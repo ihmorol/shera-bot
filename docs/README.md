@@ -10,13 +10,7 @@ This directory contains the product baseline, the decision records, and the comp
 4. [`TRACEABILITY.md`](TRACEABILITY.md) — decision/PRD reconciliation, acceptance coverage, and open implementation items.
 5. [`decisions/confirmed-decisions.md`](decisions/confirmed-decisions.md) — Codex decisions D1–D39, including historical wording and evidence status.
 6. [`decisions/closure-decisions.md`](decisions/closure-decisions.md) — continued decisions D40–D45, engineering records E1–E8, proposal history, supersession, and deferred work.
-7. [`history/2026-09-08-to-2026-09-11/README.md`](history/2026-09-08-to-2026-09-11/README.md) — three-day session archive and source inventory.
-8. [`history/2026-09-08-to-2026-09-11/pre-session-transcripts.md`](history/2026-09-08-to-2026-09-11/pre-session-transcripts.md) — earlier product-origin, PRD/TODO, and office-hours sessions.
-9. [`history/2026-09-08-to-2026-09-11/codex-transcript.md`](history/2026-09-08-to-2026-09-11/codex-transcript.md) — complete readable Codex grilling transcript.
-10. [`history/2026-09-08-to-2026-09-11/zcode-continuation-transcript.md`](history/2026-09-08-to-2026-09-11/zcode-continuation-transcript.md) — complete readable ZCode continuation, including Q40–Q45 and archive work.
-11. [`history/2026-09-08-to-2026-09-11/findings-obstacles-references.md`](history/2026-09-08-to-2026-09-11/findings-obstacles-references.md) — benchmark, founder memo, references, obstacles, and corrections.
-12. [`history/2026-09-08-to-2026-09-11/source-manifest.md`](history/2026-09-08-to-2026-09-11/source-manifest.md) — tracked source inventory and checksums.
-13. [`history/2026-09-08-to-2026-09-11/skills/`](history/2026-09-08-to-2026-09-11/skills/) — snapshotted skill instructions and companion formats.
+
 
 ## Document authority
 

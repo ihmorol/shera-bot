@@ -1,12 +1,14 @@
 # Shera Bot Prototype Product Requirements Document
 
-**Status:** Approved prototype specification  
-**Date:** 2026-09-08  
+**Status:** Approved prototype specification, synchronized with decision records D1–D45  
+**Date:** 2026-09-08 (baseline) · 2026-09-11 (synchronized)  
 **Scope:** Private prototype for validating a multi-agent, Grok Bot-inspired assistant
+
+> This document was synchronized with the confirmed decision records (D1–D45, E1–E8) on 2026-09-11 by explicit product-owner instruction. The original 2026-09-08 baseline is preserved in Git history (commit `8bacf81`) and in the session archive. Decision evidence lives in [`decisions/`](decisions/); the reconciliation record is [`TRACEABILITY.md`](TRACEABILITY.md).
 
 ## 1. Product definition
 
-Shera Bot is an independent, general-purpose AI assistant platform inspired by existing products such as Grok Bot. It provides three specialized AI agents, persistent user workspaces, tool use, autonomous tasks, multi-agent collaboration, provider/model choice, and transparent execution through a Telegram-like web interface.
+Shera Bot is an independent, general-purpose AI assistant platform inspired by existing products such as Grok Bot. It provides a team of specialized AI Agents organized in versioned customer Packs — the canonical hierarchy is **Pack → Operations → Agents** — together with persistent user workspaces, tool use, autonomous tasks, multi-agent collaboration, provider/model choice, and transparent execution through a Telegram-like web interface.
 
 The product uses its own name, branding, UI, prompts, system behavior, and implementation. It must not copy Grok or xAI trademarks, proprietary code, private infrastructure, protected assets, or internal architecture. Open-source components are used only under their applicable licenses.
 
@@ -17,10 +19,10 @@ The prototype validates the end-to-end experience and runtime architecture befor
 ### 2.1 Goals
 
 1. Validate a Telegram-like dashboard for persistent agent chats.
-2. Validate three independent Pi-based agents with distinct roles and private identities.
+2. Validate pack-defined Agents with distinct roles and persistent identities (student pack v1 ships six Agents).
 3. Validate expandable workspaces with files, terminal, browser, task activity, and tool results.
 4. Validate user-triggered and autonomous agent work.
-5. Validate multi-agent delegation and transparent group chats.
+5. Validate multi-agent delegation and transparent Operation chats.
 6. Validate user-selected AI providers, models, and custom OpenAI-compatible endpoints.
 7. Validate local-first user data storage inside isolated user containers.
 8. Validate dynamic approval for risky actions.
@@ -76,19 +78,19 @@ The product remains general-purpose and supports any research discipline.
 
 ### 4.1 Dashboard
 
-After login, the user lands on a simple Telegram-like dashboard with a sidebar. The sidebar contains persistent Researcher, Developer, and General Assistant chats, user-created task chats, and automatically created group chats. It shows unread, running, approval-required, failed, and completed states.
+After login, the user lands on a simple Telegram-like dashboard with a sidebar. The sidebar has exactly two sections: **Agents** (persistent direct chats with each Agent in the workspace's Pack) and **Operations** (reusable collaborative chats, either pack-defined or ad hoc). It shows unread, running, approval-required, failed, and completed states.
 
-The user can message an agent directly, create a task-specific chat, create a group chat, or follow an agent-created group chat after delegation.
+The user can message an Agent directly, launch a pack-defined Operation through its preview, or create an ad-hoc Operation with a custom same-Pack Agent roster.
 
 ### 4.2 Chat types
 
-**Agent chat:** persistent conversation with one fixed-role agent. It has access to that agent's private profile folder, the shared workspace, and relevant shared task/system information.
+**Agent chat:** persistent conversation with one fixed-role Agent. It has access to that Agent's private profile folder, the shared workspace, and relevant shared task/system information. A direct Agent chat spawns task runs automatically when execution requires lifecycle supervision.
 
-**Task-specific chat:** user-defined task conversation that may involve one or more agents. At completion the user may keep, archive, or delete it. Kept chats auto-archive after seven days. Deleted chats are soft-deleted and retained indefinitely.
+**Operation chat:** a persistent, reusable collaborative workspace created from a pack-defined Operation definition (through a launch preview) or created ad hoc with a custom same-Pack Agent roster. It contains the user, the selected Agents, shared Operation context, and multiple independently tracked task runs. The General Assistant is the default coordinator of every Operation and is removable; without a coordinator, Agents coordinate peer-to-peer through the typed collaboration protocol while the runtime remains the safety and lifecycle authority in all cases.
 
-**Multi-agent group chat:** created by the user or an agent. It includes the user, orchestrator, and participating agents. The orchestrator may add or remove agents as the task evolves. The user may message the group or address any individual agent directly. Agent messages, progress, tool activity, approvals, and results are visible.
+The user can message the Operation or address any individual Agent directly. Agent messages, progress, tool activity, approvals, and results are visible. The user controls the Agent roster; the coordinator may propose roster changes; the runtime validates them against pack membership, permissions, cost, and policy.
 
-After a group task completes, the user is notified and the group chat is archived as read-only. It cannot be continued directly.
+An Operation chat remains available after a task completes, for follow-up questions and new task runs. Each run keeps its own task ID, state machine, events, approvals, provider snapshot, credit usage, artifacts, and recovery checkpoint.
 
 ### 4.3 Workspace
 
@@ -100,7 +102,9 @@ The user receives a live shared read-only view of browser and terminal activity.
 
 ## 5. Agents
 
-All agents run as separate Pi processes in one user container. Each has a fixed role with editable user instructions, a private profile folder, private memory, role defaults, and access to the shared workspace and shared task context.
+Agents are reusable, persistent identities defined by versioned customer Packs. Each Agent has a fixed role with editable user instructions, a private profile folder, private memory, role defaults, and access to the shared workspace and shared task context. An Agent's Pi session process starts on demand and may hibernate after idle time; actual task work runs in separately supervised task workers. The same Agent appearing in multiple Operations keeps one persistent identity — one profile, one direct chat, one private memory, one settings surface — with a scoped assignment per Operation.
+
+All Agents in a workspace come from the workspace's pinned Pack. The first Pack, student v1, ships six Agents, each reused across at least two of the three pack-defined Operations (Research Paper, Programming Assignment, Exam Preparation). Ad-hoc Operations may combine any same-Pack Agents.
 
 ### 5.1 Researcher
 
@@ -118,21 +122,35 @@ Default tools include file browser/editor, terminal, sandboxed code execution, G
 
 It may read/write assigned project workspaces and its private folder, run non-destructive commands automatically, and execute code inside the user container. Repository mutation, deletion, package installation, deployment, and external writes require approval.
 
-Coding work uses an agent-specific branch and separate worktree. Related conflicting work is queued until the earlier change finishes. The main orchestrator prepares merges and asks the user before final merge.
+Coding work uses an agent-specific branch and separate worktree. Related conflicting work is queued until the earlier change finishes. The coordinating Agent prepares merges and asks the user before final merge.
 
 ### 5.3 General Assistant
 
-The General Assistant handles general questions, planning, coordination, user-facing synthesis, memory, task creation, and group orchestration. It clarifies goals, chooses whether one or multiple agents are needed, delegates to Researcher and Developer, combines results, writes and formats content, manages notes/checklists/documents, tracks approvals, and produces final answers/artifacts.
+The General Assistant handles general questions, planning, coordination, user-facing synthesis, memory, task creation, and Operation coordination. It clarifies goals, chooses whether one or multiple Agents are needed, delegates to Researcher and Developer, combines results, writes and formats content, manages notes/checklists/documents, tracks approvals, and produces final answers/artifacts. It is the default coordinator of every Operation and is removable; pack definitions may name a different coordinator Agent or none.
 
 Default tools include orchestration, shared files, web search/browser, document/PDF tools, image understanding, spreadsheet/data analysis, artifacts, schedules, monitoring, delegation, and tool inventory.
 
 It may read shared files, read/write its private folder, create plans/notes/artifacts, coordinate tasks, and read agent results. It may not silently modify another agent's private files. Destructive and external-write actions require approval. It is transparent about delegated work.
 
+### 5.4 Citation Manager
+
+The Citation Manager maintains source indexes, reference metadata, and citation formats across research work. It checks citations for consistency, preserves provenance for every source, and supports the Research Paper and Exam Preparation Operations.
+
+### 5.5 Programming Tutor
+
+The Programming Tutor helps students understand code and assignments: it explains concepts, reviews solutions, guides practice, and produces study-oriented explanations and exercises for the Programming Assignment Operation.
+
+### 5.6 Study Planner
+
+The Study Planner turns courses, deadlines, and exam dates into study schedules, tracks progress against them, and adjusts plans as work completes, supporting the Exam Preparation Operation.
+
+The complete student Pack mapping of all six Agents to all three Operations, including skill, tool, and connector lists, is an open implementation item recorded in [`TRACEABILITY.md`](TRACEABILITY.md).
+
 ## 6. Runtime and tenancy
 
-Each user receives one isolated container acting as that user's cloud computer. It contains three Pi processes, one shared workspace, three private profile folders, shared task/group/system information, user-local provider and repository credentials, one shared browser profile, and persistent task/memory/artifact/tool state.
+Each user receives one isolated container acting as that user's cloud computer. It contains one supervised runtime gateway, on-demand Agent session processes, task workers, one shared workspace, private Agent profile folders, shared task/system information, user-local provider and repository credentials, one shared browser profile, and persistent task/memory/artifact/tool state.
 
-All three agents may work independently or collaborate on one task. Full parallelism is allowed subject to CPU, memory, process, and storage limits. When resources are exhausted, running work continues and new jobs queue.
+Agents may work independently or collaborate on one task. Full parallelism is allowed subject to CPU, memory, process, and storage limits. When resources are exhausted, healthy running work and approval-waiting work continue and new jobs queue; idle Agent sessions may hibernate under resource pressure.
 
 ### 6.1 Deployment
 
@@ -146,7 +164,7 @@ Prototype-functional tools are web search/page reading, interactive browser, fil
 
 Minimal external API tools have a name, base URL, HTTP method, path, headers/body template, and credential reference. Read requests run automatically. Writes/deletes require approval. Calls have timeouts and response-size limits, appear in redacted history, and can be disabled.
 
-Agents may create and activate non-destructive tools automatically. Risky tools require approval. The creating agent selects private or shared inventory scope. Tools run in the same user container in the prototype. Each tool exposes its name, purpose, owner, scope, permissions, and version.
+Agent-created tools are declarative, versioned records in the local tool inventory (name, purpose, input/output schema, owner, scope, risk class, permissions, version). Non-destructive creation and activation follow the standard preview policy; risky tools require explicit approval, and activation into an Agent's or Operation's toolset requires a runtime grant. Every agent-created tool executes through the runtime executor — no bypass of validation, limits, or approval. The creating agent selects private or shared inventory scope. Tools run in the same user container in the prototype. Each tool exposes its name, purpose, owner, scope, permissions, and version.
 
 Future integrations include broad webhook/event builders, advanced external connectors, specialized parsers/artifact formats, advanced tool signing/sandboxing/distribution, native clients, full desktop takeover, and additional Pi integrations.
 
@@ -155,6 +173,10 @@ Future integrations include broad webhook/event builders, advanced external conn
 Agents support user-triggered and autonomous work. Autonomous triggers include schedules, shared-file changes, private-folder changes, Git changes, incoming webhooks, completion of another agent's task, agent-evaluated conditions, and external service events.
 
 Read-only and non-destructive actions may run automatically. Risky actions include destructive file operations, repository mutation, external writes/deletes, messages, deployments, purchases, and similar side effects. Risky actions pause for approval by default.
+
+The runtime, not the agent, decides when work becomes a task run: task runs are created only from typed protocol behavior such as a tool proposal, delegation, approval request, Operation confirmation, schedule, webhook, or file event — never from natural-language classification.
+
+Approvals are implemented as scoped, expiring, revocable grants, checked deterministically for user, Agent, workspace, Operation/task, tool version, capability, resource scope, expiry, and revocation. A prompt cannot create a grant.
 
 Approval choices are: **Approve this execution only**, **Always approve this tool**, **Always approve this tool for this agent**, **Reject this action**, and **Cancel the task**. Permissions are reviewable and revocable in settings.
 
@@ -170,6 +192,8 @@ Custom provider fields are display name, protocol type, base URL, API key or no-
 
 Each agent has a default provider/model. Users may override the provider/model per conversation. Provider keys are local-first inside the user container, runtime-injected, masked, revocable, and never written to prompts, chat history, memory, tool history, logs, shared files, or tool inventory. The central service does not persist provider keys.
 
+Platform-provider usage is metered through an internal reservation-and-settlement credit ledger with a single account-level balance: requests reserve a bounded estimate before execution, settle against actual usage, and release unused reservations; if a reservation cannot be made, the task pauses before calling the model. Credits are prototype accounting, not real billing or authorization for tools and side effects. Custom-provider requests do not consume Shera credits but are measured locally. The administrator supplies the initial provider, model catalog, and per-user credit allocation; there is no mock fallback in the user-facing runtime — a missing or invalid provider produces a clear configuration state, never fake completion.
+
 ## 10. Projects and Git
 
 Users may upload/import project archives or clone repositories from Git URLs. Private repository credentials are provided per repository, stored locally inside the user container, and scoped to that repository.
@@ -178,19 +202,19 @@ There is no artificial project-count limit. Capacity is limited by the user cont
 
 Coding agents use separate branches and worktrees. Non-coding agents publish notes, research, reports, and artifacts through the shared task area. Related conflicting work is queued rather than concurrently merged.
 
-The orchestrator prepares merge requests and runs available validation. The minimal merge approval view shows only the change summary, changed files, validation status, conflict status, and target branch. The user may approve, reject, or request changes. The orchestrator never silently merges into the main branch.
+The coordinating Agent prepares merge requests and runs available validation. The minimal merge approval view shows only the change summary, changed files, validation status, conflict status, and target branch. The user may approve, reject, or request changes. The coordinating Agent never silently merges into the main branch.
 
 ## 11. Memory and learning
 
 Runtime learning only is supported. Models are not fine-tuned and weights are not modified.
 
-There is one shared user/workspace memory and one private memory per agent. Agents automatically update memory from conversations, tasks, files, outcomes, and corrections. Users may view, edit, update, delete, permanently forget, disable automatic memory globally or per agent, inspect sources, and restore earlier versions.
+There is one shared user/workspace memory and one private memory per Agent, with explicit scopes for account, workspace, Operation, task, and Agent-private memory. Agent-private memory is private by default and is published into Operation context only through an explicit publication step; sensitive memories require user approval, and credentials and secrets are always rejected. Agents automatically update memory from conversations, tasks, files, outcomes, and corrections, preserving provenance. Users may view, edit, update, delete, permanently forget, disable automatic memory globally or per agent, inspect sources, and restore earlier versions.
 
 Passwords, API keys, tokens, payment data, and similar secrets must never be saved to memory.
 
 ## 12. Data, privacy, storage, and backups
 
-Conversations, files, projects/worktrees, memories, browser state, tasks, group chats, tool inventory, provider keys, repository credentials, and artifacts remain inside the user container. The central service stores only account identity, Google OAuth identity, container mapping, and minimal operational metadata.
+Conversations, files, projects/worktrees, memories, browser state, tasks, Operation chats, tool inventory, provider keys, repository credentials, and artifacts remain inside the user container. The central service stores only account identity, Google OAuth identity, container mapping, and minimal operational metadata.
 
 Warn when storage exceeds 80%. Never automatically delete user files. At 100%, block actions that create or expand data while preserving chat, reading, deletion, export, and cleanup.
 
@@ -198,11 +222,11 @@ Snapshot each user persistent volume every six hours and retain the latest seven
 
 ## 13. Restart and recovery
 
-Persistent volumes remount automatically. All Pi processes restart. Queued tasks resume from durable state. Interrupted tasks resume from a safe checkpoint or pause for review. Group-chat history and membership restore. Schedules and event watchers restart without duplication. Pending approvals remain pending. Browser profile/cookies restore. Potentially duplicated external effects are not blindly replayed. The dashboard shows recovery status. If safe recovery cannot be proven, the task pauses and notifies.
+Persistent volumes remount automatically. The runtime gateway and Agent session processes restart. Queued tasks resume from durable state. Interrupted tasks resume from a semantic checkpoint taken after meaningful steps, or pause for review when an external effect cannot be proven safe to replay. Group-chat history and membership restore. Schedules and event watchers restart without duplication. Pending approvals remain pending. Browser profile/cookies restore. Potentially duplicated external effects are not blindly replayed. The dashboard shows recovery status. If safe recovery cannot be proven, the task pauses and notifies.
 
 ## 14. Real-time transport and notifications
 
-WebSockets handle chat streaming, agent/group messages, progress, tool activity, approvals, notifications, browser/terminal events, and recovery status. HTTP handles Google OAuth, settings, providers, files, projects, task commands, history, and administration.
+WebSockets handle chat streaming, Agent/Operation messages, progress, tool activity, approvals, notifications, browser/terminal events, and recovery status. HTTP handles Google OAuth, settings, providers, files, projects, task commands, history, and administration.
 
 Notifications are live updates in the open workspace, in-app completion/failure/approval notifications, and browser notifications when the tab is open but unfocused. Users can enable/disable browser and in-app notifications, mute one approval, one task, or all approval reminders. Pending approvals stay visible when reminders are muted.
 
@@ -224,13 +248,15 @@ Network actions are classified as read-only or external-write. External writes a
 
 - Next.js, React, TypeScript, and Tailwind CSS for the web application.
 - Express.js with TypeScript for the control-plane API.
-- PostgreSQL for central metadata, durable task routing, and operational state.
-- Redis for transient queues, pub/sub, and live-event support.
+- PostgreSQL for central control-plane records only (accounts, signup cap, container mapping, provisioning/health, backup metadata, security events).
+- Container-local SQLite in WAL mode for product state (conversations, tasks, events, approvals, memory, tool inventory, schedules).
+- Drizzle ORM with independent PostgreSQL and SQLite schemas and migration histories.
+- Redis for transient queues, pub/sub, and live-event fanout only — never the source of truth.
 - WebSockets plus HTTP.
 - Docker Compose locally and on the single cloud VM.
-- pnpm/Turborepo TypeScript monorepo.
-- Zod shared schemas.
-- TypeScript adapter around the product-maintained Pi fork.
+- pnpm/Turborepo TypeScript monorepo: three applications (web, control-plane, user-runtime), a small set of shared contract packages, and feature modules inside each application.
+- Zod-first shared contracts with generated OpenAPI documentation and typed clients.
+- TypeScript adapter around the product-maintained Pi fork, communicating over versioned JSON Lines on stdin/stdout.
 
 Low-level library versions, exact cloud provider, database table names, module boundaries, and visual details remain engineering/design decisions.
 
@@ -244,10 +270,10 @@ Normal command acknowledgement target is approximately 500ms under normal local/
 
 1. Google OAuth login works and the five-account cap is enforced.
 2. A Balanced-tier user container is provisioned.
-3. Three agent chats are available.
-4. Each agent runs as a separate Pi process with its own private profile folder.
-5. User-created task chats work.
-6. Agents can create group chats and delegate work.
+3. All six Agents from the student pack are available as direct chats.
+4. Each Agent is a persistent identity with its own private profile folder and an on-demand supervised Pi session process.
+5. Ad-hoc Operations can be created with a custom same-Pack Agent roster.
+6. Operations launch through a preview (agents, skills, connectors, provider/model, estimated credits, approval requirements) before execution, and Agents can delegate work inside Operations.
 7. Live agent messages, progress, tool calls, approvals, and results are visible.
 8. Prototype-functional tools work end-to-end.
 9. Agents can create reusable private/shared tools under the approval policy.
@@ -263,6 +289,12 @@ Normal command acknowledgement target is approximately 500ms under normal local/
 19. Restart recovery restores processes, state, schedules, browser profile, and approvals safely.
 20. Desktop and mobile web layouts work on target browsers.
 21. No critical cross-user isolation or credential-leak failure is observed.
+22. A workspace is pinned to a versioned customer pack, and existing tasks retain the pack/Operation/Agent versions that created them.
+23. An Operation launches through a preview that shows agents, skills, connectors, provider/model, estimated credits, and approval requirements before execution.
+24. One Operation chat can hold multiple independently tracked task runs without merging their state, events, or cost.
+25. A long-running task survives browser closure, keeps its worker alive while healthy, and resumes from a semantic checkpoint after a restart.
+26. Read-only tools run automatically, local mutations show a preview, and a matching reusable grant executes without another prompt while still being policy-checked.
+27. Agent-private memory does not leak into Operation context without explicit publication.
 
 ## 20. Future work register
 
@@ -336,3 +368,5 @@ The project follows strict compliance. It preserves every dependency's license, 
 ## 24. Decision boundary
 
 This document is implementation-ready for the private prototype. Engineering may choose low-level libraries, exact versions, cloud provider, table names, module boundaries, and visual details without reopening product decisions. Changes to user-visible scope, data ownership, approval safety, tenancy, agent roles, persistence, or acceptance criteria require an explicit product decision and an update to this document.
+
+Confirmed decisions D1–D45 and engineering records E1–E8 are recorded with full evidence in [`decisions/`](decisions/). This document was synchronized with those records on 2026-09-11 by explicit product-owner instruction; the original 2026-09-08 baseline remains available in Git history (commit `8bacf81`) and in the session archive.

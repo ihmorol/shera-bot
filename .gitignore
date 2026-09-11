@@ -1,0 +1,13 @@
+# Local raw session evidence may contain hidden prompts, tool payloads, or sensitive paths.
+.session-archive/
+
+# Temporary archive/extraction helpers.
+.session-archive-*.py
+.fix-session-history.py
+
+# Local agent-session artifacts (continuation state, temp scripts, plans).
+.omo/
+.zcode/
+
+# Standalone repo with its own remote; not part of this repository.
+/business-landing-portfolio/

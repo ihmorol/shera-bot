@@ -164,7 +164,7 @@
 
 .chat-head {
   display: flex; align-items: center; gap: 12px; padding: 12px 20px;
-  border-bottom: 1px solid var(--line-soft); background: var(--surface); min-height: 68px;
+  border-bottom: 1px solid var(--line-soft); background: transparent; min-height: 68px;
 }
 .chat-head .t b { display: flex; align-items: center; gap: 8px; font: 600 15.5px/1.3 var(--font-display); }
 .chat-head .t span { font-size: 12px; color: var(--muted); }
@@ -329,20 +329,27 @@
    1 panel = full height · 2 = stacked split · 3+ = two columns
    ============================================================ */
 .dock {
-  width: var(--dock-w, 440px); min-width: 320px; max-width: 780px;
-  border-left: 1px solid var(--line-soft); background: var(--surface-2);
+  width: var(--dock-w, 440px); min-width: 0; max-width: 100%;
+  border: 1px solid var(--glass-line); border-radius: 18px;
+  background: var(--glass-surface); box-shadow: var(--panel-shadow);
   display: flex; flex-direction: column; min-height: 0; position: relative; flex: none;
 }
+/* Fill mode: the dock grows over the whole app area; the chat column steps out.
+   The collapsed flag now lands on #app (the dock's parent). */
+.app.chat-collapsed .chat-col { display: none; }
+.app.chat-collapsed .dock { flex: 1 1 auto; width: auto; max-width: none; }
+.dock-back { display: none; }
+.app.chat-collapsed .dock-back { display: inline-flex; }
 .dock-head {
-  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
-  border-bottom: 1px solid var(--line-soft); background: var(--surface); flex: none;
+  display: flex; align-items: center; gap: 8px; padding: 8px 14px; min-height: 68px;
+  border-bottom: 1px solid var(--line-soft); background: transparent; flex: none;
 }
 .dock-head h4 { font-size: 13px; display: flex; align-items: center; gap: 8px; }
 .dock-head h4 svg { color: var(--sky); }
-.dock-body { flex: 1; min-height: 0; display: flex; gap: 10px; padding: 10px; overflow: hidden; }
-.dock-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.dock-body { flex: 1; min-height: 0; display: flex; padding: 10px; overflow: auto; align-items: flex-start; }
+.dock-col { flex: none; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
 .dock-panel {
-  flex: 1; min-height: 0; display: flex; flex-direction: column;
+  flex: none; min-height: 46px; min-width: 0; display: flex; flex-direction: column;
   background: var(--surface); border: 1px solid var(--line-soft);
   border-radius: 14px; overflow: hidden; box-shadow: var(--shadow-1);
 }
@@ -364,6 +371,47 @@
   color: transparent; border-radius: 8px;
 }
 .dock-handle:hover, .dock-handle.dragging { color: var(--brand); background: rgba(59, 130, 246, 0.08); }
+.dock [hidden] { display: none !important; }
+.dock-buttons { display: inline-flex; align-items: center; gap: 8px; }
+.dock-head { flex-wrap: wrap; gap: 4px; }
+.dock-head .chip { display: none; }
+.dock-head h4 { margin-right: auto; }
+.dock.stacked .dock-body { flex-direction: column; gap: 10px; }
+.dock.stacked .dock-col { flex: none; }
+.dock.maximized .dock-body { gap: 0; }
+.dock-separator { touch-action: none; flex: none; position: relative; border-radius: 4px; }
+.dock-handle { position: absolute; }
+.dock-separator::after { content: ""; position: absolute; background: var(--line); border-radius: 3px; }
+.dock-column-handle { width: 10px; align-self: stretch; cursor: col-resize; }
+.dock-column-handle::after, .dock-handle::after { width: 2px; top: 12px; bottom: 12px; left: 4px; }
+.dock-row-handle { height: 10px; width: 100%; cursor: row-resize; }
+.dock-row-handle::after { height: 2px; left: 12px; right: 12px; top: 4px; }
+.dock-separator:hover::after, .dock-separator.dragging::after, .dock-separator:focus-visible::after { background: var(--sky); }
+.dock-separator:focus-visible { outline: 2px solid var(--sky); outline-offset: 0; z-index: 6; }
+.dock-separator.inactive { cursor: default; }
+.dock-separator.inactive::after { display: none; }
+.dp-head { height: 44px; padding: 7px 6px 7px 10px; }
+.dp-title > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dp-body { overflow: auto; }
+.dock-panel.collapsed .dp-head { border-bottom: 0; }
+.dock-panel.collapsed [data-action="dock-collapse"] svg { transform: rotate(-90deg); }
+/* Resize controls live inside the Add panel menu (2026-09-13) — the dock head stays clean. */
+.add-resize { border-top: 1px solid var(--line-soft); margin-top: 6px; padding-top: 2px; }
+.dock-size-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; padding: 4px 9px 8px; }
+.dock-size-target { min-width: 0; max-width: 100%; flex: 1; font-size: 12px; }
+.dock-size-controls .btn { min-width: 28px; min-height: 28px; }
+/* Three-zone chat topbar (2026-09-13): identity + workspace toggles left,
+   search centered, account avatar right. The workspace bar is a separate
+   top-level panel — the chat window is no longer its parent. The model picker
+   lives in the composer bar beside the send button. */
+.chat-head { flex-wrap: wrap; }
+.chat-head .t { min-width: 0; }
+.chat-head-left { display: flex; align-items: center; gap: 12px; flex: 1 1 auto; min-width: 0; }
+.chat-head-left .chat-head-actions { flex-wrap: wrap; }
+.chat-head-right { display: flex; align-items: center; flex: 0 0 auto; }
+.composer-model { display: inline-flex; margin-left: auto; }
+.composer-model .select { height: 30px; font-size: 11.5px; padding: 0 24px 0 8px; background-color: var(--surface-2); max-width: 190px; }
+.composer-bar .send-btn { margin-left: 0; }
 .dock-empty { flex: 1; display: grid; place-content: center; justify-items: center; gap: 12px; text-align: center; padding: 30px; }
 .dock-empty .glyph { width: 44px; height: 44px; border-radius: 13px; background: var(--brand-bg); color: var(--brand); display: grid; place-items: center; }
 .add-pop {
@@ -376,6 +424,98 @@
 .add-item:hover { background: var(--brand-bg); }
 .add-item svg { color: var(--muted); }
 .add-item .in-dock { margin-left: auto; font: 600 9.5px/1 var(--font-mono); color: var(--live); letter-spacing: 0.06em; }
+
+/* ---------- Agent profile panel (Telegram-style) ---------- */
+.chat-id {
+  display: flex; align-items: center; gap: 12px; min-width: 0;
+  background: none; border: 0; padding: 4px 6px; margin: -4px -6px;
+  color: inherit; text-align: left; cursor: pointer; border-radius: 12px;
+}
+.chat-id:hover { background: var(--surface-2); }
+.chat-id:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.chat-id .t { min-width: 0; }
+
+.prof { display: flex; flex-direction: column; gap: 14px; }
+.prof-head { display: grid; justify-items: center; text-align: center; gap: 6px; padding: 12px 6px 2px; }
+.prof-ava { width: 84px; height: 84px; border-radius: 26px; font-size: 26px; }
+.prof-ava .presence { width: 16px; height: 16px; right: 2px; bottom: 2px; }
+.prof-name { font: 600 17px/1.25 var(--font-display); letter-spacing: -0.01em; }
+.prof-role { font-size: 12.5px; color: var(--muted); }
+
+.pa-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.pa-btn {
+  display: grid; justify-items: center; gap: 5px; padding: 10px 4px 9px;
+  background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: 12px;
+  color: var(--text); font: 500 11px/1.2 var(--font-body); cursor: pointer;
+}
+.pa-btn:hover { border-color: var(--line-accent); background: var(--brand-bg); }
+.pa-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+.pa-btn .pa-ic { color: var(--brand); display: grid; place-items: center; }
+
+.prof-rows { display: flex; flex-direction: column; }
+.prof-row { display: flex; gap: 10px; padding: 8px 2px; border-bottom: 1px solid var(--line-soft); }
+.prof-row:last-child { border-bottom: 0; }
+.prof-row .pr-ic { color: var(--faint); flex: none; margin-top: 1px; }
+.prof-row .pr-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.prof-row .pr-label { font: 600 10px/1.4 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
+.prof-row .pr-value { font-size: 12.5px; line-height: 1.45; color: var(--text); overflow-wrap: anywhere; }
+
+.prof-sec {
+  border: 1px solid var(--line-soft); border-radius: 13px; background: var(--surface-2);
+  overflow: hidden;
+}
+.prof-sec > summary {
+  display: flex; align-items: center; gap: 8px; padding: 10px 12px; cursor: pointer;
+  font: 600 12.5px/1.3 var(--font-body); color: var(--text); list-style: none; user-select: none;
+}
+.prof-sec > summary::-webkit-details-marker { display: none; }
+.prof-sec > summary > svg:first-child { color: var(--sky); flex: none; }
+.prof-sec > summary > svg:last-child { color: var(--faint); flex: none; transition: transform 0.15s var(--ease-out); }
+.prof-sec[open] > summary > svg:last-child { transform: rotate(180deg); }
+.prof-sec > summary .count {
+  font: 600 10px/1 var(--font-mono); color: var(--muted);
+  background: var(--surface-elevated); border: 1px solid var(--line-soft);
+  border-radius: 999px; padding: 3px 7px;
+}
+.prof-sec-body { padding: 2px 12px 11px; display: flex; flex-direction: column; gap: 4px; }
+.prof-sec-body .tree-row { padding-left: 0; background: none; }
+.prof-sec-body .faint { margin-top: 6px; }
+.prof-empty { font-size: 12px; color: var(--muted); line-height: 1.5; padding: 4px 0; }
+
+.prof-run {
+  border: 1px solid var(--line-soft); border-radius: 11px; padding: 9px 10px; text-align: left;
+  background: var(--surface-elevated); width: 100%; display: grid; gap: 5px; cursor: pointer;
+}
+.prof-run:hover { border-color: var(--line-accent); }
+.prof-run .pr1 { display: flex; align-items: center; gap: 8px; }
+.prof-run .pr1 .id { font: 600 10.5px/1 var(--font-mono); color: var(--sky); }
+.prof-run .pr1 .spacer { flex: 1; }
+.prof-run .goal { font-size: 12px; font-weight: 600; line-height: 1.4; }
+
+.prof-sess { display: flex; gap: 9px; padding: 7px 0; border-bottom: 1px solid var(--line-soft); }
+.prof-sess:last-of-type { border-bottom: 0; }
+.prof-sess .ps-dot {
+  width: 18px; height: 18px; border-radius: 50%; flex: none; margin-top: 1px;
+  display: grid; place-items: center; background: var(--surface-elevated); border: 1px solid var(--line-soft);
+  color: var(--muted);
+}
+.prof-sess .ps-dot.active { color: var(--live); border-color: var(--live); }
+.prof-sess .ps-dot.active::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--live); }
+.prof-sess .ps-dot.attention { color: var(--warn); border-color: var(--warn); }
+.prof-sess .ps-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.prof-sess .ps-title { font-size: 12px; font-weight: 600; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.prof-sess .ps-when { font: 500 10px/1 var(--font-mono); color: var(--faint); }
+.prof-sess .ps-detail { font-size: 11.5px; color: var(--muted); line-height: 1.45; }
+
+.prof-op-glyph { width: 84px; height: 84px; border-radius: 26px; background: var(--brand-bg); color: var(--brand); display: grid; place-items: center; }
+.prof-member { display: flex; align-items: center; gap: 9px; padding: 5px 0; }
+.prof-member .pr-label { font-size: 11px; color: var(--muted); }
+.prof-member .grow { min-width: 0; display: flex; flex-direction: column; }
+.prof-member .grow b { font-size: 12.5px; }
+.prof-member .coord-badge {
+  font: 600 9px/1 var(--font-mono); letter-spacing: 0.05em; color: var(--brand);
+  background: var(--brand-bg); border-radius: 999px; padding: 4px 8px; flex: none;
+}
 
 /* run items (used inside the Task runs panel) */
 .run-item {
@@ -592,7 +732,7 @@
   .ov-side .live-card { grid-column: span 2; }
 }
 @media (max-width: 980px) {
-  .dock { position: fixed; inset: 0; z-index: 60; width: 100vw !important; min-width: 0; box-shadow: var(--shadow-2); }
+  .dock { position: fixed; inset: 0; z-index: 60; width: 100vw !important; min-width: 0; max-width: none; box-shadow: var(--shadow-2); margin: 0; border: 0; border-radius: 0; }
   .dock-handle { display: none; }
   .dock-body { flex-direction: column; }
   .ov-pair { grid-template-columns: 1fr; }

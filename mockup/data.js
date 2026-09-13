@@ -10,6 +10,7 @@ const USER = {
   googleInitials: "TM",
   tier: "Balanced",
   storageUsedPct: 82,
+  storageTotal: "25 GB",
   isAdmin: false,
 };
 
@@ -253,6 +254,34 @@ const BACKUPS = { every: "every 6 hours", keep: 7, latest: [
   { id: "snap-6", when: "today 00:00", size: "3.0 GB" },
   { id: "snap-5", when: "yesterday 18:00", size: "2.9 GB" },
 ]};
+
+/* ---------- Agent profile panel ---------- */
+/* Sample session history for the Agent profile panel. Display fixtures only —
+   not a runtime session log. Kept consistent with THREADS/RUNS scenarios above. */
+const AGENT_SESSIONS = {
+  "general-assistant": [
+    { when: "Today 08:02", title: "Morning status review", detail: "Summarized 3 Operations · opened the calendar approval", outcome: "done" },
+    { when: "Yesterday 20:15", title: "Evening planning", detail: "Prepared today's job list and follow-ups", outcome: "done" },
+  ],
+  "researcher": [
+    { when: "Today 07:40", title: "Morning source monitor sweep", detail: "run-s1 · 2 new papers filed to research/inbox", outcome: "done" },
+    { when: "Today 09:12", title: "Literature folding & re-ranking", detail: "Current session — ranking sources by recency and authority", outcome: "active" },
+  ],
+  "developer": [
+    { when: "Today 10:05", title: "Auth middleware patch session", detail: "run-d1 · failing test first, then the guard fix", outcome: "active" },
+    { when: "Yesterday 16:30", title: "Test harness maintenance", detail: "Flaky session test quarantined", outcome: "done" },
+  ],
+  "citation-manager": [
+    { when: "Yesterday 18:44", title: "Citation index refresh", detail: "41 sources re-checked · 3 APA 7 drifts corrected", outcome: "done" },
+  ],
+  "programming-tutor": [
+    { when: "Today 19:10", title: "Hash-table quiz", detail: "Current session — 3 questions on lookup, load factor, caching", outcome: "active" },
+  ],
+  "study-planner": [
+    { when: "Today 21:58", title: "Exam-window replan", detail: "12 blocks planned · calendar push waiting for approval", outcome: "attention" },
+    { when: "Yesterday 09:00", title: "Weekly schedule check", detail: "Progress against diagnostic areas reviewed", outcome: "done" },
+  ],
+};
 
 /* ---------- Threads ---------- */
 /* Item kinds: msg(user|agent) · system · tool · run · artifact · approval · replay · day */

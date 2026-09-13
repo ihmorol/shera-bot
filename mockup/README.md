@@ -1,58 +1,102 @@
-# Shera Bot — UI Mockup (S1–S11, light + dark)
+# Shera Bot client mockup
 
-Static HTML/CSS/JS mockup of the entire client design in [`docs/UI_DESIGN.md`](../docs/UI_DESIGN.md), styled after the owner's reference image (a Donezo-style dashboard) with a slick dark version. **No build step, no dependencies, no backend** — plain files.
+Static HTML/CSS/JavaScript exploration of S1–S11 from [UI_DESIGN.md](../docs/UI_DESIGN.md), plus an additional Overview dashboard and light/dark themes. **No build step, installed application packages, or backend.** Google Fonts load externally, with system-font fallbacks offline.
+
+**Status, 2026-09-13:** workspace pane resizing/collapse is implemented and tested in the scenarios below. Many other controls are scripted, toast-only or inert. This is not the implemented product runtime, a secure production client, or proof that prototype acceptance criteria pass.
+
+## Documentation for future agents
+
+| Read | Purpose |
+|---|---|
+| [HANDOFF.md](HANDOFF.md) | User-request evidence, completed changes, verification, failed attempts, known blockers and safe continuation rules. Start here before editing. |
+| [REFERENCE.md](REFERENCE.md) | Detailed inventory of every screen, route, Agent/Operation, panel, Settings category, interaction status, fixture and state boundary. |
+| [UX_RECOMMENDATIONS.md](UX_RECOMMENDATIONS.md) | Proposed calmer first landing, hierarchy, progressive disclosure and validation strategy. **Not implemented or adopted product policy.** |
+| [Review archive](reviews/2026-09-13/README.md) | Independent investor/client audit, pane verification and fourteen original screenshots, plus a docs-conformance audit against the PRD, decisions and UI design spec (findings and recommended fix order; documentation only). |
+| [Product documentation](../docs/README.md) | Authoritative PRD, decisions, glossary and traceability; these take precedence over mockup choices. |
 
 ## Run it
 
-- Open `index.html` directly in a browser, **or**
-- serve the folder: `npx http-server .` / any static server, then open `http://localhost:4173/` (a dev server may already be running there).
+From the repository root:
 
-Google Fonts (Space Grotesk / DM Sans / JetBrains Mono) load from the network; offline you get system fallbacks.
+```sh
+python -m http.server 8000 --directory mockup
+```
 
-## The workspace dock (Claude-style dynamic grid)
+Open **http://localhost:8000/index.html**. Directly opening `index.html` also works for ordinary static viewing. If port8000 is already serving this directory, reuse it. Inspect an occupied port before stopping anything.
 
-The chat is the spine; everything the Agents produce opens as a panel in an **adaptive right-hand dock**:
+For pane inspection, open **http://localhost:8000/index.html#/agent-general-assistant** and use the workspace toggle in the chat header. Hard-refresh if an old tab shows stale controls; the changed pane assets have versioned URLs.
 
-- **Layout**: 1 panel = full height · 2 panels = stacked split · 3+ panels = two columns. Any panel can **maximize** (fills the dock), **pop out** to a deep-linkable full page (`#/workspace/<chat>/<panel>`), or close. The dock edge is **drag-resizable** (320–780px) and each chat remembers its own panels and width.
-- **Panels**: Task runs, Run timeline, Files, Editor, read-only Terminal, read-only Browser, Tool history, Private files. The old fixed runs rail is gone — Operation runs live in the same dock. Selecting a run opens its timeline beside the list.
-- **Sidebar**: collapses to a 76px icon rail (avatars + state badges, hover names); expands back from the same control.
-- **Mobile**: the dock becomes a full-screen sheet, closed by default; the sidebar becomes a slide-over drawer.
+Do not enter actual provider credentials, private documents or other sensitive content. This mockup does not implement secure secret custody, and user-text HTML escaping has an outstanding defect.
 
-## What's inside
+## What actually works versus what is simulated
 
-| File | Purpose |
+- **Local interactions:** valid hash navigation, theme preference, sidebar/dock controls, pane resizing, collapse/maximize/reset, selected run display, notification mark-all-read and removal of existing fixture grants.
+- **Scripted:** sign-in presentation, canned streamed replies, tool/approval examples and connection-state changes.
+- **Not completed:** actual authentication, providers/models, tool execution, files/downloads/uploads, saving, new Operation creation, new approval grants, replay, storage/backups, memory or schedules.
+- **Known walkthrough blockers:** launch/creation/notification/recovery links use unsupported chat routes; Settings navigation can stick to a section-specific URL; many success messages overstate the demonstrated operation.
+
+See [REFERENCE.md](REFERENCE.md) for control-by-control status rather than assuming a visible button works.
+
+## Workspace dock
+
+The chat stays primary. Inspection panels can open beside it or in a full-page route.
+
+- **Panels:** Agent profile (`profile`), Task runs (`runs`), Run timeline (`tasks`), Files, Editor, Terminal, Browser, Tool history (`tools`), Private files (`private`). Nine types, at most six open simultaneously in the dock, no duplicate types. The six-panel limit currently lacks explanatory feedback when a seventh is attempted (except the profile header button, which toasts).
+- **Defaults:** every direct Agent chat starts with the dock open showing the Agent profile panel; Operation chats keep their seeded panels (`runs`+`tools` for Research Paper). Reopening an emptied dock restores `profile` for Agent chats and `runs` for Operations. At initial load <=980px seeded docks start closed.
+- **Layout:** one/two panels in one group; three or more in two groups. Side-by-side columns require dock width >=650px and viewport >980px. Otherwise groups stack. There is no arbitrary panel reordering or floating-window system.
+- **Drag:** outer dock boundary, inner column boundary and row boundaries within each group. These are independent axes, not a combined two-axis intersection handle.
+- **Sizes:** preferred width440px; client-controlled from 320px up to the whole main area — no cap. Dragging past the threshold (chat space below 320px) snaps the dock to fill everything except the left sidebar, and a **Back to chat** control in the dock header (or any drag back) restores the chat. Internal columns reserve about300px; expanded panels keep144px minimum total height; collapsed headers46px; short layouts scroll.
+- **Collapse / Expand:** retain the header, identity and local body state while reclaiming space.
+- **Maximize / Restore:** fill the dock temporarily and preserve prior split/collapse preferences.
+- **Close / full page:** Close removes a panel from the current layout; the separate full-page link navigates to that panel with more room. Closing the last panel closes the dock.
+- **Reset layout:** restore440px preference, equal proportions and expanded panels without closing them or saving files.
+- **Keyboard:** arrow keys resize16px; Shift+arrow48px; Home/End limits; Enter resets the selected split. Outer arrows move the boundary physically, so Left widens the right dock. Escape cancels an active drag.
+- **Click/tap alternative:** Resize panels disclosure offers a split selector, decrease/increase and Equal/default. Inactive/hidden splits need restoration, expansion or more width first.
+- **Phone:** <=980px uses a full-screen sheet, no outer divider and stacked panels; initially seeded docks start closed. This does not repair unrelated mobile shell/Settings defects.
+- **Lifetime:** layout preferences and draft snapshots are memory-only; reload resets them. Tested pane actions retain chat/editor drafts. This is **not file saving**, durable layout persistence or verified synchronization across all full-page/chat views.
+
+The pointer implementation supports mouse/pen/touch events and capture/cancellation. Actual touch/pen hardware and cancellation were not exhaustively browser-tested.
+
+## Routes and screen scope
+
+| Entry | Screen |
 |---|---|
-| `index.html` | Shell, fonts, theme bootstrap (dark default, persisted in `localStorage`) |
-| `styles.css` | Design tokens (dark = softened navy + gradient accents, light = reference adaptation) + base + core components |
-| `screens.css` | Screen layouts: overview, chat, dock, full-page workspace, preview, settings, modals, responsive |
-| `data.js` | Fixtures per UI_DESIGN.md §9: pack, 6 Agents, 3 Operations, threads, runs in all D8 states, approvals, providers, credits, memory, files |
-| `icons.js` | Authored inline SVG icon set (one 24px grid, one stroke) |
-| `views.js` | Screen renderers (pure functions) |
-| `app.js` | Hash router, state, event delegation, dock state machine, scripted demo runtime |
+| `#/login` | S1 login/cap fixture; Continue goes to Overview, not S2 |
+| `#/overview` | Additional sample statistics/activity dashboard; **actual post-login landing** |
+| `#/app` | S2 chat-first empty home with three shortcuts |
+| `#/agent-<agent-id>` | S3 six persistent direct-chat fixtures |
+| `#/op-research-paper`, `#/op-adhoc`, `#/op-exam-prep` | S4 existing collaborative Operation fixtures |
+| Template button | S5 launch preview with all eight information groups |
+| `#/operation/new` | S6 ad-hoc creation form; not a working creation flow |
+| `#/workspace/<chat-id>/<panel-id>` | S7 full-page selected workspace panel |
+| Approval card / demo overlay | S8 five required approval choices; local scripted response, not grant creation |
+| `#/settings` or `#/settings/<section-id>` | S9 fifteen Settings categories; category-switch defect on section deep links |
+| Bell | S10 notification popover |
+| Global banners / run markers | S11 recovery, storage, offline/reconnecting fixtures |
+| S12 admin | Intentionally absent/deferred |
 
-## Screens (UI_DESIGN.md route map)
+The wordmark is not a Home link. Nested forms such as `#/agent/researcher` and `#/operation/op-research-paper` are **not** working aliases. See the full route table in [REFERENCE.md](REFERENCE.md).
 
-- `#/login` — **S1** auth + the at-cap refusal variant (link at the bottom of the card)
-- `#/overview` — mockup-only Donezo-style dashboard (KPIs, run-activity chart with hatched *queued* bars, schedules, Operations list, agent activity, outcomes donut, live-run timer). Reached from the wordmark/logo; the app still lands chat-first per S2.
-- `#/app` — **S2** chat-first landing (empty state with the three shortcuts)
-- `#/agent-…` — **S3** six Agent direct chats (presence, provider override, tool cards, run cards, artifacts, streaming demo)
-- `#/op-research-paper`, `#/op-exam-prep`, `#/op-adhoc` — **S4** Operation chats (roster bar with removable coordinator, dockable runs, @-addressing picker, pack pin label)
-- `#/operation/new` — **S6** ad-hoc creation (same-pack roster picker, coordinator choice incl. peer-to-peer)
-- Launch a pack template (sidebar or Overview button) — **S5** preview gate with all eight required field groups
-- Dock panel → pop-out icon, or `#/workspace/…` — **S7** full-page workspace (deep-linkable per panel)
-- Approval cards / bell / ⚡ demo menu — **S8** five verbatim choices, fixed fields, reminder timeline, mute semantics; approving creates a visible runtime grant (revocable in Settings → Permissions)
-- `#/settings/…` — **S9** all fifteen sections
-- Bell — **S10** notification center · top banners — **S11** recovery / storage / disconnect + replay
-- **S12 admin console is intentionally absent** (deferred, E7)
+## Files and checks
 
-## Scripted demo (⚡ button in the topbar)
+Implementation: `index.html`, `styles.css`, `screens.css`, `icons.js`, `data.js`, `views.js`, `app.js`. The view/controller use global scripts, not React components. `DockLayout` helpers live in `views.js`.
 
-Stream a reply · read-only tool call (runs automatically) · risky action (pauses, opens the approval dialog; keys `1`–`5` answer it) · disconnect → reconnect with a replayed-events batch. Sending a message in any chat streams a reply with a typing cursor.
+From repository root, no install required:
 
-## Fidelity notes
+```sh
+node --check mockup/app.js
+node --check mockup/views.js
+node --check mockup/dock-layout.test.cjs
+node --test mockup/dock-layout.test.cjs
+git diff --check
+```
 
-- Vocabulary is canonical everywhere: **Pack → Operations → Agents**; approval copy is verbatim from PRD §8.
-- **Dark theme (owner direction: "softer navy + gradient colors")**: lifted, less-saturated navy (canvas `#0a0f1c`, cards `#101828`, elevated `#16213a`), soft-white text `#eef4ff`, calm emerald live status (`#34d399`) instead of the neon green. Gradients are focal moments only: hero KPI card, live-run card, primary buttons, active nav wash, focused panel header. If adopted for the product, this amends UI_DESIGN.md §2.1 as owner reference material; the documented v1 palette remains the fallback.
-- The light theme is the owner's reference-image exploration on the same cobalt brand. The product itself remains dark-only in v1 — the token architecture keeps the light theme cheap, which this mockup demonstrates.
-- The zero-offset brand glow (`--glow`) appears only on hero/login marks, per its documented "emphasis only" role; the hatched chart bars encode *queued/held* runs (legend included), mirroring the reference image. Both were flagged by the mechanical detector and kept deliberately.
-- Everything is mock data. "Keys" are fake masked strings; nothing here is a secret.
+**Recorded result:** thirteen pane regression tests passed. Real browser checks covered outer/row/column drag, collapse/expand, maximize/restore, reset, click-based sizing, editor retention, empty timeline and a phone sheet. [Verification and limits](reviews/2026-09-13/pane-verification-2026-09-13.md) distinguish unit/source/browser evidence. The fourteen tests displayed in the mock terminal are only fixture text.
+
+## Design fidelity and limits
+
+Canonical vocabulary is **Pack → Operations → Agents**. Keep Operations, same-Agent identity, independent runs, explicit preview gating and the five approval choices. Agents propose; the intended runtime validates and executes.
+
+The current mockup uses softened navy, blue accents/gradients, rounded surfaces and a light alternative. It is a design exploration, not automatic adoption into the documented dark-only v1 design. Palette tokens and exact feature coverage are described in [REFERENCE.md](REFERENCE.md). The preserved [handoff corrections](HANDOFF.md#8-readme-corrections-made-during-documentation) explain earlier README overclaims rather than erasing their history.
+
+The latest UX request produced recommendations and documentation only. No landing-page redesign, new product decision, PRD change, commit or push was made in that documentation pass.

@@ -1,6 +1,6 @@
 # Shera Bot Documentation Index
 
-This directory contains the product baseline, the decision records, and the complete evidence archive for the three-day design session. **Read this index first.**
+This directory contains the product baseline and decision records. **Read this index first.** Historical evidence referenced by older documents was removed from the working tree in commit `9d8b81c`; consult Git history (for example `cea3ba1`) and the local raw archive where available rather than assuming those paths exist.
 
 ## Required reading order
 
@@ -20,6 +20,21 @@ This directory contains the product baseline, the decision records, and the comp
 - Historical transcripts and quoted historical decision text preserve the words that were actually used. They are evidence, not current naming guidance.
 - Raw machine exports are local-only under `.session-archive/` and are checksummed by `source-manifest.json`; they are intentionally ignored by Git.
 - The marketing site in [`../business-landing-portfolio/`](../business-landing-portfolio/) is a separate Next.js application whose copy follows the canonical vocabulary; it is out of scope for prototype acceptance criteria.
+
+## Development process
+
+- [`DEV_WORKFLOW.md`](DEV_WORKFLOW.md) — solo-developer workflow from current state through production shipment, using AI agents under explicit verification gates. Process documentation only; subordinate to the PRD and decision records.
+
+## Client design and mockup documentation
+
+- [`UI_DESIGN.md`](UI_DESIGN.md) — target client UI specification; subordinate to PRD/recorded product decisions.
+- [`../mockup/README.md`](../mockup/README.md) — run the static mockup, status boundaries and documentation index.
+- [`../mockup/REFERENCE.md`](../mockup/REFERENCE.md) — detailed current screens, routes, fixtures, controls, implementation status and state lifetime.
+- [`../mockup/HANDOFF.md`](../mockup/HANDOFF.md) — completed review/pane changes, user-request evidence, checks, failed attempts and future-agent instructions.
+- [`../mockup/UX_RECOMMENDATIONS.md`](../mockup/UX_RECOMMENDATIONS.md) — proposed calmer first-use experience; not an adopted redesign or new product decision.
+- [`../mockup/reviews/2026-09-13/README.md`](../mockup/reviews/2026-09-13/README.md) — preserved independent audit, verification and screenshot evidence.
+
+Mockup interactions, fixture output and pane tests do not establish runtime behavior or change the acceptance statuses in `TRACEABILITY.md`. The mockup's actual post-login Overview differs from the specified chat-first landing; this discrepancy is documented, not silently adopted.
 
 ## Current record count
 

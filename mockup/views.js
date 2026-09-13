@@ -2,6 +2,81 @@
    Shera Bot UI mockup — view renderers (pure functions → HTML)
    ============================================================ */
 
+// Pure sizing rules shared by the view/controller and dependency-free Node tests.
+const DockLayout = (function () {
+  const defaults = { column: 0.5, panelMin: 144, header: 46, gap: 10, columnMin: 300, chatMin: 320 };
+  const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+  function widthBounds(available) {
+    const max = Math.max(0, available);
+    return { min: Math.min(320, max), max };
+  }
+  // The chat never shrinks below chatMin: past that threshold the dock snaps to
+  // the whole main area (d.fill). Only a narrowing move hands space back — a
+  // continuous widening drag must stay filled instead of bouncing off the threshold.
+  function setOuterWidth(d, requested, available, prevRequest) {
+    const min = Math.min(320, available);
+    const fillAt = Math.max(min, available - defaults.chatMin);
+    if (d.fill) {
+      const narrowing = prevRequest == null ? requested < available : requested < prevRequest;
+      if (!narrowing) return;
+      d.fill = false;
+    } else if (requested > fillAt) {
+      d.fill = true;
+      return;
+    }
+    d.width = clamp(requested, min, fillAt);
+  }
+  function leaveFill(d) {
+    d.fill = false;
+    d.width = d.width || null; // null = proportional 30% default
+  }
+  function columns(panels) {
+    const middle = Math.ceil(panels.length / 2);
+    return panels.length <= 2 ? [panels] : [panels.slice(0, middle), panels.slice(middle)];
+  }
+  function heights(panels, available) {
+    const open = panels.filter(p => !p.collapsed);
+    let remaining = Math.max(open.length * defaults.panelMin,
+      available - (panels.length - 1) * defaults.gap - (panels.length - open.length) * defaults.header);
+    const sizes = new Map(panels.filter(p => p.collapsed).map(p => [p.type, defaults.header]));
+    let pending = [...open];
+    while (pending.length) {
+      const total = pending.reduce((sum, p) => sum + (p.weight || 1), 0);
+      const small = pending.filter(p => remaining * (p.weight || 1) / total < defaults.panelMin);
+      if (!small.length) {
+        pending.forEach(p => sizes.set(p.type, remaining * (p.weight || 1) / total));
+        break;
+      }
+      small.forEach(p => { sizes.set(p.type, defaults.panelMin); remaining -= defaults.panelMin; });
+      pending = pending.filter(p => !small.includes(p));
+    }
+    return sizes;
+  }
+  function reset(d) {
+    d.width = null; d.column = defaults.column; d.fill = false;
+    d.panels.forEach(p => { delete p.weight; p.collapsed = false; p.max = false; });
+  }
+  function toggleCollapse(d, type) {
+    const p = d.panels.find(p => p.type === type);
+    if (p) { p.collapsed = !p.collapsed; p.max = false; }
+  }
+  function toggleMax(d, type) {
+    const target = d.panels.find(p => p.type === type);
+    const on = target && !target.max;
+    d.panels.forEach(p => { p.max = false; });
+    if (target) target.max = !!on;
+  }
+  function keyValue(key, value, min, max, reset, step) {
+    if (key === "Home") return min;
+    if (key === "End") return max;
+    if (key === "Enter") return clamp(reset, min, max);
+    if (key === "ArrowLeft" || key === "ArrowUp") return clamp(value - step, min, max);
+    if (key === "ArrowRight" || key === "ArrowDown") return clamp(value + step, min, max);
+    return null;
+  }
+  return { defaults, clamp, widthBounds, setOuterWidth, leaveFill, columns, heights, reset, toggleCollapse, toggleMax, keyValue };
+})();
+
 const Views = (function () {
   const I = Icons.get;
 
@@ -36,7 +111,7 @@ const Views = (function () {
     return `
       <div class="sb-brand">
         ${Icons.logo()}
-        <div class="sb-wordmark">Shera Bot<small>pack → operations → agents</small></div>
+        <div class="sb-wordmark">Shera Bot</div>
         <button class="sb-collapse tip" data-tip="Collapse sidebar" data-action="side-rail" aria-label="Collapse or expand sidebar">${I("chevD")}</button>
       </div>`;
   }
@@ -87,33 +162,52 @@ const Views = (function () {
         <nav class="sb-scroll">
           <div class="sb-section">
             <div class="sb-section-head"><span class="eyebrow">Agents</span>
-              <button class="sb-add tip" data-tip="Agent settings, not creation — pack Agents are fixed" data-action="go-settings-agents">${I("plus", 11)}&nbsp;</button>
+              <button class="sb-add sb-add-icon tip" data-tip="Agent settings — pack Agents are fixed" data-action="go-settings-agents" aria-label="Agent settings">${I("settings", 12)}</button>
             </div>
             ${agentsItems.map(c => sidebarItem({ ...c, ref: c.ref, id: c.id, approval: c.ref === "study-planner" ? 1 : 0, unread: agentById(c.ref).unread, running: agentById(c.ref).running, done: agentById(c.ref).done }, route === c.id)).join("")}
           </div>
           <div class="sb-section">
             <div class="sb-section-head"><span class="eyebrow">Operations</span>
-              <a class="sb-add" href="#/operation/new">${I("plus", 11)}New</a>
+              <a class="sb-add" href="#/operation/new" aria-label="New ad-hoc Operation">${I("plus", 11)}New</a>
             </div>
+            <div class="sb-group-label">Templates</div>
             ${templates.map(t => opItem({ ...t, id: t.template }, false)).join("")}
-            <div class="sb-group-label">active chats</div>
+            <div class="sb-group-label">Active chats</div>
             ${opChats.map(c => opItem(c, route === c.id)).join("")}
           </div>
         </nav>
         <footer class="sb-footer">
           <div class="sb-foot-row">
             <button class="credits-pill tip" data-tip="Reserved by active runs: 85 cr · settles after execution" data-action="go-credits">${I("coins", 13)}<span class="t num">1,240 cr</span></button>
-            <span class="conn-dot ${state.conn} tip" data-tip="${state.conn === "live" ? "Live · events streaming" : state.conn === "reconnecting" ? "Reconnecting — replaying missed events" : "Disconnected — work continues server-side"}" role="img" aria-label="connection ${state.conn}"></span>
-            <button class="icon-btn" style="width:30px;height:30px" data-action="toggle-conn" aria-label="Simulate connection change">${I("activity", 14)}</button>
+            <span class="spacer" style="flex:1"></span>
+            <span class="conn-chip ${state.conn} tip" data-tip="${state.conn === "live" ? "Live · events streaming" : state.conn === "reconnecting" ? "Reconnecting — replaying missed events" : "Disconnected — work continues server-side"}" role="img" aria-label="connection ${state.conn}"><i class="conn-dot ${state.conn}"></i><span class="t">${state.conn === "live" ? "Live" : state.conn === "reconnecting" ? "Reconnecting" : "Offline"}</span></span>
           </div>
           <div class="sb-foot-row">
-            <span class="storage-meter ${USER.storageUsedPct >= 80 ? "warn" : ""}" role="img" aria-label="storage ${USER.storageUsedPct} percent used"><i style="width:${USER.storageUsedPct}%"></i></span>
-            <span class="faint num" style="font-size:11px">${USER.storageUsedPct}%</span>
+            <span class="storage-meter ${USER.storageUsedPct >= 80 ? "warn" : ""}" role="img" aria-label="storage ${USER.storageUsedPct} percent of ${USER.storageTotal} used"><i style="width:${USER.storageUsedPct}%"></i></span>
+            <span class="storage-text num">${USER.storageUsedPct}% of ${USER.storageTotal}</span>
           </div>
-          <div class="sb-pack-row sb-pack-label">pinned · student pack v1 · 6 agents · 3 operations</div>
+          <div class="sb-pack-row sb-pack-label" title="Pinned pack — one workspace per account">student pack v1 · pinned</div>
         </footer>
       </aside>
       ${state.sideOpen ? '<div class="sb-scrim" data-action="close-side" aria-hidden="true"></div>' : ""}`;
+  }
+
+  /* Right-corner account button (2026-09-13): the only identity element in the
+     chat topbar's right corner. Theme, notifications and the demo controls live
+     inside the account menu; the unread count also shows on the avatar badge. */
+  function headCluster(state) {
+    const unread = NOTIFICATIONS.filter(n => n.unread).length;
+    return `
+      <button class="tb-account tip" data-action="open-account" aria-haspopup="menu" aria-label="Account menu${unread ? ` — ${unread} unread` : ""}" data-tip="Account, theme, notifications">
+        <span class="avatar" style="background:#0f766e">${USER.googleInitials}</span>
+        ${unread ? `<span class="notif">${unread}</span>` : ""}
+      </button>`;
+  }
+
+  /* Search is a compact icon button (2026-09-13) — it opens the search modal,
+     a local navigation palette over chats, templates and settings sections. */
+  function searchButton() {
+    return `<button class="icon-btn tip" data-action="open-search" data-tip="Search (Ctrl+F)" aria-label="Search" aria-haspopup="dialog">${I("search", 17)}</button>`;
   }
 
   function topbar(state) {
@@ -121,22 +215,11 @@ const Views = (function () {
     return `
       <header class="topbar">
         <button class="icon-btn tb-menu-btn" data-action="open-side" aria-label="Open menu">${I("menu")}</button>
-        <div class="tb-search" role="search">
-          ${I("search", 16)}
-          <input type="search" placeholder="Search tasks, runs, files…" aria-label="Search">
-          <kbd>⌘F</kbd>
-        </div>
         <div class="tb-right">
-          <button class="icon-btn" data-action="open-demo" aria-label="Demo controls" aria-haspopup="menu">${I("spark")}</button>
-          <button class="icon-btn" data-action="toggle-theme" aria-pressed="${state.theme === "light"}" aria-label="Toggle light or dark theme">
-            ${state.theme === "dark" ? I("sun") : I("moon")}
-          </button>
-          <button class="icon-btn" data-action="open-notifs" aria-label="Notifications (${unread} unread)" aria-haspopup="menu">
-            ${I("bell")}${unread ? `<span class="notif">${unread}</span>` : ""}
-          </button>
-          <button class="tb-account" data-action="open-account" aria-haspopup="menu" aria-label="Account menu">
+          ${searchButton()}
+          <button class="tb-account tip" data-action="open-account" aria-haspopup="menu" aria-label="Account menu${unread ? ` — ${unread} unread` : ""}" data-tip="Account, theme, notifications">
             <span class="avatar" style="background:#0f766e">${USER.googleInitials}</span>
-            <span class="who"><b>${esc(USER.name)}</b><span>${esc(USER.email)}</span></span>
+            ${unread ? `<span class="notif">${unread}</span>` : ""}
           </button>
         </div>
       </header>`;
@@ -533,6 +616,15 @@ const Views = (function () {
             <button class="icon-btn tip" data-tip="Attach file" style="width:32px;height:32px" aria-label="Attach file">${I("clip", 15)}</button>
             ${isOp ? `<button class="btn btn-xs btn-ghost" data-action="new-run">${I("plus", 11)}New run</button>` : ""}
             <span class="hint">Enter to send · Shift+Enter for newline</span>
+            ${!isOp ? `<div class="model-pick composer-model">
+              <label class="sr-only" for="model-select">Provider / model override</label>
+              <select id="model-select" class="select" data-action="noop" title="Per-conversation provider override">
+                <option>OpenAI · GPT-4o (default)</option>
+                <option>OpenAI · GPT-4o mini</option>
+                <option>Ollama · llama3:70b (local)</option>
+                <option>vLLM · mixtral-8x22b (custom)</option>
+              </select>
+            </div>` : ""}
             <button class="send-btn" data-action="send" aria-label="Send message">${I("send", 15)}</button>
           </div>
         </div>
@@ -544,28 +636,26 @@ const Views = (function () {
     return tmplById(chat.ref).agents;
   }
 
-  function chatHeader(chat) {
+  function chatHeader(chat, state) {
     if (chat.type === "agent") {
       const a = agentById(chat.ref);
       return `
         <div class="chat-head">
-          ${avatar(chat.ref, "lg").replace('class="avatar lg"', `class="avatar lg"`).replace("</span>", `<span class="presence ${a.presence === "active" ? "on" : "away"}"></span></span>`)}
-          <div class="t">
-            <b>${esc(a.name)} <span class="chip quiet" style="height:20px;font-size:10px">${a.presence === "active" ? "session active" : "hibernating"}</span></b>
-            <span>${esc(a.role)}</span>
-          </div>
-          <div class="chat-head-actions">
-            <div class="model-pick">
-              <label class="sr-only" for="model-select">Provider / model override</label>
-              <select id="model-select" class="select" data-action="noop" title="Per-conversation provider override">
-                <option>OpenAI · GPT-4o (default)</option>
-                <option>OpenAI · GPT-4o mini</option>
-                <option>Ollama · llama3:70b (local)</option>
-                <option>vLLM · mixtral-8x22b (custom)</option>
-              </select>
+          <div class="chat-head-left">
+            <button class="chat-id tip" data-tip="View Agent profile" data-action="profile-open" data-chat="${chat.id}" aria-label="View ${esc(a.name)} profile">
+              ${avatar(chat.ref, "lg").replace('class="avatar lg"', `class="avatar lg"`).replace("</span>", `<span class="presence ${a.presence === "active" ? "on" : "away"}"></span></span>`)}
+              <div class="t">
+                <b>${esc(a.name)} <span class="chip quiet" style="height:20px;font-size:10px">${a.presence === "active" ? "session active" : "hibernating"}</span></b>
+                <span>${esc(a.role)}</span>
+              </div>
+            </button>
+            <div class="chat-head-actions">
+              ${dockButtons(chat)}
             </div>
-            ${dockButtons(chat)}
-            <button class="icon-btn" aria-label="Conversation menu">${I("more")}</button>
+          </div>
+          <div class="chat-head-right">
+            ${searchButton()}
+            ${headCluster(state)}
           </div>
         </div>`;
     }
@@ -573,15 +663,20 @@ const Views = (function () {
     const name = chat.id === "op-adhoc" ? "Ad-hoc · 2 Agents" : t.name;
     return `
       <div class="chat-head">
-        <span class="glyph sb-op-icon" style="width:40px;height:40px;border-radius:12px;background:var(--brand-bg);display:grid;place-items:center">${I("operation", 19)}</span>
-        <div class="t">
-          <b>${esc(name)} <span class="chip sky" style="height:20px;font-size:10px">${I("lock", 9)} student pack v1</span></b>
-          <span>${t ? esc(t.purpose.split(":")[0].split(".")[0]) + "." : "Custom same-pack roster"} · ${chat.runs} task runs tracked separately</span>
+        <div class="chat-head-left">
+          <span class="glyph sb-op-icon" style="width:40px;height:40px;border-radius:12px;background:var(--brand-bg);display:grid;place-items:center">${I("operation", 19)}</span>
+          <div class="t">
+            <b>${esc(name)} <span class="chip sky" style="height:20px;font-size:10px">${I("lock", 9)} student pack v1</span></b>
+            <span>${t ? esc(t.purpose.split(":")[0].split(".")[0]) + "." : "Custom same-pack roster"} · ${chat.runs} task runs tracked separately</span>
+          </div>
+          <div class="chat-head-actions">
+            <button class="btn btn-xs btn-ghost" data-action="toggle-roster">${I("user", 12)}Roster</button>
+            ${dockButtons(chat)}
+          </div>
         </div>
-        <div class="chat-head-actions">
-          <button class="btn btn-xs btn-ghost" data-action="toggle-roster">${I("user", 12)}Roster</button>
-          ${dockButtons(chat)}
-          <button class="icon-btn" aria-label="Operation menu">${I("more")}</button>
+        <div class="chat-head-right">
+          ${searchButton()}
+          ${headCluster(state)}
         </div>
       </div>
       <div class="roster-bar" id="roster-bar">
@@ -597,6 +692,7 @@ const Views = (function () {
 
   /* ---------- workspace dock (adaptive panel grid) ---------- */
   const DOCK_PANELS = [
+    ["profile", "Agent profile", "user"],
     ["runs", "Task runs", "list"],
     ["tasks", "Run timeline", "history"],
     ["files", "Files", "folder"],
@@ -608,14 +704,15 @@ const Views = (function () {
   ];
 
   function dockState(chat) {
-    return App.state.dock[chat.id] || { open: false, width: 440, panels: [] };
+    return App.state.dock[chat.id] || { open: false, width: null, panels: [] };
   }
 
   function dockButtons(chat) {
     const d = dockState(chat);
     return `
+      <span class="dock-buttons" data-dock-buttons="${chat.id}">
       <button class="icon-btn tip" data-tip="Workspace dock" data-action="dock-toggle" data-chat="${chat.id}" aria-pressed="${d.open}" aria-label="Toggle workspace dock">${I("panelright", 17)}</button>
-      ${d.open ? `<a class="icon-btn tip" data-tip="Full-page workspace" href="#/workspace/${chat.id}" aria-label="Open full-page workspace" style="width:34px;height:34px">${I("expand", 14)}</a>` : ""}`;
+      </span>`;
   }
 
   function dockPanelMeta(type) { return DOCK_PANELS.find(x => x[0] === type) || DOCK_PANELS[0]; }
@@ -624,52 +721,59 @@ const Views = (function () {
     const d = dockState(chat);
     if (!d.open) return "";
     const panels = d.panels || [];
-    let cols;
-    const maxed = panels.find(p => p.max);
-    if (maxed) cols = [[maxed]];
-    else if (panels.length <= 2) cols = [panels];
-    else cols = [panels.slice(0, Math.ceil(panels.length / 2)), panels.slice(Math.ceil(panels.length / 2))];
+    const cols = DockLayout.columns(panels);
     return `
-    <aside class="dock" style="--dock-w:${d.width || 440}px" aria-label="Workspace dock">
-      <div class="dock-handle" data-dock-resize="${chat.id}" role="separator" aria-orientation="vertical" aria-label="Drag to resize dock"><span>${I("drag", 12)}</span></div>
+    <aside class="dock" id="workspace-dock" data-chat="${chat.id}" style="--dock-w:${d.fill ? "100%" : (d.width || 440) + "px"}" aria-label="Workspace dock">
+      ${dockSeparator("outer", "vertical", "Workspace width", "workspace-dock", "dock-handle")}
+      <p class="sr-only" id="dock-resize-help">Drag to resize. Use arrow keys, Shift for larger steps, Home or End for limits, Enter to reset. Escape cancels a drag. The dock can fill the whole main area; drag back or use Back to chat to restore the chat.</p>
       <div class="dock-head">
+        <button class="btn btn-xs btn-soft dock-back" data-action="dock-chat" data-chat="${chat.id}">${I("chevR", 12)}Back to chat</button>
         <h4>${I("panelright", 14)}Workspace</h4>
         <span class="chip quiet num">${panels.length} open</span>
         <span class="spacer" style="flex:1"></span>
+        <button class="btn btn-xs btn-ghost" data-action="dock-reset" data-chat="${chat.id}" title="Reset width, splits and collapsed panels">Reset layout</button>
         <button class="btn btn-xs btn-ghost" data-action="dock-add-toggle" data-chat="${chat.id}" aria-haspopup="menu" aria-expanded="${state.dockAdd === chat.id}">${I("plus", 11)}Add panel</button>
         <button class="icon-btn tip" data-tip="Collapse dock" data-action="dock-toggle" data-chat="${chat.id}" style="width:30px;height:30px" aria-label="Collapse dock">${I("x", 14)}</button>
       </div>
-      ${state.dockAdd === chat.id ? addPanelPop(chat, panels) : ""}
+      ${state.dockAdd === chat.id ? addPanelPop(chat, panels, cols) : ""}
       <div class="dock-body">
         ${panels.length === 0 ? `
           <div class="dock-empty">
             <span class="glyph">${I("panelright", 20)}</span>
             <div><b style="font-size:14px">Nothing open</b><p class="muted" style="font-size:12.5px;margin-top:3px">Open anything the Agents produce — it docks here, out of the chat.</p></div>
             <button class="btn btn-sm btn-soft" data-action="dock-add-toggle" data-chat="${chat.id}">${I("plus", 13)}Add panel</button>
-          </div>` : cols.map(col => `
-          <div class="dock-col">${col.map(p => dockPanel(chat, p, panels, state)).join("")}</div>`).join("")}
+          </div>` : cols.map((col, index) => `
+          ${index ? dockSeparator("column", "vertical", "Workspace column split", "dock-col-0", "dock-column-handle") : ""}
+          <div class="dock-col" id="dock-col-${index}" data-column="${index}">${col.map((p, row) => `
+            ${row ? dockSeparator("row", "horizontal", `Resize ${dockPanelMeta(col[row - 1].type)[1]} and ${dockPanelMeta(p.type)[1]}`, `dock-panel-${col[row - 1].type}`, "dock-row-handle", `data-before="${col[row - 1].type}" data-after="${p.type}"`) : ""}
+            ${dockPanel(chat, p, panels, state)}`).join("")}</div>`).join("")}
       </div>
     </aside>`;
+  }
+
+  function dockSeparator(kind, orientation, label, controls, cls, extra = "") {
+    return `<div class="dock-separator ${cls}" data-dock-resize="${kind}" ${extra} tabindex="0" role="separator" aria-orientation="${orientation}" aria-label="${label}" aria-controls="${controls}" aria-describedby="dock-resize-help" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" title="${label} · drag or arrow keys · Enter to reset"><span></span></div>`;
   }
 
   function dockPanel(chat, p, panels, state) {
     const [id, label, icon] = dockPanelMeta(p.type);
     const focused = p.max || panels.length === 1;
     return `
-    <section class="dock-panel ${focused ? "focused" : ""}" aria-label="${label}">
+    <section class="dock-panel ${focused ? "focused" : ""}" id="dock-panel-${p.type}" data-panel="${p.type}" aria-label="${label}">
       <header class="dp-head">
-        <span class="dp-title">${I(icon, 14)}${label}</span>
+        <span class="dp-title" title="${label}">${I(icon, 14)}<span>${label}</span></span>
         <div class="dp-actions">
+          <button class="icon-btn tip" data-tip="Collapse panel" data-action="dock-collapse" data-chat="${chat.id}" data-type="${p.type}" aria-expanded="true" aria-controls="dock-body-${p.type}" aria-label="Collapse ${label}">${I("chevD", 13)}</button>
           <button class="icon-btn tip" data-tip="${p.max ? "Restore split" : "Fill the dock"}" data-action="dock-max" data-chat="${chat.id}" data-type="${p.type}" aria-label="${p.max ? "Restore panel" : "Maximize panel"}">${I("expand", 13)}</button>
           <a class="icon-btn tip" data-tip="Open full page" href="#/workspace/${chat.id}/${p.type}" aria-label="Open ${label} full page">${I("arrowUR", 13)}</a>
           <button class="icon-btn tip" data-tip="Close panel" data-action="dock-close" data-chat="${chat.id}" data-type="${p.type}" aria-label="Close ${label}">${I("x", 13)}</button>
         </div>
       </header>
-      <div class="dp-body">${dockBody(p.type, chat, state)}</div>
+      <div class="dp-body" id="dock-body-${p.type}">${dockBody(p.type, chat, state)}</div>
     </section>`;
   }
 
-  function addPanelPop(chat, panels) {
+  function addPanelPop(chat, panels, cols = []) {
     return `
     <div class="add-pop" role="menu" aria-label="Add a panel">
       <div class="at-title">Open a panel</div>
@@ -679,12 +783,156 @@ const Views = (function () {
           ${I(icon, 15)}${label}${open ? '<span class="in-dock">OPEN</span>' : ""}
         </button>`;
       }).join("")}
+      <div class="add-resize">
+        <div class="at-title">Resize panels</div>
+        <div class="dock-size-controls">
+          <label class="sr-only" for="dock-size-target">Split to resize</label>
+          <select id="dock-size-target" class="select dock-size-target" aria-label="Split to resize">
+            <option value="outer">Dock width</option>
+            ${cols.length > 1 ? '<option value="column">Left column width</option>' : ""}
+            ${cols.map(col => col.slice(0, -1).map(p => `<option value="row:${p.type}">${dockPanelMeta(p.type)[1]} height</option>`).join("")).join("")}
+          </select>
+          <button class="btn btn-xs btn-ghost" data-action="dock-size" data-size="-1" aria-label="Decrease selected size">−</button>
+          <button class="btn btn-xs btn-ghost" data-action="dock-size" data-size="1" aria-label="Increase selected size">+</button>
+          <button class="btn btn-xs btn-ghost" data-action="dock-size" data-size="reset">Equal / default</button>
+        </div>
+      </div>
     </div>`;
+  }
+
+  /* ---------- Agent profile panel (Telegram-style) ---------- */
+  const PROFILE_ACTIVE_STATES = ["QUEUED", "RUNNING", "WAITING_FOR_APPROVAL", "RETRYING", "RECOVERY_REQUIRED", "PAUSED"];
+
+  function profRow(icon, label, value) {
+    return `<div class="prof-row"><span class="pr-ic">${I(icon, 15)}</span><span class="pr-body"><span class="pr-label">${label}</span><span class="pr-value">${value}</span></span></div>`;
+  }
+
+  function agentSkills(id) {
+    const set = new Set();
+    OP_TEMPLATES.forEach(t => ((t.skills && t.skills[id]) || []).forEach(s => set.add(s)));
+    return [...set];
+  }
+
+  function agentOperations(id) {
+    const names = OP_TEMPLATES.filter(t => t.agents.includes(id)).map(t => t.name);
+    if (["general-assistant", "programming-tutor"].includes(id)) names.push("Ad-hoc");
+    return names;
+  }
+
+  function profileActions(chat, a, state, fullPage) {
+    const muted = !!(state.profileMuted || {})[a.id];
+    const filesBtn = fullPage
+      ? `<a class="pa-btn" href="#/workspace/${chat.id}/files"><span class="pa-ic">${I("folder", 16)}</span>Files</a>`
+      : `<button class="pa-btn" data-action="dock-add" data-chat="${chat.id}" data-type="files"><span class="pa-ic">${I("folder", 16)}</span>Files</button>`;
+    return `
+      <div class="pa-grid" role="group" aria-label="${esc(a.name)} quick actions">
+        <button class="pa-btn" data-action="profile-message" data-chat="${chat.id}"><span class="pa-ic">${I("send", 16)}</span>Message</button>
+        <button class="pa-btn" data-action="profile-new-run" data-chat="${chat.id}"><span class="pa-ic">${I("play", 16)}</span>New task</button>
+        ${filesBtn}
+        <button class="pa-btn" data-action="profile-mute" data-agent="${a.id}" aria-pressed="${muted}"><span class="pa-ic">${I("bell", 16)}</span>${muted ? "Unmute" : "Mute"}</button>
+        <a class="pa-btn" href="#/settings/agents"><span class="pa-ic">${I("settings", 16)}</span>Settings</a>
+        ${fullPage ? "" : `<a class="pa-btn" href="#/workspace/${chat.id}"><span class="pa-ic">${I("expand", 16)}</span>Full page</a>`}
+      </div>`;
+  }
+
+  function profileBody(chat, state, fullPage) {
+    if (chat.type !== "agent") return operationProfileBody(chat);
+    const a = agentById(chat.ref);
+    if (!a) return '<p class="muted">No Agent is attached to this chat.</p>';
+    const skills = agentSkills(a.id);
+    const ops = agentOperations(a.id);
+    const files = WORKSPACE.privateFiles[a.id] || ["memory/journal.md", "skills/profile.md"];
+    const activeRuns = RUNS.filter(r => r.chat === chat.id && PROFILE_ACTIVE_STATES.includes(r.state));
+    const statusText = a.running || a.done || (a.approval ? "Permission request pending" : a.presence === "active" ? "Session active" : "Hibernating");
+    const sessions = AGENT_SESSIONS[a.id] || [];
+    return `
+      <div class="prof">
+        <div class="prof-head">
+          ${avatar(chat.ref).replace('class="avatar', 'class="avatar prof-ava').replace("</span>", `<span class="presence ${a.presence === "active" ? "on" : "away"}"></span></span>`)}
+          <b class="prof-name">${esc(a.name)}</b>
+          <span class="prof-role">${esc(a.role)}</span>
+        </div>
+        ${profileActions(chat, a, state, fullPage)}
+        <div class="prof-rows">
+          ${profRow("activity", "Status", esc(statusText))}
+          ${profRow("zap", "Default model", esc(a.provider))}
+          ${profRow("skill", "Skills", skills.length ? skills.map(s => esc(s)).join(" · ") : "General assistance")}
+          ${profRow("operation", "Operations", `${ops.length} — ${ops.map(o => esc(o)).join(", ")}`)}
+          ${profRow("info", "About", esc(a.blurb))}
+        </div>
+        <details class="prof-sec" open>
+          <summary>${I("folder", 14)}<span>Files</span><span class="spacer"></span><span class="count">${files.length}</span>${I("chevD", 12)}</summary>
+          <div class="prof-sec-body">
+            ${files.map(f => `<div class="tree-row d1">${I("file", 13)}<span class="grow">${esc(f)}</span></div>`).join("")}
+            <p class="faint">Private folder — shared with an Operation only through an explicit publication step.</p>
+          </div>
+        </details>
+        <details class="prof-sec" open>
+          <summary>${I("activity", 14)}<span>Ongoing tasks</span><span class="spacer"></span><span class="count">${activeRuns.length}</span>${I("chevD", 12)}</summary>
+          <div class="prof-sec-body">
+            ${activeRuns.length ? activeRuns.map(r => `
+              <button class="prof-run" data-action="select-run" data-run="${r.id}">
+                <span class="pr1"><span class="id">${esc(r.id)}</span><span class="spacer"></span>${runStateChip(r.state)}</span>
+                <span class="goal">${esc(r.goal)}</span>
+              </button>`).join("")
+            : `<p class="prof-empty">No active task runs in this chat. Send a message or use <b>New task</b> to start one.</p>`}
+          </div>
+        </details>
+        <details class="prof-sec">
+          <summary>${I("history", 14)}<span>Session history</span><span class="spacer"></span><span class="count">${sessions.length}</span>${I("chevD", 12)}</summary>
+          <div class="prof-sec-body">
+            ${sessions.length ? sessions.map(s => `
+              <div class="prof-sess">
+                <span class="ps-dot ${esc(s.outcome)}">${s.outcome === "done" ? I("check", 10) : s.outcome === "attention" ? I("alert", 10) : ""}</span>
+                <span class="ps-body"><span class="ps-title">${esc(s.title)}<span class="ps-when">${esc(s.when)}</span></span><span class="ps-detail">${esc(s.detail)}</span></span>
+              </div>`).join("")
+            : `<p class="prof-empty">No past sessions recorded for this scenario.</p>`}
+            <p class="faint">Sample session history — mockup fixture, not a runtime log.</p>
+          </div>
+        </details>
+      </div>`;
+  }
+
+  function operationProfileBody(chat) {
+    const t = tmplById(chat.ref);
+    const name = chat.id === "op-adhoc" ? "Ad-hoc · 2 Agents" : (t ? t.name : chat.id);
+    const roster = opRoster(chat);
+    const coord = chat.ref === "adhoc" ? "general-assistant" : (t ? t.coordinator : null);
+    return `
+      <div class="prof">
+        <div class="prof-head">
+          <span class="glyph prof-op-glyph">${I("operation", 22)}</span>
+          <b class="prof-name">${esc(name)}</b>
+          <span class="prof-role">Operation · student pack v1</span>
+        </div>
+        <div class="prof-rows">
+          ${t ? profRow("info", "Purpose", esc(t.purpose)) : ""}
+          ${t ? profRow("coins", "Estimated credits", `${t.estimate[0]}–${t.estimate[1]} cr — reserved at launch`) : ""}
+        </div>
+        <details class="prof-sec" open>
+          <summary>${I("user", 14)}<span>Roster</span><span class="spacer"></span><span class="count">${roster.length}</span>${I("chevD", 12)}</summary>
+          <div class="prof-sec-body">
+            ${roster.map(id => {
+              const ag = agentById(id);
+              return `<div class="prof-member">${avatar(id, "sm")}<span class="grow"><b>${esc(ag.name)}</b><span class="pr-label">${esc(ag.role)}</span></span>${coord === id ? '<span class="coord-badge">Coordinator</span>' : ""}</div>`;
+            }).join("")}
+          </div>
+        </details>
+        ${t ? `
+        <details class="prof-sec">
+          <summary>${I("box", 14)}<span>Expected outputs</span><span class="spacer"></span><span class="count">${t.outputs.length}</span>${I("chevD", 12)}</summary>
+          <div class="prof-sec-body">${t.outputs.map(o => `<div class="tree-row d1">${I("file", 13)}<span class="grow">${esc(o)}</span></div>`).join("")}</div>
+        </details>
+        <details class="prof-sec">
+          <summary>${I("plug", 14)}<span>Connectors</span><span class="spacer"></span><span class="count">${t.connectors.length}</span>${I("chevD", 12)}</summary>
+          <div class="prof-sec-body">${t.connectors.map(c => `<div class="prof-member"><span class="pr-ic">${I("plug", 14)}</span><span class="grow"><b>${esc(c.name)}</b></span><span class="chip ${c.status === "connected" ? "quiet" : "warn"}" style="height:20px;font-size:10px">${esc(c.status)}</span></div>`).join("")}</div>
+        </details>` : ""}
+      </div>`;
   }
 
   function runsPanelBody(chat, state) {
     const runs = RUNS.filter(r => r.chat === chat.id);
-    const sel = state.selRun || runs[0]?.id;
+    const sel = (runs.find(r => r.id === state.selRun) || runs[0])?.id;
     return `
     <div class="col" style="gap:8px">
       ${runs.map(r => `
@@ -697,8 +945,9 @@ const Views = (function () {
     </div>`;
   }
 
-  function dockBody(type, chat, state) {
+  function dockBody(type, chat, state, fullPage) {
     if (type === "runs") return runsPanelBody(chat, state);
+    if (type === "profile") return profileBody(chat, state, fullPage);
     return wsBody(type, chat, state);
   }
 
@@ -707,7 +956,7 @@ const Views = (function () {
     return `
       <div class="chat-shell">
         <div class="chat-col">
-          ${chatHeader(chat)}
+          ${chatHeader(chat, state)}
           <div class="thread-wrap">
             <div class="thread" id="thread">
               <div class="thread-inner">
@@ -717,7 +966,6 @@ const Views = (function () {
           </div>
           ${composer(chat)}
         </div>
-        ${dockView(chat, state)}
       </div>`;
   }
 
@@ -737,7 +985,7 @@ const Views = (function () {
             <div class="ws-tabs" role="tablist">
               ${DOCK_PANELS.map(([id, label, icon]) => `<a class="ws-tab ${active === id ? "active" : ""}" role="tab" aria-selected="${active === id}" href="#/workspace/${chat.id}/${id}">${I(icon, 13)}${label}</a>`).join("")}
             </div>
-            <div class="ws-body">${dockBody(active, chat, state)}</div>
+            <div class="ws-body">${dockBody(active, chat, state, true)}</div>
           </div>
         </div>
       </div>`;
@@ -801,7 +1049,8 @@ const Views = (function () {
     }
     if (tab === "tasks") {
       const runs = RUNS.filter(r => r.chat === chat.id);
-      const sel = RUNS.find(r => r.id === (state.selRun || runs[0]?.id)) || runs[0];
+      const sel = runs.find(r => r.id === state.selRun) || runs[0];
+      if (!sel) return '<p class="muted">No task runs in this chat yet.</p>';
       return `
         <div class="ws-toolbar">
           <select class="select" style="height:32px;font-size:12px" data-action="select-run" aria-label="Select run">
@@ -1208,13 +1457,49 @@ const Views = (function () {
     <div class="popover account-pop" role="menu" aria-label="Account" data-pop>
       <div class="account-id">${avatarlessUser()}<div class="t"><b>${esc(USER.name)}</b><span>${esc(USER.email)}</span></div></div>
       <div class="account-links">
+        <button data-action="toggle-theme">${App.state.theme === "dark" ? I("sun", 15) : I("moon", 15)}${App.state.theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}</button>
+        <button data-action="open-notifs">${I("bell", 15)}Notifications <span class="spacer"></span><span class="chip ${NOTIFICATIONS.some(n => n.unread) ? "warn" : "quiet"}" style="height:20px;font-size:10px">${NOTIFICATIONS.filter(n => n.unread).length} unread</span></button>
         <a href="#/settings/account">${I("user", 15)}Profile & tier <span class="spacer"></span><span class="chip brand" style="height:20px;font-size:10px">${esc(USER.tier)}</span></a>
         <a href="#/settings/credits">${I("coins", 15)}Credits <span class="spacer"></span><b class="num" style="font-size:12px">1,240 cr</b></a>
         <a href="#/settings">${I("settings", 15)}Settings</a>
+        <button data-action="open-demo">${I("spark", 15)}Scripted demo <span class="spacer"></span><span class="faint" style="font-size:11px">mock runtime</span></button>
         <button data-action="toggle-conn">${I("activity", 15)}Connection: ${App.state.conn} <span class="spacer"></span><span class="faint" style="font-size:11px">simulate</span></button>
         <button data-action="logout">${I("x", 15)}Sign out</button>
       </div>
       <div class="account-foot">Storage <b class="num">${USER.storageUsedPct}%</b> of 25 GB · warns at 80% · nothing auto-deleted.</div>
+    </div>`;
+  }
+
+  /* Search modal (2026-09-13): a local navigation palette. It filters chat
+     names, templates and settings sections from fixtures — it does NOT search
+     message contents, and the footer says so. */
+  function searchModal(state) {
+    const q = (state.searchQuery || "").trim().toLowerCase();
+    const index = [
+      ...AGENTS.map(a => ({ icon: "agent", label: a.name, sub: a.role, href: "#/agent-" + a.id })),
+      ...CHATS.list.filter(c => c.type === "operation").map(c => ({ icon: "operation", label: c.name, sub: "Operation chat", href: "#/" + c.id })),
+      ...OP_TEMPLATES.map(t => ({ icon: "operation", label: t.name, sub: "Launch template — preview confirms first", tpl: t.id })),
+      { icon: "overview", label: "Overview", sub: "Runs, activity and schedules", href: "#/overview" },
+      { icon: "settings", label: "Settings", sub: "All sections", href: "#/settings" },
+      ...[["account", "Account"], ["providers", "Providers & models"], ["credits", "Credits"], ["permissions", "Permissions"], ["memory", "Memory"], ["privacy", "Privacy"]].map(([id, label]) => ({ icon: "settings", label, sub: "Settings section", href: "#/settings/" + id })),
+    ];
+    const hits = q ? index.filter(x => (x.label + " " + x.sub).toLowerCase().includes(q)) : index.slice(0, 6);
+    return `
+    <div class="overlay" data-action="close-search" role="dialog" aria-modal="true" aria-label="Search">
+      <div class="modal search-modal" data-stop>
+        <div class="search-row">
+          ${I("search", 16)}
+          <input id="search-modal-input" type="search" placeholder="Search chats, templates, settings…" aria-label="Search" autocomplete="off">
+          <button class="icon-btn" data-action="close-search" aria-label="Close search">${I("x", 15)}</button>
+        </div>
+        <div class="search-hits">
+          ${hits.length ? hits.map(h => h.tpl
+            ? `<button class="search-hit" data-action="open-preview" data-id="${h.tpl}">${I(h.icon, 15)}<span class="grow"><b>${esc(h.label)}</b><span>${esc(h.sub)}</span></span></button>`
+            : `<a class="search-hit" data-action="goto" data-href="${h.href}" href="${h.href}">${I(h.icon, 15)}<span class="grow"><b>${esc(h.label)}</b><span>${esc(h.sub)}</span></span></a>`).join("")
+          : `<p class="search-empty">Nothing matches that. Search covers chat names, templates and settings sections in this mockup — not message contents.</p>`}
+        </div>
+        <p class="search-foot">Enter opens the first result · ↑↓ to move · Esc closes · searches chats, templates and settings — not message contents</p>
+      </div>
     </div>`;
   }
 
@@ -1234,7 +1519,7 @@ const Views = (function () {
   return {
     agentById, tmplById, chatById, avatar, runStateChip, riskBadge, opRoster,
     sidebar, topbar, banners, login, emptyHome, overview, chatScreen, preview,
-    createAdhoc, settings, notifications, accountPop, demoPop, approvalCard, threadItem,
-    workspaceFull, dockView, dockState,
+    createAdhoc, settings, notifications, accountPop, demoPop, searchModal, approvalCard, threadItem,
+    workspaceFull, dockView, dockState, dockButtons, dockBody,
   };
 })();

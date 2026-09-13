@@ -1,6 +1,12 @@
 # Shera Bot
 
-Shera Bot is a private prototype for a local-first, multi-agent assistant platform. The product design is documented and synchronized with the final decisions (D1–D45); the root application implementation has not yet been established. A separate marketing/waitlist site lives in `business-landing-portfolio/`.
+Shera Bot is a private prototype for a local-first, multi-agent assistant platform. The product design is documented and synchronized with the final decisions (D1–D45); the product runtime implementation has not yet been established. A static client mockup lives in `mockup/`, and a separate marketing/waitlist site lives in `business-landing-portfolio/`.
+
+## Client mockup
+
+Start with [`mockup/README.md`](mockup/README.md) to run the static UI. Future agents should read [`mockup/HANDOFF.md`](mockup/HANDOFF.md) and [`mockup/REFERENCE.md`](mockup/REFERENCE.md) for implemented interactions, simulated/inert features, completed pane changes and known blockers. [`mockup/UX_RECOMMENDATIONS.md`](mockup/UX_RECOMMENDATIONS.md) contains proposed first-use improvements, and the [`dated review archive`](mockup/reviews/2026-09-13/README.md) preserves the audit and screenshots.
+
+The mockup is not a working backend or proof of prototype acceptance. Its UX recommendations are not adopted product decisions.
 
 ## Start here
 
@@ -11,7 +17,7 @@ Before modifying architecture or code, read the documentation in this order:
 3. [`docs/decisions/README.md`](docs/decisions/README.md) — decision index.
 4. [`docs/GLOSSARY.md`](docs/GLOSSARY.md) — canonical vocabulary: **Pack → Operations → Agents**.
 5. [`docs/TRACEABILITY.md`](docs/TRACEABILITY.md) — PRD reconciliation, decision status, acceptance coverage, and open items.
-6. [`docs/history/2026-09-08-to-2026-09-11/README.md`](docs/history/2026-09-08-to-2026-09-11/README.md) — complete three-day session archive.
+6. Historical context: `docs/history/2026-09-08-to-2026-09-11/README.md` is absent from the working tree after commit `9d8b81c`. Consult the archive in Git history (for example `cea3ba1`) and local raw exports where available; read relevant full evidence before relying on a summary.
 
 ## Rules for future agents
 

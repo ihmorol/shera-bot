@@ -43,9 +43,9 @@ All paths below are hash routes relative to the served `index.html`.
 
 | Route / entry | Surface | Actual behavior and limits |
 |---|---|---|
-| Empty hash, `#/login` | S1 login / account-cap variant | Normal first load. Continue with Google changes the hash to Overview and displays a simulated success toast. No authentication. Cap link toggles a local fixture. |
-| `#/overview` | Additional mockup dashboard | **Actual post-login destination.** Statistics, activity chart, outcomes donut, schedules, Operation summaries and live timer. It is not S2's chat-first landing. |
-| `#/app` | S2 empty chat-first home | Three shortcuts: Researcher direct chat, Research Paper preview, ad-hoc creation. Researcher shortcut currently emits an unsupported nested route. |
+| Empty hash, `#/login` | S1 login / account-cap variant | Normal first load. Continue with Google lands on the S2 chat-first home (`#/app`) with a simulated success toast — repaired 2026-09-13 (was Overview). No authentication. Cap link toggles a local fixture. |
+| `#/overview` | Additional mockup dashboard | Statistics, activity chart, outcomes donut, schedules, Operation summaries and live timer. No longer the post-login destination — login lands on `#/app` (2026-09-13). |
+| `#/app` | S2 empty chat-first home | **Post-login landing.** Three shortcuts: Researcher direct chat, Research Paper preview, ad-hoc creation — all routes resolve (2026-09-13). |
 | `#/agent-general-assistant` | S3 | General Assistant direct chat. |
 | `#/agent-researcher` | S3 | Researcher direct chat. |
 | `#/agent-developer` | S3 | Developer direct chat; runs + terminal dock initially open on desktop. |
@@ -300,4 +300,4 @@ The full-page and chat routes have separate snapshot keys. Do not promise that e
 
 See [pane verification](reviews/2026-09-13/pane-verification-2026-09-13.md) for exact measurements, screenshot links, real-pointer checks, failed harness attempts, cache workaround and untested scenarios. The actual automated suite has thirteen tests; the terminal fixture's “14 passed” is not test evidence.
 
-Outstanding priorities: repair core routes and launch/create behavior; truthful demo labeling; actual result access; safe text rendering; approval focus/grant/state consistency; Settings navigation; input retention beyond pane actions; search; mobile shell; contrast/labels/focus; event/delivery honesty. The [UX recommendations](UX_RECOMMENDATIONS.md) explain how to simplify first use without deleting required capabilities.
+Outstanding priorities after the 2026-09-13 repair passes: launch truthfulness is fixed (real queued run; Programming Assignment honestly limited), routes/escaping/settings-navigation are repaired with regression tests, and search exists as a palette. Still open: approval focus/grant/state consistency; input retention beyond pane actions; mobile shell beyond the dock sheet; contrast/labels/focus; event/delivery honesty; the D43 roster decision (product owner). The [UX recommendations](UX_RECOMMENDATIONS.md) explain how to simplify first use without deleting required capabilities.

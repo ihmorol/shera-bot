@@ -278,7 +278,7 @@ const App = (function () {
     "noop": () => {},
     "go-credits": () => { location.hash = "#/settings/credits"; },
     "go-settings-agents": () => { location.hash = "#/settings/agents"; },
-    "do-login": () => { location.hash = "#/overview"; toast("Welcome back", "Signed in with Google · Balanced tier container ready"); },
+    "do-login": () => { location.hash = "#/app"; toast("Welcome back", "Signed in with Google · Balanced tier container ready"); },
     "toggle-cap": () => { state.loginCap = !state.loginCap; render(); },
     "logout": () => { state.pop = null; location.hash = "#/login"; },
     "dismiss-recovery": () => { state.recovery = false; render(); },

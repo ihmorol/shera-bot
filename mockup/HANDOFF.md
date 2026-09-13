@@ -362,3 +362,13 @@ Second audit batch: the fixture contradictions flagged as F9/F10 are repaired at
 - **REFERENCE** §3 route-contract row and §6/§10 rows updated to "repaired" status with dates; the earlier route/esc/settings repairs are in HANDOFF §18 / commit `958ce34`.
 
 Verification: 27/27 tests; launch flow browser-verified end-to-end (preview → queued run → thread item → navigation → toast); schedule/notification copy checked against SCHEDULES/RUNS. Untested: the exam-preparation launch path (same code path as research-paper), long-content rendering of the new schedule rows.
+
+## 20. Stage 1 closed; transition to the real system prepared (2026-09-13, night)
+
+Owner directive: "keep everything documented… and work on actual system from the mockup."
+
+- **Stage 1 (mockup trust & safety) is functionally closed:** the fifth and last documented defect — simulated login landing on Overview — now lands on the S2 chat-first home (`#/app`), per `docs/UI_DESIGN.md` S2. Verified in-browser; the action is app.js-internal so the check is browser-level (the workflow's documented escape hatch), not a unit test. REFERENCE route rows and the DEV_WORKFLOW baseline were refreshed to the current state (27 tests, defects repaired, clean tree at `fd0270d`).
+- **Stage 1 gate items that remain for the owner** (agents cannot decide): the D43 roster-mapping decision record, and the UX_RECOMMENDATIONS adoption call. Both are surfaced in `docs/decisions/open-items-brief-2026-09-13.md`.
+- **Stage 2 prepared:** `docs/decisions/open-items-brief-2026-09-13.md` — the Scout brief over the ten open TRACEABILITY items, each with dependencies, 2–3 options, deferral risk and interacting decision IDs, plus a disposition table for the owner to fill (⚠ flags mark the four items that touch Phase 0 contracts: admin secrets, credits/exhaustion, workspace_id, Pack mapping/D43).
+- **Stage 3 planned (draft, not scaffolded):** `docs/decisions/phase0-plan-draft-2026-09-13.md` — the Planner's Phase 0 slice list (S1 scaffold+CI → S2 contracts → S3 state machine → S4 approval model + threat model → S5 filesystem contract + harness → S6 D13 spike). Per the workflow gate, **scaffolding starts only after the owner approves this plan.** The plan's §0 records what the mockup contributes: validated interaction patterns (three-panel shell, profile-first workspace, palette search, five-choice approvals), explicitly not code.
+- The owner's one-line dispositions in the brief's table unlock the Archivist to draft D46+ records, which unlock Stage 3 scaffolding.

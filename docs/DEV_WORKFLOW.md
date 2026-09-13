@@ -22,14 +22,14 @@ Verified state — this is the starting line:
 | Area | State |
 |---|---|
 | Product design | Complete and synchronized: PRD + D1–D45 + E1–E8, acceptance criteria 1–27 defined. Criteria **22–27 are adopted but not implemented** (`docs/TRACEABILITY.md`). |
-| Static mockup | Interactive HTML/CSS/JS client with fixtures, pane system, one real test file (`mockup/dock-layout.test.cjs`, 13 passing). No backend, no auth, no persistence beyond theme. |
-| Mockup defects | Documented, not yet fixed: broken launch/create navigation, settings deep-link trap, unsafe `esc()`, empty modal `data-stop` guard, simulated login landing on Overview, approvals that create no grants (`mockup/HANDOFF.md`, `mockup/REFERENCE.md`, `mockup/app.js`, `mockup/views.js`). |
+| Static mockup | Interactive HTML/CSS/JS client with fixtures, pane system, search palette, Agent profile panel, three-panel floating shell, ambient canvas (`mockup/dock-layout.test.cjs`, 27 passing). No backend, no auth, no persistence beyond theme. |
+| Mockup defects | All five Stage-1 trust/safety defects repaired 2026-09-13 with regression tests: nested routes (17 links), unsafe `esc()`, settings deep-link trap, modal interior-click dismissal, login landing on Overview — commits `788e38f`, `958ce34`, `fd0270d`; HANDOFF §13–§20. Fixture truthfulness (F9/F10) repaired at the data source. |
 | Recorded conflict | D43 roster mapping conflict exists and must **not** be silently resolved in fixture code (`mockup/HANDOFF.md`). |
 | Unresolved decisions | Ten implementation-defined items are explicitly open (`docs/TRACEABILITY.md` — open items list): admin scope, admin secret exception, exhausted-credit UX, event compaction, SQLite-consistent backups, `workspace_id` invariant, capability mapping, coordinator removal, per-tool ambiguous-effect recovery, PRD TODO closure. |
 | Runtime | **Nothing implemented.** Chosen stack (Next.js/React/TS/Tailwind, Express control plane, PostgreSQL + container SQLite WAL, Drizzle, Redis transient, Zod contracts, pnpm/Turborepo, Docker Compose on one Ubuntu 24.04 VM) exists only as decisions. D13 TypeScript↔Pi process boundary needs a supervision spike; `node:sqlite` choice is subject to that spike. |
 | CI / deploy | None. No pipeline, no Dockerfile/Compose, no migrations, no deploy runbook. |
 | Marketing site | Separate standalone Next.js repo (git-ignored here). Waitlist is simulated and currently tells visitors they are on the list when nothing is stored (`business-landing-portfolio/components/waitlist-form.tsx`) — fix before any public exposure. |
-| Git | Both working trees dirty (product: 7 modified files + untracked handoff/reference/UX/test/review docs — **528 insertions** of real work; marketing: 4 modified). Nothing staged. |
+| Git | Product repo clean on `main` at `fd0270d` (2026-09-13): Stage 0 banked via `788e38f` (floating shell + profile + palette), `958ce34` (routes/esc/settings repairs), `fd0270d` (fixture truthfulness). HANDOFF §13–§20 and evidence committed. |
 
 **The approved next release is a private prototype** (≤5 accounts, Google OAuth, simulated tiers, one VM), not a public launch. A separate production-readiness decision comes after prototype acceptance (§7, Stage 7).
 
@@ -221,6 +221,8 @@ STOP & REPORT: The commit plan first. After approval: `git log --oneline -5` and
 - Archivist: update `mockup/REFERENCE.md` implementation status and append dated evidence to `mockup/reviews/`.
 
 **Gate:** All documented defects fixed with green regression tests; full `node --test` suite green; QA pass with no new reproducers; HANDOFF/REFERENCE updated; D43 decision recorded or explicitly deferred with a decision record.
+
+**Progress 2026-09-13:** all five defects repaired (baseline table); QA click-through done in-session for routes/settings/login; **gate still open** pending two owner decisions: the D43 roster-mapping record and the UX_RECOMMENDATIONS adoption call. Escaping/modal tests cover DOM-level behavior; the login-destination change was verified in-browser only.
 
 **Prompt set:**
 

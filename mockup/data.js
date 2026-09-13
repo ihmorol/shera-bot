@@ -6,7 +6,7 @@
 
 const USER = {
   name: "Turing Michael",
-  email: "tmichael20@gmail.com",
+  email: "tmichael@example.com",
   googleInitials: "TM",
   tier: "Balanced",
   storageUsedPct: 82,
@@ -142,7 +142,7 @@ const RUN_STATES = {
 
 const RUNS = [
   { id: "run-3", chat: "op-research-paper", goal: "Comparative analysis of 14 sources", state: "WAITING_FOR_APPROVAL", credits: 42, artifacts: 1, elapsed: "00:41:17", live: true,
-    note: "Paused — calendar export needs your approval" },
+    note: "Paused — spreadsheet export (docx.export to xlsx) needs your approval" },
   { id: "run-2", chat: "op-research-paper", goal: "Literature sweep · graph neural networks", state: "SUCCEEDED", credits: 118, artifacts: 4, elapsed: "1:12:40", done: "yesterday" },
   { id: "run-1", chat: "op-research-paper", goal: "Topic scoping & question definition", state: "SUCCEEDED", credits: 31, artifacts: 2, elapsed: "0:22:05", done: "2 days ago" },
   { id: "run-2a", chat: "op-adhoc", goal: "Practice set generation · hashing", state: "RUNNING", credits: 17, artifacts: 1, elapsed: "00:09:03", live: true },
@@ -200,7 +200,7 @@ const CREDITS = { balance: 1240, reserved: 85, usedMonth: 2430, customNote: "Cus
 const NOTIFICATIONS = [
   { id: "n1", kind: "approval", title: "Approval required — calendar.sync v2", body: "Study Planner · run-t1 · external write", when: "2 m", unread: true, link: "#/agent-study-planner" },
   { id: "n2", kind: "success", title: "Run succeeded — literature sweep", body: "Research Paper · run-2 · 4 artifacts · 118 credits", when: "1 d", unread: true, link: "#/op-research-paper" },
-  { id: "n3", kind: "failed", title: "Run failed — provider timeout", body: "Ad-hoc · run-4 paused after retry 2 of 3", when: "3 h", unread: true, link: "#/op-adhoc" },
+  { id: "n3", kind: "failed", title: "Run retrying — provider timeout", body: "Ad-hoc · run-4 attempt 2 of 3 · bounded backoff", when: "3 h", unread: true, link: "#/op-adhoc" },
   { id: "n4", kind: "recovery", title: "Recovery needs review", body: "Exam Preparation · run-2b resumed from last safe step", when: "yesterday", unread: false, link: "#/op-exam-prep" },
 ];
 

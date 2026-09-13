@@ -290,8 +290,15 @@ const App = (function () {
     },
     "launch-op": (el) => {
       state.overlay = null;
-      location.hash = "#/op-research-paper";
-      toast("Operation launched", "run-4 created from the preview — estimate reserved: 120–180 cr");
+      const t = OP_TEMPLATES.find(x => x.id === (el.dataset.template || "research-paper"));
+      const chatId = t && t.id === "exam-preparation" ? "op-exam-prep" : t && t.id === "research-paper" ? "op-research-paper" : null;
+      if (!chatId) {
+        toast("Mockup limitation", `${t ? t.name : "This template"} has no fixture chat — the runtime would provision one. Research Paper and Exam Preparation are wired end-to-end.`);
+        return;
+      }
+      if (location.hash !== "#/" + chatId) location.hash = "#/" + chatId;
+      startQueuedRun(chatId, `Launched from the ${t.name} preview`); // real local run + thread item
+      toast("Operation launched", `${t.name} — ${RUNS[RUNS.length - 1].id} queued · estimate ${t.estimate[0]}–${t.estimate[1]} cr (mockup accounting)`);
     },
     "create-adhoc": () => {
       location.hash = "#/op-adhoc";
@@ -529,9 +536,9 @@ const App = (function () {
     },
   };
 
-  function startQueuedRun(chatId) {
+  function startQueuedRun(chatId, goal) {
     const n = RUNS.filter(r => r.chat === chatId).length + 1;
-    const run = { id: "run-" + n, chat: chatId, goal: "New run — describe the goal in the composer", state: "QUEUED", credits: 0, artifacts: 0 };
+    const run = { id: "run-" + n, chat: chatId, goal: goal || "New run — describe the goal in the composer", state: "QUEUED", credits: 0, artifacts: 0 };
     RUNS.push(run); pushItem(chatId, { kind: "run", ...run, steps: [{ label: "Queued — will start after your message", state: "now" }] });
     refresh();
   }

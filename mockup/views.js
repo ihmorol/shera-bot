@@ -99,7 +99,7 @@ const Views = (function () {
     switch (state) {
       case "RUNNING": return `<span class="chip live"><span class="spin"></span>Running</span>`;
       case "WAITING_FOR_APPROVAL": return `<span class="chip warn">${I("alert", 11)}Waiting approval</span>`;
-      case "RETRYING": return `<span class="chip sky">${I("retry", 11)}Retrying · 2 of 3</span>`;
+      case "RETRYING": return `<span class="chip sky">${I("retry", 11)}Retrying</span>`;
       case "SUCCEEDED": return `<span class="chip quiet">${I("check", 11)}Succeeded</span>`;
       case "FAILED": return `<span class="chip bad">${I("x", 11)}Failed</span>`;
       case "PAUSED": return `<span class="chip quiet">${I("pause", 11)}Paused</span>`;
@@ -405,14 +405,14 @@ const Views = (function () {
               <div class="card-head"><h3>Up next</h3><span class="spacer"></span><span class="chip quiet">schedules</span></div>
               <div class="sched">
                 <div class="sched-item">
-                  <b>Literature sweep — weekly monitor</b>
-                  <span class="when">${I("clock", 12)}02:00 pm – 04:00 pm · Researcher</span>
+                  <b>Literature sweep — weekly</b>
+                  <span class="when">Mondays 07:00 · Researcher · monitors 6 sources</span>
                   <button class="btn btn-sm btn-primary" style="justify-self:start" data-action="toast" data-toast="Mockup: in the prototype this starts the scheduled run">${I("play", 13)}Start now</button>
                 </div>
                 <hr class="divider">
                 <div class="sched-item">
-                  <b>Citation format audit</b>
-                  <span class="when">${I("clock", 12)}06:30 pm · Citation Manager</span>
+                  <b>research/ folder watcher</b>
+                  <span class="when">Triggers when a new PDF lands in workspace://research</span>
                 </div>
               </div>
             </div>

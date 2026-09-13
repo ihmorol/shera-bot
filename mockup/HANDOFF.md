@@ -348,3 +348,17 @@ Continued down the docs-conformance audit's recommended order ("routes → safe 
 Verification: 27/27 tests (three new), `node --check` clean, detector unchanged (the two deliberately-kept pre-existing findings), `git diff --check` clean. Browser-verified: Overview KPI → `#/op-adhoc` (previously dead end), account menu → Notifications → Study Planner row → `#/agent-study-planner` (no "Nothing here"), Settings providers → credits switch syncs the hash. Escaped ampersands display correctly.
 
 Note: notifications now open via the account menu on all routes (the topbar bell was consolidated earlier), which is the path used for the live check above.
+
+## 19. Fixture truthfulness pass (F9/F10 findings, 2026-09-13, evening)
+
+Second audit batch: the fixture contradictions flagged as F9/F10 are repaired at the data source, not hidden in presentation.
+
+- **Launch now honors the preview.** `launch-op` reads `data-template`, maps Research Paper → `op-research-paper` and Exam Preparation → `op-exam-prep`, creates a **real queued run** (`startQueuedRun(chatId, "Launched from the <name> preview")`) plus the thread item, navigates there, and toasts the true estimate ("mockup accounting"). Programming Assignment has no fixture chat — launching it shows an honest "Mockup limitation" toast instead of a fake success. The old toast ("run-4 created…" while run-4 belonged to op-adhoc and nothing was created) is gone. Browser-verified: preview → Launch lands in the Operation chat with the queued run and thread item present.
+- **n3 notification** now says "Run retrying — provider timeout · attempt 2 of 3 · bounded backoff", matching run-4's RETRYING state (was "Run failed … paused", contradicting the bounded-backoff fixture).
+- **run-3 note** now names the actual paused action ("spreadsheet export (docx.export to xlsx)"), matching appr-2 — was "calendar export".
+- **runStateChip RETRYING** no longer hardcodes "2 of 3" (that detail lives in run-4's note); other future retrying runs would no longer lie.
+- **Overview "Up next"** now mirrors the SCHEDULES fixture (Literature sweep — weekly, Mondays 07:00 · Researcher; research/ folder watcher) instead of inventing "02:00 pm – 04:00 pm" and an unlisted "Citation format audit".
+- **User email** changed to `tmichael@example.com` (the old value resembled a real personal address).
+- **REFERENCE** §3 route-contract row and §6/§10 rows updated to "repaired" status with dates; the earlier route/esc/settings repairs are in HANDOFF §18 / commit `958ce34`.
+
+Verification: 27/27 tests; launch flow browser-verified end-to-end (preview → queued run → thread item → navigation → toast); schedule/notification copy checked against SCHEDULES/RUNS. Untested: the exam-preparation launch path (same code path as research-paper), long-content rendering of the new schedule rows.

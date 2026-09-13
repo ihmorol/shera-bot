@@ -198,10 +198,10 @@ const PROVIDERS = [
 const CREDITS = { balance: 1240, reserved: 85, usedMonth: 2430, customNote: "Custom-provider usage measured locally — never billed as Shera credits." };
 
 const NOTIFICATIONS = [
-  { id: "n1", kind: "approval", title: "Approval required — calendar.sync v2", body: "Study Planner · run-t1 · external write", when: "2 m", unread: true, link: "#/agent/study-planner" },
-  { id: "n2", kind: "success", title: "Run succeeded — literature sweep", body: "Research Paper · run-2 · 4 artifacts · 118 credits", when: "1 d", unread: true, link: "#/operation/op-research-paper" },
-  { id: "n3", kind: "failed", title: "Run failed — provider timeout", body: "Ad-hoc · run-4 paused after retry 2 of 3", when: "3 h", unread: true, link: "#/operation/op-adhoc" },
-  { id: "n4", kind: "recovery", title: "Recovery needs review", body: "Exam Preparation · run-2b resumed from last safe step", when: "yesterday", unread: false, link: "#/operation/op-exam-prep" },
+  { id: "n1", kind: "approval", title: "Approval required — calendar.sync v2", body: "Study Planner · run-t1 · external write", when: "2 m", unread: true, link: "#/agent-study-planner" },
+  { id: "n2", kind: "success", title: "Run succeeded — literature sweep", body: "Research Paper · run-2 · 4 artifacts · 118 credits", when: "1 d", unread: true, link: "#/op-research-paper" },
+  { id: "n3", kind: "failed", title: "Run failed — provider timeout", body: "Ad-hoc · run-4 paused after retry 2 of 3", when: "3 h", unread: true, link: "#/op-adhoc" },
+  { id: "n4", kind: "recovery", title: "Recovery needs review", body: "Exam Preparation · run-2b resumed from last safe step", when: "yesterday", unread: false, link: "#/op-exam-prep" },
 ];
 
 const MEMORY = {

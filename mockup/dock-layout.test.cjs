@@ -203,7 +203,7 @@ test("chat topbar: icon search opens a modal; model stays in the composer; accou
   assert.match(modal, /not message contents/, "scope is stated honestly in the footer");
   context.App.state.searchQuery = "prov";
   const filtered = vm.runInContext('Views.searchModal(App.state)', context);
-  assert.match(filtered, /Providers & models/);
+  assert.match(filtered, /Providers &amp; models/, "labels render escaped");
   assert.ok(!filtered.includes("General Assistant</b>"), "non-matching chats are filtered out");
   const pop = vm.runInContext('Views.accountPop()', context);
   assert.match(pop, /toggle-theme/, "theme toggle lives in the account menu");
@@ -224,7 +224,7 @@ test("agent profile panel renders identity, quick actions and collapsible sectio
   const html = vm.runInContext(
     'Views.dockBody("profile", { id: "agent-general-assistant", type: "agent", ref: "general-assistant" }, App.state, false)', context);
   assert.match(html, /General Assistant/);
-  assert.match(html, /Coordinator · planning & synthesis/);
+  assert.match(html, /Coordinator · planning &amp; synthesis/, "ampersands render escaped");
   for (const action of ["profile-message", "profile-new-run", "dock-add", "profile-mute"]) {
     assert.ok(html.includes(`data-action="${action}"`), `missing ${action}`);
   }
@@ -279,4 +279,55 @@ test("sidebar groups Operations into Templates and Active chats with labeled con
   assert.match(html, /student pack v1 · pinned/);
   assert.ok(html.includes("conn-chip"), "connection renders as a labeled status chip");
   assert.ok(!html.includes("Simulate connection change"), "demo connection control stays in the Demo menu, not the status footer");
+});
+
+test("esc escapes markup-significant characters", () => {
+  context.testInput = "<img src=x onerror=alert(1)>&\"'";
+  assert.equal(
+    vm.runInContext("Views.esc(testInput)", context),
+    "&lt;img src=x onerror=alert(1)&gt;&amp;&quot;&#39;"
+  );
+  assert.equal(vm.runInContext('Views.esc(null)', context), "");
+});
+
+test("every internal link in rendered views resolves to a real route", () => {
+  context.App = {
+    state: {
+      route: "overview", theme: "dark", conn: "live", recovery: true, storageWarn: true,
+      sideOpen: false, sideRail: false, searchOpen: false, searchQuery: "",
+      dock: {
+        "op-research-paper": { open: true, panels: [{ type: "runs" }, { type: "tools" }] },
+        "agent-general-assistant": { open: true, panels: [{ type: "profile" }] },
+        "agent-researcher": { open: true, panels: [{ type: "profile" }] },
+        "agent-developer": { open: true, panels: [{ type: "profile" }] },
+        "agent-citation-manager": { open: true, panels: [{ type: "profile" }] },
+        "agent-programming-tutor": { open: true, panels: [{ type: "profile" }] },
+        "agent-study-planner": { open: true, panels: [{ type: "profile" }] },
+        "op-adhoc": { open: true, panels: [{ type: "runs" }] },
+        "op-exam-prep": { open: true, panels: [{ type: "runs" }] },
+      },
+      profileMuted: {}, setSection: "account", adhocRoster: ["general-assistant"], resolved: {},
+    },
+  };
+  const chatIds = vm.runInContext('CHATS.list.map(c => c.id)', context);
+  const surfaces = [
+    "Views.sidebar(App.state)",
+    "Views.notifications()",
+    "Views.overview(App.state)",
+    "Views.banners(App.state)",
+    ...chatIds.map(id => `Views.chatScreen(CHATS.list.find(c => c.id === "${id}"), App.state)`),
+  ];
+  const hrefs = new Set();
+  for (const expr of surfaces) {
+    const html = vm.runInContext(expr, context);
+    for (const m of html.matchAll(/(?:href|data-href)="(#[^"]*)"/g)) hrefs.add(m[1]);
+  }
+  const valid = new Set(["#/overview", "#/app", "#/operation/new", "#/login", "#/settings", ...chatIds.map(id => "#/" + id)]);
+  const bad = [...hrefs].filter(h => {
+    if (valid.has(h)) return false;
+    if (/^#\/settings\/[a-z-]+$/.test(h)) return false; // known settings sections
+    if (new RegExp(`^#\/workspace\/(${chatIds.join("|")})(\/[a-z]+)?$`).test(h)) return false;
+    return true;
+  });
+  assert.deepEqual(bad, [], "no link may point at a route the router cannot resolve");
 });

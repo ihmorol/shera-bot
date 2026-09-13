@@ -67,7 +67,7 @@ All paths below are hash routes relative to the served `index.html`.
 | Unknown route | Fallback | “Nothing here” with Back to Overview. Its admin-deferral explanation is also shown for unrelated route mistakes. |
 | S12 | Admin | No implemented admin route; optional/deferred surface. |
 
-**Known route contract mismatch:** `routeView()` looks up exact flat chat IDs, but many links emit `#/agent/researcher`, `#/agent/study-planner`, or `#/operation/op-research-paper`. Those are not aliases. Launch and creation both emit broken nested routes. Sidebar existing-chat links use the working flat format. The sidebar wordmark is **not** a Home link.
+**Route contract (repaired 2026-09-13):** all internal links now use the flat chat format (`#/agent-researcher`, `#/op-research-paper`); launch, creation, notifications, banners, overview cards and demo fallbacks included. A regression test scans every rendered surface and fails if any `href`/`data-href` resolves to a route the router cannot handle. The sidebar wordmark is **not** a Home link.
 
 ## 4. Fixture inventory and scenarios
 
@@ -162,7 +162,7 @@ Thread run cards duplicate fields rather than dynamically projecting every value
 - Typing `@` can display the roster picker. Selecting an Agent **replaces the draft** with a first-name mention; it does not insert at the caret. Address parsing only recognizes a leading `@word`.
 - New run adds a queued record and thread item locally. Its ID depends on the run count within the current chat, so it can collide with other chats. It supplies `id` where the thread renderer expects `run`. The next message does not implement a real run-start transition.
 - Draft snapshots introduced for pane work reduce some rerender losses. They do not fix ad-hoc form resets, mention replacement, live-stream scroll behavior or every focus issue.
-- `esc()` currently only stringifies; HTML interpolation is not safe text escaping. Do not use real sensitive content or publish this as a secure application. Fix separately with context-safe rendering and regression tests.
+- `esc()` escapes `& < > " '` since 2026-09-13 with unit tests (previously it only stringified — a documented injection risk). It is context-safe for the quoted-attribute and text positions this mockup uses; do not use real sensitive content or publish this as a secure application.
 
 ## 7. Launch preview and ad-hoc creation
 
@@ -236,7 +236,7 @@ Mute-this-approval/task/all controls are toast-only. Modal and inline variants s
 
 ## 10. All Settings sections (S9)
 
-Common shell: category navigation, heading/description, cards/rows and controls. At a section-specific URL, selecting another category can leave the old section visible. Directly entering a known section URL is a workaround for inspection, not a fix.
+Common shell: category navigation, heading/description, cards/rows and controls. Section switching keeps the URL in sync (`#/settings/<section>`) as of 2026-09-13 — deep links and category clicks no longer fight each other (previously the section URL overrode the clicked category on rerender).
 
 | Section ID | Displayed content | Controls and actual behavior |
 |---|---|---|

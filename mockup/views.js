@@ -84,7 +84,11 @@ const Views = (function () {
   function agentById(id) { return AGENTS.find(a => a.id === id); }
   function tmplById(id) { return OP_TEMPLATES.find(t => t.id === id); }
   function chatById(id) { return CHATS.list.find(c => c.id === id); }
-  function esc(s) { return String(s == null ? "" : s); }
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, ch => (
+      { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]
+    ));
+  }
 
   function avatar(id, sizeCls) {
     const a = agentById(id);
@@ -234,7 +238,7 @@ const Views = (function () {
       out += `<div class="banner banner-replay" role="status"><span class="spin"></span><span>Replaying missed events…</span></div>`;
     }
     if (state.recovery) {
-      out += `<div class="banner banner-recover" role="status">${I("recovery", 16)}<span><b>Restoring your workspace…</b> Run 2b resumed from its last safe step and needs your review.</span><span class="spacer"></span><a class="btn btn-xs btn-ghost" href="#/operation/op-exam-prep">Review run</a><button class="icon-btn" style="width:28px;height:28px" data-action="dismiss-recovery" aria-label="Dismiss">${I("x", 13)}</button></div>`;
+      out += `<div class="banner banner-recover" role="status">${I("recovery", 16)}<span><b>Restoring your workspace…</b> Run 2b resumed from its last safe step and needs your review.</span><span class="spacer"></span><a class="btn btn-xs btn-ghost" href="#/op-exam-prep">Review run</a><button class="icon-btn" style="width:28px;height:28px" data-action="dismiss-recovery" aria-label="Dismiss">${I("x", 13)}</button></div>`;
     }
     if (state.storageWarn) {
       out += `<div class="banner banner-storage" role="status">${I("database", 16)}<span>Workspace storage at <b class="num">${USER.storageUsedPct}%</b> — nothing is deleted automatically, but new uploads may fail at 100%.</span><span class="spacer"></span><a class="btn btn-xs btn-ghost" href="#/settings/files">Clean up files</a><button class="icon-btn" style="width:28px;height:28px" data-action="dismiss-storage" aria-label="Dismiss">${I("x", 13)}</button></div>`;
@@ -276,7 +280,7 @@ const Views = (function () {
             <p class="sub">Your workspace pins <b>student pack v1</b> — six Agents and three Operations, ready to work. Everything they do is visible here.</p>
           </div>
           <div class="shortcut-row">
-            <a class="shortcut" href="#/agent/researcher">
+            <a class="shortcut" href="#/agent-researcher">
               <span class="glyph">${I("agent", 18)}</span>
               <b>Message the Researcher</b>
               <span>Persistent direct chat — it picks up where you left off.</span>
@@ -361,10 +365,10 @@ const Views = (function () {
 
         <div class="ov-grid" style="margin-top:16px">
           <div class="ov-kpis">
-            ${kpiCard({ hero: true, label: "Runs this week", num: 14, foot: `<span class="trend">${I("arrowUR", 10)} +3 from last week</span>`, go: "#/operation/op-research-paper", goTip: "Open Research Paper" })}
+            ${kpiCard({ hero: true, label: "Runs this week", num: 14, foot: `<span class="trend">${I("arrowUR", 10)} +3 from last week</span>`, go: "#/op-research-paper", goTip: "Open Research Paper" })}
             ${kpiCard({ label: "Succeeded", num: 9, foot: `<span class="chip live" style="height:20px">${I("check", 10)}</span> within policy` , go: "#/settings/credits", goTip: "Credit usage" })}
-            ${kpiCard({ label: "Active now", num: 3, foot: `<span class="dot live pulse"></span> live · healthy`, go: "#/operation/op-adhoc", goTip: "Open Ad-hoc Operation" })}
-            ${kpiCard({ label: "Awaiting approval", num: 2, foot: `<span class="chip warn" style="height:20px">${I("alert", 10)}</span> oldest 1 h 20 m`, go: "#/agent/study-planner", goTip: "Review approvals" })}
+            ${kpiCard({ label: "Active now", num: 3, foot: `<span class="dot live pulse"></span> live · healthy`, go: "#/op-adhoc", goTip: "Open Ad-hoc Operation" })}
+            ${kpiCard({ label: "Awaiting approval", num: 2, foot: `<span class="chip warn" style="height:20px">${I("alert", 10)}</span> oldest 1 h 20 m`, go: "#/agent-study-planner", goTip: "Review approvals" })}
           </div>
 
           <div class="ov-main">
@@ -417,10 +421,10 @@ const Views = (function () {
               <div class="card-head"><h3>Operations</h3><span class="spacer"></span><a class="btn btn-xs btn-ghost" href="#/operation/new">${I("plus", 11)}New</a></div>
               <div class="op-list">
                 ${[
-                  { name: "Research Paper · run 3", sub: "Comparative analysis · 42 cr", chip: `<span class="chip warn">${I("alert", 10)}Approval</span>`, href: "#/operation/op-research-paper" },
+                  { name: "Research Paper · run 3", sub: "Comparative analysis · 42 cr", chip: `<span class="chip warn">${I("alert", 10)}Approval</span>`, href: "#/op-research-paper" },
                   { name: "Programming Assignment", sub: "Solution merged · study guide filed", chip: `<span class="chip quiet">${I("check", 10)}Done</span>`, href: "#/operation/new" },
-                  { name: "Ad-hoc · 2 Agents", sub: "Practice set generation · 17 cr", chip: `<span class="chip live"><span class="spin"></span>Running</span>`, href: "#/operation/op-adhoc" },
-                  { name: "Exam Preparation", sub: "Schedule rebuild · after restart", chip: `<span class="chip warn">${I("recovery", 10)}Recovery</span>`, href: "#/operation/op-exam-prep" },
+                  { name: "Ad-hoc · 2 Agents", sub: "Practice set generation · 17 cr", chip: `<span class="chip live"><span class="spin"></span>Running</span>`, href: "#/op-adhoc" },
+                  { name: "Exam Preparation", sub: "Schedule rebuild · after restart", chip: `<span class="chip warn">${I("recovery", 10)}Recovery</span>`, href: "#/op-exam-prep" },
                 ].map(o => `
                   <a class="op-row" href="${o.href}">
                     <span class="glyph">${I("operation", 15)}</span>
@@ -1519,7 +1523,7 @@ const Views = (function () {
   return {
     agentById, tmplById, chatById, avatar, runStateChip, riskBadge, opRoster,
     sidebar, topbar, banners, login, emptyHome, overview, chatScreen, preview,
-    createAdhoc, settings, notifications, accountPop, demoPop, searchModal, approvalCard, threadItem,
+    createAdhoc, settings, notifications, accountPop, demoPop, searchModal, approvalCard, threadItem, esc,
     workspaceFull, dockView, dockState, dockButtons, dockBody,
   };
 })();

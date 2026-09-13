@@ -336,3 +336,15 @@ User requests across four messages: clean up the chat top (remove the Resize pan
 - `dock-chat`/fill-mode remains the concurrent session's in-flight feature (§15); it now hangs off `#app.chat-collapsed`. The "Back to chat" button only displays in fill mode (`.dock-back`).
 - `goto` closes the search palette on every use — notification-popover links also pass through it (no behavioral change there).
 - Asset versions: `?v=20260913-search3` at the time of writing; the concurrent session re-bumps versions periodically — always re-check `index.html` before blaming stale cache.
+
+## 18. Core-route, escaping and Settings-navigation repairs (2026-09-13, evening)
+
+Continued down the docs-conformance audit's recommended order ("routes → safe escaping → …"). Three P1 defects repaired in one pass, each with a regression test:
+
+1. **Broken internal routes (17 links).** Launch ("Operation launched" → `#/operation/op-research-paper`), ad-hoc creation, all four notification rows, the recovery banner's "Review run", the Overview KPI/Operations cards, the S2 Researcher shortcut, and the demo fallbacks (`demo-stream`/`demo-tool`/`demo-risk`) emitted nested `#/operation/…` or `#/agent/…` routes that the router cannot resolve — every one dead-ended on "Nothing here". All now use the working flat format (`#/op-research-paper`, `#/agent-researcher`, …). `#/operation/new` (the creation form) is a real route and was not touched. A new conformance test renders sidebar, notifications, overview, banners and all nine chat screens and fails if any `href`/`data-href` points at an unresolvable route.
+2. **`esc()` did not escape.** It only stringified, so fixture text flowed into HTML unescaped (documented injection risk). It now escapes `& < > "` '` and is exported; unit test plus a rendered-output assertion (`planning &amp; synthesis` in the DOM, displayed as "&"). All `esc()` call sites use quoted attributes/text contexts, so the change is safe there by construction.
+3. **Settings section navigation.** Clicking a category while on a section-specific URL silently lost the click (the URL re-won on rerender). `set-section` now syncs `location.hash` to the clicked section; deep links and clicks agree. Verified live: providers → Credits updates hash and content.
+
+Verification: 27/27 tests (three new), `node --check` clean, detector unchanged (the two deliberately-kept pre-existing findings), `git diff --check` clean. Browser-verified: Overview KPI → `#/op-adhoc` (previously dead end), account menu → Notifications → Study Planner row → `#/agent-study-planner` (no "Nothing here"), Settings providers → credits switch syncs the hash. Escaped ampersands display correctly.
+
+Note: notifications now open via the account menu on all routes (the topbar bell was consolidated earlier), which is the path used for the live check above.

@@ -290,11 +290,11 @@ const App = (function () {
     },
     "launch-op": (el) => {
       state.overlay = null;
-      location.hash = "#/operation/op-research-paper";
+      location.hash = "#/op-research-paper";
       toast("Operation launched", "run-4 created from the preview — estimate reserved: 120–180 cr");
     },
     "create-adhoc": () => {
-      location.hash = "#/operation/op-adhoc";
+      location.hash = "#/op-adhoc";
       toast("Ad-hoc Operation created", "Roster validated against pack membership by the runtime");
     },
     "toggle-roster-agent": (el) => {
@@ -468,7 +468,13 @@ const App = (function () {
       if (location.hash !== el.dataset.href) location.hash = el.dataset.href;
       else render(); // same-route result still closes the palette
     },
-    "set-section": (el) => { state.setSection = el.dataset.section; render(); },
+    "set-section": (el) => {
+      state.setSection = el.dataset.section;
+      // Keep the URL in sync so deep links and rerenders agree (fixes the
+      // section-navigation defect where the old section URL won the rerender).
+      if (location.hash !== "#/settings/" + el.dataset.section) location.hash = "#/settings/" + el.dataset.section;
+      render();
+    },
     "test-conn": (el) => toast(el.dataset.provider === "new" ? "Connection test passed" : "Connection healthy", "4 models listed · latency 212 ms — prototype simulation"),
     "revoke-grant": (el) => {
       const idx = GRANTS.findIndex(g => g.id === el.dataset.grant);
@@ -485,7 +491,7 @@ const App = (function () {
       else actions.reconnect();
     },
     "demo-stream": () => {
-      const chatId = currentChatId() || (location.hash = "#/agent/researcher", "agent-researcher");
+      const chatId = currentChatId() || (location.hash = "#/agent-researcher", "agent-researcher");
       state.pop = null;
       pushItem(chatId, { kind: "msg", from: "user", text: "Give me a quick status." });
       setTimeout(() => streamReply(chatId, chatId.startsWith("agent-") ? chatId.replace("agent-", "") : "general-assistant",
@@ -493,7 +499,7 @@ const App = (function () {
       render();
     },
     "demo-tool": () => {
-      const chatId = currentChatId() || (location.hash = "#/agent/researcher", "agent-researcher");
+      const chatId = currentChatId() || (location.hash = "#/agent-researcher", "agent-researcher");
       state.pop = null;
       pushItem(chatId, {
         kind: "tool", tool: "web.search", version: "v2", agent: "researcher", risk: "read", riskLabel: "read-only",
@@ -503,7 +509,7 @@ const App = (function () {
       render();
     },
     "demo-risk": () => {
-      const chatId = currentChatId() || (location.hash = "#/agent/developer", "agent-developer");
+      const chatId = currentChatId() || (location.hash = "#/agent-developer", "agent-developer");
       state.pop = null;
       const demoAp = {
         id: "appr-demo", state: "pending", chat: chatId, agent: "developer", run: "run-d1",

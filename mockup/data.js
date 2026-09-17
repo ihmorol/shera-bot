@@ -118,11 +118,9 @@ const OP_TEMPLATES = [
     id: "exam-preparation", name: "Exam Preparation",
     purpose: "Build a study plan from course material and exam date, generate practice sets, and track readiness as work completes.",
     coordinator: "study-planner",
-    agents: ["study-planner", "programming-tutor", "citation-manager"],
+    agents: ["study-planner"],
     skills: {
       "study-planner": ["schedule building", "progress tracking"],
-      "programming-tutor": ["past-paper drills"],
-      "citation-manager": ["syllabus source index"],
     },
     connectors: [
       { name: "Google Calendar", status: "connected" },

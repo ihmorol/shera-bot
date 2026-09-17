@@ -92,9 +92,9 @@ Each Agent has one fixture identity and one direct-chat ID. Do not create distin
 |---|---|---|
 | `research-paper` | General Assistant, Researcher, Citation Manager; General Assistant coordinates | `literature-review.md`, `evidence-table.csv`, `draft-v1.md`, `bibliography.json`; 120–180 credits. Scholar/Semantic Scholar connected, Notion export not configured. |
 | `programming-assignment` | General Assistant, Developer, Programming Tutor; General Assistant coordinates | Solution worktree, `test-report.md`, `study-guide.md`; 90–150 credits. GitHub connected, LMS not configured. |
-| `exam-preparation` | Study Planner, Programming Tutor, Citation Manager; Study Planner coordinates | `study-plan.md`, `practice-set-1.pdf`, `readiness-report.md`; 60–110 credits. Calendar connected, Anki sync not configured. |
+| `exam-preparation` | Study Planner; Study Planner coordinates. Per D46 (2026-09-17) each Agent is rostered in exactly one Operation — Exam Preparation's past-paper drills and syllabus indexing run as subagents, not roster members. | `study-plan.md`, `practice-set-1.pdf`, `readiness-report.md`; 60–110 credits. Calendar connected, Anki sync not configured. |
 
-These rosters are current fixtures, not certification against every Pack membership requirement in the product specification. The mockup has **three templates and three existing Operation chats**, but not one existing chat per template: the existing set includes Ad-hoc and has no Programming Assignment instance.
+These rosters are current fixtures. Since 2026-09-17 they match the recorded D46 mapping (one home Operation per Agent; the General Assistant appears in the Research Paper and Programming Assignment rosters as the D42 default coordinator, which is not a roster assignment). The mockup has **three templates and three existing Operation chats**, but not one existing chat per template: the existing set includes Ad-hoc and has no Programming Assignment instance.
 
 ### Runs
 
@@ -187,7 +187,7 @@ Nine panel types are available, but `dock-add` permits **at most six open at onc
 | `tasks` | Run timeline | Current-chat selected/fallback run, selector, state/cost, checkpoints, retry/recovery chips. Empty chat now safely shows “No task runs in this chat yet.” The selector still relies on delegated click, not a proper change handler. |
 | `files` | Files | Shared fixture tree, folder/file names, sizes and lease badge. Rows do not expand/open files. Upload is toast-only. |
 | `editor` | Editor | Editable textarea for the same auth-middleware sample in every chat. Save is toast-only. Lease notice does not enforce locking. Verified pane operations retain local edits; no file persistence. |
-| `terminal` | Terminal | Read-only sample commands/test output, working directory/resource badges. The displayed fourteen passed tests are **fixture output**, unrelated to the actual thirteen pane regression tests. |
+| `terminal` | Terminal | Read-only sample commands/test output, working directory/resource badges. The displayed fourteen passed tests are **fixture output**, unrelated to the actual 27-test regression suite. |
 | `browser` | Browser | Static HTML placeholder composition with sample URL/title; not an embedded live browser or real page screenshot. Direct takeover is deferred. |
 | `tools` | Tool history | Same global history table in every chat, including unrelated Agent actions. Not filtered event history. |
 | `private` | Private files | Agent selector and sample paths; Researcher/Developer have specific lists, others use fallback paths. Selector handling is incomplete; privacy labels are not enforcement. |
@@ -298,6 +298,6 @@ The full-page and chat routes have separate snapshot keys. Do not promise that e
 
 ## 13. Verification and known limits
 
-See [pane verification](reviews/2026-09-13/pane-verification-2026-09-13.md) for exact measurements, screenshot links, real-pointer checks, failed harness attempts, cache workaround and untested scenarios. The actual automated suite has thirteen tests; the terminal fixture's “14 passed” is not test evidence.
+See [pane verification](reviews/2026-09-13/pane-verification-2026-09-13.md) for exact measurements, screenshot links, real-pointer checks, failed harness attempts, cache workaround and untested scenarios. The automated suite currently runs 27 tests (thirteen pane regressions at the time of that verification, later joined by the escape/route/settings/login regressions); the terminal fixture’s “14 passed” is not test evidence.
 
-Outstanding priorities after the 2026-09-13 repair passes: launch truthfulness is fixed (real queued run; Programming Assignment honestly limited), routes/escaping/settings-navigation are repaired with regression tests, and search exists as a palette. Still open: approval focus/grant/state consistency; input retention beyond pane actions; mobile shell beyond the dock sheet; contrast/labels/focus; event/delivery honesty; the D43 roster decision (product owner). The [UX recommendations](UX_RECOMMENDATIONS.md) explain how to simplify first use without deleting required capabilities.
+Outstanding priorities after the 2026-09-13 repair passes: launch truthfulness is fixed (real queued run; Programming Assignment honestly limited), routes/escaping/settings-navigation are repaired with regression tests, and search exists as a palette. The D43 roster decision (product owner) was **resolved 2026-09-17 by D46**, and the Exam Preparation fixture roster was aligned with a HANDOFF §21 entry. Still open: approval focus/grant/state consistency; input retention beyond pane actions; mobile shell beyond the dock sheet; contrast/labels/focus; event/delivery honesty. The [UX recommendations](UX_RECOMMENDATIONS.md) explain how to simplify first use without deleting required capabilities; they are not adopted as a redesign (D50 — evaluated per Phase-1 UI slice).

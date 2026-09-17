@@ -25,6 +25,7 @@ This directory contains the product baseline and decision records. **Read this i
 ## Development process
 
 - [`DEV_WORKFLOW.md`](DEV_WORKFLOW.md) — solo-developer workflow from current state through production shipment, using AI agents under explicit verification gates. Process documentation only; subordinate to the PRD and decision records.
+- [`BUILD_MAP.md`](BUILD_MAP.md) — the 35-slice build plan with live GitHub issue numbers, the agent working protocol, guardrails G1–G8, the UI gate, and the open items. Process index only; subordinate to the PRD and decision records.
 
 ## Client design and mockup documentation
 

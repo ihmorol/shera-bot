@@ -4,6 +4,9 @@ Part of the decision records. Index and provenance: [`README.md`](README.md). Pr
 
 **Status:** Delegated engineering record — decided by the agent while executing slice **S01** (issue #2) under the owner's 2026-09-17 instruction to start building; owner review pending.
 **Date:** 2026-09-17.
+
+> **Current fork status:** the owner subsequently supplied `https://github.com/ihmorol/shera-pi.git`. The [fork evidence update below](#fork-evidence-update-2026-09-17) supplies S01's previously missing license documentation for review. Decision 9 and the earlier open-item wording remain preserved as the pre-fork state, not current claims. E15 remains Delegated; this does not approve the slice or validate D13.
+
 **Evidence:**
 - Issue #2 (S01) — acceptance criteria, layout, and the E-record requirement; `docs/BUILD_MAP.md` §5–§6 (S01 unblocked; the plan confirmations "S01 records them as Delegated pending review").
 - [`phase0-plan-draft-2026-09-13.md`](phase0-plan-draft-2026-09-13.md) §1 and §8 — the layout and the four confirmations this slice had to resolve.
@@ -88,3 +91,34 @@ The slice went to a fresh-context adversarial review before any merge (`docs/DEV
 - D25 ("unknown fields are rejected for internal protocol messages") needs `.strict()` / `z.strictObject` discipline; nothing enforces it yet, and S02's contract tests should.
 - Workspace packages export raw TypeScript source, so plain Node ESM cannot import them without a runner or build step. S05 (Express) and S07 (runtime gateway) need that decision before they start.
 - ESLint runs untyped (`tseslint.configs.recommended`); typed lint rules are a later, deliberate addition.
+
+## Fork evidence update (2026-09-17)
+
+**Record:** E15, follow-up to decision 9; no new product decision or acceptance criterion.
+**Status:** owner-supplied repository identity verified; S01 fork-license documentation supplied for owner review. The proposed sync procedure remains Delegated, pending review. The overall E15 status is unchanged.
+**Date:** 2026-09-17.
+**Exact evidence:** the owner wrote **"https://github.com/ihmorol/shera-pi.git pi forked."**, then **"continue"** in this session. Read-only GitHub source verification resolves that public fork's parent/source to `earendil-works/pi`. Commit `1283afd0d0685d1ffe88aa56a725c0e4ad3cfc7b` exists in both repositories with tree `dc795f892dc830c560573030092881cf6586ce87`; their `LICENSE` blobs match `b0a8e9b81083294360c69b4ec45d3d39a2b28197` (1069 bytes). Source links and the verification/correction ledger are in [`../PI_FORK.md`](../PI_FORK.md) and [`../pi-fork/verification-2026-09-17.md`](../pi-fork/verification-2026-09-17.md).
+
+**Disposition:** the repository-identity blocker behind decision 9 is resolved. [`../pi-fork/LICENSE`](../pi-fork/LICENSE) preserves the real MIT text and Copyright (c) 2025 Mario Zechner byte-for-byte. `PI_FORK.md` documents notice and modification obligations, the public-fork boundary, and a proposed review-before-publication upstream-sync procedure. This satisfies the documentation deliverable for review; it does not declare the full PRD §22.1 dependency audit or S01 accepted.
+
+**Rationale:** replace the historical missing-source blocker with reproducible source evidence, while keeping runtime integration and dependency/distribution compliance separate from the existence of a fork. No fabricated license, automatic dependency adoption, or blanket MIT assumption is needed.
+
+**Alternatives considered (preserved):**
+- Keep the missing-repository blocker after the owner supplied the fork — rejected because the source is now verifiable. The original blocker and rejected placeholder-license alternative remain above as history.
+- Treat `main` or the inspected commit as the adopted runtime pin and import upstream `packages/protocol` — rejected: no integration decision/test exists, and source inspection shows that package is experimental length-prefixed CBOR, not the coding-agent JSONL RPC transport. D13–D14 still govern Shera's adapter.
+- Treat the root MIT text or Shera's existing npm-dependency inventory as covering every fork asset — rejected: the fork is a separate npm workspace and includes vendored BSD-3-Clause/MIT JavaScript. Complete dependency and bundled-notice verification remains open for the actual build.
+- Auto-sync the public fork or merge upstream directly to its `main` — rejected: license/protocol changes and public publication require review. The procedure proposes an isolated checkout, an immutable candidate, a topic branch, validation, and explicit publication/merge approval; it was not executed.
+
+**Affected PRD sections:** §17 (adapter boundary unchanged), §22.1 (source/license/sync documentation supplied; full dependency verification remains open), §22.22 (current workspace inventory coverage unchanged), §23 (notice retention and attribution). No PRD edits and no changes to acceptance criteria 1–27.
+
+**Implementation implications:** no Pi dependency, adapter, runtime revision pin, install, or fork edit is introduced. S03's fake-Pi experiment does not validate upstream compatibility. Before real integration in S07 (or an earlier expressly scoped real-fork experiment), the implementer must inventory the selected fork dependency graph and bundled notices and prove adapter compatibility. S35 must verify notices in actual distributable artifacts. The incomplete Highlight.js copyright banner noted in the verification ledger must be resolved against its source notice before packaging that asset.
+
+**Verification coverage:** owner Emon; boundary `docs/PI_FORK.md`, `docs/pi-fork/LICENSE`, the verification ledger, and traceability/index updates. Immutable LICENSE bytes/hashes, fork/upstream source tree, JSONL RPC versus CBOR protocol, and relevant test scripts were inspected read-only; the ledger preserves commands/results and limitations. No upstream install/build/test, provider call, or sync was run. Existing S01 CI evidence still refers to the last pushed commit, not this local documentation update.
+
+**Supersession / status map:**
+
+| Earlier evidence or status | Current evidence/status | Boundary |
+|---|---|---|
+| E15 decision 9 and open item 1: fork not identified, license documentation unavailable | Owner identified `ihmorol/shera-pi`; root license and maintenance documentation supplied for review | Historical missing-source statement superseded by evidence, not erased |
+| PRD §22.1 dependency/license closure | Still open for the real fork build and bundled assets | Not covered by the root MIT copy or Shera-only inventory |
+| E15 Delegated choices, D13 provisional status, D46 subagent semantics, and main-branch merge gate | Unchanged | Owner's fork URL/continuation instruction is not blanket approval |

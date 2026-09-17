@@ -65,6 +65,10 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
+          # This job needs no dependencies: the suite uses only node: builtins. setup-node
+          # v5 auto-enables package-manager caching and fails when pnpm is absent from the
+          # job (it was never installed here), so caching is switched off explicitly.
+          package-manager-cache: false
       # The static mockup is reference evidence, not shipped code, but its suite is the
       # S01 regression budget and must never be broken by build tooling.
       - run: node --test mockup/dock-layout.test.cjs

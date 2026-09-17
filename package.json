@@ -18,7 +18,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "build": "turbo run build",
-    "license:inventory": "node scripts/license-inventory.mjs",
+    "license:inventory": "node scripts/license-inventory.ts",
     "mockup:test": "node --test mockup/dock-layout.test.cjs"
   },
   "devDependencies": {

@@ -1,7 +1,7 @@
 # Solo Developer Workflow: Current State → Production Shipment
 
 **Created:** 2026-09-13 · **Owner:** you (solo developer) · **Executors:** AI coding agents
-**Status:** Engineering process documentation. Subordinate to `PRD.md` and the decision records (D1–D45, E1–E8). This file changes *how* you build; it never changes *what* you build. Any scope, tenancy, data, or approval change still requires a recorded product decision (PRD §24).
+**Status:** Engineering process documentation. Subordinate to `PRD.md` and the decision records (D1–D50, E1–E14). This file changes *how* you build; it never changes *what* you build. Any scope, tenancy, data, or approval change still requires a recorded product decision (PRD §24).
 
 ---
 
@@ -21,15 +21,15 @@ Verified state — this is the starting line:
 
 | Area | State |
 |---|---|
-| Product design | Complete and synchronized: PRD + D1–D45 + E1–E8, acceptance criteria 1–27 defined. Criteria **22–27 are adopted but not implemented** (`docs/TRACEABILITY.md`). |
+| Product design | Complete and synchronized: PRD + D1–D50 + E1–E14, acceptance criteria 1–27 defined. Criteria **22–27 are adopted but not implemented** (`docs/TRACEABILITY.md`). D46–D50/E9–E14 were recorded 2026-09-17 under the owner's delegation (D47–D50/E9–E14 pending owner review). |
 | Static mockup | Interactive HTML/CSS/JS client with fixtures, pane system, search palette, Agent profile panel, three-panel floating shell, ambient canvas (`mockup/dock-layout.test.cjs`, 27 passing). No backend, no auth, no persistence beyond theme. |
 | Mockup defects | All five Stage-1 trust/safety defects repaired 2026-09-13 with regression tests: nested routes (17 links), unsafe `esc()`, settings deep-link trap, modal interior-click dismissal, login landing on Overview — commits `788e38f`, `958ce34`, `fd0270d`; HANDOFF §13–§20. Fixture truthfulness (F9/F10) repaired at the data source. |
-| Recorded conflict | D43 roster mapping conflict exists and must **not** be silently resolved in fixture code (`mockup/HANDOFF.md`). |
-| Unresolved decisions | Ten implementation-defined items are explicitly open (`docs/TRACEABILITY.md` — open items list): admin scope, admin secret exception, exhausted-credit UX, event compaction, SQLite-consistent backups, `workspace_id` invariant, capability mapping, coordinator removal, per-tool ambiguous-effect recovery, PRD TODO closure. |
-| Runtime | **Nothing implemented.** Chosen stack (Next.js/React/TS/Tailwind, Express control plane, PostgreSQL + container SQLite WAL, Drizzle, Redis transient, Zod contracts, pnpm/Turborepo, Docker Compose on one Ubuntu 24.04 VM) exists only as decisions. D13 TypeScript↔Pi process boundary needs a supervision spike; `node:sqlite` choice is subject to that spike. |
+| Recorded conflict | D43 roster mapping — **resolved 2026-09-17 by D46** (one home Operation per Agent; subagent triggering; mapping table in the record). The Exam Preparation fixture roster now matches D46; the change is recorded in `mockup/HANDOFF.md` §21 rather than applied silently. |
+| Unresolved decisions | The ten items open on 2026-09-13 were dispositioned 2026-09-17 (D46–D50, E9–E14; ledger in `docs/decisions/open-items-decisions-2026-09-17.md`). Remaining open: exact subagent semantics (D46 sub-item) and the Stage-3 plan confirmations (`docs/TRACEABILITY.md`, Open items). |
+| Runtime | **Nothing implemented.** Chosen stack (Next.js/React/TS/Tailwind, Express control plane, PostgreSQL + container SQLite WAL, Drizzle, Redis transient, Zod contracts, pnpm/Turborepo, Docker Compose on one Ubuntu 24.04 VM) exists only as decisions. D13 TypeScript↔Pi process boundary needs a supervision spike; `node:sqlite` choice is subject to that spike (and now also the E11 backup mechanism). |
 | CI / deploy | None. No pipeline, no Dockerfile/Compose, no migrations, no deploy runbook. |
 | Marketing site | Separate standalone Next.js repo (git-ignored here). Waitlist is simulated and currently tells visitors they are on the list when nothing is stored (`business-landing-portfolio/components/waitlist-form.tsx`) — fix before any public exposure. |
-| Git | Product repo clean on `main` at `fd0270d` (2026-09-13): Stage 0 banked via `788e38f` (floating shell + profile + palette), `958ce34` (routes/esc/settings repairs), `fd0270d` (fixture truthfulness). HANDOFF §13–§20 and evidence committed. |
+| Git | Product repo clean on `main` at the 2026-09-17 open-items commit (D46–D50/E9–E14 records, PRD SYNC-2, fixture update). Stage 0/1 banked via `788e38f`, `958ce34`, `fd0270d`, `c656c75`; HANDOFF §13–§21 and evidence committed. |
 
 **The approved next release is a private prototype** (≤5 accounts, Google OAuth, simulated tiers, one VM), not a public launch. A separate production-readiness decision comes after prototype acceptance (§7, Stage 7).
 
@@ -224,6 +224,8 @@ STOP & REPORT: The commit plan first. After approval: `git log --oneline -5` and
 
 **Progress 2026-09-13:** all five defects repaired (baseline table); QA click-through done in-session for routes/settings/login; **gate still open** pending two owner decisions: the D43 roster-mapping record and the UX_RECOMMENDATIONS adoption call. Escaping/modal tests cover DOM-level behavior; the login-destination change was verified in-browser only.
 
+**Progress 2026-09-17 — gate closed:** the owner answered the roster question (*"currently an agent can run only one operation, but the same agent can trigger multiple subagents"*), recorded as **D46** with the student pack v1 mapping; the UX_RECOMMENDATIONS call is dispositioned as **D50** (not adopted as a redesign; evaluated per Phase-1 UI slice) under the owner's Stage-2 delegation. The Exam Preparation fixture roster was updated to D46 with a dated HANDOFF §21 entry (test suite green, 27 passing) — no longer a silent-conflict risk (G5) because the conflict is now resolved by a recorded decision.
+
 **Prompt set:**
 
 ```text
@@ -320,6 +322,8 @@ consistent, TRACEABILITY rows updated.
 STOP & REPORT: Drafts for review; then diffs after approval.
 ```
 
+**Progress 2026-09-17 — gate met under owner delegation:** the owner delegated the ten dispositions (*"based on prd and all the decisions make the smart and best suitable choices for each one"*). The brief's disposition table is filled; records **D46–D50 and E9–E14** are drafted in `docs/decisions/open-items-decisions-2026-09-17.md` with evidence, rationale, alternatives, affected PRD sections, implementation implications, and verification coverage; the supersession map, index, and TRACEABILITY ledger are updated; PRD SYNC-2 applied. D47–D50/E9–E14 are marked **Delegated (pending owner review)** — the gate closes fully when the owner reviews those records. Remaining open: exact subagent semantics (D46 sub-item) and this plan's confirmations below.
+
 ---
 
 ### Stage 3 — Phase 0 foundation: contracts, safety model, harness, CI skeleton
@@ -338,6 +342,8 @@ STOP & REPORT: Drafts for review; then diffs after approval.
 - Release engineer: CI pipeline (lint → typecheck → unit → contract tests), branch protection notes, commit conventions.
 
 **Gate:** `pnpm install && pnpm test` green locally and in CI; contracts versioned and exported from one place; state machine rejects illegal transitions in tests; threat model reviewed by you line-by-line; this file's decision-log appendix notes the E-record for any engineering choice made (e.g., CI provider).
+
+**Progress 2026-09-17 — unchanged draft; owner deferred.** The owner directed that Stage 3 wait (*"stage 3. lets work on it later. first update the changes, mis configuration"*). The plan draft stands unapproved; the S2 contract blockers it listed (Pack mapping, `workspace_id`) are now decided (D46, E12), and the remaining confirmations in its §8 (dark-only v1, CI provider, pnpm/Node pins) plus the owner's review of the Delegated records are the only pre-scaffold items left.
 
 **Prompt set:**
 
@@ -725,4 +731,5 @@ Track per slice (a line in a log file is enough): date, slice, cycle time, rewor
 | Date | Record | What changed |
 |---|---|---|
 | 2026-09-13 | Created `docs/DEV_WORKFLOW.md` | Process baseline: stages 0–9, standing loop, guardrails G1–G8 |
+| 2026-09-17 | D46–D50, E9–E14 recorded (`docs/decisions/open-items-decisions-2026-09-17.md`) | Stage 1 gate closed (D46, D50); Stage 2 dispositions executed under owner delegation; PRD SYNC-2; Stage 3 deferred by the owner (plan stays draft); mockup Exam Prep fixture aligned to D46 (HANDOFF §21). No new engineering choices made — the Stage-3 E-records (CI provider, pins) remain pending. |
 | | *(append future process changes here; product changes go to `docs/decisions/`, not here)* | |

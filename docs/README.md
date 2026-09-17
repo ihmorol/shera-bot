@@ -4,12 +4,13 @@ This directory contains the product baseline and decision records. **Read this i
 
 ## Required reading order
 
-1. [`PRD.md`](PRD.md) — the product baseline, synchronized with decisions D1–D45 on 2026-09-11 (original 2026-09-08 baseline in Git history, commit `8bacf81`).
+1. [`PRD.md`](PRD.md) — the product baseline, synchronized with decisions D1–D45 on 2026-09-11 (SYNC-1) and D46 on 2026-09-17 (SYNC-2; original 2026-09-08 baseline in Git history, commit `8bacf81`).
 2. [`decisions/README.md`](decisions/README.md) — current decision index and status vocabulary.
 3. [`GLOSSARY.md`](GLOSSARY.md) — canonical terms for new work: **Pack → Operations → Agents**.
 4. [`TRACEABILITY.md`](TRACEABILITY.md) — decision/PRD reconciliation, acceptance coverage, and open implementation items.
 5. [`decisions/confirmed-decisions.md`](decisions/confirmed-decisions.md) — Codex decisions D1–D39, including historical wording and evidence status.
 6. [`decisions/closure-decisions.md`](decisions/closure-decisions.md) — continued decisions D40–D45, engineering records E1–E8, proposal history, supersession, and deferred work.
+7. [`decisions/open-items-decisions-2026-09-17.md`](decisions/open-items-decisions-2026-09-17.md) — D46–D50 and E9–E14: the roster/subagent decision and the ten open-item dispositions (D47–D50/E9–E14 Delegated, pending owner review).
 
 
 ## Document authority
@@ -34,11 +35,11 @@ This directory contains the product baseline and decision records. **Read this i
 - [`../mockup/UX_RECOMMENDATIONS.md`](../mockup/UX_RECOMMENDATIONS.md) — proposed calmer first-use experience; not an adopted redesign or new product decision.
 - [`../mockup/reviews/2026-09-13/README.md`](../mockup/reviews/2026-09-13/README.md) — preserved independent audit, verification and screenshot evidence.
 
-Mockup interactions, fixture output and pane tests do not establish runtime behavior or change the acceptance statuses in `TRACEABILITY.md`. The mockup's actual post-login Overview differs from the specified chat-first landing; this discrepancy is documented, not silently adopted.
+Mockup interactions, fixture output and pane tests do not establish runtime behavior or change the acceptance statuses in `TRACEABILITY.md`. The mockup's post-login landing was repaired on 2026-09-13 to match the specified chat-first home (`#/app`); remaining mockup deviations (light-theme exploration, fixture-only states) stay documented in the mockup's own docs rather than silently adopted. The Exam Preparation fixture roster was aligned to D46 on 2026-09-17 with a HANDOFF §21 entry.
 
 ## Current record count
 
-- Confirmed decisions: D1–D45, plus synchronization record SYNC-1.
-- Engineering decisions: E1–E8.
+- Confirmed decisions: D1–D50 (D46–D50 recorded 2026-09-17; D47–D50 are Delegated pending owner review), plus synchronization records SYNC-1 and SYNC-2.
+- Engineering decisions: E1–E14 (E9–E14 recorded 2026-09-17, Delegated pending owner review).
 - Adopted acceptance criteria: 1–27 (22–27 added by D45 and now included in PRD §19).
-- Explicitly deferred items and unresolved implementation-defined items are listed in [`TRACEABILITY.md`](TRACEABILITY.md) and [`closure-decisions.md`](decisions/closure-decisions.md).
+- The ten implementation-defined items open on 2026-09-13 were dispositioned on 2026-09-17 (see [`decisions/open-items-decisions-2026-09-17.md`](decisions/open-items-decisions-2026-09-17.md)); remaining open items are listed in [`TRACEABILITY.md`](TRACEABILITY.md).

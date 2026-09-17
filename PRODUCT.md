@@ -25,7 +25,7 @@ Versioned Packs of persistent-identity Agents working in supervised, transparent
 
 ## Operating Context
 
-- Authoritative specs in this repo: `docs/PRD.md` (synchronized baseline, D1–D45), `docs/UI_DESIGN.md` (implementation-ready UI spec), `docs/GLOSSARY.md`, `docs/TRACEABILITY.md`, `docs/decisions/`. Where any design doc could contradict the PRD or decision records, the PRD and records win.
+- Authoritative specs in this repo: `docs/PRD.md` (synchronized baseline, D1–D50/E1–E14), `docs/UI_DESIGN.md` (implementation-ready UI spec), `docs/GLOSSARY.md`, `docs/TRACEABILITY.md`, `docs/decisions/`. Where any design doc could contradict the PRD or decision records, the PRD and records win.
 - Canonical vocabulary is binding: **Agent** (never "Expert"), **Operation** (never "Scene" or "group chat"), **Pack**, **task run**. Hierarchy: Pack → Operations → Agents.
 - `business-landing-portfolio/` is the implemented marketing surface and the source of the approved brand; it intentionally simplifies the product model for visitors and is out of scope for prototype acceptance criteria.
 - Access: Google OAuth is the only login; signup capped at five accounts (server-enforced); tiers (Light/Balanced/Heavy) are simulated; no real payments.
@@ -33,7 +33,7 @@ Versioned Packs of persistent-identity Agents working in supervised, transparent
 
 ## Capabilities and Constraints
 
-- **Six pack-defined Agents** (General Assistant, Researcher, Developer, Citation Manager, Programming Tutor, Study Planner) and **three pack-defined Operations** (Research Paper, Programming Assignment, Exam Preparation); ad-hoc Operations with same-pack rosters also exist. Each Agent appears in at least two Operations.
+- **Six pack-defined Agents** (General Assistant, Researcher, Developer, Citation Manager, Programming Tutor, Study Planner) and **three pack-defined Operations** (Research Paper, Programming Assignment, Exam Preparation); ad-hoc Operations with same-pack rosters also exist. Each Agent is rostered in exactly one Operation; cross-Operation work runs through subagent triggering (D46).
 - One persistent Agent identity everywhere: one profile, one direct chat, one private memory, one settings surface (D39).
 - Operation launch is preview-gated: nothing executes before the user confirms the preview (D30, AC23).
 - Agents propose; the runtime validates and executes (D4, D23). The UI never renders an agent action as done before runtime validation.
@@ -45,7 +45,7 @@ Versioned Packs of persistent-identity Agents working in supervised, transparent
 - Memory with provenance and a private → shared publication boundary (D37); secrets are always rejected, never stored.
 - UI constraints: dark-only theme in v1; responsive from ~360px; full keyboard reachability and visible focus; no secrets rendered anywhere; errors show redacted `safe_message` only.
 - Build approach: UI-first with Zod-typed mock fixtures and a scripted mock runtime (UI_DESIGN.md §9) so acceptance-criterion shapes are evaluable before any backend exists.
-- Deliberately undecided/open: final logo art and avatar illustration style (owner's reference material + sketch, 2026-09-11); admin console deferred (E7); exact pack skill/tool/connector mapping pending its record.
+- Deliberately undecided/open: final logo art and avatar illustration style (owner's reference material + sketch, 2026-09-11); exact subagent semantics (D46 open sub-item); admin console deferred (E7); Stage-3 plan confirmations (dark-only v1, CI provider, tool pins) pending plan approval.
 
 ## Brand Commitments
 
@@ -56,7 +56,7 @@ Versioned Packs of persistent-identity Agents working in supervised, transparent
 
 ## Evidence on Hand
 
-- `docs/PRD.md` — approved prototype specification (D1–D45).
+- `docs/PRD.md` — approved prototype specification (D1–D50, E1–E14).
 - `docs/decisions/` — decision records with evidence, alternatives, and supersession map.
 - `docs/UI_DESIGN.md` — screen-by-screen UI spec with component inventory and mock-data requirements.
 - `docs/TRACEABILITY.md` — acceptance-criterion coverage and open items.

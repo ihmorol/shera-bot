@@ -1,6 +1,6 @@
 # Phase 0 build plan — DRAFT for owner approval (Stage 3 Planner output)
 
-**Date:** 2026-09-13 · **Status:** draft — nothing scaffolded. Per `docs/DEV_WORKFLOW.md` Stage 3 the owner approves this slice list before any scaffolding starts.
+**Date:** 2026-09-13 · **Status:** draft — nothing scaffolded. Per `docs/DEV_WORKFLOW.md` Stage 3 the owner approves this slice list before any scaffolding starts. **2026-09-17 update:** the owner deferred Stage 3 (*"lets work on it later"*); the two contract blockers below are now decided (D46 Pack mapping, E12 `workspace_id`) and the ten dispositions are recorded — see [`open-items-decisions-2026-09-17.md`](open-items-decisions-2026-09-17.md). The plan is otherwise unchanged and still unapproved.
 **Informed by:** the committed static mockup (`mockup/` — validated three-panel shell, interaction inventory with statuses in `mockup/REFERENCE.md`), PRD §247–261/§338–361, confirmed-decisions (repo layout, Zod-first, pnpm/Turborepo), D13 spike pending.
 
 ## 0. What carries over from the mockup (evidence, not code)
@@ -34,7 +34,7 @@ S1 acceptance: `pnpm install && pnpm lint && pnpm typecheck && pnpm test` green 
 9. `CreditReservation`/`Settlement` (reserve → settle/release per D20–D22; exhausted-credit transition per item 3)
 10. `MemoryEntry` (scopes shared/agent-private, publication flag per D37)
 
-⚠ Two contracts are blocked on owner decisions: `Pack` (item 7/D43) and the `workspace_id` representation (item 6). S2 starts with the other eight; these two land as amendments.
+⚠ Two contracts were blocked on owner decisions: `Pack` (item 7/D43) and the `workspace_id` representation (item 6). **Both are now decided** (D46 and E12, 2026-09-17), so S2 can include all ten contracts.
 
 ## 3. Operation/task state machine (slice S3)
 
@@ -68,4 +68,4 @@ Unit/contract/integration/recovery/E2E slots; **fake Pi provider seam** (scripte
 - Dark-only theme for `apps/web` v1 per PRODUCT.md, even though the mockup explored light mode — confirm.
 - CI provider choice (GitHub Actions assumed) — E-record at S1.
 - pnpm version pin and Node LTS line — engineering choice at S1.
-- The ten Stage-2 dispositions (see `open-items-brief-2026-09-13.md`) — items 6/7 block S2 completion.
+- The ten Stage-2 dispositions — **resolved 2026-09-17** (D46–D50, E9–E14; items 6/7 no longer block S2); only the owner's review of the Delegated records remains.

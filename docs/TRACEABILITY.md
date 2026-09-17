@@ -1,14 +1,16 @@
 # Shera Bot — Decision and Requirement Traceability
 
 **Status:** Working traceability baseline for the synchronized PRD and the post-PRD decision records.  
-**Last updated:** 2026-09-11  
+**Last updated:** 2026-09-17  
 **Canonical vocabulary:** [`GLOSSARY.md`](GLOSSARY.md)  
 **Decision index:** [`decisions/README.md`](decisions/README.md)  
-**Full session evidence:** [`history/2026-09-08-to-2026-09-11/README.md`](history/2026-09-08-to-2026-09-11/README.md)
+**Full session evidence:** `history/2026-09-08-to-2026-09-11/README.md` — removed from the working tree in commit `9d8b81c`; retrieve from Git history (for example `cea3ba1`) or the local `.session-archive/` copy.
 
 ## PRD synchronization record
 
 On 2026-09-11 the product owner instructed synchronization of `docs/PRD.md` and the marketing landing page with the final decisions. The PRD was updated in place to reflect D1–D45 and E1–E8; the original 2026-09-08 baseline remains available in Git history (commit `8bacf81`) and in the session archive. The instruction that previously kept the PRD unchanged ("Dont change previous prd", 2026-09-11) is itself superseded by this later explicit instruction; both are preserved in the continuation transcript. The `business-landing-portfolio/` marketing site was aligned to the six-Agent student pack and Pack/Operation vocabulary and registered as an out-of-scope marketing surface in its README.
+
+On 2026-09-17 the owner answered the Stage-1 roster question and delegated the Stage-2 dispositions in one instruction (verbatim in [`decisions/open-items-decisions-2026-09-17.md`](decisions/open-items-decisions-2026-09-17.md)). Recorded as **SYNC-2**: the PRD was synchronized with D46 (header, §5 lead and mapping paragraph, §5.4, §9 exhausted-credit visibility, §15 prototype admin note, §§21–22 pointer); D47–D50 and E9–E14 are engineering- and prototype-scope records with no further PRD text changes beyond those noted.
 
 ## Authority and status semantics
 
@@ -67,10 +69,16 @@ On 2026-09-11 the product owner instructed synchronization of `docs/PRD.md` and 
 | D40 | Confirmed | ZCode Q40; `zcode-continuation-transcript.md` | — | §§4, 6 | One workspace; internal `workspace_id` |
 | D41 | Confirmed | ZCode Q41 | Retires PRD task-chat type | §§4.1–4.2 | Agents/Operations navigation; ad-hoc Operation E2E |
 | D42 | Confirmed | ZCode Q42; answer `ok` accepted recommendation | — | §§4.2, 5, 8 | Coordinator removal/peer protocol tests |
-| D43 | Confirmed | ZCode Q43 | Extends D18/D29 | §§5, 19 | Six-Agent/three-Operation pack fixture |
+| D43 | Confirmed / roster clause superseded | ZCode Q43 | Roster-reuse clause superseded by D46 | §§5, 19 | Six-Agent/three-Operation pack fixture |
 | D44 | Confirmed | ZCode Q44 | Supersedes historical Expert terminology | §§4, 5, 17, 21 | Glossary/lint terminology check |
 | D45 | Confirmed | ZCode Q45 | Adds criteria 22–27 | §19 | Acceptance traceability below |
 | SYNC-1 | Confirmed | User instruction 2026-09-11: "lets sync the prd, and landing page with the final decisions" | Supersedes the earlier leave-PRD-unchanged instruction | All | PRD synchronized 2026-09-11; landing page aligned; this file updated |
+| D46 | Confirmed | Owner message 2026-09-17 (verbatim in the record) | Supersedes D43's roster-reuse clause; refines PRD §5, UI_DESIGN §1.4, PRODUCT.md | §§5, 19 | One home Operation per Agent; subagent triggering; pack v1 mapping; Pack contract tests (S2) |
+| D47 | Delegated (pending owner review) | Owner instruction 2026-09-17 delegating Stage-2 dispositions | Extends E7 | §15 | Admin API/CLI procedures; restore drill through the CLI |
+| D48 | Delegated (pending owner review) | Owner instruction 2026-09-17 | Confirms PRD §9 pause behavior; adds visible state | §9 | Reservation-failure contract test; resume-after-top-up |
+| D49 | Delegated (pending owner review) | Owner instruction 2026-09-17 | Fills D42's removal lifecycle | §§4.2, 8 | Remove-coordinator-mid-run integration test |
+| D50 | Delegated (pending owner review) | Owner instruction 2026-09-17 | Disposes the UX_RECOMMENDATIONS gate item | — | Phase-1 slice specs cite adopted recommendations |
+| SYNC-2 | Confirmed | Owner instruction 2026-09-17 (same message as D46) | Records the 2026-09-17 PRD sync | §§5, 9, 15, 21–22 | PRD header/sections updated; this file updated |
 | E1 | Engineering | PRD §24 delegation; D42 refinement | — | §6 | Admission/queue/resource tests |
 | E2 | Engineering | PRD §24 delegation; D26 extension | — | §14 | Event retention/cursor tests |
 | E3 | Engineering | PRD §24 delegation; PRD §8 timing | — | §8 | Reminder scheduler tests |
@@ -79,6 +87,12 @@ On 2026-09-11 the product owner instructed synchronization of `docs/PRD.md` and 
 | E6 | Engineering | PRD §24 delegation; PRD §10 | — | §10 | Worktree/merge approval tests |
 | E7 | Engineering | PRD §24 delegation; D23 + D45 | — | §§19, 22 | Phase gates and acceptance runner |
 | E8 | Engineering | PRD §24 delegation; D23 | — | §19, §22 | CI suite configuration |
+| E9 | Delegated engineering (pending owner review) | PRD §§9, 12 + D17/D22; owner instruction 2026-09-17 | Clarifies the §12 boundary | §§9, 12 | Secret-redaction/custody tests |
+| E10 | Delegated engineering (pending owner review) | E2 + owner instruction 2026-09-17 | Refines E2 for the prototype | §14 | Snapshot-fallback contract test |
+| E11 | Delegated engineering (pending owner review) | PRD §12/§21; D10, D13; owner instruction 2026-09-17 | Details D10 | §§12, 21 | Stage 7 restore drill; acceptance 18 |
+| E12 | Delegated engineering (pending owner review) | D40 + owner instruction 2026-09-17 | Applies D40 to the schema | §§12, 17 | Workspace-scoping repository tests |
+| E13 | Delegated engineering (pending owner review) | PRD §13; D33, E2; owner instruction 2026-09-17 | Details D33 | §13 | Recovery-class test matrix |
+| E14 | Delegated engineering (pending owner review) | PRD §§21–22; owner instruction 2026-09-17 | Defines register closure policy | §§21, 22 | Ledger accuracy at stage gates |
 
 ## D45 acceptance traceability (criteria 22–27)
 
@@ -106,25 +120,35 @@ On 2026-09-11 the product owner instructed synchronization of `docs/PRD.md` and 
 | §§12–14 | Restart, WebSocket, replay, recovery | Adds semantic checkpoints; recovery pauses on unprovable external effects; exact effect handling remains implementation-defined | D5, D26, D32–D33, E2 |
 | §17 | Stack named; module boundaries/versions open | Adds control-plane-only PostgreSQL, WAL SQLite, Drizzle, Redis-never-source-of-truth, three-app monorepo, Zod-first contracts, JSONL Pi adapter | D2, D8, D10, D23–D26, D13–D14 |
 | §19 | Acceptance criteria 1–21 | Criteria 3–6 updated to the Pack/Operation model; criteria 22–27 added | D29, D45 |
-| §§21–22 | Visual and engineering TODO lists | Some items resolved by D23–D45/E1–E8; unresolved register remains below | Partially resolved |
+| §§21–22 | Visual and engineering TODO lists | Partially resolved by D23–D45/E1–E8; the ten open items were dispositioned on 2026-09-17 (D46–D50, E9–E14) | D23–D45, D46–D50, E1–E14 |
 | §24 | Explicit decisions should update PRD | Baseline honored during the freeze; PRD updated in place on 2026-09-11 by explicit instruction (SYNC-1) | SYNC-1 |
 
-## Open / implementation-defined items
+## Stage-2 disposition ledger (2026-09-17)
 
-These are intentionally **not** hidden decisions even though the grilling frontier is closed:
+The ten implementation-defined items that were open on 2026-09-13 were dispositioned on 2026-09-17 under the owner's delegation (verbatim instruction in [`decisions/open-items-decisions-2026-09-17.md`](decisions/open-items-decisions-2026-09-17.md), which also holds the full rationale, alternatives, and verification targets).
 
-- exact admin UI scope versus manual/admin API operation for the private prototype;
-- exact exception between admin deployment secrets and PRD §12's local credential wording;
-- credits versus production billing/metering and the user-visible exhausted-credit state;
-- exact event compaction thresholds and retention size policy;
-- SQLite backup consistency/integrity and restore/migration procedure;
-- exact `workspace_id` invariant and future multi-workspace migration;
-- complete student Pack mapping of all six Agents to all three Operations, including skill/tool/connector lists;
-- exact Operation coordinator lifecycle when removed;
-- per-tool recovery semantics for ambiguous external effects;
-- which PRD TODOs are fully resolved versus only contract-defined.
+| Item | Disposition | Record | Evidence target |
+|---|---|---|---|
+| Admin scope (E7 defers admin console) | Decided | D47 | Stage 7/8 runbook: admin CLI procedures |
+| Admin provider-credential custody vs PRD §12 wording | Decided | E9 | Secret-redaction/custody tests (Stage 3/6) |
+| Exhausted-credit UX and billing boundary | Decided | D48 | Reservation-failure contract test; top-up resume |
+| Event compaction thresholds | Contract decided; thresholds production-gated | E10 | Snapshot-fallback contract test |
+| SQLite backup/restore/migration procedure | Mechanism decided; replication production-gated | E11 | Stage 7 restore drill (acceptance 18) |
+| `workspace_id` invariant | Decided (applies D40) | E12 | Workspace-scoping repository tests |
+| Complete student Pack mapping (D43 conflict) | Decided by owner | D46 | Pack manifest validation (S2); fixture update entry |
+| Coordinator removal lifecycle | Decided | D49 | Remove-coordinator-mid-run integration test |
+| Per-tool recovery semantics | Decided | E13 | Recovery-class test matrix |
+| PRD TODO register closure | Decided | E14 | Ledger accuracy at stage gates |
 
-Each item needs an owner, evidence target, and decision record before it is treated as closed.
+## Open / implementation-defined items (remaining)
+
+Still deliberately open — not silently decided:
+
+- **Exact subagent semantics** (D46): whether a subagent is a same-identity worker instance or another same-Pack Agent invoked as a subordinate, concurrency limits, and memory-scope boundaries. Owner + evidence target: before the Agent/Operation contracts freeze (Phase 0 S2), or recorded as an engineering decision at that point.
+- **Stage-3 plan confirmations** (dark-only `apps/web` v1, CI provider, pnpm/Node pins): awaiting the owner's approval of [`decisions/phase0-plan-draft-2026-09-13.md`](decisions/phase0-plan-draft-2026-09-13.md); the plan says scaffolding starts only after approval.
+- **UX_RECOMMENDATIONS**: dispositioned as not-adopted-now (D50, Delegated, pending owner review); individual recommendations are evaluated per Phase-1 UI slice.
+
+Each remaining item needs an owner, evidence target, and decision record before it is treated as closed.
 
 ## Related-but-out-of-scope artifacts
 

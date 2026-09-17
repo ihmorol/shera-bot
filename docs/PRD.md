@@ -1,10 +1,10 @@
 # Shera Bot Prototype Product Requirements Document
 
-**Status:** Approved prototype specification, synchronized with decision records D1–D45  
-**Date:** 2026-09-08 (baseline) · 2026-09-11 (synchronized)  
+**Status:** Approved prototype specification, synchronized with decision records D1–D50 and E1–E14  
+**Date:** 2026-09-08 (baseline) · 2026-09-11 (synchronized, D1–D45) · 2026-09-17 (open-items sync, D46; SYNC-2)  
 **Scope:** Private prototype for validating a multi-agent, Grok Bot-inspired assistant
 
-> This document was synchronized with the confirmed decision records (D1–D45, E1–E8) on 2026-09-11 by explicit product-owner instruction. The original 2026-09-08 baseline is preserved in Git history (commit `8bacf81`) and in the session archive. Decision evidence lives in [`decisions/`](decisions/); the reconciliation record is [`TRACEABILITY.md`](TRACEABILITY.md).
+> This document was synchronized with the confirmed decision records (D1–D45, E1–E8) on 2026-09-11 by explicit product-owner instruction, and with D46 on 2026-09-17 (§5, §5.4, §9, §15, §§21–22 notes; recorded as SYNC-2 in [`TRACEABILITY.md`](TRACEABILITY.md)). The original 2026-09-08 baseline is preserved in Git history (commit `8bacf81`) and in the session archive. Decision evidence lives in [`decisions/`](decisions/); the reconciliation record is [`TRACEABILITY.md`](TRACEABILITY.md).
 
 ## 1. Product definition
 
@@ -102,9 +102,11 @@ The user receives a live shared read-only view of browser and terminal activity.
 
 ## 5. Agents
 
-Agents are reusable, persistent identities defined by versioned customer Packs. Each Agent has a fixed role with editable user instructions, a private profile folder, private memory, role defaults, and access to the shared workspace and shared task context. An Agent's Pi session process starts on demand and may hibernate after idle time; actual task work runs in separately supervised task workers. The same Agent appearing in multiple Operations keeps one persistent identity — one profile, one direct chat, one private memory, one settings surface — with a scoped assignment per Operation.
+Agents are reusable, persistent identities defined by versioned customer Packs. Each Agent has a fixed role with editable user instructions, a private profile folder, private memory, role defaults, and access to the shared workspace and shared task context. An Agent's Pi session process starts on demand and may hibernate after idle time; actual task work runs in separately supervised task workers. An Agent keeps one persistent identity — one profile, one direct chat, one private memory, one settings surface — with a scoped assignment per Operation.
 
-All Agents in a workspace come from the workspace's pinned Pack. The first Pack, student v1, ships six Agents, each reused across at least two of the three pack-defined Operations (Research Paper, Programming Assignment, Exam Preparation). Ad-hoc Operations may combine any same-Pack Agents.
+An Agent's scoped assignment is a single Operation: each Agent is rostered in exactly one pack-defined Operation. Cross-Operation work is performed through **subagent triggering** — an Agent can trigger multiple subagents (subordinate agent executions) within its Operation, and delegated work creates independently tracked task runs. The General Assistant participates in every Operation as the default coordinator; the coordinator role is not a roster assignment and is removable (see §4.2).
+
+All Agents in a workspace come from the workspace's pinned Pack. The first Pack, student v1, ships six Agents and three pack-defined Operations (Research Paper, Programming Assignment, Exam Preparation), mapped one Operation per Agent: Research Paper — General Assistant, Researcher, Citation Manager; Programming Assignment — General Assistant, Developer, Programming Tutor; Exam Preparation — Study Planner. Ad-hoc Operations may combine any same-Pack Agents and cover every other combination.
 
 ### 5.1 Researcher
 
@@ -134,17 +136,17 @@ It may read shared files, read/write its private folder, create plans/notes/arti
 
 ### 5.4 Citation Manager
 
-The Citation Manager maintains source indexes, reference metadata, and citation formats across research work. It checks citations for consistency, preserves provenance for every source, and supports the Research Paper and Exam Preparation Operations.
+The Citation Manager maintains source indexes, reference metadata, and citation formats across research work. It checks citations for consistency, preserves provenance for every source, and supports the Research Paper Operation; where Exam Preparation needs syllabus source indexing, it is triggered there as a subagent.
 
 ### 5.5 Programming Tutor
 
-The Programming Tutor helps students understand code and assignments: it explains concepts, reviews solutions, guides practice, and produces study-oriented explanations and exercises for the Programming Assignment Operation.
+The Programming Tutor helps students understand code and assignments: it explains concepts, reviews solutions, guides practice, and produces study-oriented explanations and exercises for the Programming Assignment Operation; Exam Preparation past-paper drills run as its subagent work.
 
 ### 5.6 Study Planner
 
 The Study Planner turns courses, deadlines, and exam dates into study schedules, tracks progress against them, and adjusts plans as work completes, supporting the Exam Preparation Operation.
 
-The complete student Pack mapping of all six Agents to all three Operations, including skill, tool, and connector lists, is an open implementation item recorded in [`TRACEABILITY.md`](TRACEABILITY.md).
+The student Pack v1 roster mapping (one Operation per Agent) is recorded in D46; per-Agent skill, tool, and connector lists are Pack content authored with the Pack fixtures (D18/D43), and the mapping is exercised by the Phase 0 Pack contract.
 
 ## 6. Runtime and tenancy
 
@@ -192,7 +194,7 @@ Custom provider fields are display name, protocol type, base URL, API key or no-
 
 Each agent has a default provider/model. Users may override the provider/model per conversation. Provider keys are local-first inside the user container, runtime-injected, masked, revocable, and never written to prompts, chat history, memory, tool history, logs, shared files, or tool inventory. The central service does not persist provider keys.
 
-Platform-provider usage is metered through an internal reservation-and-settlement credit ledger with a single account-level balance: requests reserve a bounded estimate before execution, settle against actual usage, and release unused reservations; if a reservation cannot be made, the task pauses before calling the model. Credits are prototype accounting, not real billing or authorization for tools and side effects. Custom-provider requests do not consume Shera credits but are measured locally. The administrator supplies the initial provider, model catalog, and per-user credit allocation; there is no mock fallback in the user-facing runtime — a missing or invalid provider produces a clear configuration state, never fake completion.
+Platform-provider usage is metered through an internal reservation-and-settlement credit ledger with a single account-level balance: requests reserve a bounded estimate before execution, settle against actual usage, and release unused reservations; if a reservation cannot be made, the task pauses before calling the model with an explicit, visible insufficient-credit state and notification, and resumes only after an administrator top-up or user cancellation. Credits are prototype accounting, not real billing or authorization for tools and side effects. Custom-provider requests do not consume Shera credits but are measured locally. The administrator supplies the initial provider, model catalog, and per-user credit allocation; there is no mock fallback in the user-facing runtime — a missing or invalid provider produces a clear configuration state, never fake completion.
 
 ## 10. Projects and Git
 
@@ -234,7 +236,7 @@ Tasks continue after browser closure. Reconnect reloads durable history and repl
 
 ## 15. Admin console
 
-The manually flagged administrator can list users, enable/disable accounts, assign tiers, provision/restart/stop containers, view container status and resource usage, trigger backups and restore one of seven snapshots, emergency-cancel all tasks for one user, and view recent container/task failures.
+The manually flagged administrator can list users, enable/disable accounts, assign tiers, provision/restart/stop containers, view container status and resource usage, trigger backups and restore one of seven snapshots, emergency-cancel all tasks for one user, and view recent container/task failures. In the private prototype these capabilities are operated through an authenticated admin API/CLI on the control plane; the admin console UI is production-gated (E7, D47).
 
 Security-relevant actions are logged internally even without a full audit UI.
 
@@ -361,6 +363,8 @@ Normal command acknowledgement target is approximately 500ms under normal local/
 22. Add license inventory generation to CI.
 23. Add deployment and disaster-recovery runbooks.
 
+Status of these items and of the §21 visual register is tracked per item in [`TRACEABILITY.md`](TRACEABILITY.md): all are contract-defined until implemented and verified, nothing is treated as done without code, tests, and evidence (E14).
+
 ## 23. Open-source and legal compliance
 
 The project follows strict compliance. It preserves every dependency's license, copyright notices, attribution, and source/disclosure obligations; maintains a dependency/license inventory; reviews Pi fork obligations and modifications; and does not present open-source work as proprietary. Product branding and behavior remain independent from Grok/xAI.
@@ -369,4 +373,4 @@ The project follows strict compliance. It preserves every dependency's license, 
 
 This document is implementation-ready for the private prototype. Engineering may choose low-level libraries, exact versions, cloud provider, table names, module boundaries, and visual details without reopening product decisions. Changes to user-visible scope, data ownership, approval safety, tenancy, agent roles, persistence, or acceptance criteria require an explicit product decision and an update to this document.
 
-Confirmed decisions D1–D45 and engineering records E1–E8 are recorded with full evidence in [`decisions/`](decisions/). This document was synchronized with those records on 2026-09-11 by explicit product-owner instruction; the original 2026-09-08 baseline remains available in Git history (commit `8bacf81`) and in the session archive.
+Confirmed decisions D1–D50 and engineering records E1–E14 are recorded with full evidence in [`decisions/`](decisions/). This document was synchronized with those records on 2026-09-11 (D1–D45) and 2026-09-17 (D46, SYNC-2) by explicit product-owner instruction; the original 2026-09-08 baseline remains available in Git history (commit `8bacf81`) and in the session archive.

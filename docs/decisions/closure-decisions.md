@@ -2,7 +2,9 @@
 
 Part of the decision records. Index and provenance: [`README.md`](README.md). Confirmed decisions 1–39: [`confirmed-decisions.md`](confirmed-decisions.md).
 
-> The original grilling run was cut off at Question 39 by a provider quota error. This record preserves the one-question-at-a-time continuation through D45, the full disposition of pre-written proposals P1–P9, and engineering decisions E1–E8. See [`proposal-history.md`](proposal-history.md) for every proposal, alternative, recommendation, objection, and outcome.
+> The original grilling run was cut off at Question 39 by a provider quota error. This record preserves the one-question-at-a-time continuation through D45, the full disposition of pre-written proposals P1–P9, and engineering decisions E1–E8. See [`proposal-history.md`](proposal-history.md) for every proposal, alternative, recommendation, objection, and outcome. Later records (D46–D50, E9–E14, 2026-09-17) are in [`open-items-decisions-2026-09-17.md`](open-items-decisions-2026-09-17.md).
+>
+> Evidence links below into `../history/2026-09-08-to-2026-09-11/` refer to the archive removed from the working tree in commit `9d8b81c`; retrieve those files from Git history (for example `cea3ba1`) or the local `.session-archive/` copy. The quoted evidence is preserved as recorded.
 
 ---
 
@@ -33,8 +35,8 @@ Part of the decision records. Index and provenance: [`README.md`](README.md). Co
 - Coordinator proposals for roster changes still follow D36 (user controls; runtime validates).
 
 ## D43 — Student pack v1 scope
-**Status:** Confirmed — Q43 answered 2026-09-11 ("option 2")
-**Evidence:** [`zcode-continuation-transcript.md`](../history/2026-09-08-to-2026-09-11/zcode-continuation-transcript.md), Q43 section.
+**Status:** Confirmed — Q43 answered 2026-09-11 ("option 2"). The roster-reuse clause ("each Agent is reused across at least two Operations") is **superseded by D46** (2026-09-17); the pack scope below stands.
+**Evidence:** [`zcode-continuation-transcript.md`](../history/2026-09-08-to-2026-09-11/zcode-continuation-transcript.md), Q43 section; supersession: [`open-items-decisions-2026-09-17.md`](open-items-decisions-2026-09-17.md) D46.
 **Decision:** The first pack (`agent-packs/student/v1`) ships with **6 Agents** and **3 pack-defined Operations**:
 - **Agents:** General Assistant, Researcher, Developer, Citation Manager, Programming Tutor, Study Planner.
 - **Operations:** Research Paper, Programming Assignment, Exam Preparation.
@@ -123,6 +125,7 @@ CI runs unit, contract, integration, recovery, and `mock-runtime` E2E suites. `l
 | D18/D19 three-role agent pack | D29 + D43 | Pack contains an agent catalog, teams, Operations, skills, connectors; student pack v1 = 6 agents, 3 Operations. |
 | D23 earlier 20-package monorepo | D23 (revised) | Three apps + ≤7 packages + feature modules. |
 | "Expert" terminology (D29–D43) | D44 | "Agent" everywhere; Pack → Operations → Agents. |
+| D43 "reused across at least two Operations" clause | **D46** (2026-09-17) | One home Operation per Agent; the coordinator role is cross-Operation (D42) and is not a roster assignment; cross-Operation work runs through subagent triggering. Full table: [`open-items-decisions-2026-09-17.md`](open-items-decisions-2026-09-17.md). |
 | PRD §4.1/§4.2 dashboard and chat types | D29, D30, D31, D41, D44 | Sidebar = Agents + Operations; task-chat type retired; Operation preview; reusable Operation workspaces. |
 | PRD §5 "three agents" | D29, D39, D43 | Agents become reusable identities inside a customer pack. |
 

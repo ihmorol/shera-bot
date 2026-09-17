@@ -1,17 +1,18 @@
 # Shera Bot — Client UI Design Specification
 
 **Status:** Implementation-ready UI design specification (design record under PRD §24 delegation)
-**Date:** 2026-09-11
+**Date:** 2026-09-11 (D46 sync: rule 4, 2026-09-17)
 **Scope:** The `apps/web` client of the private prototype — every user-facing surface, page, component, state, and copy rule.
-**Authority:** This document resolves the PRD §21 Visual/design TODO register at the specification level. It does not change any product decision. Where this document could be read as contradicting the PRD or decisions D1–D45, **the PRD and decision records win** and this document must be corrected. Pure visual taste (exact layout feel, density, illustration style, final logo art) is intentionally left open for the product owner's reference material and handwritten sketch (2026-09-11); when that material lands, it amends this document.
+**Authority:** This document resolves the PRD §21 Visual/design TODO register at the specification level. It does not change any product decision. Where this document could be read as contradicting the PRD or decisions D1–D50, **the PRD and decision records win** and this document must be corrected. Pure visual taste (exact layout feel, density, illustration style, final logo art) is intentionally left open for the product owner's reference material and handwritten sketch (2026-09-11); when that material lands, it amends this document.
 
 **Sources analyzed:**
 
-- [`PRD.md`](PRD.md) — synchronized baseline, D1–D45 (2026-09-11)
+- [`PRD.md`](PRD.md) — synchronized baseline, D1–D50 (2026-09-17)
 - [`GLOSSARY.md`](GLOSSARY.md) — canonical vocabulary
 - [`TRACEABILITY.md`](TRACEABILITY.md) — acceptance coverage and open items
 - [`decisions/confirmed-decisions.md`](decisions/confirmed-decisions.md) — D1–D39
 - [`decisions/closure-decisions.md`](decisions/closure-decisions.md) — D40–D45, E1–E8
+- [`decisions/open-items-decisions-2026-09-17.md`](decisions/open-items-decisions-2026-09-17.md) — D46–D50, E9–E14
 - [`../business-landing-portfolio/`](../business-landing-portfolio/) — the only implemented visual identity (dark theme, tokens extracted in §2.1)
 
 ---
@@ -23,7 +24,7 @@ These come from recorded decisions and the PRD. Every screen spec below assumes 
 1. **Vocabulary:** "Agent" everywhere — UI copy, labels, code identifiers, schemas (D44). The word "Expert" must not appear in any user-visible surface. "Scene" is retired; the word is **Operation** (D29, D44). Hierarchy is **Pack → Operations → Agents**.
 2. **Sidebar has exactly two sections:** **Agents** and **Operations** (D41, PRD §4.1). No third chat type; the old "task-specific chat" is retired (D41).
 3. **No workspace switcher** — one workspace per user in the prototype; the container is the workspace (D40). Records are internally scoped by `workspace_id`, but no UI surface exposes workspace management.
-4. **Six Agents, three pack-defined Operations** (student pack v1, D43): General Assistant, Researcher, Developer, Citation Manager, Programming Tutor, Study Planner; Operations: Research Paper, Programming Assignment, Exam Preparation. Each Agent appears in at least two Operations.
+4. **Six Agents, three pack-defined Operations** (student pack v1; D43 scope, D46 mapping): General Assistant, Researcher, Developer, Citation Manager, Programming Tutor, Study Planner; Operations: Research Paper, Programming Assignment, Exam Preparation. Each Agent is rostered in exactly one Operation; the default coordinator (General Assistant) is present in every Operation by role, not by roster assignment, and is removable (D42, D46).
 5. **One persistent Agent identity** everywhere it appears: one profile, one direct chat, one private memory, one settings surface, with a scoped assignment per Operation (D39). The UI must never present "the Researcher in Operation A" and "the Researcher in Operation B" as different identities.
 6. **Operation launch is preview-gated:** nothing executes before the user confirms the preview (D30, AC23). The preview shows purpose, agents, skills, connectors, provider/model, estimated credits, approval requirements, and expected outputs.
 7. **Agents propose; the runtime decides** (D4, D23 rule 7). The UI never renders an agent action as done before the runtime validates it. Tool calls render as proposals → validated → executed/rejected, per the event stream.

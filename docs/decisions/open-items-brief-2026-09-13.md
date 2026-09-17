@@ -69,17 +69,17 @@
 
 ---
 
-**Owner disposition block (fill in, one line each — the Archivist drafts records from these):**
+**Disposition block — filled 2026-09-17** under the owner's instruction *"based on prd and all the decisions make the smart and best suitable choices for each one"* (Stage 1's D43 item answered separately by the owner: *"currently an agent can run only one operation, but the same agent can trigger multiple subagents"*). Records: [`open-items-decisions-2026-09-17.md`](open-items-decisions-2026-09-17.md). Items 1–10 are disposed by D46–D50 and E9–E14; D47–D50/E9–E14 are Delegated pending owner review.
 
-| # | Item | decide / defer / production-gate | One-line disposition |
+| # | Item | disposition | One-line disposition |
 |---|---|---|---|
-| 1 | Admin scope | | |
-| 2 | Admin secrets | | |
-| 3 | Credits/exhausted | | |
-| 4 | Event compaction | | |
-| 5 | SQLite backups | | |
-| 6 | workspace_id | | |
-| 7 | Pack mapping (D43) | | |
-| 8 | Coordinator lifecycle | | |
-| 9 | Recovery semantics | | |
-| 10 | PRD TODOs | | |
+| 1 | Admin scope | **decide** (D47) | Authored admin API/CLI on the control plane; console UI production-gated (E7). |
+| 2 | Admin secrets | **decide** (E9) | Provider credentials live only in the container's local store, admin-provisioned, never rendered or centrally persisted. |
+| 3 | Credits/exhausted | **decide** (D48) | Reservation failure pauses the run before the model call with an explicit visible reason; resumes after admin top-up; billing production-gated. |
+| 4 | Event compaction | **decide contract / defer thresholds** (E10) | Append-only in the prototype; E2's snapshot+cursor fallback kept in the API shape; numeric thresholds production-gated. |
+| 5 | SQLite backups | **decide mechanism** (E11) | Online-backup snapshots on the PRD §12 schedule with integrity checks; drilled restore at Stage 7; replication production-gated. |
+| 6 | workspace_id | **decide** (E12) | Column on every product table with a single default value; repository-scoped queries; no future migration needed. |
+| 7 | Pack mapping (D43) | **decide — owner** (D46) | One home Operation per Agent; cross-Operation work via subagent triggering; mapping table recorded. |
+| 8 | Coordinator lifecycle | **decide** (D49) | Removable at any time, including mid-run; work continues peer-to-peer; runtime stays authoritative. |
+| 9 | Recovery semantics | **decide** (E13) | Per-tool declarative classes with `needs_human` as the default; classification is data, never prose. |
+| 10 | PRD TODOs | **decide** (E14) | All §21/§22 items are contract-defined until implemented; TRACEABILITY carries the per-item ledger. |

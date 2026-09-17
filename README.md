@@ -1,6 +1,6 @@
 # Shera Bot
 
-Shera Bot is a private prototype for a local-first, multi-agent assistant platform. The product design is documented and synchronized with the final decisions (D1–D45); the product runtime implementation has not yet been established. A static client mockup lives in `mockup/`, and a separate marketing/waitlist site lives in `business-landing-portfolio/`.
+Shera Bot is a private prototype for a local-first, multi-agent assistant platform. The product design is documented and synchronized with the final decisions (D1–D50, E1–E14; D47–D50/E9–E14 Delegated pending owner review); the product runtime implementation has not yet been established. A static client mockup lives in `mockup/`, and a separate marketing/waitlist site lives in `business-landing-portfolio/`.
 
 ## Client mockup
 
@@ -13,7 +13,7 @@ The mockup is not a working backend or proof of prototype acceptance. Its UX rec
 Before modifying architecture or code, read the documentation in this order:
 
 1. [`docs/README.md`](docs/README.md) — canonical documentation index.
-2. [`docs/PRD.md`](docs/PRD.md) — synchronized product baseline (2026-09-11, per D1–D45; original 2026-09-08 baseline in Git history).
+2. [`docs/PRD.md`](docs/PRD.md) — synchronized product baseline (2026-09-17, per D1–D50/E1–E14; original 2026-09-08 baseline in Git history).
 3. [`docs/decisions/README.md`](docs/decisions/README.md) — decision index.
 4. [`docs/GLOSSARY.md`](docs/GLOSSARY.md) — canonical vocabulary: **Pack → Operations → Agents**.
 5. [`docs/TRACEABILITY.md`](docs/TRACEABILITY.md) — PRD reconciliation, decision status, acceptance coverage, and open items.

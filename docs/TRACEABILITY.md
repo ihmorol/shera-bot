@@ -93,7 +93,7 @@ On 2026-09-17 the owner answered the Stage-1 roster question and delegated the S
 | E12 | Delegated engineering (pending owner review) | D40 + owner instruction 2026-09-17 | Applies D40 to the schema | §§12, 17 | Workspace-scoping repository tests |
 | E13 | Delegated engineering (pending owner review) | PRD §13; D33, E2; owner instruction 2026-09-17 | Details D33 | §13 | Recovery-class test matrix |
 | E14 | Delegated engineering (pending owner review) | PRD §§21–22; owner instruction 2026-09-17 | Defines register closure policy | §§21, 22 | Ledger accuracy at stage gates |
-| E15 | Delegated engineering (pending owner review) | Issue #2 (S01); `BUILD_MAP` §5–§6; phase-0 plan §1/§8; owner instruction "Lets start building" 2026-09-17 | Resolves the S01 plan-confirmation conflict for this slice only | §17, §22.1, §22.22, §23 | `lint`/`format:check`/`typecheck`/`test`/`build` green locally; license gate negative test; mockup suite 27 passing |
+| E15 | Delegated engineering (pending owner review) | Issue #2 (S01); `BUILD_MAP` §5–§6; phase-0 plan §1/§8; owner instruction "Lets start building" 2026-09-17 | Resolves the S01 plan-confirmation conflict for this slice only | §17, §22.1, §22.22, §23 | CI green on PR #37 (verify, license inventory, mockup regression); 15 tests incl. license-expression regressions; license gate negative test |
 
 ## D45 acceptance traceability (criteria 22–27)
 

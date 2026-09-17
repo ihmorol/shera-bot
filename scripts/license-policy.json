@@ -1,0 +1,46 @@
+{
+  "notes": [
+    "License policy for the Shera Bot private prototype. The gate fails on any dependency",
+    "whose license is neither in `allowed` nor named in `reviewedExceptions`.",
+    "`allowed` holds permissive licenses plus MPL-2.0 — weak, file-level copyleft with an",
+    "explicit linking permission (lightningcss, a Rust CSS tool pulled in by Next tooling).",
+    "`reviewedExceptions` holds licenses that are NOT generally allowed but have been",
+    "reviewed for a named dependency, with the obligation analysis written down.",
+    "Compound expressions are supported: `A OR B` passes when either side passes;",
+    "`A AND B` requires both sides. Components are matched literally against these lists.",
+    "Any addition to `reviewedExceptions` must also be recorded in the slice's engineering",
+    "record and re-checked before distribution (PRD §22.1, §23).",
+    "This policy governs THIRD-PARTY dependencies only. The Pi fork's own license",
+    "obligations are tracked separately and are still open (see docs/TRACEABILITY.md)."
+  ],
+  "allowed": [
+    "0BSD",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BlueOak-1.0.0",
+    "CC-BY-4.0",
+    "CC0-1.0",
+    "ISC",
+    "MIT",
+    "MIT-0",
+    "MPL-2.0",
+    "Python-2.0",
+    "Unlicense",
+    "Zlib"
+  ],
+  "reviewedExceptions": [
+    {
+      "license": "LGPL-3.0-or-later",
+      "reviewedOn": "2026-09-17",
+      "status": "Delegated - pending owner review",
+      "packages": ["@img/sharp-* (prebuilt native binaries for sharp, Next.js image optimization)"],
+      "rationale": "Unmodified prebuilt native binary, loaded at runtime and not statically linked into our code. The prototype is private and not distributed, so the LGPL distribution obligations (source offer, relinking) are not triggered yet. Re-check before any distribution or public exposure at the Stage 7 production-readiness gate.",
+      "alternatives": [
+        "Drop the image-optimization dependency and serve images unoptimized: loses Next.js image optimization for no prototype benefit.",
+        "Fail the gate on LGPL until distribution terms exist: blocks S01 on a dependency the owner has not yet ruled on.",
+        "Vendor and build the library from source: real maintenance cost for a private prototype."
+      ]
+    }
+  ]
+}

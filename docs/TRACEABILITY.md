@@ -93,6 +93,7 @@ On 2026-09-17 the owner answered the Stage-1 roster question and delegated the S
 | E12 | Delegated engineering (pending owner review) | D40 + owner instruction 2026-09-17 | Applies D40 to the schema | §§12, 17 | Workspace-scoping repository tests |
 | E13 | Delegated engineering (pending owner review) | PRD §13; D33, E2; owner instruction 2026-09-17 | Details D33 | §13 | Recovery-class test matrix |
 | E14 | Delegated engineering (pending owner review) | PRD §§21–22; owner instruction 2026-09-17 | Defines register closure policy | §§21, 22 | Ledger accuracy at stage gates |
+| E15 | Delegated engineering (pending owner review) | Issue #2 (S01); `BUILD_MAP` §5–§6; phase-0 plan §1/§8; owner instruction "Lets start building" 2026-09-17 | Resolves the S01 plan-confirmation conflict for this slice only | §17, §22.1, §22.22, §23 | `lint`/`format:check`/`typecheck`/`test`/`build` green locally; license gate negative test; mockup suite 27 passing |
 
 ## D45 acceptance traceability (criteria 22–27)
 
@@ -145,7 +146,8 @@ The ten implementation-defined items that were open on 2026-09-13 were dispositi
 Still deliberately open — not silently decided:
 
 - **Exact subagent semantics** (D46): whether a subagent is a same-identity worker instance or another same-Pack Agent invoked as a subordinate, concurrency limits, and memory-scope boundaries. Owner + evidence target: before the Agent/Operation contracts freeze (Phase 0 S2), or recorded as an engineering decision at that point.
-- **Stage-3 plan confirmations** (dark-only `apps/web` v1, CI provider, pnpm/Node pins): awaiting the owner's approval of [`decisions/phase0-plan-draft-2026-09-13.md`](decisions/phase0-plan-draft-2026-09-13.md); the plan says scaffolding starts only after approval.
+- **Pi fork license, modification obligations, and upstream-sync process** (PRD §22.1, S01 acceptance criterion): no Pi fork exists in the owner's GitHub account, nothing local matches it, and no repository document names the upstream project or its license — so the criterion could not be met without inventing text (G3/G5). Owner input required to identify the upstream; evidence target: before S03/S07, where the adapter first appears. Recorded in [`decisions/engineering-record-e15-2026-09-17.md`](decisions/engineering-record-e15-2026-09-17.md) decision 9.
+- **Stage-3 plan confirmations** (dark-only `apps/web` v1, CI provider, pnpm/Node pins): S01 was executed on 2026-09-17 under the owner's instruction to start building, with these recorded as **Delegated — pending owner review** in E15 (decision 1 of that record notes the conflict between the plan draft's approval gate and `BUILD_MAP` §6/issue #2). Owner review of E15 closes them.
 - **UX_RECOMMENDATIONS**: dispositioned as not-adopted-now (D50, Delegated, pending owner review); individual recommendations are evaluated per Phase-1 UI slice.
 
 Each remaining item needs an owner, evidence target, and decision record before it is treated as closed.

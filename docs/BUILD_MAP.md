@@ -81,7 +81,8 @@ Acceptance criteria 1–27 (PRD §19) are covered by the slices named above; the
 ## 6. Open items that stay open
 
 - **Exact subagent semantics** (D46 sub-item): same-identity worker instance versus another same-Pack Agent invoked as a subordinate, concurrency limits, memory-scope boundaries. Evidence target: before the Agent/Operation contracts freeze (S10/S13), or recorded as an engineering decision at that point. Tracked in `TRACEABILITY.md`.
-- **Stage-3 plan confirmations** awaiting the owner: dark-only `apps/web` v1, CI provider, pnpm/Node pins (`decisions/phase0-plan-draft-2026-09-13.md` §8). S01 records them as Delegated pending review.
+- **Pi fork license, modification obligations, and upstream-sync process** (PRD §22.1, part of S01's acceptance criteria): the fork does not exist yet and no document names the upstream, so S01 records the gap rather than inventing license text. Owner input required to identify the upstream; evidence target before S03/S07. Tracked in `TRACEABILITY.md` and recorded in `decisions/engineering-record-e15-2026-09-17.md`.
+- **Stage-3 plan confirmations** awaiting the owner: dark-only `apps/web` v1, CI provider, pnpm/Node pins (`decisions/phase0-plan-draft-2026-09-13.md` §8). S01 executed on 2026-09-17 with them recorded as Delegated pending review in E15 — including the resolution of the conflict between the plan draft's approval gate and §6/issue #2.
 - **`mockup/UX_RECOMMENDATIONS.md`**: dispositioned as not-adopted-now (D50); individual recommendations are evaluated per UI slice.
 
 ## 7. Keeping this file current

@@ -1,0 +1,13 @@
+# Normalize every text file to LF in the repository and in the working tree, so a
+# Windows checkout and the Linux CI runner never disagree about line endings.
+* text=auto eol=lf
+
+# Binary assets stay untouched.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.pdf binary

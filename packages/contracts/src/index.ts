@@ -1,15 +1,35 @@
 /**
- * @shera-bot/contracts — the single source of truth for shared schemas.
+ * @shera-bot/contracts — the single source of truth for shared schemas (D25).
  *
- * S02 fills this package with the ten Zod-first contracts (phase-0 plan §2:
- * Session, Pack, Agent, Operation, TaskRun + RunState, TypedExecutionEvent,
- * ApprovalRequest + Grant, ArtifactRef, CreditReservation/Settlement,
- * MemoryEntry) and the generated types.
+ * S02 fills this package with the Zod-first contracts: Session, Pack, Agent,
+ * OperationDefinition + Operation, TaskRun + RunState (full D8 vocabulary),
+ * TypedExecutionEvent (D26 envelope, D34 triggers — the only thing that can
+ * create a task run, G2), ApprovalRequest + Grant (D9, five fixed choices),
+ * ArtifactRef, CreditReservation/Settlement/Release (D20–D21), MemoryEntry
+ * (D37 scopes + publication flag), ToolDefinition (D38 + E13 recovery class),
+ * CollaborationMessage (D7), the stable error taxonomy (D23 rule 4), the task
+ * command vocabulary (D23 rules 5/6), and the contract-level HTTP surfaces.
  *
- * S01 ships only this marker: it gives the workspace graph something to resolve
- * and the pipeline smoke test something to assert (tests/contract/workspace-graph.test.ts).
- * It is not a product contract and must not grow into one — contracts arrive in
- * S02, Zod-first, with no hand-written duplicate types.
- * Governing records: D23 (layout), PRD §17, G2 (typed events, not prose).
+ * Types are inferred from Zod — never hand-written duplicates (D25). Contracts
+ * contain schemas and types only: no SQL, no filesystem paths, no DB or
+ * transport coupling (D23 rule 2). Governing records: PRD §17, D25, D26, E12,
+ * E13, E15.
  */
-export const CONTRACTS_PACKAGE_PLACEHOLDER = true;
+export * from "./primitives.ts";
+export * from "./errors.ts";
+export * from "./session.ts";
+export * from "./agent.ts";
+export * from "./operation.ts";
+export * from "./pack.ts";
+export * from "./state-vocabulary.ts";
+export * from "./task-run.ts";
+export * from "./events.ts";
+export * from "./task-commands.ts";
+export * from "./approval.ts";
+export * from "./artifact.ts";
+export * from "./credits.ts";
+export * from "./memory.ts";
+export * from "./tool.ts";
+export * from "./collaboration.ts";
+export * from "./api.ts";
+export * from "./registry.ts";

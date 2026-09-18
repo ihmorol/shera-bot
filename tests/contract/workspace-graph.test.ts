@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { CONTRACTS_PACKAGE_PLACEHOLDER } from "@shera-bot/contracts";
+import { CONTRACT_REGISTRY, RUN_STATES } from "@shera-bot/contracts";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -34,9 +34,11 @@ function readManifest(member: string): Record<string, unknown> {
 
 describe("workspace graph (S01 pipeline smoke test)", () => {
   it("resolves packages/contracts through the pnpm workspace", () => {
-    // S02 replaces this marker with the ten shared Zod contracts; until then the
-    // import itself is the assertion: it fails when the workspace graph breaks.
-    expect(CONTRACTS_PACKAGE_PLACEHOLDER).toBe(true);
+    // S02 replaced the S01 marker with the real Zod contracts (the S01 test
+    // said it would): the import itself proves the workspace graph resolves,
+    // and the D8 vocabulary is the smallest product assertion to make on top.
+    expect(RUN_STATES.length).toBe(14);
+    expect(Object.keys(CONTRACT_REGISTRY).length).toBeGreaterThan(10);
   });
 
   it("declares every layout member as a workspace package", () => {

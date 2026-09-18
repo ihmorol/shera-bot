@@ -1,0 +1,18 @@
+{
+  "event_id": "evt_002",
+  "stream_id": "task:task_001",
+  "sequence": 2,
+  "event_type": "delegation.proposed",
+  "event_version": 1,
+  "actor": { "type": "agent", "id": "agent_general_assistant" },
+  "task_id": "task_001",
+  "conversation_id": "conv_001",
+  "occurred_at": "2026-09-18T09:11:30.000Z",
+  "payload": {
+    "from_agent_id": "agent_general_assistant",
+    "to_agent_id": "agent_researcher",
+    "goal_summary": "Find five recent peer-reviewed sources.",
+    "parent_task_id": "task_001"
+  },
+  "redaction_class": "internal"
+}

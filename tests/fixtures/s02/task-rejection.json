@@ -1,0 +1,6 @@
+{
+  "kind": "version_conflict",
+  "code": "TASK_VERSION_CONFLICT",
+  "safe_message": "This task changed since you opened it. Reload and try again.",
+  "detail": { "expected_version": 2, "actual_version": 3 }
+}

@@ -1,0 +1,9 @@
+{
+  "code": "TASK_VERSION_CONFLICT",
+  "category": "conflict",
+  "safe_message": "This task was updated elsewhere. Reload and retry.",
+  "retryable": true,
+  "user_action": "Reload the task view and try again.",
+  "internal_details": { "expected_version": 2, "actual_version": 3 },
+  "correlation_id": "corr_001"
+}

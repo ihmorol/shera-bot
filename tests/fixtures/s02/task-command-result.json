@@ -1,0 +1,8 @@
+{
+  "outcome": "accepted",
+  "task_id": "task_001",
+  "from_state": "QUEUED",
+  "to_state": "RUNNING",
+  "version": 3,
+  "event_id": "evt_008"
+}

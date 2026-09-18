@@ -1,0 +1,18 @@
+{
+  "grant_id": "grt_001",
+  "workspace_id": "ws_default_01",
+  "source_choice": "always-approve-this-tool-for-this-agent",
+  "principal_type": "agent",
+  "principal_id": "agent_researcher",
+  "tool_id": "tool_web_search",
+  "tool_version": "1.0.0",
+  "capability": "web.read",
+  "resource_scope": "https://*",
+  "conversation_scope": "any",
+  "workspace_scope": "ws_default_01",
+  "expires_at": "2026-10-18T09:00:00.000Z",
+  "one_time": false,
+  "created_by": { "type": "user", "id": "user_emon" },
+  "approved_at": "2026-09-18T09:21:00.000Z",
+  "revoked_at": null
+}

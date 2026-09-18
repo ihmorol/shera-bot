@@ -1,0 +1,17 @@
+{
+  "event_id": "evt_005",
+  "stream_id": "task:task_001",
+  "sequence": 5,
+  "event_type": "trigger.scheduled",
+  "event_version": 1,
+  "actor": { "type": "system", "id": "scheduler" },
+  "task_id": "task_001",
+  "conversation_id": "conv_001",
+  "occurred_at": "2026-09-18T12:00:00.000Z",
+  "payload": {
+    "schedule_id": "sch_001",
+    "operation_id": "op_exam_preparation",
+    "due_at": "2026-09-18T12:00:00.000Z"
+  },
+  "redaction_class": "internal"
+}

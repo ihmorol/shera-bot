@@ -1,0 +1,17 @@
+{
+  "event_id": "evt_007",
+  "stream_id": "task:task_001",
+  "sequence": 7,
+  "event_type": "trigger.file_event",
+  "event_version": 1,
+  "actor": { "type": "system", "id": "file-watcher" },
+  "task_id": "task_001",
+  "conversation_id": "conv_001",
+  "occurred_at": "2026-09-18T12:06:00.000Z",
+  "payload": {
+    "watcher_id": "watch_001",
+    "path_uri": "workspace://projects/thesis/notes.md",
+    "change_type": "modified"
+  },
+  "redaction_class": "internal"
+}

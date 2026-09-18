@@ -1,7 +1,7 @@
 # Pi fork — source, licensing, and upstream-sync reference
 
 **Updated:** 2026-09-17 · **Audience:** maintainers of Shera Bot and its Pi adapter.
-**Status:** source and license evidence for S01; proposed maintenance procedure under [E15](decisions/engineering-record-e15-2026-09-17.md#fork-evidence-update-2026-09-17). The fork is not installed, integrated, or approved as a runtime dependency by this document. D13's supervision spike remains provisional.
+**Status:** source and license evidence for S01; proposed maintenance procedure under [E16](decisions/engineering-record-e16-2026-09-17.md#fork-evidence-update-2026-09-17) — filed as "E15" on 2026-09-17 and renumbered on 2026-09-19. The fork is not installed, integrated, or approved as a runtime dependency by this document. D13's supervision spike remains provisional.
 
 The owner supplied **"https://github.com/ihmorol/shera-pi.git pi forked."** in this session. This resolves the missing repository identity behind S01's license-documentation gap. It does not approve a merge, choose subagent semantics, or confirm the remaining Delegated decisions.
 
@@ -80,7 +80,7 @@ Sync when an identified fix/capability is needed or before a relevant phase gate
 
 ## 6. Evidence and acceptance boundary
 
-**Requirement covered:** the existing S01 requirement to document the real fork license, modification obligations, and upstream-sync process. **Owner:** Emon; **implementation boundary:** these documents and the verbatim license copy; **verification target:** immutable source comparison, notice/hash checks, and documentation review; **evidence:** [E15's fork update](decisions/engineering-record-e15-2026-09-17.md#fork-evidence-update-2026-09-17) and [the verification ledger](pi-fork/verification-2026-09-17.md).
+**Requirement covered:** the existing S01 requirement to document the real fork license, modification obligations, and upstream-sync process. **Owner:** Emon; **implementation boundary:** these documents and the verbatim license copy; **verification target:** immutable source comparison, notice/hash checks, and documentation review; **evidence:** [E16's fork update](decisions/engineering-record-e16-2026-09-17.md#fork-evidence-update-2026-09-17) and [the verification ledger](pi-fork/verification-2026-09-17.md).
 
 The S01 documentation is supplied for owner review. The broader PRD §22.1 dependency-license work remains open for the actual fork build/distribution. No runtime acceptance criterion is promoted and D13 is not validated by these documents.
 

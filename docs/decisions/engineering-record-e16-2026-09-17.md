@@ -1,11 +1,13 @@
-# E15 — S01 monorepo scaffold, CI gate, toolchain pins, and license inventory
+# E16 — S01 monorepo scaffold, CI gate, toolchain pins, and license inventory
+
+> **Identifier note (2026-09-19):** this record was originally filed as "E15" on 2026-09-17. The E15 identifier was subsequently taken on `main` by the open-source leverage policy record ([`oss-leverage-decisions-2026-09-18.md`](oss-leverage-decisions-2026-09-18.md), commit `c201378`). To resolve the collision the S01 record was renumbered to **E16** — a mechanical rename preserving the full content, alternatives, and evidence below. Surfaced here rather than silently adopted (G5). Future records continue from E17.
 
 Part of the decision records. Index and provenance: [`README.md`](README.md). Previous records: [`confirmed-decisions.md`](confirmed-decisions.md) (D1–D39), [`closure-decisions.md`](closure-decisions.md) (D40–D45, E1–E8), [`open-items-decisions-2026-09-17.md`](open-items-decisions-2026-09-17.md) (D46–D50, E9–E14).
 
 **Status:** Delegated engineering record — decided by the agent while executing slice **S01** (issue #2) under the owner's 2026-09-17 instruction to start building; owner review pending.
 **Date:** 2026-09-17.
 
-> **Current fork status:** the owner subsequently supplied `https://github.com/ihmorol/shera-pi.git`. The [fork evidence update below](#fork-evidence-update-2026-09-17) supplies S01's previously missing license documentation for review. Decision 9 and the earlier open-item wording remain preserved as the pre-fork state, not current claims. E15 remains Delegated; this does not approve the slice or validate D13.
+> **Current fork status:** the owner subsequently supplied `https://github.com/ihmorol/shera-pi.git`. The [fork evidence update below](#fork-evidence-update-2026-09-17) supplies S01's previously missing license documentation for review. Decision 9 and the earlier open-item wording remain preserved as the pre-fork state, not current claims. E16 remains Delegated; this does not approve the slice or validate D13.
 
 **Evidence:**
 - Issue #2 (S01) — acceptance criteria, layout, and the E-record requirement; `docs/BUILD_MAP.md` §5–§6 (S01 unblocked; the plan confirmations "S01 records them as Delegated pending review").
@@ -94,8 +96,8 @@ The slice went to a fresh-context adversarial review before any merge (`docs/DEV
 
 ## Fork evidence update (2026-09-17)
 
-**Record:** E15, follow-up to decision 9; no new product decision or acceptance criterion.
-**Status:** owner-supplied repository identity verified; S01 fork-license documentation supplied for owner review. The proposed sync procedure remains Delegated, pending review. The overall E15 status is unchanged.
+**Record:** E16, follow-up to decision 9; no new product decision or acceptance criterion.
+**Status:** owner-supplied repository identity verified; S01 fork-license documentation supplied for owner review. The proposed sync procedure remains Delegated, pending review. The overall E16 status is unchanged.
 **Date:** 2026-09-17.
 **Exact evidence:** the owner wrote **"https://github.com/ihmorol/shera-pi.git pi forked."**, then **"continue"** in this session. Read-only GitHub source verification resolves that public fork's parent/source to `earendil-works/pi`. Commit `1283afd0d0685d1ffe88aa56a725c0e4ad3cfc7b` exists in both repositories with tree `dc795f892dc830c560573030092881cf6586ce87`; their `LICENSE` blobs match `b0a8e9b81083294360c69b4ec45d3d39a2b28197` (1069 bytes). Source links and the verification/correction ledger are in [`../PI_FORK.md`](../PI_FORK.md) and [`../pi-fork/verification-2026-09-17.md`](../pi-fork/verification-2026-09-17.md).
 
@@ -119,6 +121,6 @@ The slice went to a fresh-context adversarial review before any merge (`docs/DEV
 
 | Earlier evidence or status | Current evidence/status | Boundary |
 |---|---|---|
-| E15 decision 9 and open item 1: fork not identified, license documentation unavailable | Owner identified `ihmorol/shera-pi`; root license and maintenance documentation supplied for review | Historical missing-source statement superseded by evidence, not erased |
+| E16 decision 9 and open item 1: fork not identified, license documentation unavailable | Owner identified `ihmorol/shera-pi`; root license and maintenance documentation supplied for review | Historical missing-source statement superseded by evidence, not erased |
 | PRD §22.1 dependency/license closure | Still open for the real fork build and bundled assets | Not covered by the root MIT copy or Shera-only inventory |
-| E15 Delegated choices, D13 provisional status, D46 subagent semantics, and main-branch merge gate | Unchanged | Owner's fork URL/continuation instruction is not blanket approval |
+| E16 Delegated choices, D13 provisional status, D46 subagent semantics, and main-branch merge gate | Unchanged | Owner's fork URL/continuation instruction is not blanket approval |

@@ -1,10 +1,10 @@
 # Pi fork verification and correction ledger — 2026-09-17
 
-**Scope:** evidence for the S01 fork-license documentation in [`../PI_FORK.md`](../PI_FORK.md), governed by [E15's follow-up](../decisions/engineering-record-e15-2026-09-17.md#fork-evidence-update-2026-09-17). Source inspection is not runtime validation or owner acceptance.
+**Scope:** evidence for the S01 fork-license documentation in [`../PI_FORK.md`](../PI_FORK.md), governed by [E16's follow-up](../decisions/engineering-record-e16-2026-09-17.md#fork-evidence-update-2026-09-17) (filed as "E15" on 2026-09-17, renumbered 2026-09-19). Source inspection is not runtime validation or owner acceptance.
 
 ## Owner evidence
 
-The owner supplied **"https://github.com/ihmorol/shera-pi.git pi forked."**, then instructed **"continue"**. This identifies the repository; it does not choose a production revision, approve publication, or approve a merge. E15's pre-fork blocked state and its alternatives are preserved in that record.
+The owner supplied **"https://github.com/ihmorol/shera-pi.git pi forked."**, then instructed **"continue"**. This identifies the repository; it does not choose a production revision, approve publication, or approve a merge. E16's pre-fork blocked state (filed as "E15" at the time) and its alternatives are preserved in that record.
 
 ## Read-only source checks
 

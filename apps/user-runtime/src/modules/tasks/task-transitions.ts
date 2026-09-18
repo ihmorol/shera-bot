@@ -47,9 +47,9 @@ export interface TaskTransitionRow {
 const CANCEL_ACTORS: readonly Actor["type"][] = ["user", "admin"];
 
 /**
- * The transition table — every legal D8 transition, as data. Terminal states
- * (SUCCEEDED, FAILED, CANCELLED) have no rows: any command targeting them is
- * rejected as an illegal transition.
+ * The transition table — every legal D8 transition, as data. SUCCEEDED and
+ * CANCELLED have no exits: any command targeting them is rejected as an
+ * illegal transition. FAILED exits only via the policy-guarded retry row.
  *
  * Modelling notes (from the decision records):
  * - cancel_task goes through CANCELLING; completion of cancellation is its own
@@ -322,10 +322,14 @@ export const TASK_TRANSITIONS: readonly TaskTransitionRow[] = [
   },
 
   {
+    // E13: needs_human tools pause RECOVERY_REQUIRED "for review" — resuming
+    // is a human decision (user or admin). A runtime-actor auto-resume, where
+    // an E13 recovery class permits it, is S07's layer to add with its own
+    // recorded rationale (review finding, 2026-09-19).
     from: "RECOVERY_REQUIRED",
     to: "RUNNING",
     command: "recovery_resume",
-    actors: ["user", "runtime"],
+    actors: ["user", "admin"],
     reason: "recovery_approved",
     event: "task.recovery_resumed",
   },

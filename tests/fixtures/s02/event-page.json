@@ -1,0 +1,27 @@
+{
+  "stream_id": "task:task_001",
+  "events": [
+    {
+      "event_id": "evt_008",
+      "stream_id": "task:task_001",
+      "sequence": 8,
+      "event_type": "task.started",
+      "event_version": 1,
+      "actor": {
+        "type": "runtime",
+        "id": "runtime-gateway"
+      },
+      "task_id": "task_001",
+      "conversation_id": "conv_001",
+      "occurred_at": "2026-09-18T09:12:10.000Z",
+      "payload": {
+        "from_state": "QUEUED",
+        "to_state": "RUNNING",
+        "reason": "worker_acquired",
+        "correlation_id": "cmd_001"
+      },
+      "redaction_class": "public"
+    }
+  ],
+  "next_cursor": "cursor_008"
+}

@@ -4,7 +4,12 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { CONTRACT_REGISTRY, EXTENSIBLE_CONTRACTS, type ContractName } from "@shera-bot/contracts";
+import {
+  CONTRACT_REGISTRY,
+  EVENT_ENVELOPES,
+  EXTENSIBLE_CONTRACTS,
+  type ContractName
+} from "@shera-bot/contracts";
 
 const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "s02");
 
@@ -37,6 +42,10 @@ const CASES: ReadonlyArray<{ schema: ContractName; fixture: string }> = [
   // The explicitly-marked-extensible case (D25 "unless"): the webhook trigger
   // payload accepts source-specific extra fields.
   { schema: "TriggerWebhookPayload", fixture: "webhook-payload.json" },
+  { schema: "TaskCommandResult", fixture: "task-command-result.json" },
+  { schema: "TaskRejection", fixture: "task-rejection.json" },
+  { schema: "EventPage", fixture: "event-page.json" },
+  { schema: "ListTaskEventsQuery", fixture: "list-task-events-query.json" },
 ];
 
 describe.each(CASES)("$schema unknown-field discipline (D25)", ({ schema, fixture }) => {
@@ -79,5 +88,23 @@ describe("explicit extensibility registry", () => {
 
     const verdict = CONTRACT_REGISTRY.Pack.safeParse({ ...pack, agents: [poisonedAgent] });
     expect(verdict.success).toBe(false);
+  });
+});
+
+// Registry-driven enforcement (review fix 2026-09-19): every registered
+// top-level schema must be poisoned in the unknown-field suite, so a schema
+// added without strictness (non-strictObject) or without a case fails here.
+describe("contract registry completeness", () => {
+  it("every registered top-level schema has an unknown-field case", () => {
+    const envelopeKeys = new Set(Object.keys(EVENT_ENVELOPES));
+    const covered = new Set(CASES.map((c) => c.schema));
+    const missing = Object.keys(CONTRACT_REGISTRY).filter(
+      (name) => !envelopeKeys.has(name) && !covered.has(name as ContractName)
+    );
+    expect(
+      missing,
+      `Schemas registered without an unknown-field case: ${missing.join(", ")}. ` +
+        "Add a committed fixture + case, or (envelopes only) rely on the TypedExecutionEvent union coverage."
+    ).toEqual([]);
   });
 });

@@ -4,7 +4,11 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { CONTRACT_REGISTRY, type ContractName } from "@shera-bot/contracts";
+import {
+  CONTRACT_REGISTRY,
+  EVENT_ENVELOPES,
+  type ContractName
+} from "@shera-bot/contracts";
 
 const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "s02");
 
@@ -41,6 +45,10 @@ const ROUND_TRIP_CASES: ReadonlyArray<{ schema: ContractName; fixture: string }>
   { schema: "SheraError", fixture: "shera-error.json" },
   { schema: "TaskCommand", fixture: "task-command.json" },
   { schema: "TriggerWebhookPayload", fixture: "webhook-payload.json" },
+  { schema: "TaskCommandResult", fixture: "task-command-result.json" },
+  { schema: "TaskRejection", fixture: "task-rejection.json" },
+  { schema: "EventPage", fixture: "event-page.json" },
+  { schema: "ListTaskEventsQuery", fixture: "list-task-events-query.json" },
 ];
 
 describe.each(ROUND_TRIP_CASES)("$schema round-trip ($fixture)", ({ schema, fixture }) => {
@@ -61,5 +69,25 @@ describe.each(ROUND_TRIP_CASES)("$schema round-trip ($fixture)", ({ schema, fixt
     const twice = registered.parse(once);
 
     expect(twice).toEqual(once);
+  });
+});
+
+// Registry-driven enforcement (review fix 2026-09-19): the registry docstring
+// promises that a schema added without a fixture case fails the suite. This
+// test makes that true. Envelope-union members are exempt: they are covered
+// through the TypedExecutionEvent cases (the union test asserts every
+// envelope's shape).
+describe("contract registry completeness", () => {
+  it("every registered top-level schema has a round-trip fixture case", () => {
+    const envelopeKeys = new Set(Object.keys(EVENT_ENVELOPES));
+    const covered = new Set(ROUND_TRIP_CASES.map((c) => c.schema));
+    const missing = Object.keys(CONTRACT_REGISTRY).filter(
+      (name) => !envelopeKeys.has(name) && !covered.has(name as ContractName)
+    );
+    expect(
+      missing,
+      `Schemas registered without a round-trip fixture case: ${missing.join(", ")}. ` +
+        "Add a committed fixture + case, or (envelopes only) rely on the TypedExecutionEvent union coverage."
+    ).toEqual([]);
   });
 });

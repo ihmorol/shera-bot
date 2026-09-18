@@ -1,0 +1,16 @@
+{
+  "approval_id": "apr_001",
+  "workspace_id": "ws_default_01",
+  "task_id": "task_001",
+  "conversation_id": "conv_001",
+  "tool_id": "tool_repo_push",
+  "tool_version": "1.0.0",
+  "capability": "repository.mutation",
+  "risk_class": "EXTERNAL_WRITE",
+  "resource_scope": "workspace://projects/thesis",
+  "args_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+  "side_effect_summary": "Push 2 commits to the remote branch.",
+  "requested_by": { "type": "agent", "id": "agent_developer" },
+  "requested_at": "2026-09-18T09:20:00.000Z",
+  "status": "pending"
+}

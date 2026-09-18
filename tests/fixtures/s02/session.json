@@ -1,0 +1,11 @@
+{
+  "workspace_id": "ws_default_01",
+  "google_sub": "google-oauth2|110169584935001",
+  "email": "emon@example.com",
+  "display_name": "Emon Morol",
+  "avatar_url": "https://lh3.googleusercontent.com/a/example-avatar",
+  "tier": "balanced",
+  "is_admin": false,
+  "created_at": "2026-09-18T09:00:00.000Z",
+  "last_active_at": "2026-09-18T09:59:00.000Z"
+}

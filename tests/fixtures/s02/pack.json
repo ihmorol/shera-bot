@@ -1,0 +1,152 @@
+{
+  "pack_id": "pack_student",
+  "version": "1.0.0",
+  "manifest_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+  "runtime_compatibility": ">=0.2.0 <1.0.0",
+  "default_coordinator_agent_id": "agent_general_assistant",
+  "agents": [
+    {
+      "agent_id": "agent_general_assistant",
+      "display_name": "General Assistant",
+      "role_description": "Coordinates Operations, plans, delegates, and synthesizes results.",
+      "default_provider": {
+        "provider_id": "provider_platform_primary",
+        "model": "platform-default"
+      },
+      "skills": ["skill_orchestration"],
+      "tools": [
+        {
+          "tool_id": "tool_artifact_generate",
+          "version": "1.0.0"
+        }
+      ],
+      "connectors": [],
+      "home_operation_id": "op_research_paper"
+    },
+    {
+      "agent_id": "agent_researcher",
+      "display_name": "Researcher",
+      "role_description": "Investigates questions and produces evidence-backed outputs.",
+      "default_provider": {
+        "provider_id": "provider_platform_primary",
+        "model": "platform-default"
+      },
+      "skills": ["skill_literature_review"],
+      "tools": [
+        {
+          "tool_id": "tool_web_search",
+          "version": "1.0.0"
+        }
+      ],
+      "connectors": [],
+      "home_operation_id": "op_research_paper"
+    },
+    {
+      "agent_id": "agent_citation_manager",
+      "display_name": "Citation Manager",
+      "role_description": "Maintains source indexes, reference metadata, and citation formats.",
+      "default_provider": {
+        "provider_id": "provider_platform_primary",
+        "model": "platform-default"
+      },
+      "skills": ["skill_citation_formats"],
+      "tools": [
+        {
+          "tool_id": "tool_page_fetch",
+          "version": "1.0.0"
+        }
+      ],
+      "connectors": ["connector_reference_manager"],
+      "home_operation_id": "op_research_paper"
+    },
+    {
+      "agent_id": "agent_developer",
+      "display_name": "Developer",
+      "role_description": "Inspects repositories, writes code, and runs validation.",
+      "default_provider": {
+        "provider_id": "provider_platform_primary",
+        "model": "platform-default"
+      },
+      "skills": ["skill_git_workflows"],
+      "tools": [
+        {
+          "tool_id": "tool_terminal",
+          "version": "1.0.0"
+        }
+      ],
+      "connectors": [],
+      "home_operation_id": "op_programming_assignment"
+    },
+    {
+      "agent_id": "agent_programming_tutor",
+      "display_name": "Programming Tutor",
+      "role_description": "Explains code and guides practice for programming assignments.",
+      "default_provider": {
+        "provider_id": "provider_platform_primary",
+        "model": "platform-default"
+      },
+      "skills": ["skill_code_explanation"],
+      "tools": [
+        {
+          "tool_id": "tool_page_fetch",
+          "version": "1.0.0"
+        }
+      ],
+      "connectors": [],
+      "home_operation_id": "op_programming_assignment"
+    },
+    {
+      "agent_id": "agent_study_planner",
+      "display_name": "Study Planner",
+      "role_description": "Turns courses, deadlines, and exam dates into study schedules.",
+      "default_provider": {
+        "provider_id": "provider_platform_primary",
+        "model": "platform-default"
+      },
+      "skills": ["skill_schedule_planning"],
+      "tools": [
+        {
+          "tool_id": "tool_artifact_generate",
+          "version": "1.0.0"
+        }
+      ],
+      "connectors": [],
+      "home_operation_id": "op_exam_preparation"
+    }
+  ],
+  "operations": [
+    {
+      "operation_id": "op_research_paper",
+      "version": "1.0.0",
+      "title": "Research Paper",
+      "purpose": "Produce an evidence-backed research paper with managed citations.",
+      "roster": ["agent_general_assistant", "agent_researcher", "agent_citation_manager"],
+      "coordinator": "agent_general_assistant",
+      "skills": ["skill_literature_review"],
+      "connectors": ["connector_reference_manager"],
+      "content_hash": "2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    {
+      "operation_id": "op_programming_assignment",
+      "version": "1.0.0",
+      "title": "Programming Assignment",
+      "purpose": "Complete a programming assignment with tests and documentation.",
+      "roster": ["agent_general_assistant", "agent_developer", "agent_programming_tutor"],
+      "coordinator": "agent_general_assistant",
+      "skills": ["skill_git_workflows"],
+      "connectors": [],
+      "content_hash": "3333333333333333333333333333333333333333333333333333333333333333"
+    },
+    {
+      "operation_id": "op_exam_preparation",
+      "version": "1.0.0",
+      "title": "Exam Preparation",
+      "purpose": "Build a study schedule and prepare for the exam.",
+      "roster": ["agent_study_planner"],
+      "coordinator": "agent_study_planner",
+      "skills": ["skill_schedule_planning"],
+      "connectors": [],
+      "content_hash": "4444444444444444444444444444444444444444444444444444444444444444"
+    }
+  ]
+}

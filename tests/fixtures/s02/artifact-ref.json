@@ -1,0 +1,10 @@
+{
+  "artifact_id": "art_001",
+  "workspace_id": "ws_default_01",
+  "producer_task_id": "task_001",
+  "uri": "workspace://artifacts/task_001/literature-review.md",
+  "size_bytes": 20480,
+  "content_hash": "7777777777777777777777777777777777777777777777777777777777777777",
+  "media_type": "text/markdown",
+  "created_at": "2026-09-18T09:30:00.000Z"
+}

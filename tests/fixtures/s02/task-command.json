@@ -1,0 +1,10 @@
+{
+  "type": "cancel_task",
+  "command_id": "cmd_001",
+  "idempotency_key": "idem_cmd_001",
+  "workspace_id": "ws_default_01",
+  "task_id": "task_001",
+  "actor": { "type": "user", "id": "user_emon" },
+  "expected_version": 3,
+  "issued_at": "2026-09-18T09:50:00.000Z"
+}

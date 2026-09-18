@@ -1,0 +1,18 @@
+{
+  "event_id": "evt_004",
+  "stream_id": "task:task_001",
+  "sequence": 4,
+  "event_type": "operation.confirmed",
+  "event_version": 1,
+  "actor": { "type": "user", "id": "user_emon" },
+  "task_id": "task_001",
+  "conversation_id": "conv_001",
+  "occurred_at": "2026-09-18T09:10:30.000Z",
+  "payload": {
+    "operation_id": "op_research_paper",
+    "operation_version": "1.0.0",
+    "operation_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+    "roster": ["agent_general_assistant", "agent_researcher", "agent_citation_manager"]
+  },
+  "redaction_class": "internal"
+}

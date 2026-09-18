@@ -11,3 +11,15 @@
 
 # Standalone repo with its own remote; not part of this repository.
 /business-landing-portfolio/
+
+# Node / pnpm monorepo build output.
+node_modules/
+dist/
+.next/
+.turbo/
+coverage/
+pnpm-debug.log*
+*.tsbuildinfo
+
+# Generated CI output (dependency and license inventory).
+artifacts/

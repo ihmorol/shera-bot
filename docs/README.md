@@ -27,6 +27,9 @@ This directory contains the product baseline and decision records. **Read this i
 
 - [`DEV_WORKFLOW.md`](DEV_WORKFLOW.md) — solo-developer workflow from current state through production shipment, using AI agents under explicit verification gates. Process documentation only; subordinate to the PRD and decision records.
 - [`BUILD_MAP.md`](BUILD_MAP.md) — the 35-slice build plan with live GitHub issue numbers, the agent working protocol, guardrails G1–G8, the UI gate, and the open items. Process index only; subordinate to the PRD and decision records.
+- [`decisions/engineering-record-e16-2026-09-17.md`](decisions/engineering-record-e16-2026-09-17.md) — E16: S01 scaffold/CI choices (Delegated, pending owner review), review corrections, and the owner-supplied Pi fork evidence update. Filed as "E15" on 2026-09-17; renumbered E16 on 2026-09-19 (identifier collision with the OSS-leverage record) and incorporated in the decision index.
+- [`PI_FORK.md`](PI_FORK.md) — verified fork/upstream source snapshot, verbatim MIT license reference, modification obligations, and proposed upstream-sync procedure. Includes the JSONL RPC versus CBOR protocol distinction and the remaining dependency/distribution audit boundary; source evidence is not runtime acceptance.
+- [`pi-fork/verification-2026-09-17.md`](pi-fork/verification-2026-09-17.md) — fork source checks, immutable references, draft corrections, and verification limits; [`pi-fork/LICENSE`](pi-fork/LICENSE) is the unmodified license copy.
 
 ## Client design and mockup documentation
 
@@ -42,6 +45,6 @@ Mockup interactions, fixture output and pane tests do not establish runtime beha
 ## Current record count
 
 - Confirmed decisions: D1–D50 (D46–D50 recorded 2026-09-17; D47–D50 are Delegated pending owner review), plus synchronization records SYNC-1 and SYNC-2.
-- Engineering decisions: E1–E15 (E9–E14 recorded 2026-09-17; E15 recorded 2026-09-18 — all Delegated pending owner review).
+- Engineering decisions: E1–E16 (E9–E14 recorded 2026-09-17; E15 recorded 2026-09-18; E16 recorded 2026-09-17 with slice S01 and renumbered from "E15" on 2026-09-19 to resolve the identifier collision — all Delegated pending owner review). E16's fork follow-up records source/license evidence; no new product decision was made.
 - Adopted acceptance criteria: 1–27 (22–27 added by D45 and now included in PRD §19).
 - The ten implementation-defined items open on 2026-09-13 were dispositioned on 2026-09-17 (see [`decisions/open-items-decisions-2026-09-17.md`](decisions/open-items-decisions-2026-09-17.md)); remaining open items are listed in [`TRACEABILITY.md`](TRACEABILITY.md).

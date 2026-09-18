@@ -1,0 +1,38 @@
+/*
+ * Dark-only v1 (PRODUCT.md: dark theme in v1). The three tokens below are copied
+ * from docs/UI_DESIGN.md §2.1 so the placeholder is not an invented palette; S08
+ * owns the real token set and every surface built from it.
+ */
+:root {
+  color-scheme: dark;
+  --canvas: #050a14;
+  --text: #ffffff;
+  --muted: #91a4bd;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--canvas);
+  color: var(--text);
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+  line-height: 1.5;
+}
+
+main {
+  margin: 0 auto;
+  max-width: 42rem;
+  padding: 4rem 1.5rem;
+}
+
+code {
+  color: var(--muted);
+}

@@ -1,0 +1,21 @@
+node_modules/
+dist/
+.next/
+.turbo/
+coverage/
+artifacts/
+pnpm-lock.yaml
+docs/
+mockup/
+business-landing-portfolio/
+.agents/
+.codegraph/
+.gstack/
+.omo/
+.session-archive/
+.zcode/
+
+# Change-controlled prose: reformatting these is an edit to a governed document.
+AGENTS.md
+PRODUCT.md
+README.md

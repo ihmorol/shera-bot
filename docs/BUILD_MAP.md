@@ -9,7 +9,8 @@ Issue numbers below are GitHub issues in this repository (`https://github.com/ih
 
 - **Design: complete.** `docs/PRD.md` (D1–D50, E1–E14, acceptance criteria 1–27), `docs/decisions/`, `docs/TRACEABILITY.md`, `docs/GLOSSARY.md`, `docs/UI_DESIGN.md`.
 - **Existing code:** the static client mockup (`mockup/`) and the separate, git-ignored marketing site (`business-landing-portfolio/`). Both are reference evidence.
-- **Runtime: nothing implemented.** No monorepo, apps, database, CI, or deployment exist yet. The 35 slices below build them in dependency order.
+- **Runtime behavior: not implemented.** S01's monorepo placeholders and CI landed via PR #37 (2026-09-19); no database or deployed runtime exists. The 35 slices below build the prototype in dependency order.
+- **Pi fork identified (2026-09-17):** the owner supplied `ihmorol/shera-pi`. [`PI_FORK.md`](PI_FORK.md) supplies verified source/MIT-license evidence and proposed maintenance guidance for S01 review. No real-fork integration, runtime revision pin, dependency audit, or upstream test run is implied.
 
 ## 2. How to work a slice
 
@@ -83,7 +84,8 @@ Acceptance criteria 1–27 (PRD §19) are covered by the slices named above; the
 ## 6. Open items that stay open
 
 - **Exact subagent semantics** (D46 sub-item): same-identity worker instance versus another same-Pack Agent invoked as a subordinate, concurrency limits, memory-scope boundaries. Evidence target: before the Agent/Operation contracts freeze (S10/S13), or recorded as an engineering decision at that point. Tracked in `TRACEABILITY.md`.
-- **Stage-3 plan confirmations** awaiting the owner: dark-only `apps/web` v1, CI provider, pnpm/Node pins (`decisions/phase0-plan-draft-2026-09-13.md` §8). S01 records them as Delegated pending review.
+- **Pi fork follow-through:** the missing-identity/documentation blocker from S01 is resolved by the owner-supplied fork and [`PI_FORK.md`](PI_FORK.md), with the earlier blocked state preserved in E16 (the S01 scaffold record, renumbered from "E15" on 2026-09-19). Dependency/build inventory, vendored notices, adapter verification, and maintenance-procedure approval remain open; Emon and the integration slice own evidence before real-fork consumption, with distribution-notice checks in S35. The inspected source SHA is not an adopted runtime pin.
+- **Stage-3 plan confirmations** awaiting the owner: dark-only `apps/web` v1, CI provider, pnpm/Node pins (`decisions/phase0-plan-draft-2026-09-13.md` §8). S01 executed on 2026-09-17 with them recorded as Delegated pending review in E16 — including the resolution of the conflict between the plan draft's approval gate and §6/issue #2.
 - **`mockup/UX_RECOMMENDATIONS.md`**: dispositioned as not-adopted-now (D50); individual recommendations are evaluated per UI slice.
 
 ## 7. Keeping this file current

@@ -1,7 +1,7 @@
 # Shera Bot — Decision and Requirement Traceability
 
 **Status:** Working traceability baseline for the synchronized PRD and the post-PRD decision records.  
-**Last updated:** 2026-09-17  
+**Last updated:** 2026-09-18  
 **Canonical vocabulary:** [`GLOSSARY.md`](GLOSSARY.md)  
 **Decision index:** [`decisions/README.md`](decisions/README.md)  
 **Full session evidence:** `history/2026-09-08-to-2026-09-11/README.md` — removed from the working tree in commit `9d8b81c`; retrieve from Git history (for example `cea3ba1`) or the local `.session-archive/` copy.
@@ -93,6 +93,7 @@ On 2026-09-17 the owner answered the Stage-1 roster question and delegated the S
 | E12 | Delegated engineering (pending owner review) | D40 + owner instruction 2026-09-17 | Applies D40 to the schema | §§12, 17 | Workspace-scoping repository tests |
 | E13 | Delegated engineering (pending owner review) | PRD §13; D33, E2; owner instruction 2026-09-17 | Details D33 | §13 | Recovery-class test matrix |
 | E14 | Delegated engineering (pending owner review) | PRD §§21–22; owner instruction 2026-09-17 | Defines register closure policy | §§21, 22 | Ledger accuracy at stage gates |
+| E15 | Delegated engineering (pending owner review) | Owner instructions 2026-09-18 (leverage OSS across the build; per-issue references); 2026-09-18 research with license verification | — | §§17, 22, 23 (no product text changes) | S01 license-allowlist CI gate; per-slice "Open-source leverage" sections in issues #1–#36; per-slice E-notes |
 
 ## D45 acceptance traceability (criteria 22–27)
 

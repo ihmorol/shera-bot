@@ -17,6 +17,8 @@ Per `docs/DEV_WORKFLOW.md` §5 (the standing loop): read the slice and the decis
 
 Do not start a slice whose `Blocked by` issues are still open.
 
+Each slice issue ends with an **Open-source leverage** section (E15, recorded 2026-09-18 in [`decisions/oss-leverage-decisions-2026-09-18.md`](decisions/oss-leverage-decisions-2026-09-18.md)): read the linked docs before designing — do not discover by exploration — and record adopted dependencies as an E-note in the pull request. The standing rules and the per-slice borrow map are in §8 below.
+
 ## 3. Guardrails (every slice)
 
 - **G1** Vocabulary is **Pack → Operations → Agents**; "Agent" in UI, code, schemas, pack files, and tests. `Expert` and `Scene` are historical words only.
@@ -87,3 +89,53 @@ Acceptance criteria 1–27 (PRD §19) are covered by the slices named above; the
 ## 7. Keeping this file current
 
 When issues are created, split, merged, or renumbered, update the table in the same pull request. Acceptance statuses live in [`TRACEABILITY.md`](TRACEABILITY.md) and may only change with code, tests, and evidence links (E14) — never to match a fixture or screenshot.
+
+## 8. Open-source leverage (E15, recorded 2026-09-18)
+
+Standing rules for every slice (full record: [`decisions/oss-leverage-decisions-2026-09-18.md`](decisions/oss-leverage-decisions-2026-09-18.md)):
+
+- **Embed** only MIT / Apache-2.0 / BSD / ISC dependencies that fit the PRD §17 stack; the S01 license-inventory CI gate enforces this.
+- **Pattern-only** for AGPL/GPL projects (Coder; SearXNG allowed only as an unmodified external container) and out-of-stack platforms (Dify, Coze Studio, Suna, AutoGPT Platform, Temporal server) — copy semantics and vocabulary, never code or branding.
+- **Never adopt agent frameworks as the runtime** (LangGraph, CrewAI, AutoGen) — G2; vocabulary-only reference for S13–S15.
+- **Read the linked docs first — do not discover by exploration.** Established mechanism names (lease, heartbeat, replay cursor, retry policy, signal, worktree) keep their established semantics. A slice that cannot name a reference is an over-design signal — raise it before inventing.
+- Every adopted dependency gets an E-note in the slice PR.
+
+Per-slice map (the issue bodies carry the same map with exact doc links and repo search terms; the append script is archived at `artifacts/oss-issue-sections.sh`):
+
+| Slice | Embed | Pattern-only / reference |
+|---|---|---|
+| S01 | pnpm workspaces + Turborepo; license-checker allowlist gate | OpenClaw repo layout (MIT) |
+| S02 | zod-to-openapi; XState v5 (evaluate vs hand-rolled transition table) | Temporal event-history / retry / signal vocabulary |
+| S03 | better-sqlite3 (WAL) + Drizzle | OpenClaw process supervision; pi-mono protocol docs |
+| S04 | — | OWASP GenAI LLM Top 10 + ASVS; Magentic-UI action guards; OpenClaw security model |
+| S05 | Auth.js (Google provider, database sessions) | — |
+| S06 | dockerode | Coder provisioning model (AGPL — docs only); OpenClaw channel auth |
+| S07 | Socket.IO v4 (durable cursor replay stays custom) | OpenClaw gateway; Temporal event history |
+| S08 | shadcn/ui + Radix; TanStack Query; react-resizable-panels | — |
+| S09 | — (integration; reuse S05–S08 picks, no new dependencies) | — |
+| S10 | — (Pack schema is novel) | OpenClaw skills format — optional alignment, requires an E-note |
+| S11 | — (reuse S02 contracts) | Letta memory blocks / durable-agent-identity vocabulary |
+| S12 | — (node child_process + better-sqlite3) | OpenClaw session lifecycle; pi-mono session docs |
+| S13 | — (implement D7/D31/D34/D42/D49 as recorded) | AutoGen / CrewAI vocabulary only |
+| S14 | — (reuse S13) | AutoGen team configuration vocabulary |
+| S15 | — | Magentic-UI co-planning; LangGraph interrupt vocabulary |
+| S16 | BullMQ | Temporal worker model; OpenClaw supervisor patterns |
+| S17 | CodeMirror 6 | OpenHands workspace panels; lease semantics (Temporal/Kubernetes vocabulary) |
+| S18 | xterm.js + node-pty; Playwright (CDP screencast; launchPersistentContext) | OpenHands browser/terminal panels |
+| S19 | simple-git | git-worktree docs; GitHub PR "Files changed" view |
+| S20 | BullMQ delayed jobs (reminder sequence) | Letta HITL; LangGraph interrupts; Magentic-UI action approval |
+| S21 | MCP TypeScript SDK (MCP servers wrapped as Connectors) | — |
+| S22 | BullMQ retry/backoff; tree-kill / process-group kill | Temporal RetryPolicy semantics |
+| S23 | Vercel AI SDK (native + OpenAI-compatible + community providers) | — |
+| S24 | — (custom ledger; explicitly no billing libraries) | — |
+| S25 | SearXNG (external container); @mozilla/readability + turndown; unpdf; SheetJS CE | — |
+| S26 | docker run/exec sandboxing (no new dependencies) | E2B sandbox model; OpenClaw sandboxing docs |
+| S27 | — (reuse Playwright; write tests, not tools) | OWASP checklists from S04 |
+| S28 | BullMQ repeatable jobs; chokidar | — |
+| S29 | secretlint | Letta memory / sleep-time-agents vocabulary |
+| S30 | Web Notifications API; BroadcastChannel | — |
+| S31 | — (custom checkpoints on the S02/S07 journal) | Temporal replay semantics |
+| S32 | commander | — |
+| S33 | restic (external binary, BSD-2) | — |
+| S34 | Playwright Test; axe-core | — |
+| S35 | Docker Compose; Caddy | — |

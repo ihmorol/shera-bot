@@ -11,6 +11,7 @@ This directory contains the product baseline and decision records. **Read this i
 5. [`decisions/confirmed-decisions.md`](decisions/confirmed-decisions.md) — Codex decisions D1–D39, including historical wording and evidence status.
 6. [`decisions/closure-decisions.md`](decisions/closure-decisions.md) — continued decisions D40–D45, engineering records E1–E8, proposal history, supersession, and deferred work.
 7. [`decisions/open-items-decisions-2026-09-17.md`](decisions/open-items-decisions-2026-09-17.md) — D46–D50 and E9–E14: the roster/subagent decision and the ten open-item dispositions (D47–D50/E9–E14 Delegated, pending owner review).
+8. [`decisions/oss-leverage-decisions-2026-09-18.md`](decisions/oss-leverage-decisions-2026-09-18.md) — E15: the open-source leverage policy (embed / pattern-only / never-adopt tiers, S01 license-allowlist gate, anti-creativity rule) and the per-slice adoption map (Delegated, pending owner review).
 
 
 ## Document authority
@@ -41,6 +42,6 @@ Mockup interactions, fixture output and pane tests do not establish runtime beha
 ## Current record count
 
 - Confirmed decisions: D1–D50 (D46–D50 recorded 2026-09-17; D47–D50 are Delegated pending owner review), plus synchronization records SYNC-1 and SYNC-2.
-- Engineering decisions: E1–E14 (E9–E14 recorded 2026-09-17, Delegated pending owner review).
+- Engineering decisions: E1–E15 (E9–E14 recorded 2026-09-17; E15 recorded 2026-09-18 — all Delegated pending owner review).
 - Adopted acceptance criteria: 1–27 (22–27 added by D45 and now included in PRD §19).
 - The ten implementation-defined items open on 2026-09-13 were dispositioned on 2026-09-17 (see [`decisions/open-items-decisions-2026-09-17.md`](decisions/open-items-decisions-2026-09-17.md)); remaining open items are listed in [`TRACEABILITY.md`](TRACEABILITY.md).

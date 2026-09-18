@@ -1,7 +1,7 @@
 # Shera Bot — Decision Records Index
 
-**Status:** D1–D50 recorded; E1–E14 recorded as engineering decisions; SYNC-1 and SYNC-2 record the PRD synchronizations of 2026-09-11 and 2026-09-17; no D51+ exist. D46 is owner-confirmed; D47–D50 and E9–E14 are Delegated (agent-decided under the owner's 2026-09-17 instruction) pending owner review.
-**Last updated:** 2026-09-17
+**Status:** D1–D50 recorded; E1–E15 recorded as engineering decisions (E1–E14 on 2026-09-17, E15 on 2026-09-18); SYNC-1 and SYNC-2 record the PRD synchronizations of 2026-09-11 and 2026-09-17; no D51+ exist. D46 is owner-confirmed; D47–D50, E9–E14, and E15 are Delegated (agent-decided under the owner's explicit instructions) pending owner review.
+**Last updated:** 2026-09-18
 **Canonical vocabulary:** **Pack → Operations → Agents**.
 **PRD policy:** [`docs/PRD.md`](../PRD.md) was synchronized with D1–D45 on 2026-09-11 and with D46 on 2026-09-17 (SYNC-2) by explicit product-owner instruction (previously it was the unchanged 2026-09-08 baseline).
 
@@ -24,7 +24,7 @@
 - **Confirmed** — explicit product-owner answer is preserved in the readable transcript.
 - **Confirmed / incomplete acknowledgement** — the user's explicit answer exists, but the original assistant acknowledgement was lost or interrupted (D39).
 - **Confirmed / refined** — accepted, then narrowed or corrected by a later clarification.
-- **Delegated** — decided by the agent under an explicit owner instruction (D47–D50, E9–E14, 2026-09-17), with rationale, alternatives, and evidence recorded; becomes Confirmed on owner review.
+- **Delegated** — decided by the agent under an explicit owner instruction (D47–D50, E9–E14, 2026-09-17; E15, 2026-09-18), with rationale, alternatives, and evidence recorded; becomes Confirmed on owner review.
 - **Provisional** — selected for the prototype but requires a named spike or validation before becoming permanent (D13, D19).
 - **Superseded** — retained for history; a later decision is authoritative.
 - **Engineering** — an implementation choice delegated by PRD §24 or derived from an accepted boundary; not a new product decision.
@@ -38,6 +38,7 @@
 | [`confirmed-decisions.md`](confirmed-decisions.md) | D1–D39 from the original Codex grilling. D3 is superseded by D32; D39 is confirmed from an explicit answer but has an incomplete original acknowledgement. Historical `Expert` wording is retained only as evidence and is superseded by D44. |
 | [`closure-decisions.md`](closure-decisions.md) | D40–D45 answered one at a time in this session; E1–E8 engineering dispositions; proposal dispositions; supersession and deferred registers. D43's roster-reuse clause is superseded by D46. |
 | [`open-items-decisions-2026-09-17.md`](open-items-decisions-2026-09-17.md) | D46 (owner-confirmed roster/subagent model and student pack v1 mapping) and the Delegated records D47–D50 + E9–E14 covering the ten Stage-2 open items; filled disposition ledger; 2026-09-17 supersession and production-gate additions. |
+| [`oss-leverage-decisions-2026-09-18.md`](oss-leverage-decisions-2026-09-18.md) | E15: the open-source leverage policy (embed / pattern-only / never-adopt tiers, license allowlist gate, anti-creativity rule) and the per-slice adoption map; mirrors the "Open-source leverage" sections in issues #1–#36 and BUILD_MAP §8. |
 | [`proposal-history.md`](proposal-history.md) | Full P1–P9 problem statements, alternatives, recommendations, objections, and final dispositions. |
 
 ## Current product model

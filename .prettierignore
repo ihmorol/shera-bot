@@ -19,3 +19,8 @@ business-landing-portfolio/
 AGENTS.md
 PRODUCT.md
 README.md
+
+# Generated artifacts (D25 rule 10): byte-stable output of `pnpm gen:clients`.
+# Prettier must never touch them or the --check reproducibility gate would drift.
+packages/clients/openapi.json
+packages/clients/src/generated/

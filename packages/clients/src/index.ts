@@ -1,8 +1,16 @@
 /**
- * @shera-bot/clients — generated typed clients over the shared contracts.
+ * @shera-bot/clients — generated typed clients over the shared contracts (D25).
  *
- * Placeholder only: this package ships empty in S01 so the workspace graph and the
- * pipeline are real from the first slice. It is filled by a later slice, once the S02 contracts exist.
- * Governing records: D23 (layout), PRD §17.
+ * Everything under src/generated/ is machine-written by the ONE documented
+ * command (repo root):
+ *
+ *     pnpm gen:clients            # regenerate
+ *     pnpm gen:clients -- --check # verify committed output matches the contracts
+ *
+ * The OpenAPI document (openapi.json) and the typed client are generated from
+ * the same Zod schemas — a single source of truth per D25 rule 10. This index
+ * only re-exports the generated surface.
+ *
+ * Governing records: D25, D23 (layout), PRD §17.
  */
-export {};
+export * from "./generated/client.ts";

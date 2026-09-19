@@ -1,0 +1,22 @@
+{
+  "name": "@shera-bot/spike-d13",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "S03 spike (issue #4): D13 Pi-supervision variants (JSONL stdio child vs loopback HTTP sidecar) and the SQLite driver comparison. Evidence only — imported by nothing outside spikes/.",
+  "engines": {
+    "node": ">=24.0.0 <25.0.0"
+  },
+  "scripts": {
+    "bench:supervision": "node src/bench-supervision.ts",
+    "bench:sqlite": "node src/bench-sqlite.ts"
+  },
+  "devDependencies": {
+    "better-sqlite3": "12.4.1"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3"
+    ]
+  }
+}

@@ -1,0 +1,157 @@
+{
+  "run": "2026-09-19T16-31-38-966Z",
+  "node": "v24.21.0",
+  "platform": "linux x64",
+  "betterSqlite3Package": "12.4.1",
+  "results": {
+    "node:sqlite": {
+      "sqliteEngineVersion": "3.53.4",
+      "nativeBackupApi": "absent",
+      "wal": {
+        "defaultMode": "delete",
+        "modeAfterSet": "wal",
+        "modeAfterReopen": "wal"
+      },
+      "migrations": {
+        "appliedFirstRun": [1, 2],
+        "appliedSecondRun": [],
+        "recorded": [
+          {
+            "version": 1,
+            "name": "create-operations"
+          },
+          {
+            "version": 2,
+            "name": "create-operation-events"
+          }
+        ]
+      },
+      "foreignKeys": {
+        "defaultEnforces": true,
+        "defaultDetail": "FOREIGN KEY constraint failed",
+        "explicitEnforces": true,
+        "explicitError": "FOREIGN KEY constraint failed"
+      },
+      "throughput": {
+        "insertedRows": 20000,
+        "insertMs": 148.2,
+        "insertsPerSec": 134954,
+        "scannedRows": 20000,
+        "fullScanMs": 55.96
+      },
+      "contention": {
+        "busy_timeout_0ms": {
+          "outcome": "SQLITE_BUSY",
+          "waitedMs": 0.38,
+          "error": "database is locked",
+          "holdMs": 300
+        },
+        "busy_timeout_100ms": {
+          "outcome": "SQLITE_BUSY",
+          "waitedMs": 101.7,
+          "error": "database is locked",
+          "holdMs": 300
+        },
+        "busy_timeout_5000ms": {
+          "outcome": "blocked-then-succeeded",
+          "waitedMs": 135.02,
+          "error": null,
+          "holdMs": 300
+        }
+      },
+      "backup": {
+        "sourceRows": 20000,
+        "approxSourceBytes": 4849664,
+        "vacuumInto": {
+          "elapsedMs": 85.58,
+          "integrity": {
+            "integrity_check": "ok"
+          },
+          "rows": 20000,
+          "journalMode": "delete"
+        },
+        "nativeBackupApi": {
+          "available": false
+        },
+        "rowCountMatch": true
+      }
+    },
+    "better-sqlite3": {
+      "sqliteEngineVersion": "3.50.4",
+      "nativeBackupApi": "present",
+      "wal": {
+        "defaultMode": "delete",
+        "modeAfterSet": "wal",
+        "modeAfterReopen": "wal"
+      },
+      "migrations": {
+        "appliedFirstRun": [1, 2],
+        "appliedSecondRun": [],
+        "recorded": [
+          {
+            "version": 1,
+            "name": "create-operations"
+          },
+          {
+            "version": 2,
+            "name": "create-operation-events"
+          }
+        ]
+      },
+      "foreignKeys": {
+        "defaultEnforces": true,
+        "defaultDetail": "FOREIGN KEY constraint failed",
+        "explicitEnforces": true,
+        "explicitError": "FOREIGN KEY constraint failed"
+      },
+      "throughput": {
+        "insertedRows": 20000,
+        "insertMs": 120.16,
+        "insertsPerSec": 166446,
+        "scannedRows": 20000,
+        "fullScanMs": 36.38
+      },
+      "contention": {
+        "busy_timeout_0ms": {
+          "outcome": "SQLITE_BUSY",
+          "waitedMs": 0.43,
+          "error": "database is locked",
+          "holdMs": 300
+        },
+        "busy_timeout_100ms": {
+          "outcome": "SQLITE_BUSY",
+          "waitedMs": 103.69,
+          "error": "database is locked",
+          "holdMs": 300
+        },
+        "busy_timeout_5000ms": {
+          "outcome": "blocked-then-succeeded",
+          "waitedMs": 183.13,
+          "error": null,
+          "holdMs": 300
+        }
+      },
+      "backup": {
+        "sourceRows": 20000,
+        "approxSourceBytes": 4849664,
+        "vacuumInto": {
+          "elapsedMs": 27.71,
+          "integrity": {
+            "integrity_check": "ok"
+          },
+          "rows": 20000,
+          "journalMode": "delete"
+        },
+        "nativeBackupApi": {
+          "available": true,
+          "elapsedMs": 27.84,
+          "integrity": {
+            "integrity_check": "ok"
+          },
+          "rows": 20000
+        },
+        "rowCountMatch": true
+      }
+    }
+  }
+}

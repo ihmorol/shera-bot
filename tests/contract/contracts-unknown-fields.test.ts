@@ -8,7 +8,7 @@ import {
   CONTRACT_REGISTRY,
   EVENT_ENVELOPES,
   EXTENSIBLE_CONTRACTS,
-  type ContractName
+  type ContractName,
 } from "@shera-bot/contracts";
 
 const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "s02");
@@ -99,12 +99,12 @@ describe("contract registry completeness", () => {
     const envelopeKeys = new Set(Object.keys(EVENT_ENVELOPES));
     const covered = new Set(CASES.map((c) => c.schema));
     const missing = Object.keys(CONTRACT_REGISTRY).filter(
-      (name) => !envelopeKeys.has(name) && !covered.has(name as ContractName)
+      (name) => !envelopeKeys.has(name) && !covered.has(name as ContractName),
     );
     expect(
       missing,
       `Schemas registered without an unknown-field case: ${missing.join(", ")}. ` +
-        "Add a committed fixture + case, or (envelopes only) rely on the TypedExecutionEvent union coverage."
+        "Add a committed fixture + case, or (envelopes only) rely on the TypedExecutionEvent union coverage.",
     ).toEqual([]);
   });
 });

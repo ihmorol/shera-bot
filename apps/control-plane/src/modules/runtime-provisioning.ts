@@ -86,6 +86,19 @@ interface MappingRow {
   tokenRotatedAt: Date | null;
 }
 
+/**
+ * SQLSTATE 23505 (unique violation), recognized through Drizzle's
+ * DrizzleQueryError wrapper (the driver error rides on `cause`).
+ */
+function isUniqueViolation(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; current instanceof Error && depth < 3; depth += 1) {
+    if ((current as Error & { code?: string }).code === "23505") return true;
+    current = (current as Error & { cause?: unknown }).cause;
+  }
+  return false;
+}
+
 export class ProvisioningService {
   private readonly deps: ProvisioningServiceDeps;
   /** In-memory current credentials (digest-keyed by account); redacted at logging. */
@@ -336,7 +349,20 @@ export class ProvisioningService {
       throw runtimeNotProvisionedError();
     }
     // PRD §3.2: the account tier governs the container tier; balanced default.
-    await this.deps.db.insert(controlContainerMappings).values({ accountId, tier: account.tier });
+    try {
+      await this.deps.db.insert(controlContainerMappings).values({ accountId, tier: account.tier });
+    } catch (error) {
+      // Two concurrent first logins race on this select-then-insert: the
+      // loser's insert hits the account_id unique constraint (SQLSTATE 23505).
+      // That is the winner's success, not a fault — re-load the mapping the
+      // winner created and continue (single retry). Any other failure, or a
+      // still-missing mapping, keeps surfacing as a typed error, never a raw
+      // 500.
+      if (!isUniqueViolation(error)) throw error;
+      const raced = await this.loadMapping(accountId);
+      if (!raced) throw runtimeProvisionFailedError();
+      return raced;
+    }
     const created = await this.loadMapping(accountId);
     if (!created) throw runtimeProvisionFailedError();
     return created;

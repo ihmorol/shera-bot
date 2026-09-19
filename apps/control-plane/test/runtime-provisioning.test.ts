@@ -60,6 +60,7 @@ beforeAll(async () => {
     "f1b2c3d4-0000-4000-8000-000000000006",
     "9e1b2c3d-0000-4000-8000-000000000007",
     "8f1b2c3d-0000-4000-8000-000000000008",
+    "7a1b2c3d-0000-4000-8000-000000000009",
   ]) {
     const credentials = new ChannelCredentialStore();
     const api = createInternalApi({ credentials, securityEvents: channelRecorder });
@@ -365,3 +366,59 @@ describe("re-provisioning keeps the channel true (adoption invariants I1/I2)", (
   });
 });
 
+describe("concurrent first login (unique-violation race, FIX 3)", () => {
+  it("a racing insert that hits the account_id unique constraint is retried, not surfaced as a 500", async () => {
+    const J = "7a1b2c3d-0000-4000-8000-000000000009";
+    await createAccount(J);
+
+    // Simulate the loser of two concurrent first logins: its select misses,
+    // the insert reports the account_id unique violation (SQLSTATE 23505) —
+    // and the winner's mapping is committed by the time the loser retries.
+    // The test makes the FIRST insert commit, then throw exactly once.
+    let violateOnce = true;
+    const realDb = controlPlane.db;
+    const racingDb = new Proxy(realDb, {
+      get(target, prop, receiver) {
+        if (prop !== "insert") return Reflect.get(target, prop, receiver);
+        return (table: unknown) => {
+          const insert = (
+            target.insert as (t: unknown) => {
+              values: (v: unknown) => Promise<unknown>;
+            }
+          ).bind(target);
+          if (!violateOnce) return insert(table);
+          violateOnce = false;
+          return {
+            values: (values: unknown) =>
+              insert(table)
+                .values(values)
+                .then(() => {
+                  throw Object.assign(
+                    new Error(
+                      'duplicate key value violates unique constraint "control_container_mappings_account_id_unique"',
+                    ),
+                    { code: "23505" },
+                  );
+                }),
+          };
+        };
+      },
+    }) as unknown as typeof realDb;
+
+    const racing = new ProvisioningService({
+      db: racingDb,
+      backend,
+      channel: new RuntimeChannelClient(),
+      securityEvents: controlPlane.securityEvents,
+      registry: controlPlane.registry,
+      logger: controlPlane.logger,
+    });
+
+    const result = await racing.ensureProvisioned(J);
+
+    expect(result.provisioning_status).toBe("running");
+    const row = await mapping(J);
+    expect(row).toBeDefined();
+    expect(row?.runtimeHandle).toBe(result.runtime_handle);
+  });
+});

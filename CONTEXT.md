@@ -9,7 +9,7 @@ A private multi-agent AI assistant prototype (≤5 users, one VM): versioned cus
 ## Where truth lives (read in this order when touching a slice)
 
 1. `AGENTS.md` — mandatory loading rules and non-negotiables.
-2. `docs/PRD.md` — synchronized product baseline (D1–D50, E-records; acceptance criteria 1–27 in §19).
+2. `docs/PRD.md` — synchronized product baseline (D1–D51, E-records; acceptance criteria 1–27 in §19; D51 = dual harness, Pi default + Hermes selectable).
 3. `docs/decisions/` — the decision register; `docs/TRACEABILITY.md` — acceptance status (never upgraded without evidence).
 4. `docs/GLOSSARY.md` — vocabulary is binding: **Pack → Operations → Agents**; identifiers `agent_id`, `operation`, `task_run` (never "Expert"/"Scene").
 5. `docs/BUILD_MAP.md` — the 35-slice build plan (GitHub issues #2–#36), guardrails G1–G8, merge gates; `docs/DEV_WORKFLOW.md` — the standing loop (red-first, evidence pack, fresh-context review).

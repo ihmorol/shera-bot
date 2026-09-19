@@ -1,8 +1,8 @@
 # Shera Bot — Canonical Glossary
 
 **Status:** Authoritative vocabulary for new documentation and implementation.  
-**Last updated:** 2026-09-17 (D46–D50, E9–E14)  
-**Decision source:** D29–D50 in [`decisions/`](decisions/) — [`confirmed-decisions.md`](decisions/confirmed-decisions.md), [`closure-decisions.md`](decisions/closure-decisions.md), [`open-items-decisions-2026-09-17.md`](decisions/open-items-decisions-2026-09-17.md).
+**Last updated:** 2026-09-19 (D51, SYNC-3; previously 2026-09-17 — D46–D50, E9–E14)  
+**Decision source:** D29–D51 in [`decisions/`](decisions/) — [`confirmed-decisions.md`](decisions/confirmed-decisions.md), [`closure-decisions.md`](decisions/closure-decisions.md), [`open-items-decisions-2026-09-17.md`](decisions/open-items-decisions-2026-09-17.md), [`owner-decision-d51-dual-harness-2026-09-19.md`](decisions/owner-decision-d51-dual-harness-2026-09-19.md).
 
 ## Naming rule
 
@@ -20,13 +20,16 @@ Pack → Operations → Agents
 An audience-specific, versioned catalog of Operations, Agents, Agent Teams, Skills, Connectors, defaults, onboarding, and UI metadata. A workspace pins one Pack version. A Pack is configuration and data, not unrestricted executable code.
 
 ### Agent
-A specialized, reusable AI identity with a profile, direct chat, private memory, settings, capabilities, one scoped Operation assignment, and task history. An Agent is a logical durable identity; its Pi session process is on-demand. An Agent can trigger multiple **subagents** within its Operation. In code, use identifiers such as `agent_id`, `agent_profile`, and `agent_roster`.
+A specialized, reusable AI identity with a profile, direct chat, private memory, settings, capabilities, one scoped Operation assignment, and task history. An Agent is a logical durable identity; its session process is on-demand and runs on the Agent's selected **harness** (Pi default, Hermes optional — D51). An Agent can trigger multiple **subagents** within its Operation. In code, use identifiers such as `agent_id`, `agent_profile`, and `agent_roster`.
+
+### Harness
+The agent runtime harness that executes an Agent's session process under runtime supervision (D51). The prototype supports exactly two: **Pi** — the default, the product-maintained fork (`ihmorol/shera-pi`, D13/D14; supervision seam validated by E17) — and **Hermes** — selectable per Agent, contract-defined but not implementable until the owner supplies its upstream source and license evidence (same pattern as `PI_FORK.md`). Harness selection is Agent configuration; the runtime gateway validates and executes through the same supervised adapter seam regardless of harness (G2). Use `harness` as the identifier root (`agent_harness`, `harness_type`); do not invent a third value.
 
 ### Subagent
 The owner's term (2026-09-17, D46) for a subordinate agent execution triggered by an Agent within its Operation; multiple subagents may be triggered by the same Agent. It is not a separate object type. Delegated work becomes independently tracked task runs (D31/D34) executed in supervised task workers (D32). Exact semantics — same-identity worker instances versus other same-Pack Agents invoked as subordinates, concurrency limits, and memory-scope boundaries — remain an open item in [`TRACEABILITY.md`](TRACEABILITY.md).
 
 ### Agent Team
-A predefined recommended roster of Agents for an Operation. It is not a separate process architecture. Active Agents still run through the shared runtime gateway, task state machine, approval policy, and Pi adapter.
+A predefined recommended roster of Agents for an Operation. It is not a separate process architecture. Active Agents still run through the shared runtime gateway, task state machine, approval policy, and their selected harness's adapter (Pi by default, D51).
 
 ### Operation definition
 A versioned, reusable task-oriented collaboration template in a Pack. It declares purpose, recommended/allowed Agents, skills, connectors, outputs, collaboration rules, coordinator policy, and default approval behavior.

@@ -1,7 +1,9 @@
 packages:
   - "apps/*"
   - "packages/*"
+# esbuild's postinstall (used by drizzle-kit) must run; allow-listed per
+# package (pnpm 12 build-approval). Only build scripts we have reviewed.
 allowBuilds:
-  esbuild: set this to true or false
+  esbuild: true
 minimumReleaseAgeExclude:
   - prettier@3.9.7

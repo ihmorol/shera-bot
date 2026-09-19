@@ -55,7 +55,11 @@ export const TIER_RESOURCE_LIMITS: Readonly<Record<ResourceTier, TierResourceLim
 } as const;
 
 /** D23 rule 3: typed backend kinds (D12 backends). */
-export const RUNTIME_BACKEND_KINDS = ["local_container", "remote_container", "managed_cloud"] as const;
+export const RUNTIME_BACKEND_KINDS = [
+  "local_container",
+  "remote_container",
+  "managed_cloud",
+] as const;
 export const RuntimeBackendKind = z.enum(RUNTIME_BACKEND_KINDS);
 export type RuntimeBackendKind = z.infer<typeof RuntimeBackendKind>;
 
@@ -255,6 +259,27 @@ export interface RuntimeInternalMetadata {
 export interface ProvisionBackendOutcome {
   result: ProvisionRuntimeResult;
   internal: RuntimeInternalMetadata;
+}
+
+/**
+ * Typed backend failure (G4, D23 rule 4): a backend that cannot complete an
+ * operation throws this instead of reporting success. `detail` is a bounded,
+ * redaction-safe description for server logs — it must never carry secrets,
+ * host paths, or engine identifiers.
+ */
+export type RuntimeBackendFailureCode =
+  "RUNTIME_PROVISION_FAILED" | "RUNTIME_UNAVAILABLE" | "RUNTIME_TENANT_MISMATCH";
+
+export class RuntimeBackendFailure extends Error {
+  readonly code: RuntimeBackendFailureCode;
+  readonly detail: string;
+
+  constructor(code: RuntimeBackendFailureCode, detail: string) {
+    super(`${code}: ${detail}`);
+    this.name = "RuntimeBackendFailure";
+    this.code = code;
+    this.detail = detail;
+  }
 }
 
 /**

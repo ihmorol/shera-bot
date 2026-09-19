@@ -1,0 +1,6 @@
+{
+  "tier": "balanced",
+  "cpu_vcpus": 2,
+  "memory_bytes": 4294967296,
+  "storage_bytes": 26843545600
+}

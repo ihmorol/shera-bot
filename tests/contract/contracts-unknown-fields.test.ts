@@ -46,6 +46,22 @@ const CASES: ReadonlyArray<{ schema: ContractName; fixture: string }> = [
   { schema: "TaskRejection", fixture: "task-rejection.json" },
   { schema: "EventPage", fixture: "event-page.json" },
   { schema: "ListTaskEventsQuery", fixture: "list-task-events-query.json" },
+  // S06 (runtime backend contract + internal channel; D12, D2).
+  { schema: "ResourceSummary", fixture: "resource-summary.json" },
+  { schema: "ProvisionRuntimeInput", fixture: "provision-runtime-input.json" },
+  { schema: "ProvisionRuntimeResult", fixture: "provision-runtime-result.json" },
+  { schema: "ResumeRuntimeInput", fixture: "resume-runtime-input.json" },
+  { schema: "ResumeRuntimeResult", fixture: "resume-runtime-result.json" },
+  { schema: "StopRuntimeInput", fixture: "stop-runtime-input.json" },
+  { schema: "StopRuntimeResult", fixture: "stop-runtime-result.json" },
+  { schema: "GetRuntimeStatusInput", fixture: "get-runtime-status-input.json" },
+  { schema: "RuntimeStatus", fixture: "runtime-status.json" },
+  { schema: "RuntimeRegistrationRequest", fixture: "runtime-registration-request.json" },
+  { schema: "RuntimeRegistrationResponse", fixture: "runtime-registration-response.json" },
+  { schema: "RuntimeCredentialRotationRequest", fixture: "runtime-credential-rotation-request.json" },
+  { schema: "RuntimeCredentialRotationResponse", fixture: "runtime-credential-rotation-response.json" },
+  { schema: "RuntimeCredentialCommitRequest", fixture: "runtime-credential-commit-request.json" },
+  { schema: "RuntimeCredentialCommitResponse", fixture: "runtime-credential-commit-response.json" },
 ];
 
 describe.each(CASES)("$schema unknown-field discipline (D25)", ({ schema, fixture }) => {

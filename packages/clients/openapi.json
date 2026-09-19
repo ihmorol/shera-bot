@@ -5361,6 +5361,24 @@
         ],
         "additionalProperties": false
       },
+      "GetRuntimeStatusInput": {
+        "type": "object",
+        "properties": {
+          "runtime_handle": {
+            "type": "string",
+            "pattern": "^rt_[0-9a-f]{32}$"
+          },
+          "correlation_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "runtime_handle"
+        ],
+        "additionalProperties": false
+      },
       "ListTaskEventsQuery": {
         "type": "object",
         "properties": {
@@ -5940,6 +5958,412 @@
         ],
         "additionalProperties": false
       },
+      "ProvisionRuntimeInput": {
+        "type": "object",
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "tier": {
+            "type": "string",
+            "enum": [
+              "light",
+              "balanced",
+              "heavy"
+            ]
+          },
+          "request_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "correlation_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "account_id",
+          "tier",
+          "request_id"
+        ],
+        "additionalProperties": false
+      },
+      "ProvisionRuntimeResult": {
+        "type": "object",
+        "properties": {
+          "runtime_handle": {
+            "type": "string",
+            "pattern": "^rt_[0-9a-f]{32}$"
+          },
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "tier": {
+            "type": "string",
+            "enum": [
+              "light",
+              "balanced",
+              "heavy"
+            ]
+          },
+          "provisioning_status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "provisioning",
+              "running",
+              "stopped",
+              "failed"
+            ]
+          },
+          "health": {
+            "type": "string",
+            "enum": [
+              "unknown",
+              "healthy",
+              "unhealthy"
+            ]
+          },
+          "resource_summary": {
+            "type": "object",
+            "properties": {
+              "tier": {
+                "type": "string",
+                "enum": [
+                  "light",
+                  "balanced",
+                  "heavy"
+                ]
+              },
+              "cpu_vcpus": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "memory_bytes": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "storage_bytes": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": [
+              "tier",
+              "cpu_vcpus",
+              "memory_bytes",
+              "storage_bytes"
+            ],
+            "additionalProperties": false
+          },
+          "provisioned_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "runtime_handle",
+          "account_id",
+          "tier",
+          "provisioning_status",
+          "health",
+          "resource_summary",
+          "provisioned_at"
+        ],
+        "additionalProperties": false
+      },
+      "ResourceSummary": {
+        "type": "object",
+        "properties": {
+          "tier": {
+            "type": "string",
+            "enum": [
+              "light",
+              "balanced",
+              "heavy"
+            ]
+          },
+          "cpu_vcpus": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
+          "memory_bytes": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
+          "storage_bytes": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          }
+        },
+        "required": [
+          "tier",
+          "cpu_vcpus",
+          "memory_bytes",
+          "storage_bytes"
+        ],
+        "additionalProperties": false
+      },
+      "ResumeRuntimeInput": {
+        "type": "object",
+        "properties": {
+          "runtime_handle": {
+            "type": "string",
+            "pattern": "^rt_[0-9a-f]{32}$"
+          },
+          "request_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "correlation_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "runtime_handle",
+          "request_id"
+        ],
+        "additionalProperties": false
+      },
+      "ResumeRuntimeResult": {
+        "type": "object",
+        "properties": {
+          "runtime_handle": {
+            "type": "string",
+            "pattern": "^rt_[0-9a-f]{32}$"
+          },
+          "provisioning_status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "provisioning",
+              "running",
+              "stopped",
+              "failed"
+            ]
+          },
+          "health": {
+            "type": "string",
+            "enum": [
+              "unknown",
+              "healthy",
+              "unhealthy"
+            ]
+          },
+          "checked_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "runtime_handle",
+          "provisioning_status",
+          "health",
+          "checked_at"
+        ],
+        "additionalProperties": false
+      },
+      "RuntimeCredentialCommitRequest": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "RuntimeCredentialCommitResponse": {
+        "type": "object",
+        "properties": {
+          "committed": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        },
+        "required": [
+          "committed"
+        ],
+        "additionalProperties": false
+      },
+      "RuntimeCredentialRotationRequest": {
+        "type": "object",
+        "properties": {
+          "credential_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "credential_sha256"
+        ],
+        "additionalProperties": false
+      },
+      "RuntimeCredentialRotationResponse": {
+        "type": "object",
+        "properties": {
+          "staged": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        },
+        "required": [
+          "staged"
+        ],
+        "additionalProperties": false
+      },
+      "RuntimeRegistrationRequest": {
+        "type": "object",
+        "properties": {
+          "runtime_handle": {
+            "type": "string",
+            "pattern": "^rt_[0-9a-f]{32}$"
+          },
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "tier": {
+            "type": "string",
+            "enum": [
+              "light",
+              "balanced",
+              "heavy"
+            ]
+          },
+          "correlation_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "runtime_handle",
+          "account_id",
+          "tier"
+        ],
+        "additionalProperties": false
+      },
+      "RuntimeRegistrationResponse": {
+        "type": "object",
+        "properties": {
+          "registered": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "runtime_handle": {
+            "type": "string",
+            "pattern": "^rt_[0-9a-f]{32}$"
+          },
+          "registered_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "registered",
+          "runtime_handle",
+          "registered_at"
+        ],
+        "additionalProperties": false
+      },
+      "RuntimeStatus": {
+        "type": "object",
+        "properties": {
+          "runtime_handle": {
+            "type": "string",
+            "pattern": "^rt_[0-9a-f]{32}$"
+          },
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "tier": {
+            "type": "string",
+            "enum": [
+              "light",
+              "balanced",
+              "heavy"
+            ]
+          },
+          "provisioning_status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "provisioning",
+              "running",
+              "stopped",
+              "failed"
+            ]
+          },
+          "health": {
+            "type": "string",
+            "enum": [
+              "unknown",
+              "healthy",
+              "unhealthy"
+            ]
+          },
+          "resource_summary": {
+            "type": "object",
+            "properties": {
+              "tier": {
+                "type": "string",
+                "enum": [
+                  "light",
+                  "balanced",
+                  "heavy"
+                ]
+              },
+              "cpu_vcpus": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "memory_bytes": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "storage_bytes": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": [
+              "tier",
+              "cpu_vcpus",
+              "memory_bytes",
+              "storage_bytes"
+            ],
+            "additionalProperties": false
+          },
+          "checked_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "runtime_handle",
+          "account_id",
+          "tier",
+          "provisioning_status",
+          "health",
+          "resource_summary",
+          "checked_at"
+        ],
+        "additionalProperties": false
+      },
       "Session": {
         "type": "object",
         "properties": {
@@ -6056,6 +6480,68 @@
           "user_action",
           "internal_details",
           "correlation_id"
+        ],
+        "additionalProperties": false
+      },
+      "StopRuntimeInput": {
+        "type": "object",
+        "properties": {
+          "runtime_handle": {
+            "type": "string",
+            "pattern": "^rt_[0-9a-f]{32}$"
+          },
+          "request_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "correlation_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "runtime_handle",
+          "request_id"
+        ],
+        "additionalProperties": false
+      },
+      "StopRuntimeResult": {
+        "type": "object",
+        "properties": {
+          "runtime_handle": {
+            "type": "string",
+            "pattern": "^rt_[0-9a-f]{32}$"
+          },
+          "provisioning_status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "provisioning",
+              "running",
+              "stopped",
+              "failed"
+            ]
+          },
+          "health": {
+            "type": "string",
+            "enum": [
+              "unknown",
+              "healthy",
+              "unhealthy"
+            ]
+          },
+          "checked_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "runtime_handle",
+          "provisioning_status",
+          "health",
+          "checked_at"
         ],
         "additionalProperties": false
       },

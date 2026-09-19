@@ -23,6 +23,23 @@ import { EVENT_ENVELOPES, TypedExecutionEvent, TriggerWebhookPayload } from "./e
 import { MemoryEntry } from "./memory.ts";
 import { Operation, OperationDefinition } from "./operation.ts";
 import { Pack } from "./pack.ts";
+import {
+  GetRuntimeStatusInput,
+  ProvisionRuntimeInput,
+  ProvisionRuntimeResult,
+  ResourceSummary,
+  ResumeRuntimeInput,
+  ResumeRuntimeResult,
+  RuntimeRegistrationRequest,
+  RuntimeRegistrationResponse,
+  RuntimeStatus,
+  RuntimeCredentialCommitRequest,
+  RuntimeCredentialCommitResponse,
+  RuntimeCredentialRotationRequest,
+  RuntimeCredentialRotationResponse,
+  StopRuntimeInput,
+  StopRuntimeResult,
+} from "./runtime.ts";
 import { Session } from "./session.ts";
 import { TaskCommand, TaskCommandResult, TaskRejection } from "./task-commands.ts";
 import { TaskRun } from "./task-run.ts";
@@ -53,6 +70,22 @@ export const CONTRACT_REGISTRY = {
   ListTaskEventsQuery,
   TriggerWebhookPayload,
   ...EVENT_ENVELOPES,
+  // S06 (runtime backend contract + internal channel; D12, D2).
+  ResourceSummary,
+  ProvisionRuntimeInput,
+  ProvisionRuntimeResult,
+  ResumeRuntimeInput,
+  ResumeRuntimeResult,
+  StopRuntimeInput,
+  StopRuntimeResult,
+  GetRuntimeStatusInput,
+  RuntimeStatus,
+  RuntimeRegistrationRequest,
+  RuntimeRegistrationResponse,
+  RuntimeCredentialRotationRequest,
+  RuntimeCredentialRotationResponse,
+  RuntimeCredentialCommitRequest,
+  RuntimeCredentialCommitResponse,
 } as const;
 
 export type ContractName = keyof typeof CONTRACT_REGISTRY;

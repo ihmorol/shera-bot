@@ -1,0 +1,772 @@
+{
+  "run": "2026-09-19T16-28-28-846Z",
+  "node": "v24.21.0",
+  "platform": "linux x64",
+  "iterations": {
+    "timingScenarios": 5,
+    "backpressure": 3
+  },
+  "codeSize": {
+    "supervision-core.ts (shared by both variants)": {
+      "total": 240,
+      "code": 199
+    },
+    "variant-a.ts (transport-specific, A)": {
+      "total": 171,
+      "code": 140
+    },
+    "variant-b.ts (transport-specific, B)": {
+      "total": 274,
+      "code": 226
+    },
+    "contract.ts (shared protocol types + JSONL framing)": {
+      "total": 294,
+      "code": 203
+    },
+    "fake-pi-stdio.ts (stub host, A)": {
+      "total": 88,
+      "code": 63
+    },
+    "fake-pi-sidecar.ts (stub host, B)": {
+      "total": 128,
+      "code": 97
+    },
+    "note": "code = non-blank, non-comment lines; total = all lines"
+  },
+  "results": {
+    "A:jsonl-stdio": [
+      {
+        "scenario": "lifecycle",
+        "iterations": [
+          {
+            "readyMs": 287.36,
+            "ttftColdMs": 29.7,
+            "ttftWarmMs": 24.98,
+            "coldStreamMs": 1067.02
+          },
+          {
+            "readyMs": 119.81,
+            "ttftColdMs": 29.98,
+            "ttftWarmMs": 25.86,
+            "coldStreamMs": 1072.44
+          },
+          {
+            "readyMs": 200.68,
+            "ttftColdMs": 30.99,
+            "ttftWarmMs": 25.77,
+            "coldStreamMs": 1089.38
+          },
+          {
+            "readyMs": 135.05,
+            "ttftColdMs": 29.52,
+            "ttftWarmMs": 26.86,
+            "coldStreamMs": 1106.99
+          },
+          {
+            "readyMs": 126.79,
+            "ttftColdMs": 31.58,
+            "ttftWarmMs": 27.23,
+            "coldStreamMs": 1117.32
+          }
+        ],
+        "stats": {
+          "readyMs": {
+            "n": 5,
+            "median": 135.05,
+            "min": 119.81,
+            "max": 287.36
+          },
+          "ttftColdMs": {
+            "n": 5,
+            "median": 29.98,
+            "min": 29.52,
+            "max": 31.58
+          },
+          "ttftWarmMs": {
+            "n": 5,
+            "median": 25.86,
+            "min": 24.98,
+            "max": 27.23
+          },
+          "coldStreamMs": {
+            "n": 5,
+            "median": 1089.38,
+            "min": 1067.02,
+            "max": 1117.32
+          }
+        }
+      },
+      {
+        "scenario": "kill9-loss-restart",
+        "iterations": [
+          {
+            "detectLatencyMs": 4.2,
+            "emittedAtDeath": 60,
+            "journaledAtKill": 60,
+            "journaledAtDeath": 60,
+            "lostTokens": 0,
+            "restartReadyMs": 152.38,
+            "ttftAfterRestartMs": 30.21,
+            "resumeStreamMs": 760.23,
+            "finalDistinctTokens": 200,
+            "duplicateTokens": 0,
+            "partialLinesDropped": 0,
+            "tokensMissingAfterRecovery": 0
+          },
+          {
+            "detectLatencyMs": 5.96,
+            "emittedAtDeath": 60,
+            "journaledAtKill": 60,
+            "journaledAtDeath": 60,
+            "lostTokens": 0,
+            "restartReadyMs": 116.09,
+            "ttftAfterRestartMs": 29.61,
+            "resumeStreamMs": 798.96,
+            "finalDistinctTokens": 200,
+            "duplicateTokens": 0,
+            "partialLinesDropped": 0,
+            "tokensMissingAfterRecovery": 0
+          },
+          {
+            "detectLatencyMs": 4.49,
+            "emittedAtDeath": 60,
+            "journaledAtKill": 60,
+            "journaledAtDeath": 60,
+            "lostTokens": 0,
+            "restartReadyMs": 125.3,
+            "ttftAfterRestartMs": 29.54,
+            "resumeStreamMs": 791.78,
+            "finalDistinctTokens": 200,
+            "duplicateTokens": 0,
+            "partialLinesDropped": 0,
+            "tokensMissingAfterRecovery": 0
+          },
+          {
+            "detectLatencyMs": 4.9,
+            "emittedAtDeath": 60,
+            "journaledAtKill": 60,
+            "journaledAtDeath": 60,
+            "lostTokens": 0,
+            "restartReadyMs": 140.42,
+            "ttftAfterRestartMs": 29.09,
+            "resumeStreamMs": 790.57,
+            "finalDistinctTokens": 200,
+            "duplicateTokens": 0,
+            "partialLinesDropped": 0,
+            "tokensMissingAfterRecovery": 0
+          },
+          {
+            "detectLatencyMs": 19.67,
+            "emittedAtDeath": 60,
+            "journaledAtKill": 60,
+            "journaledAtDeath": 60,
+            "lostTokens": 0,
+            "restartReadyMs": 167.32,
+            "ttftAfterRestartMs": 29.85,
+            "resumeStreamMs": 750.67,
+            "finalDistinctTokens": 200,
+            "duplicateTokens": 0,
+            "partialLinesDropped": 0,
+            "tokensMissingAfterRecovery": 0
+          }
+        ],
+        "stats": {
+          "detectLatencyMs": {
+            "n": 5,
+            "median": 4.9,
+            "min": 4.2,
+            "max": 19.67
+          },
+          "emittedAtDeath": {
+            "n": 5,
+            "median": 60,
+            "min": 60,
+            "max": 60
+          },
+          "journaledAtKill": {
+            "n": 5,
+            "median": 60,
+            "min": 60,
+            "max": 60
+          },
+          "journaledAtDeath": {
+            "n": 5,
+            "median": 60,
+            "min": 60,
+            "max": 60
+          },
+          "lostTokens": {
+            "n": 5,
+            "median": 0,
+            "min": 0,
+            "max": 0
+          },
+          "restartReadyMs": {
+            "n": 5,
+            "median": 140.42,
+            "min": 116.09,
+            "max": 167.32
+          },
+          "ttftAfterRestartMs": {
+            "n": 5,
+            "median": 29.61,
+            "min": 29.09,
+            "max": 30.21
+          },
+          "resumeStreamMs": {
+            "n": 5,
+            "median": 790.57,
+            "min": 750.67,
+            "max": 798.96
+          },
+          "finalDistinctTokens": {
+            "n": 5,
+            "median": 200,
+            "min": 200,
+            "max": 200
+          },
+          "duplicateTokens": {
+            "n": 5,
+            "median": 0,
+            "min": 0,
+            "max": 0
+          },
+          "partialLinesDropped": {
+            "n": 5,
+            "median": 0,
+            "min": 0,
+            "max": 0
+          },
+          "tokensMissingAfterRecovery": {
+            "n": 5,
+            "median": 0,
+            "min": 0,
+            "max": 0
+          }
+        }
+      },
+      {
+        "scenario": "hang-detection",
+        "iterations": [
+          {
+            "hungDetectionMs": 524.84,
+            "watchdogTimeoutMs": 500,
+            "tokensReceivedBeforeHang": 1,
+            "fired": 1
+          },
+          {
+            "hungDetectionMs": 521.88,
+            "watchdogTimeoutMs": 500,
+            "tokensReceivedBeforeHang": 1,
+            "fired": 1
+          },
+          {
+            "hungDetectionMs": 520.33,
+            "watchdogTimeoutMs": 500,
+            "tokensReceivedBeforeHang": 1,
+            "fired": 1
+          },
+          {
+            "hungDetectionMs": 523.37,
+            "watchdogTimeoutMs": 500,
+            "tokensReceivedBeforeHang": 1,
+            "fired": 1
+          },
+          {
+            "hungDetectionMs": 522.53,
+            "watchdogTimeoutMs": 500,
+            "tokensReceivedBeforeHang": 1,
+            "fired": 1
+          }
+        ],
+        "stats": {
+          "hungDetectionMs": {
+            "n": 5,
+            "median": 522.53,
+            "min": 520.33,
+            "max": 524.84
+          },
+          "watchdogTimeoutMs": {
+            "n": 5,
+            "median": 500,
+            "min": 500,
+            "max": 500
+          },
+          "tokensReceivedBeforeHang": {
+            "n": 5,
+            "median": 1,
+            "min": 1,
+            "max": 1
+          },
+          "fired": {
+            "n": 5,
+            "median": 1,
+            "min": 1,
+            "max": 1
+          }
+        }
+      },
+      {
+        "scenario": "backpressure-slow-consumer",
+        "iterations": [
+          {
+            "wallMs": 5144.81,
+            "queuePeak": 82,
+            "maxQueue": 50,
+            "pauseCount": 58,
+            "resumeCount": 4,
+            "sourceWriteFalse": 12,
+            "stubEmittedEvents": 252,
+            "lossTokens": 0,
+            "duplicateTokens": 0
+          },
+          {
+            "wallMs": 5140.13,
+            "queuePeak": 82,
+            "maxQueue": 50,
+            "pauseCount": 58,
+            "resumeCount": 4,
+            "sourceWriteFalse": 12,
+            "stubEmittedEvents": 252,
+            "lossTokens": 0,
+            "duplicateTokens": 0
+          },
+          {
+            "wallMs": 5120.24,
+            "queuePeak": 81,
+            "maxQueue": 50,
+            "pauseCount": 57,
+            "resumeCount": 4,
+            "sourceWriteFalse": 11,
+            "stubEmittedEvents": 252,
+            "lossTokens": 0,
+            "duplicateTokens": 0
+          }
+        ],
+        "stats": {
+          "wallMs": {
+            "n": 3,
+            "median": 5140.13,
+            "min": 5120.24,
+            "max": 5144.81
+          },
+          "queuePeak": {
+            "n": 3,
+            "median": 82,
+            "min": 81,
+            "max": 82
+          },
+          "maxQueue": {
+            "n": 3,
+            "median": 50,
+            "min": 50,
+            "max": 50
+          },
+          "pauseCount": {
+            "n": 3,
+            "median": 58,
+            "min": 57,
+            "max": 58
+          },
+          "resumeCount": {
+            "n": 3,
+            "median": 4,
+            "min": 4,
+            "max": 4
+          },
+          "sourceWriteFalse": {
+            "n": 3,
+            "median": 12,
+            "min": 11,
+            "max": 12
+          },
+          "stubEmittedEvents": {
+            "n": 3,
+            "median": 252,
+            "min": 252,
+            "max": 252
+          },
+          "lossTokens": {
+            "n": 3,
+            "median": 0,
+            "min": 0,
+            "max": 0
+          },
+          "duplicateTokens": {
+            "n": 3,
+            "median": 0,
+            "min": 0,
+            "max": 0
+          }
+        }
+      }
+    ],
+    "B:http-sidecar": [
+      {
+        "scenario": "lifecycle",
+        "iterations": [
+          {
+            "readyMs": 263.26,
+            "ttftColdMs": 32.09,
+            "ttftWarmMs": 27.9,
+            "coldStreamMs": 1116.01
+          },
+          {
+            "readyMs": 195.44,
+            "ttftColdMs": 30.67,
+            "ttftWarmMs": 27.33,
+            "coldStreamMs": 1150.72
+          },
+          {
+            "readyMs": 193.86,
+            "ttftColdMs": 28.61,
+            "ttftWarmMs": 27.36,
+            "coldStreamMs": 1139.94
+          },
+          {
+            "readyMs": 197.68,
+            "ttftColdMs": 30.36,
+            "ttftWarmMs": 28.18,
+            "coldStreamMs": 1120.17
+          },
+          {
+            "readyMs": 194.9,
+            "ttftColdMs": 30.37,
+            "ttftWarmMs": 28.3,
+            "coldStreamMs": 1102.2
+          }
+        ],
+        "stats": {
+          "readyMs": {
+            "n": 5,
+            "median": 195.44,
+            "min": 193.86,
+            "max": 263.26
+          },
+          "ttftColdMs": {
+            "n": 5,
+            "median": 30.37,
+            "min": 28.61,
+            "max": 32.09
+          },
+          "ttftWarmMs": {
+            "n": 5,
+            "median": 27.9,
+            "min": 27.33,
+            "max": 28.3
+          },
+          "coldStreamMs": {
+            "n": 5,
+            "median": 1120.17,
+            "min": 1102.2,
+            "max": 1150.72
+          }
+        }
+      },
+      {
+        "scenario": "kill9-loss-restart",
+        "iterations": [
+          {
+            "detectLatencyMs": 5.98,
+            "emittedAtDeath": 60,
+            "journaledAtKill": 60,
+            "journaledAtDeath": 60,
+            "lostTokens": 0,
+            "restartReadyMs": 164.12,
+            "ttftAfterRestartMs": 29.02,
+            "resumeStreamMs": 769.6,
+            "finalDistinctTokens": 200,
+            "duplicateTokens": 0,
+            "partialLinesDropped": 0,
+            "tokensMissingAfterRecovery": 0
+          },
+          {
+            "detectLatencyMs": 6.09,
+            "emittedAtDeath": 60,
+            "journaledAtKill": 60,
+            "journaledAtDeath": 60,
+            "lostTokens": 0,
+            "restartReadyMs": 173.25,
+            "ttftAfterRestartMs": 28.83,
+            "resumeStreamMs": 757.48,
+            "finalDistinctTokens": 200,
+            "duplicateTokens": 0,
+            "partialLinesDropped": 0,
+            "tokensMissingAfterRecovery": 0
+          },
+          {
+            "detectLatencyMs": 6.09,
+            "emittedAtDeath": 60,
+            "journaledAtKill": 60,
+            "journaledAtDeath": 60,
+            "lostTokens": 0,
+            "restartReadyMs": 207.76,
+            "ttftAfterRestartMs": 30.55,
+            "resumeStreamMs": 759.92,
+            "finalDistinctTokens": 200,
+            "duplicateTokens": 0,
+            "partialLinesDropped": 0,
+            "tokensMissingAfterRecovery": 0
+          },
+          {
+            "detectLatencyMs": 5.73,
+            "emittedAtDeath": 60,
+            "journaledAtKill": 60,
+            "journaledAtDeath": 60,
+            "lostTokens": 0,
+            "restartReadyMs": 198.85,
+            "ttftAfterRestartMs": 29.73,
+            "resumeStreamMs": 755.48,
+            "finalDistinctTokens": 200,
+            "duplicateTokens": 0,
+            "partialLinesDropped": 0,
+            "tokensMissingAfterRecovery": 0
+          },
+          {
+            "detectLatencyMs": 8.67,
+            "emittedAtDeath": 60,
+            "journaledAtKill": 60,
+            "journaledAtDeath": 60,
+            "lostTokens": 0,
+            "restartReadyMs": 239.49,
+            "ttftAfterRestartMs": 29.8,
+            "resumeStreamMs": 770.49,
+            "finalDistinctTokens": 200,
+            "duplicateTokens": 0,
+            "partialLinesDropped": 0,
+            "tokensMissingAfterRecovery": 0
+          }
+        ],
+        "stats": {
+          "detectLatencyMs": {
+            "n": 5,
+            "median": 6.09,
+            "min": 5.73,
+            "max": 8.67
+          },
+          "emittedAtDeath": {
+            "n": 5,
+            "median": 60,
+            "min": 60,
+            "max": 60
+          },
+          "journaledAtKill": {
+            "n": 5,
+            "median": 60,
+            "min": 60,
+            "max": 60
+          },
+          "journaledAtDeath": {
+            "n": 5,
+            "median": 60,
+            "min": 60,
+            "max": 60
+          },
+          "lostTokens": {
+            "n": 5,
+            "median": 0,
+            "min": 0,
+            "max": 0
+          },
+          "restartReadyMs": {
+            "n": 5,
+            "median": 198.85,
+            "min": 164.12,
+            "max": 239.49
+          },
+          "ttftAfterRestartMs": {
+            "n": 5,
+            "median": 29.73,
+            "min": 28.83,
+            "max": 30.55
+          },
+          "resumeStreamMs": {
+            "n": 5,
+            "median": 759.92,
+            "min": 755.48,
+            "max": 770.49
+          },
+          "finalDistinctTokens": {
+            "n": 5,
+            "median": 200,
+            "min": 200,
+            "max": 200
+          },
+          "duplicateTokens": {
+            "n": 5,
+            "median": 0,
+            "min": 0,
+            "max": 0
+          },
+          "partialLinesDropped": {
+            "n": 5,
+            "median": 0,
+            "min": 0,
+            "max": 0
+          },
+          "tokensMissingAfterRecovery": {
+            "n": 5,
+            "median": 0,
+            "min": 0,
+            "max": 0
+          }
+        }
+      },
+      {
+        "scenario": "hang-detection",
+        "iterations": [
+          {
+            "hungDetectionMs": 521.16,
+            "watchdogTimeoutMs": 500,
+            "tokensReceivedBeforeHang": 1,
+            "fired": 1
+          },
+          {
+            "hungDetectionMs": 526.95,
+            "watchdogTimeoutMs": 500,
+            "tokensReceivedBeforeHang": 1,
+            "fired": 1
+          },
+          {
+            "hungDetectionMs": 524.23,
+            "watchdogTimeoutMs": 500,
+            "tokensReceivedBeforeHang": 1,
+            "fired": 1
+          },
+          {
+            "hungDetectionMs": 523.95,
+            "watchdogTimeoutMs": 500,
+            "tokensReceivedBeforeHang": 1,
+            "fired": 1
+          },
+          {
+            "hungDetectionMs": 523.01,
+            "watchdogTimeoutMs": 500,
+            "tokensReceivedBeforeHang": 1,
+            "fired": 1
+          }
+        ],
+        "stats": {
+          "hungDetectionMs": {
+            "n": 5,
+            "median": 523.95,
+            "min": 521.16,
+            "max": 526.95
+          },
+          "watchdogTimeoutMs": {
+            "n": 5,
+            "median": 500,
+            "min": 500,
+            "max": 500
+          },
+          "tokensReceivedBeforeHang": {
+            "n": 5,
+            "median": 1,
+            "min": 1,
+            "max": 1
+          },
+          "fired": {
+            "n": 5,
+            "median": 1,
+            "min": 1,
+            "max": 1
+          }
+        }
+      },
+      {
+        "scenario": "backpressure-slow-consumer",
+        "iterations": [
+          {
+            "wallMs": 5125.49,
+            "queuePeak": 64,
+            "maxQueue": 50,
+            "pauseCount": 43,
+            "resumeCount": 4,
+            "sourceWriteFalse": 0,
+            "stubEmittedEvents": 252,
+            "lossTokens": 0,
+            "duplicateTokens": 0
+          },
+          {
+            "wallMs": 5084.01,
+            "queuePeak": 64,
+            "maxQueue": 50,
+            "pauseCount": 43,
+            "resumeCount": 4,
+            "sourceWriteFalse": 0,
+            "stubEmittedEvents": 251,
+            "lossTokens": 0,
+            "duplicateTokens": 0
+          },
+          {
+            "wallMs": 5093.88,
+            "queuePeak": 64,
+            "maxQueue": 50,
+            "pauseCount": 43,
+            "resumeCount": 4,
+            "sourceWriteFalse": 0,
+            "stubEmittedEvents": 251,
+            "lossTokens": 0,
+            "duplicateTokens": 0
+          }
+        ],
+        "stats": {
+          "wallMs": {
+            "n": 3,
+            "median": 5093.88,
+            "min": 5084.01,
+            "max": 5125.49
+          },
+          "queuePeak": {
+            "n": 3,
+            "median": 64,
+            "min": 64,
+            "max": 64
+          },
+          "maxQueue": {
+            "n": 3,
+            "median": 50,
+            "min": 50,
+            "max": 50
+          },
+          "pauseCount": {
+            "n": 3,
+            "median": 43,
+            "min": 43,
+            "max": 43
+          },
+          "resumeCount": {
+            "n": 3,
+            "median": 4,
+            "min": 4,
+            "max": 4
+          },
+          "sourceWriteFalse": {
+            "n": 3,
+            "median": 0,
+            "min": 0,
+            "max": 0
+          },
+          "stubEmittedEvents": {
+            "n": 3,
+            "median": 251,
+            "min": 251,
+            "max": 252
+          },
+          "lossTokens": {
+            "n": 3,
+            "median": 0,
+            "min": 0,
+            "max": 0
+          },
+          "duplicateTokens": {
+            "n": 3,
+            "median": 0,
+            "min": 0,
+            "max": 0
+          }
+        }
+      }
+    ]
+  }
+}

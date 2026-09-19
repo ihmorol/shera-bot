@@ -3,9 +3,12 @@
  * extensibility register (D25: "unknown fields are rejected for internal
  * protocol messages unless explicitly marked extensible").
  *
- * The contract tests iterate this registry: round-trip fixtures and
- * unknown-field rejection are enforced mechanically against every entry, so a
- * schema added without fixtures or without strictness fails the suite.
+ * The contract tests enforce this registry: completeness tests in both the
+ * round-trip and unknown-field suites require every registered top-level
+ * schema to have a fixture case (envelope-union members are covered through
+ * the TypedExecutionEvent cases), and every case is poisoned for unknown-field
+ * rejection — so a schema added without a fixture or without strictness fails
+ * the suite. (Registry-driven completeness added 2026-09-19 on review.)
  */
 import type { z } from "zod";
 

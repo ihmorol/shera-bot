@@ -12,6 +12,8 @@ On 2026-09-11 the product owner instructed synchronization of `docs/PRD.md` and 
 
 On 2026-09-17 the owner answered the Stage-1 roster question and delegated the Stage-2 dispositions in one instruction (verbatim in [`decisions/open-items-decisions-2026-09-17.md`](decisions/open-items-decisions-2026-09-17.md)). Recorded as **SYNC-2**: the PRD was synchronized with D46 (header, §5 lead and mapping paragraph, §5.4, §9 exhausted-credit visibility, §15 prototype admin note, §§21–22 pointer); D47–D50 and E9–E14 are engineering- and prototype-scope records with no further PRD text changes beyond those noted.
 
+On 2026-09-19 the owner directed dual harness support — "i want pi as a default, and hermes as a second option to choose which harness agent will use" (verbatim in [`decisions/owner-decision-d51-dual-harness-2026-09-19.md`](decisions/owner-decision-d51-dual-harness-2026-09-19.md)). Recorded as **SYNC-3**: the PRD was synchronized with D51 (header, §5 Agent session process, §17 stack adapter line, §19 AC4, §22 new Hermes-evidence item). D51 extends rather than supersedes D13/D14 — Pi remains the default harness and E17's validated seam its supervision path; the Hermes path stays contract-defined until the owner supplies its upstream source and license evidence (same pattern as `PI_FORK.md`).
+
 ## Authority and status semantics
 
 - `Confirmed` — explicit product-owner answer is preserved in the transcript.
@@ -78,7 +80,9 @@ On 2026-09-17 the owner answered the Stage-1 roster question and delegated the S
 | D48 | Delegated (pending owner review) | Owner instruction 2026-09-17 | Confirms PRD §9 pause behavior; adds visible state | §9 | Reservation-failure contract test; resume-after-top-up |
 | D49 | Delegated (pending owner review) | Owner instruction 2026-09-17 | Fills D42's removal lifecycle | §§4.2, 8 | Remove-coordinator-mid-run integration test |
 | D50 | Delegated (pending owner review) | Owner instruction 2026-09-17 | Disposes the UX_RECOMMENDATIONS gate item | — | Phase-1 slice specs cite adopted recommendations |
+| D51 | Confirmed | Owner instruction 2026-09-19 (verbatim in [`decisions/owner-decision-d51-dual-harness-2026-09-19.md`](decisions/owner-decision-d51-dual-harness-2026-09-19.md)) | Extends D13/D14 — Pi remains the default harness; E17's seam is the default path | §§5, 17, 19, 22 | Harness-field contract tests (S10); settings QA (S11); dual-harness supervision tests (S12); harness-agnostic gateway seam (S07); Hermes path blocked on owner-supplied upstream evidence |
 | SYNC-2 | Confirmed | Owner instruction 2026-09-17 (same message as D46) | Records the 2026-09-17 PRD sync | §§5, 9, 15, 21–22 | PRD header/sections updated; this file updated |
+| SYNC-3 | Confirmed | Owner instruction 2026-09-19 (same message as D51) | Records the 2026-09-19 dual-harness PRD sync | §§5, 17, 19, 22 | PRD header/sections updated; this file updated |
 | E1 | Engineering | PRD §24 delegation; D42 refinement | — | §6 | Admission/queue/resource tests |
 | E2 | Engineering | PRD §24 delegation; D26 extension | — | §14 | Event retention/cursor tests |
 | E3 | Engineering | PRD §24 delegation; PRD §8 timing | — | §8 | Reminder scheduler tests |

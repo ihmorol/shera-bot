@@ -52,9 +52,9 @@ Design authority is [`UI_DESIGN.md`](UI_DESIGN.md) and [`../PRODUCT.md`](../PROD
 | S07 Runtime gateway: local API, SQLite WAL, event journal, WebSocket replay | #8 | 1 | S02, S03, S06 | D5, D10, D11, D26 |
 | S08 Web client shell and Agent chat UI | #9 | 1 | S02 | §21.1–21.6, AC20 |
 | S09 End-to-end thin slice: login → container → chat → stream → refresh → replay | #10 | 1 | S07, S08 | D23 Phase 1 |
-| S10 Pack loader, student pack v1, workspace pack pinning | #11 | 2 | S02, S09 | AC22, D18, D28, D46 |
-| S11 Agent identity: six direct chats, private folders, private memory, settings | #12 | 2 | S09, S10 | AC3, AC4, D32, D39 |
-| S12 On-demand Agent session supervision: warm, hibernate, reconstruct | #13 | 2 | S03, S11 | AC4, D32 |
+| S10 Pack loader, student pack v1, workspace pack pinning | #11 | 2 | S02, S09 | AC22, D18, D28, D46, D51 |
+| S11 Agent identity: six direct chats, private folders, private memory, settings | #12 | 2 | S09, S10 | AC3, AC4, D32, D39, D51 |
+| S12 On-demand Agent session supervision: warm, hibernate, reconstruct | #13 | 2 | S03, S11 | AC4, D32, D51 |
 | S13 Operation chat: roster, removable coordinator, independent task runs, typed collaboration | #14 | 2 | S11 | AC6, AC24, D7, D31, D34, D42, D49 |
 | S14 Ad-hoc Operation creation with same-Pack roster | #15 | 2 | S13 | AC5, D41 |
 | S15 Operation launch preview gate | #16 | 2 | S10, S13 | AC6, AC23, D30 |
@@ -84,6 +84,7 @@ Acceptance criteria 1–27 (PRD §19) are covered by the slices named above; the
 ## 6. Open items that stay open
 
 - **Exact subagent semantics** (D46 sub-item): same-identity worker instance versus another same-Pack Agent invoked as a subordinate, concurrency limits, memory-scope boundaries. Evidence target: before the Agent/Operation contracts freeze (S10/S13), or recorded as an engineering decision at that point. Tracked in `TRACEABILITY.md`.
+- **Hermes harness upstream evidence (D51):** the owner named Hermes as the second, selectable harness (Pi default). Its upstream source, license, adapter protocol, and maintenance evidence must be owner-supplied — the same evidence pattern as [`PI_FORK.md`](PI_FORK.md) — before any Hermes code path, schema value, or UI option is built (G4/G5; PRD §22 item 24). Until then the harness field is contract-defined with Pi as the only exercised value.
 - **Pi fork follow-through:** the missing-identity/documentation blocker from S01 is resolved by the owner-supplied fork and [`PI_FORK.md`](PI_FORK.md), with the earlier blocked state preserved in E16 (the S01 scaffold record, renumbered from "E15" on 2026-09-19). Dependency/build inventory, vendored notices, adapter verification, and maintenance-procedure approval remain open; Emon and the integration slice own evidence before real-fork consumption, with distribution-notice checks in S35. The inspected source SHA is not an adopted runtime pin.
 - **Stage-3 plan confirmations** awaiting the owner: dark-only `apps/web` v1, CI provider, pnpm/Node pins (`decisions/phase0-plan-draft-2026-09-13.md` §8). S01 executed on 2026-09-17 with them recorded as Delegated pending review in E16 — including the resolution of the conflict between the plan draft's approval gate and §6/issue #2.
 - **`mockup/UX_RECOMMENDATIONS.md`**: dispositioned as not-adopted-now (D50); individual recommendations are evaluated per UI slice.

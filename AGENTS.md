@@ -5,7 +5,7 @@
 Before making architecture or product changes, read:
 
 1. [`docs/README.md`](docs/README.md)
-2. [`docs/PRD.md`](docs/PRD.md) — synchronized product baseline (2026-09-17, D1–D50, E1–E14); changes require a recorded product decision per PRD §24
+2. [`docs/PRD.md`](docs/PRD.md) — synchronized product baseline (2026-09-19, D1–D51, E1–E17); changes require a recorded product decision per PRD §24
 3. [`docs/decisions/README.md`](docs/decisions/README.md)
 4. [`docs/GLOSSARY.md`](docs/GLOSSARY.md)
 5. [`docs/TRACEABILITY.md`](docs/TRACEABILITY.md)

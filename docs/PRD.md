@@ -1,10 +1,10 @@
 # Shera Bot Prototype Product Requirements Document
 
-**Status:** Approved prototype specification, synchronized with decision records D1–D50 and E1–E14  
-**Date:** 2026-09-08 (baseline) · 2026-09-11 (synchronized, D1–D45) · 2026-09-17 (open-items sync, D46; SYNC-2)  
+**Status:** Approved prototype specification, synchronized with decision records D1–D51 and E1–E17  
+**Date:** 2026-09-08 (baseline) · 2026-09-11 (synchronized, D1–D45) · 2026-09-17 (open-items sync, D46; SYNC-2) · 2026-09-19 (dual-harness decision D51; SYNC-3)  
 **Scope:** Private prototype for validating a multi-agent, Grok Bot-inspired assistant
 
-> This document was synchronized with the confirmed decision records (D1–D45, E1–E8) on 2026-09-11 by explicit product-owner instruction, and with D46 on 2026-09-17 (§5, §5.4, §9, §15, §§21–22 notes; recorded as SYNC-2 in [`TRACEABILITY.md`](TRACEABILITY.md)). The original 2026-09-08 baseline is preserved in Git history (commit `8bacf81`) and in the session archive. Decision evidence lives in [`decisions/`](decisions/); the reconciliation record is [`TRACEABILITY.md`](TRACEABILITY.md).
+> This document was synchronized with the confirmed decision records (D1–D45, E1–E8) on 2026-09-11 by explicit product-owner instruction, and with D46 on 2026-09-17 (§5, §5.4, §9, §15, §§21–22 notes; recorded as SYNC-2 in [`TRACEABILITY.md`](TRACEABILITY.md)). On 2026-09-19 the owner directed dual harness support — Pi as the default harness, Hermes as a selectable second option, chosen per Agent (D51) — and the PRD was synchronized accordingly (header, §5, §17, §19 AC4, §22; recorded as SYNC-3 in [`TRACEABILITY.md`](TRACEABILITY.md)). The original 2026-09-08 baseline is preserved in Git history (commit `8bacf81`) and in the session archive. Decision evidence lives in [`decisions/`](decisions/); the reconciliation record is [`TRACEABILITY.md`](TRACEABILITY.md).
 
 ## 1. Product definition
 
@@ -102,7 +102,7 @@ The user receives a live shared read-only view of browser and terminal activity.
 
 ## 5. Agents
 
-Agents are reusable, persistent identities defined by versioned customer Packs. Each Agent has a fixed role with editable user instructions, a private profile folder, private memory, role defaults, and access to the shared workspace and shared task context. An Agent's Pi session process starts on demand and may hibernate after idle time; actual task work runs in separately supervised task workers. An Agent keeps one persistent identity — one profile, one direct chat, one private memory, one settings surface — with a scoped assignment per Operation.
+Agents are reusable, persistent identities defined by versioned customer Packs. Each Agent has a fixed role with editable user instructions, a private profile folder, private memory, role defaults, and access to the shared workspace and shared task context. An Agent's session process runs on the Agent's selected harness — Pi by default, Hermes optional (D51) — starts on demand, and may hibernate after idle time; actual task work runs in separately supervised task workers. An Agent keeps one persistent identity — one profile, one direct chat, one private memory, one settings surface — with a scoped assignment per Operation.
 
 An Agent's scoped assignment is a single Operation: each Agent is rostered in exactly one pack-defined Operation. Cross-Operation work is performed through **subagent triggering** — an Agent can trigger multiple subagents (subordinate agent executions) within its Operation, and delegated work creates independently tracked task runs. The General Assistant participates in every Operation as the default coordinator; the coordinator role is not a roster assignment and is removable (see §4.2).
 
@@ -258,7 +258,7 @@ Network actions are classified as read-only or external-write. External writes a
 - Docker Compose locally and on the single cloud VM.
 - pnpm/Turborepo TypeScript monorepo: three applications (web, control-plane, user-runtime), a small set of shared contract packages, and feature modules inside each application.
 - Zod-first shared contracts with generated OpenAPI documentation and typed clients.
-- TypeScript adapter around the product-maintained Pi fork, communicating over versioned JSON Lines on stdin/stdout.
+- TypeScript adapter around the product-maintained Pi fork, communicating over versioned JSON Lines on stdin/stdout — the default harness. A second, selectable harness (Hermes) is supported behind the same supervised adapter seam (D51); Hermes integration follows its own recorded upstream/license evidence.
 
 Low-level library versions, exact cloud provider, database table names, module boundaries, and visual details remain engineering/design decisions.
 
@@ -273,7 +273,7 @@ Normal command acknowledgement target is approximately 500ms under normal local/
 1. Google OAuth login works and the five-account cap is enforced.
 2. A Balanced-tier user container is provisioned.
 3. All six Agents from the student pack are available as direct chats.
-4. Each Agent is a persistent identity with its own private profile folder and an on-demand supervised Pi session process.
+4. Each Agent is a persistent identity with its own private profile folder and an on-demand supervised session process on its selected harness (Pi default, Hermes optional — D51).
 5. Ad-hoc Operations can be created with a custom same-Pack Agent roster.
 6. Operations launch through a preview (agents, skills, connectors, provider/model, estimated credits, approval requirements) before execution, and Agents can delegate work inside Operations.
 7. Live agent messages, progress, tool calls, approvals, and results are visible.
@@ -362,6 +362,7 @@ Normal command acknowledgement target is approximately 500ms under normal local/
 21. Create manual QA scenarios for chat, groups, approvals, recovery, and mobile layout.
 22. Add license inventory generation to CI.
 23. Add deployment and disaster-recovery runbooks.
+24. Confirm Hermes harness upstream source, license, adapter protocol, and upstream-sync process (D51); record the evidence like `PI_FORK.md` before any Hermes code path is built.
 
 Status of these items and of the §21 visual register is tracked per item in [`TRACEABILITY.md`](TRACEABILITY.md): all are contract-defined until implemented and verified, nothing is treated as done without code, tests, and evidence (E14).
 

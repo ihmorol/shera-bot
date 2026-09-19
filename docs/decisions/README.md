@@ -1,14 +1,14 @@
 # Shera Bot — Decision Records Index
 
-**Status:** D1–D50 recorded; E1–E16 recorded as engineering decisions (E1–E14 on 2026-09-17; E15 on 2026-09-18; E16 on 2026-09-17 with slice S01, renumbered from "E15" on 2026-09-19 to resolve the identifier collision); SYNC-1 and SYNC-2 record the PRD synchronizations of 2026-09-11 and 2026-09-17; no D51+ exist. D46 is owner-confirmed; D47–D50 and E9–E16 are Delegated (agent-decided under the owner's explicit instructions) pending owner review.
+**Status:** D1–D51 recorded (D51 owner-confirmed, 2026-09-19); E1–E17 recorded as engineering decisions (E1–E14 on 2026-09-17; E15 on 2026-09-18; E16 on 2026-09-17 with slice S01, renumbered from "E15" on 2026-09-19 to resolve the identifier collision; E17 on 2026-09-19 with slice S03); SYNC-1, SYNC-2, and SYNC-3 record the PRD synchronizations of 2026-09-11, 2026-09-17, and 2026-09-19. D46 and D51 are owner-confirmed; D47–D50 and E9–E17 are Delegated (agent-decided under the owner's explicit instructions) pending owner review.
 **Last updated:** 2026-09-19
 **Canonical vocabulary:** **Pack → Operations → Agents**.
-**PRD policy:** [`docs/PRD.md`](../PRD.md) was synchronized with D1–D45 on 2026-09-11 and with D46 on 2026-09-17 (SYNC-2) by explicit product-owner instruction (previously it was the unchanged 2026-09-08 baseline).
+**PRD policy:** [`docs/PRD.md`](../PRD.md) was synchronized with D1–D45 on 2026-09-11, with D46 on 2026-09-17 (SYNC-2), and with D51 on 2026-09-19 (SYNC-3) by explicit product-owner instruction (previously it was the unchanged 2026-09-08 baseline).
 
 ## Start here
 
 1. [`../README.md`](../README.md) — repository entry point and mandatory rules.
-2. [`../PRD.md`](../PRD.md) — synchronized product baseline (2026-09-17, D1–D50/E1–E14).
+2. [`../PRD.md`](../PRD.md) — synchronized product baseline (2026-09-19, D1–D51/E1–E17).
 3. [`README.md`](README.md) — this index and status semantics.
 4. [`confirmed-decisions.md`](confirmed-decisions.md) — Codex D1–D39, including historical wording and evidence limitations.
 5. [`closure-decisions.md`](closure-decisions.md) — continued D40–D45, engineering E1–E8, proposal dispositions, supersession, and deferred work.
@@ -40,6 +40,8 @@
 | [`open-items-decisions-2026-09-17.md`](open-items-decisions-2026-09-17.md) | D46 (owner-confirmed roster/subagent model and student pack v1 mapping) and the Delegated records D47–D50 + E9–E14 covering the ten Stage-2 open items; filled disposition ledger; 2026-09-17 supersession and production-gate additions. |
 | [`oss-leverage-decisions-2026-09-18.md`](oss-leverage-decisions-2026-09-18.md) | E15: the open-source leverage policy (embed / pattern-only / never-adopt tiers, license allowlist gate, anti-creativity rule) and the per-slice adoption map; mirrors the "Open-source leverage" sections in issues #1–#36 and BUILD_MAP §8. |
 | [`engineering-record-e16-2026-09-17.md`](engineering-record-e16-2026-09-17.md) | E16 (filed 2026-09-17 as "E15"; renumbered 2026-09-19): S01 scaffold record — plan-approval conflict resolution, CI provider, toolchain pins, TypeScript line, layout, test runner, license gate with reviewed exceptions, and the owner-supplied Pi fork (`ihmorol/shera-pi`) evidence update. Delegated, pending owner review. |
+| [`engineering-record-e17-2026-09-19.md`](engineering-record-e17-2026-09-19.md) | E17: S03 spike record — Pi supervision seam (variant A validated, D13/D14 "validated as recorded"), SQLite driver (`node:sqlite`, validating D24's initial choice), and E11 backup mechanism (`VACUUM INTO` + `PRAGMA integrity_check`), with measured evidence. Delegated, pending owner review; the owner's D51 instruction (same day) confirms its Pi-default direction. |
+| [`owner-decision-d51-dual-harness-2026-09-19.md`](owner-decision-d51-dual-harness-2026-09-19.md) | D51 (owner-confirmed, SYNC-3): dual harness — Pi is the default Agent session harness, Hermes is a selectable second option chosen per Agent; extends (does not supersede) D13/D14; Hermes path blocked on owner-supplied upstream source and license evidence, same pattern as `PI_FORK.md`. |
 | [`proposal-history.md`](proposal-history.md) | Full P1–P9 problem statements, alternatives, recommendations, objections, and final dispositions. |
 
 ## Current product model

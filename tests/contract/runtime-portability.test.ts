@@ -34,11 +34,13 @@ const SCAN_ROOTS: string[] = [
   join(repoRoot, "packages", "clients", "src"),
   join(repoRoot, "apps", "user-runtime", "src"),
   join(repoRoot, "apps", "control-plane", "src", "modules"),
+  join(repoRoot, "apps", "control-plane", "src", "runtime"),
   join(repoRoot, "apps", "control-plane", "src", "auth"),
 ];
 
 const SCAN_FILES: string[] = [
   join(repoRoot, "apps", "control-plane", "src", "routes.ts"),
+  join(repoRoot, "apps", "control-plane", "src", "index.ts"),
   join(repoRoot, "packages", "clients", "openapi.json"),
   join(repoRoot, "apps", "user-runtime", "package.json"),
   join(repoRoot, "packages", "contracts", "package.json"),
@@ -118,10 +120,27 @@ describe("runtime API surface is container-engine-neutral (PRD §6.1, D23 rule 2
     expect(files.some((file) => file.endsWith("internal-api.ts"))).toBe(true);
     expect(files.some((file) => file.endsWith("fake-container-backend.ts"))).toBe(true);
     expect(files.some((file) => file.endsWith("routes.ts"))).toBe(true);
-    // The adapter files are the exclusion set — they must exist so the
-    // exclusion is real and not an accident of a missing file.
+    // The channel code is part of the claimed surface: the scan must actually
+    // cover it (it was silently omitted before the 2026-09-20 review fix).
+    expect(
+      files.includes(
+        join(repoRoot, "apps", "control-plane", "src", "runtime", "channel-client.ts"),
+      ),
+      "channel-client.ts must be scanned",
+    ).toBe(true);
+    expect(
+      files.includes(join(repoRoot, "apps", "control-plane", "src", "runtime", "channel-token.ts")),
+      "channel-token.ts must be scanned",
+    ).toBe(true);
+    expect(
+      files.includes(join(repoRoot, "apps", "control-plane", "src", "index.ts")),
+      "the control-plane app entry must be scanned",
+    ).toBe(true);
+    // The adapter exclusion is still EXACTLY the two sanctioned files (D23
+    // rule 2) — they exist but never appear in the scanned surface.
     for (const adapter of ADAPTER_FILES) {
       expect(statSync(adapter).isFile(), `${adapter} must exist`).toBe(true);
+      expect(files.includes(adapter), `${adapter} must stay excluded`).toBe(false);
     }
   });
 });

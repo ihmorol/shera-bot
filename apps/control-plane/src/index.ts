@@ -59,8 +59,8 @@ export interface ControlPlaneOptions {
   logSink?: (line: string) => void;
   /**
    * Runtime backend override (TEST SEAM and future remote/cloud backends,
-   * D12). Defaults to the LocalContainerBackend for the Docker Compose
-   * deployment; the engine client connects lazily, so an engine-less
+   * D12). Defaults to the LocalContainerBackend for the local single-host
+   * deployment (S35); the engine client connects lazily, so an engine-less
    * environment constructs fine and provisioning fails truthfully (G4).
    */
   runtimeBackend?: RuntimeBackend;
@@ -102,7 +102,7 @@ export async function createControlPlaneApp(
 
   // S06 runtime provisioning (D12): the typed backend seam. Tests and future
   // remote/cloud backends inject their implementation; the default speaks to
-  // the local engine for the Docker Compose deployment.
+  // the local engine for the local single-host deployment (S35).
   const runtimeBackend =
     options.runtimeBackend ?? new LocalContainerBackend({ env: options.env ?? process.env });
   const provisioning = new ProvisioningService({

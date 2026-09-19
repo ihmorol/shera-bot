@@ -1,0 +1,7 @@
+allowBuilds:
+  better-sqlite3: true
+# Standalone pnpm project root for the S03 spike (deliberately NOT part of the
+# monorepo workspace in ../../pnpm-workspace.yaml — its dependencies must never
+# leak into apps/* or packages/*). Run pnpm commands from this directory.
+onlyBuiltDependencies:
+  - better-sqlite3

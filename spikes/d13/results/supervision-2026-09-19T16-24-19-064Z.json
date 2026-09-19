@@ -1,0 +1,520 @@
+{
+  "run": "2026-09-19T16-24-19-064Z",
+  "node": "v24.21.0",
+  "platform": "linux x64",
+  "iterations": {
+    "timingScenarios": 1,
+    "backpressure": 1
+  },
+  "codeSize": {
+    "supervision-core.ts (shared by both variants)": {
+      "total": 240,
+      "code": 199
+    },
+    "variant-a.ts (transport-specific, A)": {
+      "total": 171,
+      "code": 140
+    },
+    "variant-b.ts (transport-specific, B)": {
+      "total": 274,
+      "code": 226
+    },
+    "contract.ts (shared protocol types + JSONL framing)": {
+      "total": 294,
+      "code": 203
+    },
+    "fake-pi-stdio.ts (stub host, A)": {
+      "total": 88,
+      "code": 63
+    },
+    "fake-pi-sidecar.ts (stub host, B)": {
+      "total": 128,
+      "code": 97
+    },
+    "note": "code = non-blank, non-comment lines; total = all lines"
+  },
+  "results": {
+    "A:jsonl-stdio": [
+      {
+        "scenario": "lifecycle",
+        "iterations": [
+          {
+            "readyMs": 115.46,
+            "ttftColdMs": 29.12,
+            "ttftWarmMs": 26,
+            "coldStreamMs": 1090.47
+          }
+        ],
+        "stats": {
+          "readyMs": {
+            "n": 1,
+            "median": 115.46,
+            "min": 115.46,
+            "max": 115.46
+          },
+          "ttftColdMs": {
+            "n": 1,
+            "median": 29.12,
+            "min": 29.12,
+            "max": 29.12
+          },
+          "ttftWarmMs": {
+            "n": 1,
+            "median": 26,
+            "min": 26,
+            "max": 26
+          },
+          "coldStreamMs": {
+            "n": 1,
+            "median": 1090.47,
+            "min": 1090.47,
+            "max": 1090.47
+          }
+        }
+      },
+      {
+        "scenario": "kill9-loss-restart",
+        "iterations": [
+          {
+            "detectLatencyMs": 4.27,
+            "emittedAtDeath": 60,
+            "journaledAtKill": 60,
+            "journaledAtDeath": 60,
+            "lostTokens": 0,
+            "restartReadyMs": 124.68,
+            "ttftAfterRestartMs": 29.53,
+            "resumeStreamMs": 745.28,
+            "finalDistinctTokens": 200,
+            "duplicateTokens": 0,
+            "partialLinesDropped": 0,
+            "tokensMissingAfterRecovery": 0
+          }
+        ],
+        "stats": {
+          "detectLatencyMs": {
+            "n": 1,
+            "median": 4.27,
+            "min": 4.27,
+            "max": 4.27
+          },
+          "emittedAtDeath": {
+            "n": 1,
+            "median": 60,
+            "min": 60,
+            "max": 60
+          },
+          "journaledAtKill": {
+            "n": 1,
+            "median": 60,
+            "min": 60,
+            "max": 60
+          },
+          "journaledAtDeath": {
+            "n": 1,
+            "median": 60,
+            "min": 60,
+            "max": 60
+          },
+          "lostTokens": {
+            "n": 1,
+            "median": 0,
+            "min": 0,
+            "max": 0
+          },
+          "restartReadyMs": {
+            "n": 1,
+            "median": 124.68,
+            "min": 124.68,
+            "max": 124.68
+          },
+          "ttftAfterRestartMs": {
+            "n": 1,
+            "median": 29.53,
+            "min": 29.53,
+            "max": 29.53
+          },
+          "resumeStreamMs": {
+            "n": 1,
+            "median": 745.28,
+            "min": 745.28,
+            "max": 745.28
+          },
+          "finalDistinctTokens": {
+            "n": 1,
+            "median": 200,
+            "min": 200,
+            "max": 200
+          },
+          "duplicateTokens": {
+            "n": 1,
+            "median": 0,
+            "min": 0,
+            "max": 0
+          },
+          "partialLinesDropped": {
+            "n": 1,
+            "median": 0,
+            "min": 0,
+            "max": 0
+          },
+          "tokensMissingAfterRecovery": {
+            "n": 1,
+            "median": 0,
+            "min": 0,
+            "max": 0
+          }
+        }
+      },
+      {
+        "scenario": "hang-detection",
+        "iterations": [
+          {
+            "hungDetectionMs": 522.53,
+            "watchdogTimeoutMs": 500,
+            "tokensReceivedBeforeHang": 1,
+            "fired": 1
+          }
+        ],
+        "stats": {
+          "hungDetectionMs": {
+            "n": 1,
+            "median": 522.53,
+            "min": 522.53,
+            "max": 522.53
+          },
+          "watchdogTimeoutMs": {
+            "n": 1,
+            "median": 500,
+            "min": 500,
+            "max": 500
+          },
+          "tokensReceivedBeforeHang": {
+            "n": 1,
+            "median": 1,
+            "min": 1,
+            "max": 1
+          },
+          "fired": {
+            "n": 1,
+            "median": 1,
+            "min": 1,
+            "max": 1
+          }
+        }
+      },
+      {
+        "scenario": "backpressure-slow-consumer",
+        "iterations": [
+          {
+            "wallMs": 5120.76,
+            "queuePeak": 82,
+            "maxQueue": 50,
+            "pauseCount": 58,
+            "resumeCount": 4,
+            "sourceWriteFalse": 11,
+            "stubEmittedEvents": 252,
+            "lossTokens": 0,
+            "duplicateTokens": 0
+          }
+        ],
+        "stats": {
+          "wallMs": {
+            "n": 1,
+            "median": 5120.76,
+            "min": 5120.76,
+            "max": 5120.76
+          },
+          "queuePeak": {
+            "n": 1,
+            "median": 82,
+            "min": 82,
+            "max": 82
+          },
+          "maxQueue": {
+            "n": 1,
+            "median": 50,
+            "min": 50,
+            "max": 50
+          },
+          "pauseCount": {
+            "n": 1,
+            "median": 58,
+            "min": 58,
+            "max": 58
+          },
+          "resumeCount": {
+            "n": 1,
+            "median": 4,
+            "min": 4,
+            "max": 4
+          },
+          "sourceWriteFalse": {
+            "n": 1,
+            "median": 11,
+            "min": 11,
+            "max": 11
+          },
+          "stubEmittedEvents": {
+            "n": 1,
+            "median": 252,
+            "min": 252,
+            "max": 252
+          },
+          "lossTokens": {
+            "n": 1,
+            "median": 0,
+            "min": 0,
+            "max": 0
+          },
+          "duplicateTokens": {
+            "n": 1,
+            "median": 0,
+            "min": 0,
+            "max": 0
+          }
+        }
+      }
+    ],
+    "B:http-sidecar": [
+      {
+        "scenario": "lifecycle",
+        "iterations": [
+          {
+            "readyMs": 213.73,
+            "ttftColdMs": 32.91,
+            "ttftWarmMs": 28.5,
+            "coldStreamMs": 1084.83
+          }
+        ],
+        "stats": {
+          "readyMs": {
+            "n": 1,
+            "median": 213.73,
+            "min": 213.73,
+            "max": 213.73
+          },
+          "ttftColdMs": {
+            "n": 1,
+            "median": 32.91,
+            "min": 32.91,
+            "max": 32.91
+          },
+          "ttftWarmMs": {
+            "n": 1,
+            "median": 28.5,
+            "min": 28.5,
+            "max": 28.5
+          },
+          "coldStreamMs": {
+            "n": 1,
+            "median": 1084.83,
+            "min": 1084.83,
+            "max": 1084.83
+          }
+        }
+      },
+      {
+        "scenario": "kill9-loss-restart",
+        "iterations": [
+          {
+            "detectLatencyMs": 6.02,
+            "emittedAtDeath": 60,
+            "journaledAtKill": 60,
+            "journaledAtDeath": 60,
+            "lostTokens": 0,
+            "restartReadyMs": 174.91,
+            "ttftAfterRestartMs": 29.42,
+            "resumeStreamMs": 766.82,
+            "finalDistinctTokens": 200,
+            "duplicateTokens": 0,
+            "partialLinesDropped": 0,
+            "tokensMissingAfterRecovery": 0
+          }
+        ],
+        "stats": {
+          "detectLatencyMs": {
+            "n": 1,
+            "median": 6.02,
+            "min": 6.02,
+            "max": 6.02
+          },
+          "emittedAtDeath": {
+            "n": 1,
+            "median": 60,
+            "min": 60,
+            "max": 60
+          },
+          "journaledAtKill": {
+            "n": 1,
+            "median": 60,
+            "min": 60,
+            "max": 60
+          },
+          "journaledAtDeath": {
+            "n": 1,
+            "median": 60,
+            "min": 60,
+            "max": 60
+          },
+          "lostTokens": {
+            "n": 1,
+            "median": 0,
+            "min": 0,
+            "max": 0
+          },
+          "restartReadyMs": {
+            "n": 1,
+            "median": 174.91,
+            "min": 174.91,
+            "max": 174.91
+          },
+          "ttftAfterRestartMs": {
+            "n": 1,
+            "median": 29.42,
+            "min": 29.42,
+            "max": 29.42
+          },
+          "resumeStreamMs": {
+            "n": 1,
+            "median": 766.82,
+            "min": 766.82,
+            "max": 766.82
+          },
+          "finalDistinctTokens": {
+            "n": 1,
+            "median": 200,
+            "min": 200,
+            "max": 200
+          },
+          "duplicateTokens": {
+            "n": 1,
+            "median": 0,
+            "min": 0,
+            "max": 0
+          },
+          "partialLinesDropped": {
+            "n": 1,
+            "median": 0,
+            "min": 0,
+            "max": 0
+          },
+          "tokensMissingAfterRecovery": {
+            "n": 1,
+            "median": 0,
+            "min": 0,
+            "max": 0
+          }
+        }
+      },
+      {
+        "scenario": "hang-detection",
+        "iterations": [
+          {
+            "hungDetectionMs": 522.31,
+            "watchdogTimeoutMs": 500,
+            "tokensReceivedBeforeHang": 1,
+            "fired": 1
+          }
+        ],
+        "stats": {
+          "hungDetectionMs": {
+            "n": 1,
+            "median": 522.31,
+            "min": 522.31,
+            "max": 522.31
+          },
+          "watchdogTimeoutMs": {
+            "n": 1,
+            "median": 500,
+            "min": 500,
+            "max": 500
+          },
+          "tokensReceivedBeforeHang": {
+            "n": 1,
+            "median": 1,
+            "min": 1,
+            "max": 1
+          },
+          "fired": {
+            "n": 1,
+            "median": 1,
+            "min": 1,
+            "max": 1
+          }
+        }
+      },
+      {
+        "scenario": "backpressure-slow-consumer",
+        "iterations": [
+          {
+            "wallMs": 5086.42,
+            "queuePeak": 64,
+            "maxQueue": 50,
+            "pauseCount": 43,
+            "resumeCount": 4,
+            "sourceWriteFalse": 0,
+            "stubEmittedEvents": 251,
+            "lossTokens": 0,
+            "duplicateTokens": 0
+          }
+        ],
+        "stats": {
+          "wallMs": {
+            "n": 1,
+            "median": 5086.42,
+            "min": 5086.42,
+            "max": 5086.42
+          },
+          "queuePeak": {
+            "n": 1,
+            "median": 64,
+            "min": 64,
+            "max": 64
+          },
+          "maxQueue": {
+            "n": 1,
+            "median": 50,
+            "min": 50,
+            "max": 50
+          },
+          "pauseCount": {
+            "n": 1,
+            "median": 43,
+            "min": 43,
+            "max": 43
+          },
+          "resumeCount": {
+            "n": 1,
+            "median": 4,
+            "min": 4,
+            "max": 4
+          },
+          "sourceWriteFalse": {
+            "n": 1,
+            "median": 0,
+            "min": 0,
+            "max": 0
+          },
+          "stubEmittedEvents": {
+            "n": 1,
+            "median": 251,
+            "min": 251,
+            "max": 251
+          },
+          "lossTokens": {
+            "n": 1,
+            "median": 0,
+            "min": 0,
+            "max": 0
+          },
+          "duplicateTokens": {
+            "n": 1,
+            "median": 0,
+            "min": 0,
+            "max": 0
+          }
+        }
+      }
+    ]
+  }
+}

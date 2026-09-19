@@ -82,7 +82,7 @@ Agents may propose commands, stream progress, publish artifacts, request approva
 **The frontend never knows:** Docker container IDs, host paths, internal service ports, cloud provider IDs, provider credentials, sandbox implementation details. The gateway returns an opaque runtime handle and session-scoped access information. Cloud backends support create/resume, readiness and health, endpoint discovery, session auth, explicit cleanup/keep-alive, timeout and failure classification.
 
 ## D13 — TypeScript runtime gateway; Pi behind a versioned child-process adapter
-**Status:** Confirmed (provisional for the prototype)
+**Status:** Confirmed (provisional for the prototype) — provisional status resolved 2026-09-19 by [`engineering-record-e17-2026-09-19.md`](engineering-record-e17-2026-09-19.md) (E17, S03 process-supervision spike): validated as recorded for the prototype; owner review pending.
 **Decision:** Implement the gateway, supervisor, scheduler, persistence, authorization, event model, and provider adapters in TypeScript; Pi runs as child processes behind a typed adapter. Validate with a process-supervision spike before committing to a long-term Pi integration contract.
 **Pi owns:** role identity, prompt/profile assembly, model interaction, tool proposal, progress explanation, result synthesis.
 **Pi does not own:** authorization, approval decisions, durable task transitions, event sequencing, retry policy, leases, container lifecycle, provider secret persistence, cross-agent writes.

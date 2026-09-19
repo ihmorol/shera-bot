@@ -11,7 +11,7 @@ import type { AddressInfo } from "node:net";
 import { createServer } from "node:net";
 
 import { controlSecurityEvents } from "../src/db/schema.ts";
-import { CookieJar, runGoogleSignin } from "./helpers/test-server.ts";
+import { CookieJar, request, runGoogleSignin } from "./helpers/test-server.ts";
 import { startMockGoogleIdp, type MockIdp } from "./helpers/mock-google-idp.ts";
 import {
   randomTestSecret,
@@ -38,6 +38,7 @@ let origin: string;
 let authSecret: string;
 let clientSecret: string;
 let logLines: string[];
+let sessionToken: string | undefined;
 
 beforeAll(async () => {
   cluster = await startTestCluster("redaction");
@@ -67,7 +68,20 @@ beforeAll(async () => {
     name: "Redaction User",
     picture: "https://example.com/redaction.png",
   });
-  await runGoogleSignin({ origin, idpOrigin: idp.origin, jar: new CookieJar() });
+  const jar = new CookieJar();
+  await runGoogleSignin({ origin, idpOrigin: idp.origin, jar });
+  sessionToken = jar.get("__Secure-authjs.session-token");
+
+  // Sign out: the logout audit registers the dying session token for
+  // value-based redaction (index.ts) — required for the assertions below.
+  const csrf = await request(origin, "/api/auth/csrf", { jar });
+  const { csrfToken } = JSON.parse(csrf.body) as { csrfToken: string };
+  await request(origin, "/api/auth/signout", {
+    method: "POST",
+    jar,
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ csrfToken, json: "true" }).toString(),
+  });
 }, 180_000);
 
 afterAll(async () => {
@@ -77,9 +91,10 @@ afterAll(async () => {
 }, 180_000);
 
 describe("secret redaction (G3)", () => {
-  it("never writes the auth secret, the client secret, or the issued access token to the log", () => {
+  it("never writes the auth secret, client secret, access token, or session token to the log", () => {
     expect(logLines.length).toBeGreaterThan(0);
-    const forbidden = [authSecret, clientSecret, idp.lastAccessToken].filter(
+    expect(sessionToken).toBeDefined();
+    const forbidden = [authSecret, clientSecret, idp.lastAccessToken, sessionToken].filter(
       (value): value is string => typeof value === "string" && value.length > 0,
     );
     expect(forbidden.length).toBeGreaterThanOrEqual(2); // the issued token must have existed
@@ -93,7 +108,8 @@ describe("secret redaction (G3)", () => {
   it("never stores issued token values in the security_events table", async () => {
     const rows = await fixture.controlPlane.db.select().from(controlSecurityEvents);
     expect(rows.length).toBeGreaterThan(0);
-    const forbidden = [authSecret, clientSecret, idp.lastAccessToken].filter(
+    expect(sessionToken).toBeDefined();
+    const forbidden = [authSecret, clientSecret, idp.lastAccessToken, sessionToken].filter(
       (value): value is string => typeof value === "string" && value.length > 0,
     );
     for (const row of rows) {
@@ -115,6 +131,9 @@ describe("secret redaction (G3)", () => {
       expect(serialized).not.toContain(idp.clientSecret);
       if (idp.lastAccessToken) {
         expect(serialized).not.toContain(idp.lastAccessToken);
+      }
+      if (sessionToken) {
+        expect(serialized).not.toContain(sessionToken);
       }
     }
   });

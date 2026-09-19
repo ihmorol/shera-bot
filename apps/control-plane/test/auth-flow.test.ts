@@ -12,6 +12,7 @@ import type { AddressInfo } from "node:net";
 import { createServer } from "node:net";
 
 import { CookieJar, request, runGoogleSignin } from "./helpers/test-server.ts";
+import { controlSessions } from "../src/db/schema.ts";
 import { startMockGoogleIdp, type MockIdp } from "./helpers/mock-google-idp.ts";
 import {
   randomTestSecret,
@@ -161,7 +162,8 @@ describe("Google OAuth flow (only login method)", () => {
     });
     const jar = new CookieJar();
     await runGoogleSignin({ origin, idpOrigin: idp.origin, jar });
-    expect(jar.get("__Secure-authjs.session-token")).toBeDefined();
+    const sessionToken = jar.get("__Secure-authjs.session-token");
+    expect(sessionToken).toBeDefined();
 
     // Auth.js signout: POST with the CSRF token from the cookie pair.
     const csrf = await request(origin, "/api/auth/csrf", { jar });
@@ -174,12 +176,36 @@ describe("Google OAuth flow (only login method)", () => {
     });
     expect([200, 302, 303]).toContain(signout.status);
 
-    // The old session token no longer validates: the database session is gone.
-    const after = await request(origin, "/api/session", { jar });
-    expect(after.status).toBe(401);
+    // The DATABASE session is gone, not just the cookie: replay the captured
+    // token explicitly (cookie clearing alone would 401 regardless) and check
+    // the control_sessions row directly (spec-review fix, 2026-09-19).
+    const replay = await request(origin, "/api/session", {
+      headers: { cookie: `__Secure-authjs.session-token=${sessionToken}` },
+    });
+    expect(replay.status).toBe(401);
+    const remaining = await fixture.controlPlane.db.select().from(controlSessions);
+    expect(
+      remaining.filter((row) => row.sessionToken === sessionToken),
+      "the signed-out session token must no longer exist in control_sessions",
+    ).toHaveLength(0);
 
     const events = await fixture.controlPlane.securityEvents.listByType("logout");
     expect(events.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("records session_validation_failed when an invalid session cookie is presented", async () => {
+    // A presented-but-invalid token hits the middleware's validation-failure
+    // path (issue #6: the fourth security event); no cookie → no event.
+    const before = (
+      await fixture.controlPlane.securityEvents.listByType("session_validation_failed")
+    ).length;
+    const response = await request(origin, "/api/session", {
+      headers: { cookie: "__Secure-authjs.session-token=invalid-token-value" },
+    });
+    expect(response.status).toBe(401);
+    const after = await fixture.controlPlane.securityEvents.listByType("session_validation_failed");
+    expect(after.length).toBeGreaterThan(before);
+    expect(after[after.length - 1]?.details).toBeDefined();
   });
 
   it("signs a returning user in without creating a second account", async () => {

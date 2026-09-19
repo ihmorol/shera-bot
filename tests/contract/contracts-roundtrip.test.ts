@@ -57,8 +57,14 @@ const ROUND_TRIP_CASES: ReadonlyArray<{ schema: ContractName; fixture: string }>
   { schema: "RuntimeStatus", fixture: "runtime-status.json" },
   { schema: "RuntimeRegistrationRequest", fixture: "runtime-registration-request.json" },
   { schema: "RuntimeRegistrationResponse", fixture: "runtime-registration-response.json" },
-  { schema: "RuntimeCredentialRotationRequest", fixture: "runtime-credential-rotation-request.json" },
-  { schema: "RuntimeCredentialRotationResponse", fixture: "runtime-credential-rotation-response.json" },
+  {
+    schema: "RuntimeCredentialRotationRequest",
+    fixture: "runtime-credential-rotation-request.json",
+  },
+  {
+    schema: "RuntimeCredentialRotationResponse",
+    fixture: "runtime-credential-rotation-response.json",
+  },
   { schema: "RuntimeCredentialCommitRequest", fixture: "runtime-credential-commit-request.json" },
   { schema: "RuntimeCredentialCommitResponse", fixture: "runtime-credential-commit-response.json" },
 ];

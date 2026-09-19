@@ -40,6 +40,14 @@ export class ChannelCredentialStore {
     this.insert(digestOfRaw(rawToken));
   }
 
+  /**
+   * Admit a credential digest directly — the provisioning path: the engine
+   * environment carries the digest, never the raw token (G3).
+   */
+  admitDigest(credentialSha256: string): void {
+    this.insert(digestOfHex(credentialSha256));
+  }
+
   /** Stage a rotation digest (hex) received over the authenticated channel. */
   stage(credentialSha256: string): void {
     this.insert(digestOfHex(credentialSha256));

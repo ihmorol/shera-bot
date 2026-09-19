@@ -93,6 +93,11 @@ export class SignupCapService {
   async assertCapOpen(tx: QueryExecutorLike): Promise<void> {
     // Transaction-scoped advisory lock serializes concurrent signups so the
     // count-check and the insert cannot interleave across transactions.
+    // D23 rule 2 judgment (recorded on standards review 2026-09-19): this is
+    // the one deliberately reviewed raw-SQL site in this module — the
+    // advisory lock has no Drizzle-native equivalent, and the count stays
+    // raw SQL beside it so both race-control statements are visible in one
+    // reviewed place. Repository extraction happens if the module grows.
     await tx.execute(sql`select pg_advisory_xact_lock(918273645)`);
     const count = await this.countRows(tx);
     if (count >= SIGNUP_CAP) {

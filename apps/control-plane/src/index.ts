@@ -18,7 +18,7 @@ import express, { type Express, type NextFunction, type Request, type Response }
 import { ExpressAuth, getSession } from "@auth/express";
 
 import { AUTH_BASE_PATH, isAuthConfigured, readEnv } from "./config.ts";
-import { SESSION_COOKIE_NAMES } from "./auth/session-middleware.ts";
+import { parseCookieHeader, SESSION_COOKIE_NAMES } from "./auth/session-middleware.ts";
 import { createDb, type ControlPlaneDb } from "./db/client.ts";
 import { runMigrations } from "./db/migrations.ts";
 import {
@@ -119,13 +119,9 @@ export async function createControlPlaneApp(
           const session = await getSession(req, authConfig);
           const accountId = session?.user?.id;
           if (accountId) {
+            const cookies = parseCookieHeader(req.headers.cookie ?? "");
             for (const cookieName of SESSION_COOKIE_NAMES) {
-              const raw = req.headers.cookie
-                ?.split(";")
-                .map((part) => part.trim())
-                .find((part) => part.startsWith(`${cookieName}=`))
-                ?.slice(cookieName.length + 1);
-              registry.register(raw, "session-token");
+              registry.register(cookies.get(cookieName), "session-token");
             }
             await securityEvents.record({
               eventType: "logout",

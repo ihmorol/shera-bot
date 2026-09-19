@@ -21,7 +21,7 @@ export const SESSION_COOKIE_NAMES = [
   "__Secure-authjs.session-token",
 ] as const;
 
-function parseCookieHeader(cookieHeader: string): Map<string, string> {
+export function parseCookieHeader(cookieHeader: string): Map<string, string> {
   const cookies = new Map<string, string>();
   for (const part of cookieHeader.split(";")) {
     const eq = part.indexOf("=");

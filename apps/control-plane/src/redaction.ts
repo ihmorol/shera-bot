@@ -40,7 +40,19 @@ export class SecretRegistry {
     if (this.values.has(value)) return;
     if (this.values.size >= MAX_REGISTERED_SECRETS) {
       const oldest = this.values.keys().next().value;
-      if (oldest !== undefined) this.values.delete(oldest);
+      if (oldest !== undefined) {
+        this.values.delete(oldest);
+        // Observable, value-free: an evicted secret could reach logs
+        // unredacted, so the gap must be visible (security review note).
+        console.warn(
+          JSON.stringify({
+            level: "warn",
+            service: "control-plane",
+            message: "secret_registry_evicted",
+            details: { size: this.values.size, max: MAX_REGISTERED_SECRETS },
+          }),
+        );
+      }
     }
     this.values.set(value, `[REDACTED:${kind}]`);
   }

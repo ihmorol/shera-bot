@@ -10,6 +10,13 @@
  * raw channel credential it was handed so security tests can assert that the
  * value never reaches any web-facing response or log.
  *
+ * Adoption semantics (aligned with the real adapter's invariants): a
+ * re-provision with the SAME credential re-attaches to the existing record
+ * and returns the SAME handle; a re-provision with a DIFFERENT credential
+ * recreates the record — new handle, fresh credential — so the "container's
+ * credential equals this call's digest" invariant (I2) holds after every
+ * successful provision, exactly as the real engine path behaves.
+ *
  * The fake is deliberately container-engine-neutral: it speaks the contract,
  * nothing else (a portability test greps this package for engine vocabulary).
  */
@@ -75,12 +82,10 @@ export interface FakeContainerBackendOptions {
   failures?: { provision?: string; resume?: string; stop?: string };
 }
 
-function digest(accountId: string): string {
-  return createHash("sha256").update(`fake-container:${accountId}`, "utf8").digest("hex");
-}
-
 export class FakeContainerBackend implements RuntimeBackend {
   private readonly records = new Map<string, ContainerRecord>();
+  /** Per-account creation counter: recreations mint a fresh handle. */
+  private readonly creations = new Map<string, number>();
   private readonly applied: AppliedSpec[] = [];
   private readonly failures: { provision?: string; resume?: string; stop?: string };
   private readonly options: FakeContainerBackendOptions;
@@ -111,24 +116,45 @@ export class FakeContainerBackend implements RuntimeBackend {
       throw new RuntimeBackendFailure("RUNTIME_PROVISION_FAILED", injected);
     }
 
-    const existing = this.records.get(request.account_id);
-    const containerId = digest(request.account_id);
     const credentialSha256 = createHash("sha256")
       .update(secrets.internal_channel_token, "utf8")
       .digest("hex");
-    // The endpoint is a property of the container's network configuration and
-    // is resolved before the credential is delivered into the environment.
     const endpoint = this.options.endpointFor?.(request.account_id) ?? null;
 
-    // Credential delivery into the container environment (digest only, G3).
-    this.options.deliverCredential?.(request.account_id, credentialSha256);
-
+    const existing = this.records.get(request.account_id);
+    let create: boolean;
     if (existing) {
-      // Idempotent re-attach: never a second container. Bring it to running.
-      existing.status = "running";
-      existing.health = "healthy";
-      existing.tier = request.tier;
+      if (existing.credential_sha256 === credentialSha256) {
+        // Re-attach: the container already carries exactly this credential —
+        // never a second container, never a new handle (I1). Bring it to
+        // running.
+        existing.status = "running";
+        existing.health = "healthy";
+        existing.tier = request.tier;
+        create = false;
+      } else {
+        // Credential recovery: the stored digest does not match this call's
+        // token — recreate (the analogue of removing the owned container and
+        // creating it fresh): a new handle and a fresh credential (I2), still
+        // one container per user.
+        this.records.delete(request.account_id);
+        create = true;
+      }
     } else {
+      create = true;
+    }
+
+    if (create) {
+      // Credential delivery into the container environment (digest only, G3)
+      // happens at creation — the analogue of the engine writing the digest
+      // into the environment of the (re)created container.
+      this.options.deliverCredential?.(request.account_id, credentialSha256);
+      const creation = this.creations.get(request.account_id) ?? 0;
+      this.creations.set(request.account_id, creation + 1);
+      const seed = creation === 0 ? request.account_id : `${request.account_id}#${creation}`;
+      const containerId = createHash("sha256")
+        .update(`fake-container:${seed}`, "utf8")
+        .digest("hex");
       this.records.set(request.account_id, {
         account_id: request.account_id,
         runtime_handle: `rt_${containerId.slice(0, 32)}`,

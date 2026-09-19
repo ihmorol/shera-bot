@@ -11,10 +11,20 @@
  * container never sees the engine socket (D27).
  *
  * Isolation/idempotency posture:
- * - One container per user: deterministic container name keyed by account id;
- *   a name conflict is resolved by ADOPTING the existing container only when
- *   its ownership label matches the requesting account — otherwise a typed
- *   tenant-mismatch failure (a cross-tenant attempt can never adopt).
+ * - One container per user: deterministic container name keyed by account id.
+ *   A name conflict is resolved against the existing container: it is ADOPTED
+ *   only when it is provably this account's AND it already carries exactly
+ *   this call's credential digest — adoption then returns the handle its
+ *   `shera.runtime_handle` label carries (a handle is never minted for a
+ *   container that does not have one; a missing/unmanaged label is a typed
+ *   failure). An owned container whose stored credential digest does NOT
+ *   match this call's token is REMOVED and RECREATED under the same
+ *   deterministic name with the new spec: recreation of an owned, volume-less
+ *   container is the credential-recovery mechanism (the old digest is
+ *   unreachable, e.g. after a control-plane restart lost the in-memory raw
+ *   token), and the deterministic name keeps "one container per user" true.
+ *   A container owned by a different account is never adopted or removed — a
+ *   typed tenant-mismatch failure (a cross-tenant attempt can never adopt).
  * - start/stop tolerate the engine's "already started/stopped" (304) answer —
  *   idempotency at the engine boundary.
  * - Ownership of a runtime handle is resolved through the control-plane
@@ -26,12 +36,13 @@
  * container daemon, so this backend is exercised by the contract/fake suites
  * here and for real in Compose (S35). Nothing in this file pretends success.
  */
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 
 import Docker from "dockerode";
 import type { Container, ContainerInspectInfo } from "dockerode";
 
 import {
+  OpaqueRuntimeHandle,
   RuntimeBackendFailure,
   TIER_RESOURCE_LIMITS,
   type GetRuntimeStatusInput,
@@ -47,7 +58,11 @@ import {
   type StopRuntimeInput,
 } from "@shera-bot/contracts";
 
-import { buildLocalContainerSpec, containerNameFor } from "./container-spec.ts";
+import {
+  buildLocalContainerSpec,
+  CREDENTIAL_SHA256_ENV,
+  containerNameFor,
+} from "./container-spec.ts";
 
 const MANAGED_LABEL = "shera.managed";
 const ACCOUNT_LABEL = "shera.account_id";
@@ -56,6 +71,13 @@ const HANDLE_LABEL = "shera.runtime_handle";
 export interface LocalContainerBackendOptions {
   /** Environment reference map; defaults to process.env (G3: no literals). */
   env?: NodeJS.ProcessEnv;
+  /**
+   * TEST SEAM (D23 fake strategy): supplies the engine client so the backend
+   * can be exercised deterministically without a container daemon. Production
+   * omits it; the real client is constructed from the standard environment
+   * references and connects lazily.
+   */
+  engineClientFactory?: () => Docker;
 }
 
 export interface LocalContainerBackendConfig {
@@ -108,6 +130,17 @@ async function ignoreAlreadyState(operation: () => Promise<unknown>): Promise<vo
   }
 }
 
+/**
+ * The credential digest a container currently carries, read from its
+ * environment (the only credential material the container ever received —
+ * G3). Undefined when the container has no credential entry at all.
+ */
+function credentialDigestFromEnv(env: string[] | undefined): string | undefined {
+  const prefix = `${CREDENTIAL_SHA256_ENV}=`;
+  const entry = env?.find((value) => value.startsWith(prefix));
+  return entry?.slice(prefix.length);
+}
+
 export class LocalContainerBackend implements RuntimeBackend {
   private readonly docker: Docker;
   private readonly config: LocalContainerBackendConfig;
@@ -116,8 +149,10 @@ export class LocalContainerBackend implements RuntimeBackend {
     const env = options.env ?? process.env;
     this.config = readLocalBackendConfig(env);
     // The engine client reads its connection configuration from the standard
-    // environment references (DOCKER_HOST et al.); it connects lazily.
-    this.docker = new Docker();
+    // environment references (DOCKER_HOST et al.); it connects lazily. The
+    // factory seam keeps the no-daemon host testable (D23) without weakening
+    // the sanctioned engine-vocabulary boundary.
+    this.docker = options.engineClientFactory?.() ?? new Docker();
   }
 
   async provisionRuntime(
@@ -125,11 +160,10 @@ export class LocalContainerBackend implements RuntimeBackend {
     secrets: RuntimeProvisionSecrets,
   ): Promise<ProvisionBackendOutcome> {
     const name = containerNameFor(request.account_id);
-    const { createHash } = await import("node:crypto");
     const credentialSha256 = createHash("sha256")
       .update(secrets.internal_channel_token, "utf8")
       .digest("hex");
-    const handle = opaqueHandle();
+    const mintedHandle = opaqueHandle();
 
     const spec = buildLocalContainerSpec({
       account_id: request.account_id,
@@ -141,9 +175,14 @@ export class LocalContainerBackend implements RuntimeBackend {
     });
     // The handle rides on the labels so the backend can resolve ownership
     // after a control-plane restart.
-    spec.Labels[HANDLE_LABEL] = handle;
+    spec.Labels[HANDLE_LABEL] = mintedHandle;
 
     let container: Container;
+    // ADOPT keeps the container's own handle; RECREATE keeps the minted one.
+    // Either way the returned handle is guaranteed to be the one the running
+    // container carries (I1), and the container's credential digest is the
+    // digest of THIS call's token (I2).
+    let handle = mintedHandle;
     try {
       container = await this.docker.createContainer({ ...spec, name });
     } catch (error) {
@@ -154,8 +193,23 @@ export class LocalContainerBackend implements RuntimeBackend {
         );
       }
       // Name conflict: the deterministic name already exists. Adopt it only
-      // if it is provably this account's container (cross-tenant guard).
-      container = await this.adoptOwnedContainer(name, request.account_id);
+      // if it is provably this account's container carrying exactly this
+      // call's credential; otherwise recreate it (credential recovery); a
+      // foreign-owned container is never adopted or removed.
+      const resolution = await this.resolveNameConflict(name, request.account_id, credentialSha256);
+      if (resolution.action === "adopt") {
+        container = resolution.container;
+        handle = resolution.handle;
+      } else {
+        try {
+          container = await this.docker.createContainer({ ...spec, name });
+        } catch {
+          throw new RuntimeBackendFailure(
+            "RUNTIME_PROVISION_FAILED",
+            "the engine refused to recreate the container after removing the stale one",
+          );
+        }
+      }
     }
 
     await ignoreAlreadyState(() => container.start());
@@ -185,7 +239,6 @@ export class LocalContainerBackend implements RuntimeBackend {
       internal,
     };
   }
-
   async resumeRuntime(request: ResumeRuntimeInput) {
     const container = await this.byHandle(request.runtime_handle);
     await ignoreAlreadyState(() => container.start());
@@ -236,7 +289,27 @@ export class LocalContainerBackend implements RuntimeBackend {
     };
   }
 
-  private async adoptOwnedContainer(name: string, accountId: string): Promise<Container> {
+  /**
+   * Resolve a 409 on the deterministic name.
+   *
+   * - The existing container is ADOPTED only when it provably belongs to this
+   *   account AND already carries exactly this call's credential digest; the
+   *   adopted container's own `shera.runtime_handle` label is the handle that
+   *   must be returned — a handle is never minted for a container that does
+   *   not carry one, and a missing/unmanaged label is a typed failure.
+   * - An owned container whose credential digest does not match is REMOVED
+   *   and the caller recreates it: recreation of an owned, volume-less
+   *   container is the credential-recovery mechanism (the old digest is
+   *   unreachable, e.g. after a control-plane restart lost the in-memory raw
+   *   token).
+   * - A container owned by a different account is never adopted or removed
+   *   (RUNTIME_TENANT_MISMATCH): a cross-tenant attempt can never adopt.
+   */
+  private async resolveNameConflict(
+    name: string,
+    accountId: string,
+    credentialSha256: string,
+  ): Promise<{ action: "adopt"; container: Container; handle: string } | { action: "recreate" }> {
     const container = this.docker.getContainer(name);
     const inspected = await container.inspect().catch(() => {
       throw new RuntimeBackendFailure(
@@ -250,7 +323,24 @@ export class LocalContainerBackend implements RuntimeBackend {
         "a container with this name exists under a different owner",
       );
     }
-    return container;
+    const existingHandle = inspected.Config?.Labels?.[HANDLE_LABEL];
+    const parsedHandle = OpaqueRuntimeHandle.safeParse(existingHandle);
+    if (credentialDigestFromEnv(inspected.Config?.Env) === credentialSha256) {
+      if (inspected.Config?.Labels?.[MANAGED_LABEL] !== "control-plane" || !parsedHandle.success) {
+        throw new RuntimeBackendFailure(
+          "RUNTIME_PROVISION_FAILED",
+          "the existing container carries no valid control-plane handle label",
+        );
+      }
+      return { action: "adopt", container, handle: parsedHandle.data };
+    }
+    await container.remove({ force: true }).catch(() => {
+      throw new RuntimeBackendFailure(
+        "RUNTIME_PROVISION_FAILED",
+        "the stale container could not be removed for credential recovery",
+      );
+    });
+    return { action: "recreate" };
   }
 
   private async byHandle(handle: string): Promise<Container> {

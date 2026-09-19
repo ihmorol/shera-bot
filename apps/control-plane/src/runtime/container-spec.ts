@@ -11,6 +11,14 @@
  */
 import { TIER_RESOURCE_LIMITS, type ResourceTier } from "@shera-bot/contracts";
 
+/**
+ * The environment key carrying the channel credential DIGEST. Defined here so
+ * the spec builder and the adapter's ownership checks read one source of
+ * truth: the container environment holds the digest only, never raw material
+ * (G3).
+ */
+export const CREDENTIAL_SHA256_ENV = "SHERA_INTERNAL_CHANNEL_CREDENTIAL_SHA256";
+
 /** Deterministic, per-user container name — the idempotency key of the engine layer. */
 export function containerNameFor(accountId: string): string {
   return `shera-rt-${accountId}`;
@@ -78,7 +86,7 @@ export function buildLocalContainerSpec(input: LocalContainerSpecInput): LocalCo
     name: containerNameFor(input.account_id),
     Image: input.image,
     Env: [
-      `SHERA_INTERNAL_CHANNEL_CREDENTIAL_SHA256=${input.credential_sha256}`,
+      `${CREDENTIAL_SHA256_ENV}=${input.credential_sha256}`,
       `SHERA_ACCOUNT_ID=${input.account_id}`,
       `SHERA_TIER=${input.tier}`,
       `SHERA_INTERNAL_PORT=${input.internal_port}`,

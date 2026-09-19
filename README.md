@@ -29,7 +29,7 @@ pnpm license:inventory   # dependency + license gate; fails on an unreviewed lic
 pnpm mockup:test         # the static mockup's regression suite
 ```
 
-CI (`.github/workflows/ci.yml`) runs the same commands on pull requests to `main`, uploads the license inventory as an artifact, and runs the mockup regression job. The choices behind the pipeline — pins, CI provider, layout, license policy and its one reviewed exception — are recorded in [`docs/decisions/engineering-record-e15-2026-09-17.md`](docs/decisions/engineering-record-e15-2026-09-17.md).
+CI (`.github/workflows/ci.yml`) runs the same commands on pull requests to `main`, uploads the license inventory as an artifact, and runs the mockup regression job. The choices behind the pipeline — pins, CI provider, layout, license policy and its one reviewed exception — are recorded in E16 ([`docs/decisions/engineering-record-e16-2026-09-17.md`](docs/decisions/engineering-record-e16-2026-09-17.md); filed as "E15" on 2026-09-17, renumbered on 2026-09-19 to resolve the identifier collision with the OSS-leverage record).
 
 ## Start here
 

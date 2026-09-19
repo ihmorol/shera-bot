@@ -31,3 +31,17 @@ Before making architecture or product changes, read:
 - The runtime gateway owns authoritative transitions, persistence, event sequencing, approvals, leases, supervision, and recovery.
 - Never expose secrets in prompts, events, logs, memory, artifacts, transcripts, or documentation.
 - Check `docs/TRACEABILITY.md` for unresolved implementation-defined items before treating the design as fully closed.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues for `ihmorol/shera-bot` (the 35-slice build plan is tracked in issue #1, slices in #2–#36). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-label vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`) — already used by the slice tracker. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: start at `CONTEXT.md`; product authority stays with `docs/PRD.md` + `docs/decisions/` per the chain in `docs/agents/domain.md`. Engineering ADRs go to `docs/adr/`.

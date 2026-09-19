@@ -19,8 +19,12 @@
  * digest only. Rotation stages the new digest over the authenticated channel
  * (current credential), then commits with the new credential and prunes the
  * old. If the in-memory token is gone (e.g. control-plane restart), rotation
- * fails closed with a typed error and the documented fallback is
- * re-provisioning.
+ * fails closed with a typed error, and re-provisioning is the documented
+ * recovery, matching exactly what the code does: with the in-memory token
+ * still valid, re-provisioning reuses that token and re-adopts the existing
+ * handle; with the token lost, re-provisioning mints a fresh token, the
+ * backend recreates the container, and the credential and registration are
+ * re-established (a real recovery — the handle changes).
  */
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
@@ -102,6 +106,16 @@ export class ProvisioningService {
     const mapping = await this.loadOrCreateMapping(accountId);
 
     if (mapping.provisioningStatus === "provisioning") {
+      // KNOWN WEDGE (S06, documented posture — review finding, 2026-09-20): a
+      // control-plane crash between setStatus("provisioning") below and
+      // recordProvisioned leaves the mapping at status "provisioning" with
+      // runtimeHandle=null forever; every later ensureProvisioned lands here
+      // and throws RUNTIME_PROVISION_IN_PROGRESS. This is safe-but-stuck, not
+      // unsafe: the error is truthful (no fake success, G4), nothing is
+      // half-provisioned behind the wedge, and the name-keyed container means
+      // no second container can exist. Bounded recovery (staleness rule /
+      // lease / reaper) is owned by S07/S12 runtime supervision through the
+      // E17 seam and is deliberately NOT built in this slice.
       throw runtimeProvisionInProgressError(correlationId);
     }
 
@@ -112,10 +126,30 @@ export class ProvisioningService {
 
     // Issue the channel credential. The raw value is redacted everywhere and
     // never persisted; the backend delivers its digest into the container.
-    const rawToken = generateChannelToken();
+    //
+    // Re-provisioning credential choice (adoption invariants I1/I2): when the
+    // mapping already has a runtime handle AND the in-memory token still
+    // verifies against the stored digest, REUSE it — the backend then adopts
+    // the existing container and provisioning returns the SAME handle (the
+    // stop → re-provision path within one control-plane lifetime). When no
+    // in-memory token verifies (e.g. control-plane restart), a fresh token is
+    // minted and the backend recreates the container: re-provisioning becomes
+    // a REAL credential recovery, not a report of success over a bricked
+    // credential.
+    const inMemory = this.channelSecrets.get(mapping.accountId);
+    const reusable: ChannelSecretEntry | null =
+      mapping.runtimeHandle !== null &&
+      mapping.internalChannelTokenHash !== null &&
+      inMemory !== undefined &&
+      inMemory.sha256 === mapping.internalChannelTokenHash
+        ? inMemory
+        : null;
+    const rawToken = reusable ? reusable.raw : generateChannelToken();
     const tokenSha256 = sha256Hex(rawToken);
-    this.deps.registry.register(rawToken, "runtime-channel-token");
-    this.channelSecrets.set(accountId, { raw: rawToken, sha256: tokenSha256 });
+    if (!reusable) {
+      this.deps.registry.register(rawToken, "runtime-channel-token");
+      this.channelSecrets.set(mapping.accountId, { raw: rawToken, sha256: tokenSha256 });
+    }
 
     await this.setStatus(mapping.accountId, "provisioning");
     try {
@@ -247,7 +281,11 @@ export class ProvisioningService {
     const current = this.channelSecrets.get(accountId);
     if (!current || current.sha256 !== mapping.internalChannelTokenHash) {
       // Fail closed: without the current credential the channel cannot prove
-      // itself; the documented fallback is re-provisioning (idempotent).
+      // itself. The documented recovery is re-provisioning, and it is real:
+      // with the in-memory token still valid, re-provisioning reuses that
+      // token and re-adopts the existing handle; with the token lost
+      // (control-plane restart), it recreates the container and re-establishes
+      // the credential and registration.
       throw runtimeUnavailableError(correlationId);
     }
 

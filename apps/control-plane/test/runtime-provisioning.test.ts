@@ -13,10 +13,12 @@ import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 
-import { TIER_RESOURCE_LIMITS } from "@shera-bot/contracts";
+import { TIER_RESOURCE_LIMITS, RUNTIME_REGISTRATION_PATH } from "@shera-bot/contracts";
 
 import { createControlPlaneApp, type ControlPlaneApp } from "../src/index.ts";
 import { controlAccounts, controlContainerMappings } from "../src/db/schema.ts";
+import { ProvisioningService } from "../src/modules/runtime-provisioning.ts";
+import { RuntimeChannelClient } from "../src/runtime/channel-client.ts";
 import { startTestCluster, type TestCluster } from "./helpers/pg-cluster.ts";
 import { FakeContainerBackend } from "@shera-bot/test-kit";
 import {
@@ -56,6 +58,8 @@ beforeAll(async () => {
     "c1b2c3d4-0000-4000-8000-000000000003",
     "d1b2c3d4-0000-4000-8000-000000000004",
     "f1b2c3d4-0000-4000-8000-000000000006",
+    "9e1b2c3d-0000-4000-8000-000000000007",
+    "8f1b2c3d-0000-4000-8000-000000000008",
   ]) {
     const credentials = new ChannelCredentialStore();
     const api = createInternalApi({ credentials, securityEvents: channelRecorder });
@@ -272,3 +276,92 @@ describe("tiers and credentials", () => {
     expect(JSON.stringify(ours)).not.toMatch(new RegExp(backend.channelTokensSeen[0] ?? ".^"));
   });
 });
+
+describe("re-provisioning keeps the channel true (adoption invariants I1/I2)", () => {
+  it("re-provisioning after stop reuses the in-memory token: same handle, one credential, channel works immediately", async () => {
+    const G = "9e1b2c3d-0000-4000-8000-000000000007";
+    await createAccount(G);
+    const first = await controlPlane.provisioning.ensureProvisioned(G);
+    const rowBefore = await mapping(G);
+    await controlPlane.provisioning.stop(G);
+
+    const again = await controlPlane.provisioning.ensureProvisioned(G);
+
+    // I1: the same runtime handle — the container was adopted, not recreated.
+    expect(again.runtime_handle).toBe(first.runtime_handle);
+    const row = await mapping(G);
+    expect(row?.runtimeHandle).toBe(first.runtime_handle);
+    // The in-memory token was REUSED: two provision calls (create + re-attach)
+    // but exactly ONE distinct credential was ever issued.
+    const tokens = backend.tokensByAccount.get(G) ?? [];
+    expect(tokens.length).toBe(2);
+    expect(new Set(tokens).size).toBe(1);
+    expect(row?.internalChannelTokenHash).toBe(rowBefore?.internalChannelTokenHash);
+    // I2: the channel works immediately with that credential — a replayed
+    // registration with the issued token is accepted by the container.
+    const container = fakeContainers.get(G);
+    const replay = await fetch(`${container?.origin}${RUNTIME_REGISTRATION_PATH}`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${backend.tokensByAccount.get(G)?.at(-1) ?? ""}`,
+      },
+      body: JSON.stringify({
+        runtime_handle: again.runtime_handle,
+        account_id: G,
+        tier: "balanced",
+      }),
+    });
+    expect(replay.status).toBe(200);
+    // The returned handle resolves truthfully after the re-provision.
+    const status = await controlPlane.provisioning.getStatus(G);
+    expect(status.runtime_handle).toBe(first.runtime_handle);
+    expect(status.provisioning_status).toBe("running");
+  });
+
+  it("re-provisioning after token loss (control-plane restart) recreates: new handle, re-established credential and registration", async () => {
+    const H = "8f1b2c3d-0000-4000-8000-000000000008";
+    await createAccount(H);
+    const first = await controlPlane.provisioning.ensureProvisioned(H);
+    const rowBefore = await mapping(H);
+    await controlPlane.provisioning.stop(H);
+
+    // A fresh service instance models the control-plane restart: it holds no
+    // in-memory token, so re-provisioning must recreate the container and
+    // re-establish the credential and registration (a REAL recovery, not a
+    // report of success over a bricked credential).
+    const restarted = new ProvisioningService({
+      db: controlPlane.db,
+      backend,
+      channel: new RuntimeChannelClient(),
+      securityEvents: controlPlane.securityEvents,
+      registry: controlPlane.registry,
+      logger: controlPlane.logger,
+    });
+    const again = await restarted.ensureProvisioned(H);
+
+    expect(again.runtime_handle).not.toBe(first.runtime_handle);
+    const row = await mapping(H);
+    expect(row?.runtimeHandle).toBe(again.runtime_handle);
+    expect(row?.internalChannelTokenHash).not.toBe(rowBefore?.internalChannelTokenHash);
+    // I2: the channel works immediately with the NEW credential — a replayed
+    // registration with the newest issued token is accepted.
+    const container = fakeContainers.get(H);
+    const replay = await fetch(`${container?.origin}${RUNTIME_REGISTRATION_PATH}`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${backend.tokensByAccount.get(H)?.at(-1) ?? ""}`,
+      },
+      body: JSON.stringify({
+        runtime_handle: again.runtime_handle,
+        account_id: H,
+        tier: "balanced",
+      }),
+    });
+    expect(replay.status).toBe(200);
+    const status = await restarted.getStatus(H);
+    expect(status.runtime_handle).toBe(again.runtime_handle);
+  });
+});
+

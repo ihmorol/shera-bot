@@ -1,0 +1,134 @@
+/**
+ * Typed error construction on the S02 taxonomy (D23 rule 4): every error
+ * carries code, category, safe_message, retryable, user_action,
+ * internal_details, correlation_id. `internal_details` never crosses the user
+ * boundary unredacted — HTTP responses carry `internal_details: null` and the
+ * full details go to the redacted server log only.
+ */
+import { randomUUID } from "node:crypto";
+
+import type { SheraError } from "@shera-bot/contracts";
+
+/** New stable codes for S05 (the S02 list grows per slice; codes never rename). */
+export const AUTH_ERROR_CODES = [
+  "UNAUTHENTICATED",
+  "SIGNUP_CAP_REACHED",
+  "AUTH_CONFIGURATION_INVALID",
+  "AUTH_SIGNIN_FAILED",
+  "ROUTE_NOT_FOUND",
+  "INTERNAL_ERROR",
+] as const;
+
+export type AuthErrorCode = (typeof AUTH_ERROR_CODES)[number];
+
+/** The exact S1 refusal copy (docs/UI_DESIGN.md S1). No retry affordance. */
+export const SIGNUP_CAP_REFUSAL_MESSAGE =
+  "Shera is in private testing and is at its five-account limit.";
+
+export interface TypedErrorInput {
+  code: AuthErrorCode;
+  category: SheraError["category"];
+  safe_message: string;
+  retryable: boolean;
+  user_action: string | null;
+  correlation_id: string | undefined;
+}
+
+export function makeSheraError(input: TypedErrorInput): SheraError {
+  return {
+    code: input.code,
+    category: input.category,
+    safe_message: input.safe_message,
+    retryable: input.retryable,
+    user_action: input.user_action,
+    // Never crosses the boundary unredacted: responses carry null; the server
+    // log carries the redacted internal details alongside the correlation_id.
+    internal_details: null,
+    correlation_id: input.correlation_id ?? randomUUID(),
+  };
+}
+
+export function unauthenticatedError(correlationId?: string): SheraError {
+  return makeSheraError({
+    code: "UNAUTHENTICATED",
+    category: "unauthorized",
+    safe_message: "Sign in to continue.",
+    retryable: false,
+    user_action: "Continue with Google.",
+    correlation_id: correlationId,
+  });
+}
+
+export function signupCapReachedError(correlationId?: string): SheraError {
+  return makeSheraError({
+    code: "SIGNUP_CAP_REACHED",
+    category: "policy",
+    safe_message: SIGNUP_CAP_REFUSAL_MESSAGE,
+    retryable: false,
+    user_action: null,
+    correlation_id: correlationId,
+  });
+}
+
+export function authConfigurationError(correlationId?: string): SheraError {
+  return makeSheraError({
+    code: "AUTH_CONFIGURATION_INVALID",
+    category: "internal",
+    safe_message: "Sign-in is not available because this deployment is not fully configured.",
+    retryable: false,
+    user_action: "Contact the operator.",
+    correlation_id: correlationId,
+  });
+}
+
+export function authSignInFailedError(correlationId?: string): SheraError {
+  return makeSheraError({
+    code: "AUTH_SIGNIN_FAILED",
+    category: "provider",
+    safe_message: "Sign-in failed. You can try again.",
+    retryable: true,
+    user_action: "Retry sign-in from the login screen.",
+    correlation_id: correlationId,
+  });
+}
+
+export function routeNotFoundError(correlationId?: string): SheraError {
+  return makeSheraError({
+    code: "ROUTE_NOT_FOUND",
+    category: "validation",
+    safe_message: "The requested resource does not exist.",
+    retryable: false,
+    user_action: null,
+    correlation_id: correlationId,
+  });
+}
+
+/** Untyped server fault, already stripped to the safe taxonomy shape. */
+export function internalErrorPayload(correlationId: string): SheraError {
+  return makeSheraError({
+    code: "INTERNAL_ERROR",
+    category: "internal",
+    safe_message: "Something went wrong. The failure has been recorded.",
+    retryable: false,
+    user_action: "Try again later.",
+    correlation_id: correlationId,
+  });
+}
+
+/** HTTP status for an error category on the user boundary. */
+export function statusForError(error: SheraError): number {
+  switch (error.category) {
+    case "unauthorized":
+      return 401;
+    case "policy":
+      return 403;
+    case "validation":
+      return 404;
+    case "internal":
+      return 503;
+    case "provider":
+      return 502;
+    default:
+      return 500;
+  }
+}

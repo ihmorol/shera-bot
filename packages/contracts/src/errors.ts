@@ -47,6 +47,12 @@ export const KNOWN_ERROR_CODES = [
   "PROVIDER_UNAVAILABLE",
   "RECOVERY_REQUIRED",
   "INTERNAL_ERROR",
+  // S05 (control-plane identity layer).
+  "UNAUTHENTICATED",
+  "SIGNUP_CAP_REACHED",
+  "AUTH_CONFIGURATION_INVALID",
+  "AUTH_SIGNIN_FAILED",
+  "ROUTE_NOT_FOUND",
 ] as const;
 
 export const ErrorCodeShape = z

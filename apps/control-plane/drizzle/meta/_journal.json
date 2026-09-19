@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1789768013854,
+      "tag": "0000_control_plane_identity_baseline",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789768032548,
+      "tag": "0001_admin_flag_security_event_trigger",
+      "breakpoints": true
+    }
+  ]
+}

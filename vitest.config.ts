@@ -8,7 +8,16 @@ import { defineConfig } from "vitest/config";
  */
 export default defineConfig({
   test: {
-    include: ["tests/**/*.test.ts", "packages/*/src/**/*.test.ts", "apps/*/src/**/*.test.ts"],
+    include: [
+      "tests/**/*.test.ts",
+      "packages/*/src/**/*.test.ts",
+      "apps/*/src/**/*.test.ts",
+      "apps/*/test/**/*.test.ts",
+    ],
+    // Integration suites (S05: real PostgreSQL cluster + OAuth flow) exceed
+    // the unit default; unit tests still finish in milliseconds.
+    testTimeout: 120_000,
+    hookTimeout: 180_000,
     environment: "node",
     passWithNoTests: false,
   },

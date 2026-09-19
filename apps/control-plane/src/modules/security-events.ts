@@ -1,0 +1,78 @@
+/**
+ * Security events service (D2: "operational security events required by the
+ * control plane"; PRD §15, §22.18). Append-only writes; details are always
+ * scrubbed through the secret registry before insert (G3). Recording must
+ * never break the auth flow — failures are logged, never thrown.
+ */
+import { randomUUID } from "node:crypto";
+
+import { eq } from "drizzle-orm";
+
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+
+import { controlSecurityEvents } from "../db/schema.ts";
+import { scrubObject, type SecretRegistry } from "../redaction.ts";
+import type { ControlPlaneLogger } from "../logger.ts";
+
+export const SECURITY_EVENT_TYPES = [
+  "login_succeeded",
+  "logout",
+  "signup_cap_refused",
+  "admin_flag_changed",
+  "session_validation_failed",
+] as const;
+
+export type SecurityEventType = (typeof SECURITY_EVENT_TYPES)[number];
+
+export interface SecurityEventInput {
+  eventType: SecurityEventType;
+  accountId?: string | null;
+  details?: Record<string, unknown>;
+  correlationId?: string;
+  redactionClass?: "public" | "internal" | "restricted";
+}
+
+export class SecurityEventService {
+  constructor(
+    private readonly db: NodePgDatabase,
+    private readonly registry: SecretRegistry,
+    private readonly logger: ControlPlaneLogger,
+  ) {}
+
+  async record(input: SecurityEventInput): Promise<void> {
+    try {
+      const details = scrubObject(input.details ?? {}, this.registry);
+      await this.db.insert(controlSecurityEvents).values({
+        eventType: input.eventType,
+        accountId: input.accountId ?? null,
+        redactionClass: input.redactionClass ?? "internal",
+        details,
+        correlationId: input.correlationId ?? randomUUID(),
+      });
+    } catch (error) {
+      // Recording must never break the flow it is auditing (G5: surfaced, not
+      // silent — the failure is logged, redacted, and observable).
+      this.logger.error("security_event_write_failed", {
+        event_type: input.eventType,
+        reason: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  async listByType(
+    eventType: SecurityEventType,
+  ): Promise<
+    Array<{ id: string; eventType: string; details: Record<string, unknown>; occurredAt: Date }>
+  > {
+    const rows = await this.db
+      .select()
+      .from(controlSecurityEvents)
+      .where(eq(controlSecurityEvents.eventType, eventType));
+    return rows.map((row) => ({
+      id: row.id,
+      eventType: row.eventType,
+      details: row.details,
+      occurredAt: row.occurredAt,
+    }));
+  }
+}

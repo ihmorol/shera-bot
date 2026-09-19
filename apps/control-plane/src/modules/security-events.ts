@@ -20,6 +20,12 @@ export const SECURITY_EVENT_TYPES = [
   "signup_cap_refused",
   "admin_flag_changed",
   "session_validation_failed",
+  // S06 (runtime provisioning + internal channel; D2, PRD §16).
+  "runtime_provisioned",
+  "runtime_provision_failed",
+  "runtime_operation_failed",
+  "runtime_channel_auth_failed",
+  "runtime_channel_token_rotated",
 ] as const;
 
 export type SecurityEventType = (typeof SECURITY_EVENT_TYPES)[number];
@@ -28,7 +34,7 @@ export interface SecurityEventInput {
   eventType: SecurityEventType;
   accountId?: string | null;
   details?: Record<string, unknown>;
-  correlationId?: string;
+  correlationId?: string | undefined;
   redactionClass?: "public" | "internal" | "restricted";
 }
 
@@ -59,10 +65,14 @@ export class SecurityEventService {
     }
   }
 
-  async listByType(
-    eventType: SecurityEventType,
-  ): Promise<
-    Array<{ id: string; eventType: string; details: Record<string, unknown>; occurredAt: Date }>
+  async listByType(eventType: SecurityEventType): Promise<
+    Array<{
+      id: string;
+      eventType: string;
+      accountId: string | null;
+      details: Record<string, unknown>;
+      occurredAt: Date;
+    }>
   > {
     const rows = await this.db
       .select()
@@ -71,6 +81,7 @@ export class SecurityEventService {
     return rows.map((row) => ({
       id: row.id,
       eventType: row.eventType,
+      accountId: row.accountId,
       details: row.details,
       occurredAt: row.occurredAt,
     }));

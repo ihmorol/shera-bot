@@ -13,6 +13,8 @@ import { join } from "node:path";
 
 import type { Express } from "express";
 
+import type { RuntimeBackend } from "@shera-bot/contracts";
+
 import { createControlPlaneApp, type ControlPlaneApp } from "../../src/index.ts";
 
 export interface ControlPlaneFixture {
@@ -78,6 +80,8 @@ export interface FixtureOptions {
   env?: Record<string, string>;
   logSink?: (line: string) => void;
   port?: number;
+  /** TEST SEAM: deterministic RuntimeBackend (S06); defaults to the real local backend. */
+  runtimeBackend?: RuntimeBackend;
 }
 
 export async function startControlPlaneFixture(
@@ -87,6 +91,7 @@ export async function startControlPlaneFixture(
     databaseUrl: options.databaseUrl,
     ...(options.googleIssuer ? { googleIssuer: options.googleIssuer } : {}),
     ...(options.logSink ? { logSink: options.logSink } : {}),
+    ...(options.runtimeBackend ? { runtimeBackend: options.runtimeBackend } : {}),
     env: {
       ...process.env,
       ...options.env,

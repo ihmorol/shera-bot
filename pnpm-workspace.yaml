@@ -4,6 +4,9 @@ packages:
 # esbuild's postinstall (used by drizzle-kit) must run; allow-listed per
 # package (pnpm 12 build-approval). Only build scripts we have reviewed.
 allowBuilds:
+  cpu-features: false
   esbuild: true
+  protobufjs: false
+  ssh2: false
 minimumReleaseAgeExclude:
   - prettier@3.9.7

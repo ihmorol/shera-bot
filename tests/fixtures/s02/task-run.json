@@ -1,0 +1,24 @@
+{
+  "task_id": "task_001",
+  "workspace_id": "ws_default_01",
+  "conversation_id": "conv_001",
+  "operation_id": "opr_001",
+  "created_from": { "trigger_event_type": "tool.proposed", "trigger_event_id": "evt_001" },
+  "pack_snapshot": {
+    "pack_id": "pack_student",
+    "pack_version": "1.0.0",
+    "pack_hash": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "operation_snapshot": {
+    "operation_id": "op_research_paper",
+    "version": "1.0.0",
+    "hash": "2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "roster": ["agent_general_assistant", "agent_researcher", "agent_citation_manager"],
+  "provider_snapshot": { "provider_id": "provider_platform_primary", "model": "platform-default" },
+  "state": "RUNNING",
+  "version": 3,
+  "retry_count": 0,
+  "created_at": "2026-09-18T09:11:00.000Z",
+  "updated_at": "2026-09-18T09:12:00.000Z"
+}

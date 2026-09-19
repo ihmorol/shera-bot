@@ -1,0 +1,18 @@
+{
+  "event_id": "evt_001",
+  "stream_id": "task:task_001",
+  "sequence": 1,
+  "event_type": "tool.proposed",
+  "event_version": 1,
+  "actor": { "type": "agent", "id": "agent_researcher" },
+  "task_id": "task_001",
+  "conversation_id": "conv_001",
+  "occurred_at": "2026-09-18T09:11:00.000Z",
+  "payload": {
+    "tool_id": "tool_web_search",
+    "tool_version": "1.0.0",
+    "args_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+    "proposal_summary": "Search for recent peer-reviewed sources on the paper topic."
+  },
+  "redaction_class": "internal"
+}

@@ -1,0 +1,13 @@
+{
+  "agent_id": "agent_researcher",
+  "display_name": "Researcher",
+  "role_description": "Investigates questions and produces evidence-backed outputs.",
+  "default_provider": { "provider_id": "provider_platform_primary", "model": "platform-default" },
+  "skills": ["skill_literature_review", "skill_source_evaluation"],
+  "tools": [
+    { "tool_id": "tool_web_search", "version": "1.0.0" },
+    { "tool_id": "tool_page_fetch", "version": "1.0.0" }
+  ],
+  "connectors": ["connector_reference_manager"],
+  "home_operation_id": "op_research_paper"
+}

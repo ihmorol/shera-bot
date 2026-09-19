@@ -1,0 +1,17 @@
+{
+  "event_id": "evt_006",
+  "stream_id": "task:task_001",
+  "sequence": 6,
+  "event_type": "trigger.webhook",
+  "event_version": 1,
+  "actor": { "type": "system", "id": "webhook-receiver" },
+  "task_id": "task_001",
+  "conversation_id": "conv_001",
+  "occurred_at": "2026-09-18T12:05:00.000Z",
+  "payload": {
+    "webhook_id": "wh_001",
+    "source": "github",
+    "body_summary": "push event for branch feature/thesis"
+  },
+  "redaction_class": "internal"
+}

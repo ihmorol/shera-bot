@@ -1,0 +1,20 @@
+{
+  "event_id": "evt_003",
+  "stream_id": "task:task_001",
+  "sequence": 3,
+  "event_type": "approval.requested",
+  "event_version": 1,
+  "actor": { "type": "runtime", "id": "runtime-gateway" },
+  "task_id": "task_001",
+  "conversation_id": "conv_001",
+  "occurred_at": "2026-09-18T09:12:00.000Z",
+  "payload": {
+    "tool_id": "tool_repo_push",
+    "tool_version": "1.0.0",
+    "capability": "repository.mutation",
+    "risk_class": "EXTERNAL_WRITE",
+    "args_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+    "resource_scope": "workspace://projects/thesis"
+  },
+  "redaction_class": "internal"
+}

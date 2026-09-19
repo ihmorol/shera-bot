@@ -1,0 +1,11 @@
+{
+  "operation_id": "op_research_paper",
+  "version": "1.0.0",
+  "title": "Research Paper",
+  "purpose": "Produce an evidence-backed research paper with managed citations.",
+  "roster": ["agent_general_assistant", "agent_researcher", "agent_citation_manager"],
+  "coordinator": "agent_general_assistant",
+  "skills": ["skill_literature_review"],
+  "connectors": ["connector_reference_manager"],
+  "content_hash": "2222222222222222222222222222222222222222222222222222222222222222"
+}

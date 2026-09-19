@@ -1,0 +1,8 @@
+{
+  "reservation_id": "crs_001",
+  "workspace_id": "ws_default_01",
+  "task_id": "task_001",
+  "estimated_amount": 120,
+  "status": "reserved",
+  "created_at": "2026-09-18T09:12:05.000Z"
+}

@@ -261,7 +261,7 @@ importers:
         specifier: 5.2.1
         version: 5.2.1
       socket.io:
-        specifier: ^4.8.4
+        specifier: 4.8.4
         version: 4.8.4
       zod:
         specifier: 4.6.5

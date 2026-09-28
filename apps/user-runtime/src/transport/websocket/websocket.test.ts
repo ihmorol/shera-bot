@@ -407,6 +407,34 @@ describe("websocket gateway — durable replay resume (AC4, E10)", () => {
           conversation_id: conversationId,
           revision: 1,
         });
+
+        // B8: after the snapshot fallback, the SAME connection subscribes and
+        // receives LIVE delivery of the next committed event on the stream —
+        // the room join that backed the replay also carries the fanout, so
+        // the client resumes live without reconnecting.
+        const subscribeAck = (await client.emitWithAck("stream.subscribe", {
+          workspace_id: WS_A,
+          stream_id: `conversation:${conversationId}`,
+        })) as Record<string, unknown>;
+        expect(subscribeAck).toMatchObject({ subscribed: true, workspace_id: WS_A });
+
+        const live = client.waitForEvent(
+          (name) => name === "stream.event",
+          "live delivery after snapshot fallback",
+        );
+        const renamed = await postJson(
+          running.origin,
+          renameCommand(WS_A, "idem-ws-horizon-2", conversationId, 1, "v2"),
+        );
+        expect(renamed.status).toBe(200);
+        const received = (await live).payload as Record<string, unknown>;
+        expect(received).toMatchObject({
+          type: "conversation.renamed",
+          stream_id: `conversation:${conversationId}`,
+          workspace_id: WS_A,
+          sequence: 2,
+        });
+        expect((received["payload"] as Record<string, unknown>)["title"]).toBe("v2");
       } finally {
         client.close();
       }

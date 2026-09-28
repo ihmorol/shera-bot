@@ -677,7 +677,7 @@ describe("replay cursors (AC4, E10)", () => {
     }
   });
 
-  it("reports an unknown stream as a snapshot fallback, never as fake events", () => {
+  it("reports an unknown stream as an EMPTY EVENT BATCH (kind 'events'), not a snapshot fallback (B7)", () => {
     const h = newHarness();
     try {
       const result = h.replay.resolve(WS_A, "conversation:no-such-stream", 0);

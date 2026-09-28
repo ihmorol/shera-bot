@@ -99,6 +99,16 @@ export class ReplayService {
       // (E10). An unknown stream reports itself the same way, with horizon 0.
       const snapshot = this.deps.loadSnapshot(workspaceId, streamId);
       if (!snapshot) {
+        // Reachability (B7): today this arm fires ONLY when the injected
+        // retention horizon sits above the client's cursor on a stream the
+        // snapshot loader cannot resolve (tests exercise exactly that). Two
+        // other paths CANNOT reach it right now: an unknown stream's default
+        // horizon is 0 (nothing journaled), so cursor 0 fails `cursor <
+        // horizon` and falls through to the honest empty events batch below;
+        // and both transport schemas forbid negative cursors (min 0), so a
+        // negative cursor cannot push `cursor < horizon` either. The arm
+        // stays for schema evolution — a future caller may pass a cursor or
+        // horizon combination the loader cannot answer with a snapshot.
         return {
           kind: "snapshot_required",
           stream_id: streamId,

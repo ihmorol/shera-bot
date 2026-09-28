@@ -18,7 +18,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-import { composeRuntime, type RuntimeHandle } from "./transport/local-api/compose.ts";
+import { DEFAULT_WORKSPACE_ID, composeRuntime, type RuntimeHandle } from "./transport/local-api/compose.ts";
 
 export interface RuntimeNodeConfig {
   /** Bind address; default 127.0.0.1 (loopback only). */
@@ -27,6 +27,12 @@ export interface RuntimeNodeConfig {
   port?: number;
   /** SQLite database path; parent directory is created if missing. */
   dbPath?: string;
+  /**
+   * E12: the container's default workspace for harness-driven runs.
+   * Default: RUNTIME_DEFAULT_WORKSPACE_ID, else DEFAULT_WORKSPACE_ID
+   * ("ws-local-default" — a PROTOTYPE default the owner must confirm).
+   */
+  defaultWorkspaceId?: string;
   /** Install SIGINT/SIGTERM handlers that drain and stop the node. Default false. */
   signals?: boolean;
 }
@@ -43,6 +49,7 @@ export interface RuntimeNodeEnvConfig {
   host: string;
   port: number;
   dbPath: string;
+  defaultWorkspaceId: string;
 }
 
 const DEFAULT_HOST = "127.0.0.1";
@@ -68,15 +75,17 @@ export function runtimeConfigFromEnv(
     }
   }
   const dbPath = overrides.dbPath ?? env["RUNTIME_DB_PATH"] ?? DEFAULT_DB_PATH;
-  return { host, port, dbPath };
+  const defaultWorkspaceId =
+    overrides.defaultWorkspaceId ?? env["RUNTIME_DEFAULT_WORKSPACE_ID"] ?? DEFAULT_WORKSPACE_ID;
+  return { host, port, dbPath, defaultWorkspaceId };
 }
 
 /** Start the runtime node: compose, bind, (optionally) wire shutdown signals. */
 export async function startRuntimeNode(config: RuntimeNodeConfig = {}): Promise<RuntimeNode> {
-  const { host, port, dbPath } = runtimeConfigFromEnv(process.env, config);
+  const { host, port, dbPath, defaultWorkspaceId } = runtimeConfigFromEnv(process.env, config);
   mkdirSync(dirname(dbPath), { recursive: true });
 
-  const runtime: RuntimeHandle = composeRuntime({ dbPath });
+  const runtime: RuntimeHandle = composeRuntime({ dbPath, workspaceId: defaultWorkspaceId });
   await new Promise<void>((resolve, reject) => {
     const onError = (error: Error) => reject(error);
     runtime.httpServer.once("error", onError);

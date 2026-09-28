@@ -62,13 +62,31 @@ describe("runtime node config from environment (no secrets cross this path, G3)"
       host: "127.0.0.1",
       port: 8080,
       dbPath: join("data", "runtime.db"),
+      defaultWorkspaceId: "ws-local-default",
     });
     expect(
       runtimeConfigFromEnv(
         { RUNTIME_HOST: "127.0.0.1", RUNTIME_PORT: "5099", RUNTIME_DB_PATH: "/tmp/runtime.db" },
         { port: 0 },
       ),
-    ).toEqual({ host: "127.0.0.1", port: 0, dbPath: "/tmp/runtime.db" });
+    ).toEqual({
+      host: "127.0.0.1",
+      port: 0,
+      dbPath: "/tmp/runtime.db",
+      defaultWorkspaceId: "ws-local-default",
+    });
+  });
+
+  it("takes the default workspace from RUNTIME_DEFAULT_WORKSPACE_ID (E12)", () => {
+    expect(
+      runtimeConfigFromEnv({ RUNTIME_DEFAULT_WORKSPACE_ID: "ws-provisioned-1" }),
+    ).toMatchObject({ defaultWorkspaceId: "ws-provisioned-1" });
+    expect(
+      runtimeConfigFromEnv(
+        { RUNTIME_DEFAULT_WORKSPACE_ID: "ws-provisioned-1" },
+        { defaultWorkspaceId: "ws-explicit" },
+      ),
+    ).toMatchObject({ defaultWorkspaceId: "ws-explicit" });
   });
 
   it("fails on an invalid port instead of silently falling back (G4)", () => {

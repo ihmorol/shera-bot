@@ -95,6 +95,7 @@ describe("workspace scoping by construction (E12)", () => {
   const repositoryFiles = [
     join(USER_RUNTIME_SRC, "adapters", "sqlite", "event-journal-repository.ts"),
     join(USER_RUNTIME_SRC, "adapters", "sqlite", "conversations-repository.ts"),
+    join(USER_RUNTIME_SRC, "adapters", "sqlite", "command-receipts-repository.ts"),
     join(USER_RUNTIME_SRC, "adapters", "sqlite", "migrations.ts"),
   ];
 
@@ -134,7 +135,7 @@ describe("workspace scoping by construction (E12)", () => {
       join(USER_RUNTIME_SRC, "adapters", "sqlite", "migrations.ts"),
       "utf8",
     );
-    for (const table of ["event_journal", "conversations"]) {
+    for (const table of ["event_journal", "conversations", "command_receipts"]) {
       const tableSql = schema.slice(schema.indexOf(`CREATE TABLE IF NOT EXISTS ${table}`));
       if (!tableSql.includes("workspace_id")) {
         throw new Error(`${table} schema does not declare workspace_id`);

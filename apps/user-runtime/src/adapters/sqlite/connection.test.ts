@@ -72,7 +72,7 @@ describe("sqlite connection", () => {
 });
 
 describe("committed migrations", () => {
-  it("apply from an empty database and create the event journal and conversations tables (AC1)", () => {
+  it("apply from an empty database and create the event journal, conversations, and command receipt tables (AC1, E12)", () => {
     const conn: SqliteConnection = openDatabase(newTempDbPath());
     try {
       applyMigrations(conn.db);
@@ -85,10 +85,13 @@ describe("committed migrations", () => {
 
       expect(tables).toContain("event_journal");
       expect(tables).toContain("conversations");
+      expect(tables).toContain("command_receipts");
       expect(tables).toContain("schema_migrations");
 
-      // Both product tables carry workspace_id (E12) from the very first migration.
-      for (const table of ["event_journal", "conversations"]) {
+      // Every product table carries workspace_id (E12) from the very first
+      // migration — command receipts included, since receipts are keyed by
+      // (workspace_id, idempotency_key).
+      for (const table of ["event_journal", "conversations", "command_receipts"]) {
         const columns = (
           conn.db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
         ).map((row) => row.name);

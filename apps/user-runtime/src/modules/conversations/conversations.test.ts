@@ -344,6 +344,41 @@ describe("conversations commands (E12/AC5 — workspace scoping)", () => {
       h.conn.close();
     }
   });
+
+  it("scopes idempotency keys per workspace: the same key in two workspaces stays independent (E12/AC6)", () => {
+    const h = newHarness();
+    try {
+      const key = "shared-idem-key-across-workspaces";
+      const inA = h.service.executeCommand(
+        createCommand({ workspace_id: WS_A, idempotency_key: key, payload: { title: "A side" } }),
+      );
+      // The SAME idempotency_key in workspace B must NOT replay workspace A's
+      // receipt: receipts are keyed by (workspace_id, idempotency_key), so B's
+      // command executes fully as its own aggregate.
+      const inB = h.service.executeCommand(
+        createCommand({ workspace_id: WS_B, idempotency_key: key, payload: { title: "B side" } }),
+      );
+      expect(inB.kind).toBe("created");
+      expect(inB.conversation_id).not.toBe(inA.conversation_id);
+      expect(inB.title).toBe("B side");
+      expect(inB.event_id).not.toBe(inA.event_id);
+
+      // Workspace A's receipt and result are untouched by B's execution: the
+      // recorded result still replays for A's key, and each workspace holds
+      // exactly one conversation and one receipt.
+      const replayedA = h.service.executeCommand(
+        createCommand({ workspace_id: WS_A, idempotency_key: key, payload: { title: "ignored" } }),
+      );
+      expect(replayedA).toEqual(inA);
+      expect(h.conversations.findById(WS_A, inA.conversation_id, h.conn.db)?.title).toBe("A side");
+      expect(h.conversations.countInWorkspace(WS_A, h.conn.db)).toBe(1);
+      expect(h.conversations.countInWorkspace(WS_B, h.conn.db)).toBe(1);
+      expect(h.receipts.countInWorkspace(WS_A, h.conn.db)).toBe(1);
+      expect(h.receipts.countInWorkspace(WS_B, h.conn.db)).toBe(1);
+    } finally {
+      h.conn.close();
+    }
+  });
 });
 
 describe("conversations commands (D26/AC8 — post-commit fanout)", () => {

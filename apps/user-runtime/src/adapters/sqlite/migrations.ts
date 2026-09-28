@@ -8,7 +8,14 @@
  *
  * v1 — append-only event journal + the conversations aggregate. BOTH tables
  * carry workspace_id from day one (E12): every row is tenant-scoped at the
- * storage layer, not only at the API layer.
+ * storage layer, not only at the API layer. The journal's primary key is
+ * (workspace_id, stream_id, sequence): streams live INSIDE workspaces, so the
+ * same aggregate id in two workspaces never collides (AC3).
+ *
+ * v2 — command receipts (D23 rule 6): one row per accepted command keyed by
+ * (workspace_id, idempotency_key), recorded in the SAME transaction as the
+ * command's effects, so a repeated key replays the recorded result instead of
+ * duplicating effects.
  */
 import type { DatabaseSync } from "node:sqlite";
 
@@ -48,6 +55,20 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
         created_at   TEXT    NOT NULL,
         updated_at   TEXT    NOT NULL,
         PRIMARY KEY (workspace_id, id)
+      ) STRICT;
+    `,
+  },
+  {
+    version: 2,
+    name: "command-receipts",
+    sql: `
+      CREATE TABLE IF NOT EXISTS command_receipts (
+        workspace_id    TEXT NOT NULL,
+        idempotency_key TEXT NOT NULL,
+        command_type    TEXT NOT NULL,
+        result_json     TEXT NOT NULL,
+        created_at      TEXT NOT NULL,
+        PRIMARY KEY (workspace_id, idempotency_key)
       ) STRICT;
     `,
   },

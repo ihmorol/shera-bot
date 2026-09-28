@@ -125,4 +125,59 @@ export class EventJournalRepository {
     const n = row?.n;
     return typeof n === "bigint" ? Number(n) : (n ?? 0);
   }
+
+  /**
+   * Replay read (AC4): the durable events of one stream strictly after
+   * `afterSequence`, in order, workspace-scoped. `limit` bounds a single
+   * replay batch; the caller pages by advancing its cursor.
+   */
+  readFrom(
+    workspaceId: string,
+    streamId: string,
+    afterSequence: number,
+    limit: number,
+    exec?: DatabaseSync,
+  ): EventJournalRow[] {
+    const db = exec ?? this.tx.connection();
+    return db
+      .prepare(
+        `SELECT stream_id, sequence, event_id, event_type, schema_version,
+                payload, workspace_id, occurred_at, correlation_id
+         FROM event_journal
+         WHERE workspace_id = ? AND stream_id = ? AND sequence > ?
+         ORDER BY sequence ASC
+         LIMIT ?`,
+      )
+      .all(workspaceId, streamId, afterSequence, limit) as unknown as EventJournalRow[];
+  }
+
+  /** Lowest sequence still present for a stream (E10 retention horizon). */
+  minSequence(workspaceId: string, streamId: string, exec?: DatabaseSync): number {
+    const db = exec ?? this.tx.connection();
+    const row = db
+      .prepare(
+        "SELECT MIN(sequence) AS min_sequence FROM event_journal WHERE workspace_id = ? AND stream_id = ?",
+      )
+      .get(workspaceId, streamId) as { min_sequence: number | bigint | null } | undefined;
+    const value = row?.min_sequence;
+    if (value === null || value === undefined) {
+      return 0;
+    }
+    return typeof value === "bigint" ? Number(value) : value;
+  }
+
+  /** Highest sequence currently held for a stream (snapshot cursor anchor). */
+  maxSequence(workspaceId: string, streamId: string, exec?: DatabaseSync): number {
+    const db = exec ?? this.tx.connection();
+    const row = db
+      .prepare(
+        "SELECT MAX(sequence) AS max_sequence FROM event_journal WHERE workspace_id = ? AND stream_id = ?",
+      )
+      .get(workspaceId, streamId) as { max_sequence: number | bigint | null } | undefined;
+    const value = row?.max_sequence;
+    if (value === null || value === undefined) {
+      return 0;
+    }
+    return typeof value === "bigint" ? Number(value) : value;
+  }
 }

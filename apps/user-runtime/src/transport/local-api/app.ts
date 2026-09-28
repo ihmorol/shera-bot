@@ -24,8 +24,9 @@ import { ConversationCommand } from "../../modules/conversations/conversations.t
 import type { ReplayService } from "../../modules/events/replay.service.ts";
 import {
   contractValidationResponse,
+  createTypedErrorRequestHandler,
   notFoundRequestHandler,
-  typedErrorRequestHandler,
+  type RedactedLogger,
 } from "../http/typed-errors.ts";
 
 export const SUBMIT_CONVERSATION_COMMAND_PATH = "/v1/conversations/commands" as const;
@@ -52,6 +53,12 @@ export interface LocalApiDeps {
   conversations: Pick<ConversationsService, "executeCommand">;
   /** AC4 replay resolution — always the journal's ReplayService, never re-implemented here. */
   replay: Pick<ReplayService, "resolve">;
+  /**
+   * B-1: the redacted sink untyped HTTP faults are recorded to — the generic
+   * INTERNAL_ERROR's correlation_id is logged with it, so "The failure has
+   * been recorded." is true. Default: a single JSON line on console.error.
+   */
+  logUntypedFault?: RedactedLogger;
 }
 
 export function createLocalApi(deps: LocalApiDeps): Express {
@@ -112,7 +119,9 @@ export function createLocalApi(deps: LocalApiDeps): Express {
 
   // Typed failures and unknown routes: the SheraError taxonomy, never an
   // Express default page, a stack trace, or raw internals (D23 rule 4, G3).
+  // Untyped faults are additionally recorded through the injected redacted
+  // sink (B-1) — the correlation_id the client receives is the one logged.
   app.use(notFoundRequestHandler);
-  app.use(typedErrorRequestHandler);
+  app.use(createTypedErrorRequestHandler(deps.logUntypedFault));
   return app;
 }

@@ -13,10 +13,18 @@
  * transport routing (D23 rule 2). Route-level schema mismatches reuse the
  * same response builder (contractValidationResponse) so every failure path
  * emits identical, contract-validated fields.
+ *
+ * Untyped faults are also RECORDED (B-1): the generic INTERNAL_ERROR carries
+ * only its correlation_id to the client, while the injected redacted logger
+ * receives the allowlisted operational fields (routing data, name, message,
+ * stack) — making "The failure has been recorded." a true statement. The log
+ * shape matches the control-plane's request-failure log so one grep covers
+ * both surfaces (G3: never payloads, credentials, or SQL text beyond the
+ * error's own name/message/stack).
  */
 import { randomUUID } from "node:crypto";
 
-import type { ErrorRequestHandler, RequestHandler } from "express";
+import type { ErrorRequestHandler, RequestHandler, Request } from "express";
 
 import type { SheraError } from "@shera-bot/contracts";
 
@@ -26,6 +34,18 @@ import { EventsServiceError } from "../../modules/events/events.service.ts";
 interface HttpErrorMapping {
   status: number;
   body: SheraError;
+}
+
+/**
+ * A redacted operator-log sink (G3). Sinks receive an event name plus an
+ * explicit field allowlist chosen by the CALL SITE — this type is the conduit,
+ * not the redaction enforcement; call sites must never pass secrets.
+ */
+export type RedactedLogger = (event: string, fields: Record<string, unknown>) => void;
+
+/** Minimal default sink: one JSON line on console.error. */
+export function consoleRedactedLogger(event: string, fields: Record<string, unknown>): void {
+  console.error(JSON.stringify({ level: "error", event, ...fields }));
 }
 
 /**
@@ -88,8 +108,8 @@ function bodyParserType(error: unknown): string | null {
 }
 
 /** Map any thrown failure to a stable HTTP status + contract-validated body. */
-export function toSheraErrorResponse(error: unknown): HttpErrorMapping {
-  const correlation_id = randomUUID();
+export function toSheraErrorResponse(error: unknown, correlationId?: string): HttpErrorMapping {
+  const correlation_id = correlationId ?? randomUUID();
 
   if (error instanceof ConversationsServiceError) {
     const mapping = CONVERSATIONS_REJECTIONS[error.code];
@@ -180,19 +200,49 @@ export function notFoundErrorResponse(): SheraError {
   };
 }
 
+/** True when the failure is none of the typed/parsing paths — the generic 500. */
+function isUntypedFault(error: unknown): boolean {
+  return (
+    !(error instanceof ConversationsServiceError) &&
+    !(error instanceof EventsServiceError) &&
+    bodyParserType(error) === null
+  );
+}
+
 /**
- * Express error middleware: mount AFTER all routes on every runtime HTTP
- * surface. Headers-already-sent failures delegate to Express' default
- * handling; everything else becomes the typed taxonomy.
+ * Express error middleware with an injected redacted fault log: an untyped
+ * fault is answered with the generic INTERNAL_ERROR whose correlation_id is
+ * ALSO the one logged (B-1) — the client can quote it, the operator can find
+ * it. Typed rejections and contract-validation failures are recorded as data
+ * / answered precisely and are not logged here.
  */
-export const typedErrorRequestHandler: ErrorRequestHandler = (error, _req, res, next) => {
-  if (res.headersSent) {
-    next(error);
-    return;
-  }
-  const { status, body } = toSheraErrorResponse(error);
-  res.status(status).json(body);
-};
+export function createTypedErrorRequestHandler(
+  logFault: RedactedLogger = consoleRedactedLogger,
+): ErrorRequestHandler {
+  return (error, req, res, next) => {
+    if (res.headersSent) {
+      next(error);
+      return;
+    }
+    const untyped = isUntypedFault(error);
+    const correlationId = untyped ? randomUUID() : undefined;
+    const { status, body } = toSheraErrorResponse(error, correlationId);
+    if (untyped && correlationId !== undefined) {
+      logFault("untyped_request_fault", {
+        correlation_id: correlationId,
+        method: req.method,
+        path: req.path,
+        name: error instanceof Error ? error.name : "Error",
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? (error.stack ?? null) : null,
+      });
+    }
+    res.status(status).json(body);
+  };
+}
+
+/** Default mount: untyped faults are recorded to the default redacted sink. */
+export const typedErrorRequestHandler: ErrorRequestHandler = createTypedErrorRequestHandler();
 
 /** Mount LAST: unknown paths answer with the typed 404, never HTML. */
 export const notFoundRequestHandler: RequestHandler = (_req, res) => {

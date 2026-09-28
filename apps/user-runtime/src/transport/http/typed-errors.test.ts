@@ -8,13 +8,53 @@
  * and every produced body must validate against the @shera-bot/contracts
  * SheraError schema.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { SheraError } from "@shera-bot/contracts";
 
 import { ConversationsServiceError } from "../../modules/conversations/conversations.types.ts";
 import { EventsServiceError } from "../../modules/events/events.service.ts";
-import { notFoundErrorResponse, toSheraErrorResponse } from "./typed-errors.ts";
+import {
+  consoleRedactedLogger,
+  createTypedErrorRequestHandler,
+  notFoundErrorResponse,
+  toSheraErrorResponse,
+  type RedactedLogger,
+} from "./typed-errors.ts";
+
+interface StubResponse {
+  headersSent: boolean;
+  statusCode: number;
+  body: unknown;
+  status(code: number): StubResponse;
+  json(body: unknown): StubResponse;
+}
+
+function stubResponse(headersSent = false): StubResponse {
+  return {
+    headersSent,
+    statusCode: 0,
+    body: undefined,
+    status(code: number) {
+      this.statusCode = code;
+      return this;
+    },
+    json(body: unknown) {
+      this.body = body;
+      return this;
+    },
+  };
+}
+
+function callHandler(
+  handler: ReturnType<typeof createTypedErrorRequestHandler>,
+  error: unknown,
+  req: { method: string; path: string },
+  res: StubResponse,
+  next: () => void,
+): void {
+  handler(error, req as never, res as never, next);
+}
 
 describe("toSheraErrorResponse — chunk-2 typed rejections map to stable HTTP failures", () => {
   it("maps conversations typed rejections to status + code + category", () => {
@@ -135,5 +175,112 @@ describe("notFoundErrorResponse — unknown routes answer with the typed 404", (
     expect(body.retryable).toBe(false);
     expect(body.internal_details).toBeNull();
     expect(() => SheraError.parse(body)).not.toThrow();
+  });
+});
+
+describe("createTypedErrorRequestHandler — untyped faults are recorded, not silent (B-1)", () => {
+  it("logs the untyped fault with the correlation_id the client receives, and nothing beyond the allowlist", () => {
+    const logged: Array<{ event: string; fields: Record<string, unknown> }> = [];
+    const logger: RedactedLogger = (event, fields) => logged.push({ event, fields });
+    const handler = createTypedErrorRequestHandler(logger);
+    const res = stubResponse();
+
+    callHandler(
+      handler,
+      new Error("SQLITE_CONSTRAINT: users.email leaked"),
+      { method: "POST", path: "/v1/conversations/commands" },
+      res,
+      () => {},
+    );
+
+    // The client sees the generic, already-stripped fault (G3).
+    expect(res.statusCode).toBe(500);
+    const body = res.body as { code: string; correlation_id: string; safe_message: string };
+    expect(body.code).toBe("INTERNAL_ERROR");
+    expect(JSON.stringify(body)).not.toContain("SQLITE_CONSTRAINT");
+    expect(JSON.stringify(body)).not.toContain("leaked");
+
+    // The operator log carries the SAME correlation_id the client can quote,
+    // and exactly the allowlisted fields: routing data + name/message/stack.
+    expect(logged).toHaveLength(1);
+    const recorded = logged[0]!;
+    expect(recorded.event).toBe("untyped_request_fault");
+    const fields = recorded.fields;
+    expect(Object.keys(fields).sort()).toEqual([
+      "correlation_id",
+      "message",
+      "method",
+      "name",
+      "path",
+      "stack",
+    ]);
+    expect(fields.correlation_id).toBe(body.correlation_id);
+    expect(fields.method).toBe("POST");
+    expect(fields.path).toBe("/v1/conversations/commands");
+    expect(fields.name).toBe("Error");
+    expect(fields.message).toBe("SQLITE_CONSTRAINT: users.email leaked");
+    expect(typeof fields.stack).toBe("string");
+  });
+
+  it("does not log typed rejections — they are answered precisely and recorded as data", () => {
+    const logged: Array<{ event: string; fields: Record<string, unknown> }> = [];
+    const handler = createTypedErrorRequestHandler((event, fields) => logged.push({ event, fields }));
+    const res = stubResponse();
+
+    callHandler(
+      handler,
+      new ConversationsServiceError("CONVERSATION_REVISION_CONFLICT", "conflict", "rev 4 vs 2"),
+      { method: "POST", path: "/v1/conversations/commands" },
+      res,
+      () => {},
+    );
+
+    expect(res.statusCode).toBe(409);
+    expect(logged).toHaveLength(0);
+  });
+
+  it("delegates headers-sent failures to Express and logs nothing", () => {
+    const logged: Array<{ event: string; fields: Record<string, unknown> }> = [];
+    const handler = createTypedErrorRequestHandler((event, fields) => logged.push({ event, fields }));
+    const res = stubResponse(true);
+    let delegated: unknown = null;
+    callHandler(handler, new Error("late failure"), { method: "GET", path: "/x" }, res, () => {
+      delegated = "next";
+    });
+
+    expect(delegated).toBe("next");
+    expect(logged).toHaveLength(0);
+  });
+
+  it("a non-Error fault is still recorded with its stringified form", () => {
+    const logged: Array<{ event: string; fields: Record<string, unknown> }> = [];
+    const handler = createTypedErrorRequestHandler((event, fields) => logged.push({ event, fields }));
+    const res = stubResponse();
+
+    callHandler(handler, "raw string fault", { method: "GET", path: "/x" }, res, () => {});
+
+    expect(res.statusCode).toBe(500);
+    expect(logged).toHaveLength(1);
+    const recorded = logged[0]!;
+    expect(recorded.fields.name).toBe("Error");
+    expect(recorded.fields.message).toBe("raw string fault");
+    expect(recorded.fields.stack).toBeNull();
+  });
+
+  it("the default sink writes one redacted JSON line on console.error", () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const handler = createTypedErrorRequestHandler(consoleRedactedLogger);
+      const res = stubResponse();
+      callHandler(handler, new Error("boom"), { method: "GET", path: "/x" }, res, () => {});
+
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      const line = JSON.parse(errorSpy.mock.calls[0]?.[0] as string) as Record<string, unknown>;
+      expect(line.event).toBe("untyped_request_fault");
+      expect(line.level).toBe("error");
+      expect(line.correlation_id).toBe((res.body as { correlation_id: string }).correlation_id);
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 });

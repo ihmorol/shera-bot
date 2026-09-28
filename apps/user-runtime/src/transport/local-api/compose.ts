@@ -40,6 +40,7 @@ import {
 } from "../../modules/conversations/conversations.service.ts";
 import { HarnessRunService } from "../../modules/runtime/harness-run-service.ts";
 import { createLocalApi } from "./app.ts";
+import type { RedactedLogger } from "../http/typed-errors.ts";
 import { attachWebSocketGateway, type WebSocketGatewayHandle } from "../websocket/gateway.ts";
 
 /**
@@ -67,6 +68,8 @@ export interface ComposeLocalApiOptions {
    * Default: the journal's lowest held sequence minus one (nothing compacted).
    */
   retentionHorizon?: (workspaceId: string, streamId: string) => number;
+  /** B-1: the redacted sink untyped HTTP faults are recorded to. Default: console.error JSON line. */
+  logUntypedFault?: RedactedLogger;
 }
 
 export interface LocalApiHandle {
@@ -152,7 +155,11 @@ function wire(options: ComposeLocalApiOptions): Wired {
         Math.max(0, journal.minSequence(workspaceId, streamId, conn.db) - 1)),
   });
 
-  const app = createLocalApi({ conversations, replay });
+  const app = createLocalApi({
+    conversations,
+    replay,
+    ...(options.logUntypedFault ? { logUntypedFault: options.logUntypedFault } : {}),
+  });
   return {
     conn,
     app,

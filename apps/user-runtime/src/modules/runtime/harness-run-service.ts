@@ -172,6 +172,13 @@ export class HarnessRunService {
   /**
    * Validate and execute one proposal (G2). Returns the run's next projection;
    * rejected proposals are recorded as data and never mutate the run.
+   *
+   * The projection lives IN MEMORY for the duration of startRun: task runs
+   * have no durable table, and restart recovery from the journal is deferred
+   * to the recovery slice (S31). The DURABLE record is the journal itself —
+   * every applied unit is a contract-valid D26 envelope row — but nothing
+   * rebuilds task-run state from it yet. (Conversation projections rebuild
+   * from the journal today: conversations.projection.ts.)
    */
   private applyProposal(
     run: TaskRun,

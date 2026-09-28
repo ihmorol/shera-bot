@@ -26,6 +26,7 @@ import { EventsService } from "../events/events.service.ts";
 import { ReplayService, type ReplaySnapshot } from "../events/replay.service.ts";
 import { conversationStreamFor, type ConversationEvent } from "./conversations.events.ts";
 import { ConversationsService } from "./conversations.service.ts";
+import { rebuildConversationProjections } from "./conversations.projection.ts";
 import type { ConversationCommand, ConversationCommandResult } from "./conversations.types.ts";
 
 const tempDirs: string[] = [];
@@ -90,7 +91,7 @@ function createCommand(
 ) {
   return {
     type: "conversation.create" as const,
-    workspace_id: WS_A,
+    workspace_id: overrides.workspace_id ?? WS_A,
     idempotency_key:
       overrides.idempotency_key ?? `idem-create-${Math.random().toString(36).slice(2)}`,
     payload: overrides.payload ?? { title: "Operation kickoff" },
@@ -373,6 +374,129 @@ describe("conversations commands (D26/AC8 — post-commit fanout)", () => {
       ]);
       expect(h.published[0]?.payload).toMatchObject({ title: "Operation kickoff" });
       expect(h.published[1]?.payload).toMatchObject({ new_revision: 2 });
+    } finally {
+      h.conn.close();
+    }
+  });
+});
+
+describe("conversation projection rebuild (D5 — state rebuildable from the journal)", () => {
+  it("rebuilds conversation state from the journal alone and it matches the table", () => {
+    const h = newHarness();
+    try {
+      const renamedTwice = h.service.executeCommand(createCommand());
+      h.service.executeCommand(
+        renameCommand(renamedTwice.conversation_id, {
+          payload: { conversation_id: renamedTwice.conversation_id, title: "v2", expected_revision: 1 },
+        }),
+      );
+      h.service.executeCommand(
+        renameCommand(renamedTwice.conversation_id, {
+          payload: { conversation_id: renamedTwice.conversation_id, title: "v3", expected_revision: 2 },
+        }),
+      );
+      const untouched = h.service.executeCommand(
+        createCommand({ payload: { title: "never renamed" } }),
+      );
+      const foreign = h.service.executeCommand(
+        createCommand({ workspace_id: WS_B, payload: { title: "workspace B twin" } }),
+      );
+
+      // Rebuild from the journal ALONE — no conversations-table reads.
+      const rebuiltA = rebuildConversationProjections(WS_A, h.journal, h.conn.db);
+      expect(rebuiltA.size).toBe(2);
+      for (const [id, projection] of rebuiltA) {
+        const row = h.conversations.findById(WS_A, id, h.conn.db);
+        expect(row).not.toBeNull();
+        expect(projection).toEqual({
+          id,
+          workspace_id: WS_A,
+          title: row?.title,
+          revision: row?.revision,
+        });
+      }
+      expect(rebuiltA.get(renamedTwice.conversation_id)).toMatchObject({
+        title: "v3",
+        revision: 3,
+      });
+      expect(rebuiltA.get(untouched.conversation_id)).toMatchObject({
+        title: "never renamed",
+        revision: 1,
+      });
+
+      // E12: the rebuild is workspace-scoped — WS_B's stream folds separately.
+      const rebuiltB = rebuildConversationProjections(WS_B, h.journal, h.conn.db);
+      expect(rebuiltB.size).toBe(1);
+      expect(rebuiltB.get(foreign.conversation_id)).toMatchObject({
+        workspace_id: WS_B,
+        title: "workspace B twin",
+        revision: 1,
+      });
+    } finally {
+      h.conn.close();
+    }
+  });
+
+  it("re-validates every payload against the registry while folding (G2)", () => {
+    const h = newHarness();
+    try {
+      const created = h.service.executeCommand(createCommand());
+      const streamId = conversationStreamFor(created.conversation_id);
+
+      // A row the gateway could never have written (the append boundary would
+      // have rejected this payload): the rebuild must refuse to fold it.
+      const sequence = h.journal.nextSequence(streamId, WS_A, h.conn.db);
+      h.journal.append(
+        {
+          stream_id: streamId,
+          sequence,
+          event_id: "evt_smuggled_1",
+          event_type: "conversation.renamed",
+          schema_version: 1,
+          payload: JSON.stringify({ nope: true }),
+          workspace_id: WS_A,
+          occurred_at: new Date().toISOString(),
+          correlation_id: "smuggled",
+        },
+        h.conn.db,
+      );
+
+      expect(() => rebuildConversationProjections(WS_A, h.journal, h.conn.db)).toThrow(
+        /conversation projection/,
+      );
+    } finally {
+      h.conn.close();
+    }
+  });
+
+  it("rejects rows whose payload conversation does not match their stream", () => {
+    const h = newHarness();
+    try {
+      h.service.executeCommand(createCommand());
+      const forgedStream = "conversation:forged";
+      const sequence = h.journal.nextSequence(forgedStream, WS_A, h.conn.db);
+      h.journal.append(
+        {
+          stream_id: forgedStream,
+          sequence,
+          event_id: "evt_forged_1",
+          event_type: "conversation.created",
+          schema_version: 1,
+          payload: JSON.stringify({
+            conversation_id: "elsewhere",
+            workspace_id: WS_A,
+            title: "mismatched",
+          }),
+          workspace_id: WS_A,
+          occurred_at: new Date().toISOString(),
+          correlation_id: "forged",
+        },
+        h.conn.db,
+      );
+
+      expect(() => rebuildConversationProjections(WS_A, h.journal, h.conn.db)).toThrow(
+        /does not match payload conversation/,
+      );
     } finally {
       h.conn.close();
     }

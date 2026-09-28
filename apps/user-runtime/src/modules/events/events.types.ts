@@ -36,9 +36,13 @@ export type ConversationRenamedPayload = z.infer<typeof ConversationRenamedPaylo
  * The D26 task-execution vocabulary (S07; D51 seam) journaled on `task:<id>`
  * streams. The journal row stores the FULL contract envelope as its payload —
  * the envelope IS the durable D26 event — so each registry entry validates the
- * whole envelope (G2: the gateway validates what it persists, at append and at
- * replay). The embedded per-stream sequence equals the row's sequence: the
- * writer allocates it first, then builds the envelope with it.
+ * whole envelope. WHERE VALIDATION ACTUALLY HAPPENS (G2): at APPEND
+ * (events.service validates every payload against its registry entry) and at
+ * PROJECTION REBUILD (conversations.projection.ts re-validates every payload
+ * it folds). replay.service does NOT re-validate payloads today — it trusts
+ * rows the append boundary already validated. The embedded per-stream
+ * sequence equals the row's sequence: the writer allocates it first, then
+ * builds the envelope with it.
  */
 const TASK_EVENT_REGISTRY = Object.fromEntries(
   (Object.keys(CONTRACT_EVENT_ENVELOPES) as ContractEventType[]).map((type) => [

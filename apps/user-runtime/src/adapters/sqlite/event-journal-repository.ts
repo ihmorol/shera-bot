@@ -117,6 +117,18 @@ export class EventJournalRepository {
       .all(streamId, workspaceId) as unknown as EventJournalRow[];
   }
 
+  /**
+   * Distinct journal streams of one workspace (projection-rebuild discovery,
+   * E12): callers fold each stream back into aggregate state.
+   */
+  listWorkspaceStreams(workspaceId: string, exec?: DatabaseSync): string[] {
+    const db = exec ?? this.tx.connection();
+    const rows = db
+      .prepare("SELECT DISTINCT stream_id FROM event_journal WHERE workspace_id = ?")
+      .all(workspaceId) as Array<{ stream_id: string }>;
+    return rows.map((row) => row.stream_id);
+  }
+
   countStream(streamId: string, workspaceId: string, exec?: DatabaseSync): number {
     const db = exec ?? this.tx.connection();
     const row = db

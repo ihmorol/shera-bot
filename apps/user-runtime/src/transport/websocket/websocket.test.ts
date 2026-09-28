@@ -11,13 +11,19 @@
  */
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { createServer, type Server as HTTPServer } from "node:http";
 import { join } from "node:path";
 
 import { afterAll, describe, expect, it } from "vitest";
 import type { TypedExecutionEvent } from "@shera-bot/contracts";
 
 import { DEFAULT_WORKSPACE_ID, composeRuntime, type RuntimeHandle } from "../local-api/compose.ts";
-import { DEFAULT_PING_INTERVAL_MS, DEFAULT_PING_TIMEOUT_MS } from "./gateway.ts";
+import {
+  attachWebSocketGateway,
+  DEFAULT_PING_INTERVAL_MS,
+  DEFAULT_PING_TIMEOUT_MS,
+  type WebSocketGatewayHandle,
+} from "./gateway.ts";
 
 const tempDirs: string[] = [];
 const WS_A = "ws-11111111-1111-4111-8111-111111111111";
@@ -430,6 +436,71 @@ describe("websocket gateway — durable replay resume (AC4, E10)", () => {
       }
     } finally {
       await running.close();
+    }
+  });
+});
+
+describe("websocket gateway — handler faults are contained (B3)", () => {
+  it("acks a typed INTERNAL_ERROR when the replay path throws, records the fault, and the connection survives", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "shera-runtime-ws-fault-"));
+    tempDirs.push(dir);
+    const httpServer: HTTPServer = createServer((_req, res) => {
+      res.writeHead(404).end();
+    });
+    const logged: Array<{ event: string; fields: Record<string, unknown> }> = [];
+    const gateway: WebSocketGatewayHandle = attachWebSocketGateway(httpServer, {
+      // Fault injection: the replay authority throws on ANY resolve — the
+      // corrupt-row failure the finding describes.
+      replay: {
+        resolve: () => {
+          throw new Error("corrupt journal row: event_journal.sequence malformed");
+        },
+      },
+      logHandlerFault: (event, fields) => logged.push({ event, fields }),
+    });
+    await new Promise<void>((resolve) => httpServer.listen(0, "127.0.0.1", resolve));
+    const address = httpServer.address() as { port: number };
+    const client = await WsTestClient.open(`http://127.0.0.1:${address.port}`);
+    try {
+      const ack = (await client.emitWithAck("replay.request", {
+        workspace_id: WS_A,
+        stream_id: "conversation:any",
+        last_acknowledged_sequence: 0,
+      })) as Record<string, unknown>;
+
+      // The typed INTERNAL_ERROR carries the stable fields and NO internals.
+      expect(ack["code"]).toBe("INTERNAL_ERROR");
+      expect(ack["category"]).toBe("internal");
+      expect(ack["safe_message"]).toBe("Something went wrong. The failure has been recorded.");
+      expect(ack["internal_details"]).toBeNull();
+      expect(typeof ack["correlation_id"]).toBe("string");
+      expect(JSON.stringify(ack)).not.toContain("corrupt journal row");
+      expect(JSON.stringify(ack)).not.toContain("event_journal");
+
+      // The fault was recorded for operators through the redacted sink.
+      expect(logged).toHaveLength(1);
+      const recorded = logged[0]!;
+      expect(recorded.event).toBe("ws_handler_failed");
+      expect(Object.keys(recorded.fields).sort()).toEqual(["handler", "message", "name", "stack"]);
+      expect(recorded.fields.handler).toBe("replay.request");
+      expect(recorded.fields.message).toBe(
+        "corrupt journal row: event_journal.sequence malformed",
+      );
+
+      // The connection survived: the same socket still completes a read-only
+      // subscription and can leave cleanly.
+      const subscribeAck = (await client.emitWithAck("stream.subscribe", {
+        workspace_id: WS_A,
+        stream_id: "conversation:any",
+      })) as Record<string, unknown>;
+      expect(subscribeAck).toEqual({
+        subscribed: true,
+        workspace_id: WS_A,
+        stream_id: "conversation:any",
+      });
+    } finally {
+      client.close();
+      await gateway.close();
     }
   });
 });

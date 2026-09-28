@@ -33,7 +33,12 @@ import { Id, WorkspaceId } from "@shera-bot/contracts";
 
 import type { EventEnvelope } from "../../modules/events/events.types.ts";
 import type { ReplayService } from "../../modules/events/replay.service.ts";
-import { contractValidationResponse } from "../http/typed-errors.ts";
+import {
+  consoleRedactedLogger,
+  toSheraErrorResponse,
+  contractValidationResponse,
+  type RedactedLogger,
+} from "../http/typed-errors.ts";
 
 /** Server → client: one live, committed stream event (never replay batches). */
 export const STREAM_EVENT = "stream.event" as const;
@@ -71,6 +76,8 @@ export function streamRoom(workspaceId: string, streamId: string): string {
 export interface WebSocketGatewayDeps {
   /** AC4 durability — the ONLY replay authority (never an in-memory buffer). */
   replay: Pick<ReplayService, "resolve">;
+  /** B3: the redacted sink a contained handler fault is recorded to. Default: console.error JSON line. */
+  logHandlerFault?: RedactedLogger;
   pingIntervalMs?: number;
   pingTimeoutMs?: number;
 }
@@ -103,6 +110,7 @@ export function attachWebSocketGateway(
   server: HTTPServer,
   deps: WebSocketGatewayDeps,
 ): WebSocketGatewayHandle {
+  const logHandlerFault = deps.logHandlerFault ?? consoleRedactedLogger;
   const io = new SocketIOServer(server, {
     // Transport-level heartbeats (engine.io ping/pong) — NOT business events.
     pingInterval: deps.pingIntervalMs ?? DEFAULT_PING_INTERVAL_MS,
@@ -113,16 +121,39 @@ export function attachWebSocketGateway(
   });
 
   io.on("connection", (socket: Socket) => {
+    // Every inbound handler is wrapped (B3): a synchronous fault — e.g.
+    // ReplayService.resolve on a corrupt journal row — is CONTAINED here. The
+    // client is acked a typed INTERNAL_ERROR carrying no internals (G3), the
+    // fault is recorded through the redacted sink, and the socket stays
+    // connected. An unwrapped throw would surface as an uncaughtException and
+    // kill the whole runtime process.
+    const guarded = (handler: string, run: () => void, ack?: (response: unknown) => void): void => {
+      try {
+        run();
+      } catch (error) {
+        logHandlerFault("ws_handler_failed", {
+          handler,
+          name: error instanceof Error ? error.name : "Error",
+          message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? (error.stack ?? null) : null,
+        });
+        // Same stable SheraError fields as the HTTP untyped-fault path.
+        ack?.(toSheraErrorResponse(error).body);
+      }
+    };
+
     // Read-only subscription: join the stream's room, ack the receipt. No
     // command surface is reachable from here (D26 — WS never mutates state).
     socket.on(STREAM_SUBSCRIBE, (payload: unknown, ack?: (response: unknown) => void) => {
-      const parsed = StreamSelector.safeParse(payload);
-      if (!parsed.success) {
-        ack?.(contractValidationResponse("The subscription is not a valid stream selector.").body);
-        return;
-      }
-      socket.join(streamRoom(parsed.data.workspace_id, parsed.data.stream_id));
-      ack?.(subscribeAck(parsed.data.workspace_id, parsed.data.stream_id));
+      guarded("stream.subscribe", () => {
+        const parsed = StreamSelector.safeParse(payload);
+        if (!parsed.success) {
+          ack?.(contractValidationResponse("The subscription is not a valid stream selector.").body);
+          return;
+        }
+        socket.join(streamRoom(parsed.data.workspace_id, parsed.data.stream_id));
+        ack?.(subscribeAck(parsed.data.workspace_id, parsed.data.stream_id));
+      }, ack);
     });
 
     // Durable replay resume (AC4): the client's cursor is answered from the
@@ -132,22 +163,24 @@ export function attachWebSocketGateway(
     // (no durability), so it is not used here. Live delivery then resumes in
     // the joined stream room.
     socket.on(REPLAY_REQUEST, (payload: unknown, ack?: (response: unknown) => void) => {
-      const parsed = ReplayRequestBody.safeParse(payload);
-      if (!parsed.success) {
-        ack?.(
-          contractValidationResponse(
-            "The replay request is not valid: workspace_id, stream_id and last_acknowledged_sequence are required.",
-          ).body,
+      guarded("replay.request", () => {
+        const parsed = ReplayRequestBody.safeParse(payload);
+        if (!parsed.success) {
+          ack?.(
+            contractValidationResponse(
+              "The replay request is not valid: workspace_id, stream_id and last_acknowledged_sequence are required.",
+            ).body,
+          );
+          return;
+        }
+        const result = deps.replay.resolve(
+          parsed.data.workspace_id,
+          parsed.data.stream_id,
+          parsed.data.last_acknowledged_sequence,
         );
-        return;
-      }
-      const result = deps.replay.resolve(
-        parsed.data.workspace_id,
-        parsed.data.stream_id,
-        parsed.data.last_acknowledged_sequence,
-      );
-      socket.join(streamRoom(parsed.data.workspace_id, parsed.data.stream_id));
-      ack?.(result);
+        socket.join(streamRoom(parsed.data.workspace_id, parsed.data.stream_id));
+        ack?.(result);
+      }, ack);
     });
   });
 

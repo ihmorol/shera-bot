@@ -34,13 +34,14 @@ import type { HarnessAdapter } from "../../adapters/process/harness-adapter.ts";
 import { FakeHarnessAdapter } from "../../adapters/process/fake-harness-adapter.ts";
 import { EventsService } from "../../modules/events/events.service.ts";
 import { ReplayService } from "../../modules/events/replay.service.ts";
+import type { EventEnvelope } from "../../modules/events/events.types.ts";
 import {
   ConversationsService,
   type ConversationPublisher,
 } from "../../modules/conversations/conversations.service.ts";
 import { HarnessRunService } from "../../modules/runtime/harness-run-service.ts";
 import { createLocalApi } from "./app.ts";
-import type { RedactedLogger } from "../http/typed-errors.ts";
+import { consoleRedactedLogger, type RedactedLogger } from "../http/typed-errors.ts";
 import { attachWebSocketGateway, type WebSocketGatewayHandle } from "../websocket/gateway.ts";
 
 /**
@@ -111,7 +112,36 @@ interface Wired {
   setPublisher(publisher: ConversationPublisher): void;
 }
 
+/**
+ * Fanout containment (B4/AC8): the publish hook fires strictly AFTER commit —
+ * a subscriber's failure (the WS broadcast, any future transport) must never
+ * fail an already-committed command or run. Errors are contained at THIS
+ * wiring and recorded through the composition's redacted sink; the committed
+ * result and the journal row are untouched by the fanout's fate.
+ */
+function containFanout<E extends EventEnvelope>(
+  publisher: (event: E) => void,
+  logFault: RedactedLogger,
+): (event: E) => void {
+  return (event) => {
+    try {
+      publisher(event);
+    } catch (error) {
+      logFault("fanout_failed", {
+        stream_id: event.stream_id,
+        workspace_id: event.workspace_id,
+        sequence: event.sequence,
+        event_type: event.type,
+        name: error instanceof Error ? error.name : "Error",
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? (error.stack ?? null) : null,
+      });
+    }
+  };
+}
+
 function wire(options: ComposeLocalApiOptions): Wired {
+  const logFault = options.logUntypedFault ?? consoleRedactedLogger;
   const conn = openDatabase(options.dbPath);
   applyMigrations(conn.db);
 
@@ -122,14 +152,15 @@ function wire(options: ComposeLocalApiOptions): Wired {
   const events = new EventsService(journal, tx);
 
   // Late-bound fanout: subscribers bind after construction (the WS gateway
-  // mounts later); the post-commit discipline lives in the service.
+  // mounts later); the post-commit discipline lives in the service, and the
+  // subscriber's failures are contained HERE (B4) — never at the command.
   let publisher: ConversationPublisher = options.publish ?? (() => {});
   const conversations = new ConversationsService({
     journal: events,
     conversations: conversationsRepository,
     receipts,
     tx,
-    publish: (event) => publisher(event),
+    publish: containFanout((event) => publisher(event), logFault),
   });
 
   const replay = new ReplayService({
@@ -192,8 +223,12 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     ...(options.pingIntervalMs ? { pingIntervalMs: options.pingIntervalMs } : {}),
     ...(options.pingTimeoutMs ? { pingTimeoutMs: options.pingTimeoutMs } : {}),
   });
-  const broadcast = (event: Parameters<WebSocketGatewayHandle["broadcastStreamEvent"]>[0]) =>
-    gateway.broadcastStreamEvent(event);
+  // Every fanout route (conversation commands AND harness runs) flows through
+  // the same containment (B4): a broadcast failure is recorded, never fatal.
+  const broadcast = containFanout(
+    (event) => gateway.broadcastStreamEvent(event),
+    options.logUntypedFault ?? consoleRedactedLogger,
+  );
   wired.setPublisher(broadcast);
 
   // D51 seam wiring: adapters propose through the sink; the service validates

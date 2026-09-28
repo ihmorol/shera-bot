@@ -505,6 +505,76 @@ describe("websocket gateway — handler faults are contained (B3)", () => {
   });
 });
 
+describe("websocket gateway — post-commit fanout containment (B4)", () => {
+  const TRIGGER: TypedExecutionEvent = {
+    event_id: "evt_trig_ws_fanout",
+    stream_id: "conversation:conv_ws_fanout",
+    sequence: 1,
+    event_version: 1,
+    actor: { type: "system", id: "scheduler" },
+    task_id: "task_evt_trig_ws_fanout",
+    conversation_id: "conv_ws_fanout",
+    occurred_at: "2026-09-28T12:00:00.000Z",
+    redaction_class: "internal",
+    event_type: "trigger.scheduled",
+    payload: { schedule_id: "sch_ws_fanout", due_at: "2026-09-28T12:00:00.000Z" },
+  };
+
+  it("a throwing WS broadcast never fails an already-committed command or run", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "shera-runtime-ws-fanout-"));
+    tempDirs.push(dir);
+    const logged: Array<{ event: string; fields: Record<string, unknown> }> = [];
+    const runtime = composeRuntime({
+      dbPath: join(dir, "runtime.db"),
+      logUntypedFault: (event, fields) => logged.push({ event, fields }),
+    });
+    await new Promise<void>((resolve) => runtime.httpServer.listen(0, "127.0.0.1", resolve));
+    const address = runtime.httpServer.address() as { port: number };
+    const origin = `http://127.0.0.1:${address.port}`;
+
+    // The subscriber (WS broadcast) fails on EVERY event — a transport-down
+    // simulation at the composition boundary the publish hooks flow through.
+    runtime.gateway.broadcastStreamEvent = () => {
+      throw new Error("ws transport down");
+    };
+
+    try {
+      // 1. A conversations command still returns success with committed state.
+      const created = await postJson(origin, createCommand(WS_A, "idem-fanout-1"));
+      expect(created.status).toBe(200);
+      const conversationId = created.body["conversation_id"] as string;
+      const events = await getJson(
+        origin,
+        `/v1/conversations/${conversationId}/events?workspace_id=${WS_A}&last_acknowledged_sequence=0`,
+      );
+      expect((events.body["events"] as unknown[]).length).toBe(1);
+
+      // 2. A harness run still completes and journals its committed events.
+      const result = runtime.harness.startRun(TRIGGER);
+      expect(result).toMatchObject({ ok: true, state: "SUCCEEDED", version: 4 });
+
+      // 3. Every fanout failure was recorded through the redacted sink with
+      // exactly the allowlisted fields — routing data + name/message/stack.
+      const fanoutFaults = logged.filter((entry) => entry.event === "fanout_failed");
+      expect(fanoutFaults.length).toBe(6); // 1 conversation + 5 task events
+      const first = fanoutFaults[0]!;
+      expect(Object.keys(first.fields).sort()).toEqual([
+        "event_type",
+        "message",
+        "name",
+        "sequence",
+        "stack",
+        "stream_id",
+        "workspace_id",
+      ]);
+      expect(first.fields.message).toBe("ws transport down");
+      expect(first.fields.workspace_id).toBe(WS_A);
+    } finally {
+      await runtime.close();
+    }
+  });
+});
+
 describe("websocket gateway — the WS layer cannot mutate state (D26)", () => {
   it("ignores command-like WS messages and leaves the journal untouched", async () => {
     const running = await composeAndListen();

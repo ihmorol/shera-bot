@@ -1,20 +1,29 @@
 /**
- * Minimal composition root for the typed local API (S07).
+ * Minimal composition root for the typed local API and its WebSocket gateway
+ * (S07).
  *
  * Wires the container-local SQLite database (WAL, foreign keys, committed
- * migrations) through the repositories into the chunk-2 services and the
- * Express app factory. This is the wiring the container entrypoint will
+ * migrations) through the repositories into the chunk-2 services, the Express
+ * app factory, and — for the full runtime — a Socket.IO gateway mounted on
+ * the SAME HTTP server. This is the wiring the container entrypoint will
  * reuse; here it exists so tests exercise the REAL stack — real SQLite, real
- * transactions, real HTTP — not a mock transport.
+ * transactions, real HTTP and WS — not a mock transport.
  *
  * The replay snapshot loader is the conversation aggregate read through its
  * repository (workspace-scoped, E12); the retention horizon defaults to the
  * journal's lowest held sequence minus one (no compaction in this slice —
  * E10 hook), and can be overridden where a future compactor raises it.
+ *
+ * The publish hook is late-bound: the gateway does not exist when the
+ * conversations service is constructed, but the D26/AC8 discipline holds —
+ * the hook fires strictly AFTER the committing transaction, whichever
+ * subscriber(s) are bound by then.
  */
+import { createServer, type Server as HTTPServer } from "node:http";
+
 import type { Express } from "express";
 
-import { openDatabase } from "../../adapters/sqlite/connection.ts";
+import { openDatabase, type SqliteConnection } from "../../adapters/sqlite/connection.ts";
 import { applyMigrations } from "../../adapters/sqlite/migrations.ts";
 import { CommandReceiptsRepository } from "../../adapters/sqlite/command-receipts-repository.ts";
 import { ConversationsRepository } from "../../adapters/sqlite/conversations-repository.ts";
@@ -27,11 +36,15 @@ import {
   type ConversationPublisher,
 } from "../../modules/conversations/conversations.service.ts";
 import { createLocalApi } from "./app.ts";
+import {
+  attachWebSocketGateway,
+  type WebSocketGatewayHandle,
+} from "../websocket/gateway.ts";
 
 export interface ComposeLocalApiOptions {
   /** Path of the container-local SQLite database file. */
   dbPath: string;
-  /** Post-commit live fanout hook (WebSocket layer arrives in a later chunk). */
+  /** Post-commit live fanout hook (HTTP-only composition; tests). */
   publish?: ConversationPublisher;
   /**
    * E10 hook: cursors strictly below the returned sequence are not replayable.
@@ -46,7 +59,29 @@ export interface LocalApiHandle {
   close(): void;
 }
 
-export function composeLocalApi(options: ComposeLocalApiOptions): LocalApiHandle {
+export interface ComposeRuntimeOptions extends ComposeLocalApiOptions {
+  /** Transport heartbeats (engine.io ping/pong); defaults documented in the gateway. */
+  pingIntervalMs?: number;
+  pingTimeoutMs?: number;
+}
+
+export interface RuntimeHandle {
+  app: Express;
+  /** The one HTTP server serving BOTH the local API and the WS gateway. */
+  httpServer: HTTPServer;
+  gateway: WebSocketGatewayHandle;
+  /** Closes the gateway (and with it the HTTP server), then SQLite. */
+  close(): Promise<void>;
+}
+
+interface Wired {
+  conn: SqliteConnection;
+  app: Express;
+  replay: ReplayService;
+  setPublisher(publisher: ConversationPublisher): void;
+}
+
+function wire(options: ComposeLocalApiOptions): Wired {
   const conn = openDatabase(options.dbPath);
   applyMigrations(conn.db);
 
@@ -56,12 +91,15 @@ export function composeLocalApi(options: ComposeLocalApiOptions): LocalApiHandle
   const receipts = new CommandReceiptsRepository(tx);
   const events = new EventsService(journal, tx);
 
+  // Late-bound fanout: subscribers bind after construction (the WS gateway
+  // mounts later); the post-commit discipline lives in the service.
+  let publisher: ConversationPublisher = options.publish ?? (() => {});
   const conversations = new ConversationsService({
     journal: events,
     conversations: conversationsRepository,
     receipts,
     tx,
-    ...(options.publish ? { publish: options.publish } : {}),
+    publish: (event) => publisher(event),
   });
 
   const replay = new ReplayService({
@@ -88,5 +126,43 @@ export function composeLocalApi(options: ComposeLocalApiOptions): LocalApiHandle
   });
 
   const app = createLocalApi({ conversations, replay });
-  return { app, close: () => conn.close() };
+  return {
+    conn,
+    app,
+    replay,
+    setPublisher(next) {
+      publisher = next;
+    },
+  };
+}
+
+export function composeLocalApi(options: ComposeLocalApiOptions): LocalApiHandle {
+  const wired = wire(options);
+  return { app: wired.app, close: () => wired.conn.close() };
+}
+
+/**
+ * Full runtime composition: local API + WebSocket gateway on one HTTP server.
+ * Live fanout flows from the conversations service's post-commit publish hook
+ * into the gateway's per-stream rooms; the WS layer itself stays read-only.
+ */
+export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
+  const wired = wire(options);
+  const httpServer = createServer(wired.app);
+  const gateway = attachWebSocketGateway(httpServer, {
+    replay: wired.replay,
+    ...(options.pingIntervalMs ? { pingIntervalMs: options.pingIntervalMs } : {}),
+    ...(options.pingTimeoutMs ? { pingTimeoutMs: options.pingTimeoutMs } : {}),
+  });
+  wired.setPublisher((event) => gateway.broadcastConversationEvent(event));
+  return {
+    app: wired.app,
+    httpServer,
+    gateway,
+    close: async () => {
+      // io.close() also closes the attached HTTP server (socket.io v4).
+      await gateway.close();
+      wired.conn.close();
+    },
+  };
 }

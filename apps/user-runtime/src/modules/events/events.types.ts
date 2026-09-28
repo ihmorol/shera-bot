@@ -8,6 +8,11 @@
  */
 import { z } from "zod";
 
+import {
+  EVENT_ENVELOPES as CONTRACT_EVENT_ENVELOPES,
+  type EventType as ContractEventType,
+} from "@shera-bot/contracts";
+
 /** Streams: the aggregate instance an event belongs to (per-stream sequences). */
 export const ConversationStreamPrefix = "conversation" as const;
 
@@ -27,9 +32,30 @@ export const ConversationRenamedPayload = z.strictObject({
 });
 export type ConversationRenamedPayload = z.infer<typeof ConversationRenamedPayload>;
 
+/**
+ * The D26 task-execution vocabulary (S07; D51 seam) journaled on `task:<id>`
+ * streams. The journal row stores the FULL contract envelope as its payload —
+ * the envelope IS the durable D26 event — so each registry entry validates the
+ * whole envelope (G2: the gateway validates what it persists, at append and at
+ * replay). The embedded per-stream sequence equals the row's sequence: the
+ * writer allocates it first, then builds the envelope with it.
+ */
+const TASK_EVENT_REGISTRY = Object.fromEntries(
+  (Object.keys(CONTRACT_EVENT_ENVELOPES) as ContractEventType[]).map((type) => [
+    type,
+    { schema_version: 1, payload: CONTRACT_EVENT_ENVELOPES[type] },
+  ]),
+) as {
+  [T in ContractEventType]: {
+    schema_version: number;
+    payload: (typeof CONTRACT_EVENT_ENVELOPES)[T];
+  };
+};
+
 export const EVENT_TYPES = {
   "conversation.created": { schema_version: 1, payload: ConversationCreatedPayload },
   "conversation.renamed": { schema_version: 1, payload: ConversationRenamedPayload },
+  ...TASK_EVENT_REGISTRY,
 } as const;
 
 export type EventType = keyof typeof EVENT_TYPES;

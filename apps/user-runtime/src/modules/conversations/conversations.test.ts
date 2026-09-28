@@ -85,11 +85,14 @@ function newHarness(): Harness {
   return { service, conversations, journal, receipts, tx, conn, published, replay };
 }
 
-function createCommand(overrides: Partial<Extract<ConversationCommand, { type: "conversation.create" }>> = {}) {
+function createCommand(
+  overrides: Partial<Extract<ConversationCommand, { type: "conversation.create" }>> = {},
+) {
   return {
     type: "conversation.create" as const,
     workspace_id: WS_A,
-    idempotency_key: overrides.idempotency_key ?? `idem-create-${Math.random().toString(36).slice(2)}`,
+    idempotency_key:
+      overrides.idempotency_key ?? `idem-create-${Math.random().toString(36).slice(2)}`,
     payload: overrides.payload ?? { title: "Operation kickoff" },
   };
 }
@@ -101,7 +104,8 @@ function renameCommand(
   return {
     type: "conversation.rename" as const,
     workspace_id: overrides.workspace_id ?? WS_A,
-    idempotency_key: overrides.idempotency_key ?? `idem-rename-${Math.random().toString(36).slice(2)}`,
+    idempotency_key:
+      overrides.idempotency_key ?? `idem-rename-${Math.random().toString(36).slice(2)}`,
     payload: {
       conversation_id: conversationId,
       title: overrides.payload?.title ?? "renamed",
@@ -185,7 +189,11 @@ describe("conversations commands (AC2 — atomic transition + event + receipt)",
       expect(() =>
         h.service.executeCommand(
           renameCommand(created.conversation_id, {
-            payload: { conversation_id: created.conversation_id, title: tooLong, expected_revision: 1 },
+            payload: {
+              conversation_id: created.conversation_id,
+              title: tooLong,
+              expected_revision: 1,
+            },
           }),
         ),
       ).toThrow(/EVENT_PAYLOAD_INVALID/);
@@ -197,7 +205,9 @@ describe("conversations commands (AC2 — atomic transition + event + receipt)",
       );
       expect(unchanged?.title).toBe("Operation kickoff");
       expect(unchanged?.revision).toBe(1);
-      expect(h.journal.countStream(conversationStreamFor(created.conversation_id), WS_A, h.conn.db)).toBe(1);
+      expect(
+        h.journal.countStream(conversationStreamFor(created.conversation_id), WS_A, h.conn.db),
+      ).toBe(1);
       // The failed command consumed no receipt: a valid retry is possible.
       expect(h.receipts.countInWorkspace(WS_A, h.conn.db)).toBe(1);
     } finally {
@@ -239,7 +249,11 @@ describe("conversations commands (AC6 — idempotency, conflicts, typed rejectio
       expect(() =>
         h.service.executeCommand(
           renameCommand(created.conversation_id, {
-            payload: { conversation_id: created.conversation_id, title: "v3", expected_revision: 1 },
+            payload: {
+              conversation_id: created.conversation_id,
+              title: "v3",
+              expected_revision: 1,
+            },
           }),
         ),
       ).toThrow(/CONVERSATION_REVISION_CONFLICT/);
@@ -344,7 +358,11 @@ describe("conversations commands (D26/AC8 — post-commit fanout)", () => {
       expect(() =>
         h.service.executeCommand(
           renameCommand(created.conversation_id, {
-            payload: { conversation_id: created.conversation_id, title: "v3", expected_revision: 1 },
+            payload: {
+              conversation_id: created.conversation_id,
+              title: "v3",
+              expected_revision: 1,
+            },
           }),
         ),
       ).toThrow(/CONVERSATION_REVISION_CONFLICT/);

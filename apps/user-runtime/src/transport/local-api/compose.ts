@@ -40,10 +40,7 @@ import {
 } from "../../modules/conversations/conversations.service.ts";
 import { HarnessRunService } from "../../modules/runtime/harness-run-service.ts";
 import { createLocalApi } from "./app.ts";
-import {
-  attachWebSocketGateway,
-  type WebSocketGatewayHandle,
-} from "../websocket/gateway.ts";
+import { attachWebSocketGateway, type WebSocketGatewayHandle } from "../websocket/gateway.ts";
 
 /**
  * The container's default workspace (E12: every product-state record carries

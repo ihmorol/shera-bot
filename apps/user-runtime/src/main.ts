@@ -18,7 +18,11 @@
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-import { DEFAULT_WORKSPACE_ID, composeRuntime, type RuntimeHandle } from "./transport/local-api/compose.ts";
+import {
+  DEFAULT_WORKSPACE_ID,
+  composeRuntime,
+  type RuntimeHandle,
+} from "./transport/local-api/compose.ts";
 
 export interface RuntimeNodeConfig {
   /** Bind address; default 127.0.0.1 (loopback only). */

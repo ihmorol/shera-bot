@@ -152,10 +152,7 @@ export function toSheraErrorResponse(error: unknown): HttpErrorMapping {
 }
 
 /** Route-level schema mismatch: the same typed shape the middleware emits. */
-export function contractValidationResponse(
-  safeMessage: string,
-  status = 400,
-): HttpErrorMapping {
+export function contractValidationResponse(safeMessage: string, status = 400): HttpErrorMapping {
   return {
     status,
     body: {

@@ -14,10 +14,7 @@ import { SheraError } from "@shera-bot/contracts";
 
 import { ConversationsServiceError } from "../../modules/conversations/conversations.types.ts";
 import { EventsServiceError } from "../../modules/events/events.service.ts";
-import {
-  notFoundErrorResponse,
-  toSheraErrorResponse,
-} from "./typed-errors.ts";
+import { notFoundErrorResponse, toSheraErrorResponse } from "./typed-errors.ts";
 
 describe("toSheraErrorResponse — chunk-2 typed rejections map to stable HTTP failures", () => {
   it("maps conversations typed rejections to status + code + category", () => {
@@ -38,7 +35,11 @@ describe("toSheraErrorResponse — chunk-2 typed rejections map to stable HTTP f
         "CONVERSATION_NOT_FOUND",
       ],
       [
-        new ConversationsServiceError("CONVERSATION_REVISION_CONFLICT", "conflict", "internal detail"),
+        new ConversationsServiceError(
+          "CONVERSATION_REVISION_CONFLICT",
+          "conflict",
+          "internal detail",
+        ),
         409,
         "CONVERSATION_REVISION_CONFLICT",
       ],

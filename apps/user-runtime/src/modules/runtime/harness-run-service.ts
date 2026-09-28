@@ -32,12 +32,15 @@ import {
   type TaskRejection,
   type TaskRun,
   type TypedExecutionEvent,
-  TypedExecutionEvent as TypedExecutionEventSchema,
 } from "@shera-bot/contracts";
 
 import type { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
 import type { SqliteExec, SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
-import type { HarnessAdapter, HarnessProposal, HarnessRunRequest } from "../../adapters/process/harness-adapter.ts";
+import type {
+  HarnessAdapter,
+  HarnessProposal,
+  HarnessRunRequest,
+} from "../../adapters/process/harness-adapter.ts";
 import { parseTaskCommand, evaluateTaskTransition } from "../tasks/task-transitions.ts";
 import { createTaskRunFromTypedEvent } from "../tasks/task-run-creator.ts";
 import { taskStreamId } from "../tasks/task-events.ts";
@@ -121,7 +124,12 @@ export class HarnessRunService {
 
     this.deps.tx.transaction((exec) => {
       // Creation event first (idempotent by event_id on a replayed trigger).
-      this.appendContractEvent(created.creation_event, created.creation_event.event_id, exec, published);
+      this.appendContractEvent(
+        created.creation_event,
+        created.creation_event.event_id,
+        exec,
+        published,
+      );
 
       // The adapter drives the run synchronously inside the same atomic unit.
       const request: HarnessRunRequest = {
@@ -247,16 +255,14 @@ export class HarnessRunService {
     if (existing) {
       return null;
     }
-    const appended = this.deps.events.appendEvent(
-      {
-        event_id: event.event_id,
-        stream_id: event.stream_id,
-        type: event.event_type,
-        payload: event,
-        workspace_id: this.deps.workspace_id,
-        correlation_id: correlationId,
-      },
-    );
+    const appended = this.deps.events.appendEvent({
+      event_id: event.event_id,
+      stream_id: event.stream_id,
+      type: event.event_type,
+      payload: event,
+      workspace_id: this.deps.workspace_id,
+      correlation_id: correlationId,
+    });
     published.push(appended);
     return appended;
   }

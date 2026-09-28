@@ -88,7 +88,10 @@ export interface WebSocketGatewayHandle {
   close(): Promise<void>;
 }
 
-function subscribeAck(workspaceId: string, streamId: string): {
+function subscribeAck(
+  workspaceId: string,
+  streamId: string,
+): {
   subscribed: true;
   workspace_id: string;
   stream_id: string;

@@ -16,7 +16,7 @@ import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import type { TypedExecutionEvent } from "@shera-bot/contracts";
 
-import { DEFAULT_WORKSPACE_ID, composeRuntime, type ComposeRuntimeOptions, type RuntimeHandle } from "../local-api/compose.ts";
+import { DEFAULT_WORKSPACE_ID, composeRuntime, type RuntimeHandle } from "../local-api/compose.ts";
 import { DEFAULT_PING_INTERVAL_MS, DEFAULT_PING_TIMEOUT_MS } from "./gateway.ts";
 
 const tempDirs: string[] = [];
@@ -33,10 +33,7 @@ const WS_B = "ws-22222222-2222-4222-8222-222222222222";
 interface MinimalWebSocket {
   send(data: string): void;
   close(): void;
-  addEventListener(
-    type: string,
-    listener: (event: { data?: unknown }) => void,
-  ): void;
+  addEventListener(type: string, listener: (event: { data?: unknown }) => void): void;
 }
 const NodeWebSocket = globalThis.WebSocket as unknown as new (url: string) => MinimalWebSocket;
 
@@ -252,7 +249,7 @@ describe("websocket gateway — live fanout (D26/AC8)", () => {
         expect(ack).toEqual({ subscribed: true, workspace_id: WS_A, stream_id: streamId });
 
         const fanout = client.waitForEvent(
-          (name, payload) => name === "stream.event",
+          (name) => name === "stream.event",
           "fanout of the rename",
         );
         const renamed = await postJson(
@@ -322,8 +319,14 @@ describe("websocket gateway — durable replay resume (AC4, E10)", () => {
       const created = await postJson(running.origin, createCommand(WS_A, "idem-ws-resume-0"));
       const conversationId = created.body["conversation_id"] as string;
       const streamId = `conversation:${conversationId}`;
-      await postJson(running.origin, renameCommand(WS_A, "idem-ws-resume-1", conversationId, 1, "v2"));
-      await postJson(running.origin, renameCommand(WS_A, "idem-ws-resume-2", conversationId, 2, "v3"));
+      await postJson(
+        running.origin,
+        renameCommand(WS_A, "idem-ws-resume-1", conversationId, 1, "v2"),
+      );
+      await postJson(
+        running.origin,
+        renameCommand(WS_A, "idem-ws-resume-2", conversationId, 2, "v3"),
+      );
 
       const client = await WsTestClient.open(running.origin);
       try {
@@ -345,7 +348,10 @@ describe("websocket gateway — durable replay resume (AC4, E10)", () => {
         ).toEqual([1, 2, 3]);
 
         // Live delivery resumes in the same room after the replay.
-        const live = client.waitForEvent((name) => name === "stream.event", "live event after replay");
+        const live = client.waitForEvent(
+          (name) => name === "stream.event",
+          "live event after replay",
+        );
         await postJson(
           running.origin,
           renameCommand(WS_A, "idem-ws-resume-3", conversationId, 3, "v4"),
@@ -442,8 +448,12 @@ describe("websocket gateway — the WS layer cannot mutate state (D26)", () => {
 
         // A command-shaped message over WS: there is no handler for it, and
         // none may exist — the message is dropped by the transport.
-        client.sendRaw(`42["conversation.command",${JSON.stringify({ type: "conversation.create" })}]`);
-        client.sendRaw(`42["conversation.rename",${JSON.stringify({ type: "conversation.rename" })}]`);
+        client.sendRaw(
+          `42["conversation.command",${JSON.stringify({ type: "conversation.create" })}]`,
+        );
+        client.sendRaw(
+          `42["conversation.rename",${JSON.stringify({ type: "conversation.rename" })}]`,
+        );
         await new Promise((resolve) => setTimeout(resolve, 150));
 
         // The journal is untouched: exactly the creation event exists.

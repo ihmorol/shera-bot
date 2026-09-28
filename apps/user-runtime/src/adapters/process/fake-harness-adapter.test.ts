@@ -37,7 +37,9 @@ describe("FakeHarnessAdapter — the deterministic D51 seam", () => {
     ]);
 
     const commands = proposals
-      .filter((p): p is Extract<HarnessProposal, { kind: "task_command" }> => p.kind === "task_command")
+      .filter(
+        (p): p is Extract<HarnessProposal, { kind: "task_command" }> => p.kind === "task_command",
+      )
       .map((p) => p.command as Record<string, unknown>);
     expect(commands.map((c) => c["type"])).toEqual(["queue_task", "start_task", "complete_task"]);
     // G2: proposals are typed commands carrying the full D23 rule 6 envelope.

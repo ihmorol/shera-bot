@@ -20,7 +20,12 @@ import { openDatabase, type SqliteConnection } from "../../adapters/sqlite/conne
 import { applyMigrations } from "../../adapters/sqlite/migrations.ts";
 import { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import { FakeHarnessAdapter } from "../../adapters/process/fake-harness-adapter.ts";
-import type { HarnessAdapter, HarnessEventSink, HarnessProposal, HarnessRunRequest } from "../../adapters/process/harness-adapter.ts";
+import type {
+  HarnessAdapter,
+  HarnessEventSink,
+  HarnessProposal,
+  HarnessRunRequest,
+} from "../../adapters/process/harness-adapter.ts";
 import { EventsService } from "../events/events.service.ts";
 import type { EventEnvelope } from "../events/events.types.ts";
 import { taskStreamId } from "../tasks/task-events.ts";
@@ -134,7 +139,11 @@ describe("harness run service — the fake drives a run end-to-end (D51, G2)", (
     try {
       const first = h.service.startRun(TRIGGER);
       expect(first.ok).toBe(true);
-      const rowsAfterFirst = h.journal.countStream(taskStreamId("task_evt_trig_1"), WS_A, h.conn.db);
+      const rowsAfterFirst = h.journal.countStream(
+        taskStreamId("task_evt_trig_1"),
+        WS_A,
+        h.conn.db,
+      );
       const publishedAfterFirst = h.published.length;
 
       const second = h.service.startRun(TRIGGER);

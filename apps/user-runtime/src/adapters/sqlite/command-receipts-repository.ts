@@ -45,13 +45,7 @@ export class CommandReceiptsRepository {
       `INSERT INTO command_receipts
          (workspace_id, idempotency_key, command_type, result_json, created_at)
        VALUES (?, ?, ?, ?, ?)`,
-    ).run(
-      row.workspace_id,
-      row.idempotency_key,
-      row.command_type,
-      row.result_json,
-      row.created_at,
-    );
+    ).run(row.workspace_id, row.idempotency_key, row.command_type, row.result_json, row.created_at);
     return row;
   }
 

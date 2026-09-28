@@ -21,7 +21,7 @@
  * Exits non-zero on any violation. Run: `pnpm boundary-guards`.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join, relative, sep } from "node:path";
+import { join, relative, sep } from "node:path";
 
 const REPO_ROOT = join(import.meta.dirname, "..");
 const SCAN_ROOTS = ["apps", "packages"];

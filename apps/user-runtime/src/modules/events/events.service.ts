@@ -21,9 +21,7 @@ import {
 
 /** Stable failure codes for the journal boundary (SCREAMING_SNAKE). */
 export type EventsServiceFailureCode =
-  | "EVENT_PAYLOAD_INVALID"
-  | "EVENT_UNKNOWN_TYPE"
-  | "EVENT_SEQUENCE_CONFLICT";
+  "EVENT_PAYLOAD_INVALID" | "EVENT_UNKNOWN_TYPE" | "EVENT_SEQUENCE_CONFLICT";
 
 export class EventsServiceError extends Error {
   readonly code: EventsServiceFailureCode;

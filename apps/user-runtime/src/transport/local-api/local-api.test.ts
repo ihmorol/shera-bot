@@ -295,9 +295,9 @@ describe("local API — replay cursors (AC4, E10)", () => {
         next_cursor: 3,
         replayed: true,
       });
-      expect((fromZero.body["events"] as Array<{ sequence: number }>).map((e) => e.sequence)).toEqual(
-        [1, 2, 3],
-      );
+      expect(
+        (fromZero.body["events"] as Array<{ sequence: number }>).map((e) => e.sequence),
+      ).toEqual([1, 2, 3]);
 
       const caughtUp = await getJson(running.origin, `${base}&last_acknowledged_sequence=3`);
       expect(caughtUp.body).toMatchObject({ kind: "events", next_cursor: 3, replayed: true });

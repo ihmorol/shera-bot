@@ -12,7 +12,10 @@
  * is exercised through the horizon parameter and by tests that trim the
  * journal the way a future compactor would.
  */
-import type { EventJournalRepository, EventJournalRow } from "../../adapters/sqlite/event-journal-repository.ts";
+import type {
+  EventJournalRepository,
+  EventJournalRow,
+} from "../../adapters/sqlite/event-journal-repository.ts";
 import { EVENT_TYPES, type EventEnvelope, type EventType } from "./events.types.ts";
 
 /** Durable events are replayed in batches of at most this size. */
@@ -88,11 +91,7 @@ function toEnvelope(row: EventJournalRow): EventEnvelope {
 export class ReplayService {
   constructor(private readonly deps: ReplayDeps) {}
 
-  resolve(
-    workspaceId: string,
-    streamId: string,
-    lastAcknowledgedSequence: number,
-  ): ReplayResult {
+  resolve(workspaceId: string, streamId: string, lastAcknowledgedSequence: number): ReplayResult {
     const horizon = this.deps.retentionHorizon(workspaceId, streamId);
 
     if (lastAcknowledgedSequence < horizon) {

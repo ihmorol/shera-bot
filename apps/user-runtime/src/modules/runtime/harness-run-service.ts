@@ -35,10 +35,8 @@ import {
   TypedExecutionEvent as TypedExecutionEventSchema,
 } from "@shera-bot/contracts";
 
-import type { DatabaseSync } from "node:sqlite";
-
 import type { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
-import type { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
+import type { SqliteExec, SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import type { HarnessAdapter, HarnessProposal, HarnessRunRequest } from "../../adapters/process/harness-adapter.ts";
 import { parseTaskCommand, evaluateTaskTransition } from "../tasks/task-transitions.ts";
 import { createTaskRunFromTypedEvent } from "../tasks/task-run-creator.ts";
@@ -172,7 +170,7 @@ export class HarnessRunService {
     appliedKeys: Set<string>,
     journalEventCounts: Map<TaskJournalEventType, number>,
     proposal: HarnessProposal,
-    exec: DatabaseSync,
+    exec: SqliteExec,
     published: EventEnvelope[],
     rejections: TaskRejection[],
   ): TaskRun {
@@ -242,7 +240,7 @@ export class HarnessRunService {
   private appendContractEvent(
     event: TypedExecutionEvent,
     correlationId: string,
-    exec: DatabaseSync,
+    exec: SqliteExec,
     published: EventEnvelope[],
   ): EventEnvelope | null {
     const existing = this.deps.journal.findById(this.deps.workspace_id, event.event_id, exec);

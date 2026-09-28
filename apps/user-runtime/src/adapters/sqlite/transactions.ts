@@ -16,6 +16,14 @@ import type { DatabaseSync } from "node:sqlite";
 
 import { MAX_LOCK_RETRIES } from "./connection.ts";
 
+/**
+ * The connection handle a transactional unit receives, re-exported as an
+ * adapter type: modules compose transactions through the adapter's public
+ * surface and never import the sqlite driver directly (D23 rule 2 boundary
+ * guard — node:sqlite stays inside adapters/sqlite).
+ */
+export type { DatabaseSync as SqliteExec };
+
 function isBusyError(error: unknown): boolean {
   return (
     typeof error === "object" &&

@@ -15,14 +15,12 @@
  */
 import { randomUUID } from "node:crypto";
 
-import type { DatabaseSync } from "node:sqlite";
-
 import type { CommandReceiptsRepository } from "../../adapters/sqlite/command-receipts-repository.ts";
 import type {
   ConversationsRepository,
   ConversationRow,
 } from "../../adapters/sqlite/conversations-repository.ts";
-import type { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
+import type { SqliteExec, SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import type { EventsService } from "../events/events.service.ts";
 import type { EventEnvelope } from "../events/events.types.ts";
 import { conversationStreamFor, type ConversationEvent } from "./conversations.events.ts";
@@ -223,7 +221,7 @@ export class ConversationsService {
    */
   private runWithReceipt(
     command: ConversationCommand,
-    unit: (exec: DatabaseSync) => { stored: StoredReceipt; event: ConversationEvent },
+    unit: (exec: SqliteExec) => { stored: StoredReceipt; event: ConversationEvent },
   ): ConversationCommandResult {
     const { stored, event } = this.deps.tx.transaction((exec) => {
       const result = unit(exec);

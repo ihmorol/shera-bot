@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   verify:
-    name: install → lint → typecheck → test → build
+    name: install → lint → typecheck → guards → test → build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -34,6 +34,10 @@ jobs:
       - run: pnpm lint
       - run: pnpm format:check
       - run: pnpm typecheck
+      # D23 rule 2 boundary guards: SQL + node:sqlite only under the SQLite
+      # adapters; child_process only under the process adapters (S07 5b). Local
+      # execution is the evidence path when Actions minutes are unavailable.
+      - run: pnpm boundary-guards
       - run: pnpm test
       - run: pnpm build
 

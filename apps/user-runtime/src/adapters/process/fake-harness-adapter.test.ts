@@ -66,7 +66,8 @@ describe("FakeHarnessAdapter — the deterministic D51 seam", () => {
     adapter.driveRun(REQUEST, second.sink);
 
     expect(second.proposals).toEqual(first.proposals);
-    expect(JSON.stringify(second.proposals)).not.toContain("child_process");
+    // The fake stays in-process: no process-execution markers anywhere.
+    expect(JSON.stringify(second.proposals)).not.toMatch(/spawn|exec\(|fork\(/);
   });
 
   it("never blocks: the whole script is emitted synchronously", () => {

@@ -240,4 +240,27 @@ describe("runtime internal API (authenticated internal channel)", () => {
     const newAccepted = await post(RUNTIME_REGISTRATION_PATH, registrationBody, newToken);
     expect(newAccepted.status).toBe(200);
   });
+
+  it("answers unknown routes with the typed 404, never an HTML page (typed error middleware)", async () => {
+    const response = await fetch(`${origin}/internal/v1/no-such-route`);
+    expect(response.status).toBe(404);
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body["code"]).toBe("ROUTE_NOT_FOUND");
+    expect(body["internal_details"]).toBeNull();
+    expect(typeof body["correlation_id"]).toBe("string");
+  });
+
+  it("maps an invalid JSON body to the typed 400 validation failure (typed error middleware)", async () => {
+    const response = await fetch(`${origin}${RUNTIME_REGISTRATION_PATH}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{not json at all",
+    });
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body["code"]).toBe("CONTRACT_VALIDATION_FAILED");
+    expect(body["internal_details"]).toBeNull();
+    // The parser's own message never crosses the wire (G3).
+    expect(JSON.stringify(body)).not.toContain("not json at all");
+  });
 });

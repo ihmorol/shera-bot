@@ -15,7 +15,11 @@
  */
 import { randomUUID } from "node:crypto";
 
-import type { CommandReceiptsRepository } from "../../adapters/sqlite/command-receipts-repository.ts";
+import type {
+  CommandReceiptRow,
+  CommandReceiptsRepository,
+} from "../../adapters/sqlite/command-receipts-repository.ts";
+import { isReceiptKeyConflict } from "../../adapters/sqlite/command-receipts-repository.ts";
 import type {
   ConversationsRepository,
   ConversationRow,
@@ -76,14 +80,7 @@ export class ConversationsService {
 
     const receipt = this.deps.receipts.findById(command.workspace_id, command.idempotency_key);
     if (receipt) {
-      const stored = JSON.parse(receipt.result_json) as StoredReceipt;
-      return {
-        kind: stored.kind,
-        conversation_id: stored.conversation_id,
-        title: stored.title,
-        revision: stored.revision,
-        event_id: stored.event_id,
-      };
+      return this.replayReceipt(receipt);
     }
 
     switch (command.type) {
@@ -218,27 +215,62 @@ export class ConversationsService {
    * One transaction wraps the transition, the event append, and the receipt
    * write; the publish hook fires strictly after COMMIT so live subscribers
    * never see a rolled-back event (AC2, D26).
+   *
+   * Race containment (B5): two concurrent executions of the same
+   * idempotency_key can both miss the fast-path read above; the loser's
+   * receipt INSERT then hits the winner's committed primary key. That
+   * constraint failure means THIS unit rolled back atomically (no partial
+   * effects) and the winner's receipt is durable — so it is re-read and its
+   * recorded result replayed, the exact contract of the non-race path. A
+   * conflict with no readable receipt is corruption: surfaced, never faked
+   * (G5).
    */
   private runWithReceipt(
     command: ConversationCommand,
     unit: (exec: SqliteExec) => { stored: StoredReceipt; event: ConversationEvent },
   ): ConversationCommandResult {
-    const { stored, event } = this.deps.tx.transaction((exec) => {
-      const result = unit(exec);
-      this.deps.receipts.create(
-        {
-          workspace_id: command.workspace_id,
-          idempotency_key: command.idempotency_key,
-          command_type: command.type,
-          result_json: JSON.stringify(result.stored),
-          created_at: new Date().toISOString(),
-        },
-        exec,
-      );
-      return result;
-    });
+    let committed: { stored: StoredReceipt; event: ConversationEvent };
+    try {
+      committed = this.deps.tx.transaction((exec) => {
+        const result = unit(exec);
+        this.deps.receipts.create(
+          {
+            workspace_id: command.workspace_id,
+            idempotency_key: command.idempotency_key,
+            command_type: command.type,
+            result_json: JSON.stringify(result.stored),
+            created_at: new Date().toISOString(),
+          },
+          exec,
+        );
+        return result;
+      });
+    } catch (error) {
+      if (isReceiptKeyConflict(error)) {
+        const winner = this.deps.receipts.findById(
+          command.workspace_id,
+          command.idempotency_key,
+        );
+        if (winner) {
+          return this.replayReceipt(winner);
+        }
+      }
+      throw error;
+    }
 
-    this.deps.publish?.(event);
+    this.deps.publish?.(committed.event);
+    return {
+      kind: committed.stored.kind,
+      conversation_id: committed.stored.conversation_id,
+      title: committed.stored.title,
+      revision: committed.stored.revision,
+      event_id: committed.stored.event_id,
+    };
+  }
+
+  /** The recorded receipt replays verbatim: effects are never duplicated. */
+  private replayReceipt(receipt: CommandReceiptRow): ConversationCommandResult {
+    const stored = JSON.parse(receipt.result_json) as StoredReceipt;
     return {
       kind: stored.kind,
       conversation_id: stored.conversation_id,

@@ -237,6 +237,48 @@ describe("conversations commands (AC6 — idempotency, conflicts, typed rejectio
     }
   });
 
+  it("replays the winner's receipt when a concurrent same-key execution loses the race (B5)", () => {
+    const h = newHarness();
+    try {
+      const winner = h.service.executeCommand(
+        createCommand({ idempotency_key: "race-key", payload: { title: "first commit" } }),
+      );
+
+      // Deterministic race simulation: the loser's fast-path receipt read
+      // happens BEFORE the winner's receipt is visible (returns null exactly
+      // once), so the loser's unit runs and its receipt INSERT hits the
+      // winner's committed primary key inside the transaction.
+      const realFindById = h.receipts.findById.bind(h.receipts);
+      let missedOnce = false;
+      h.receipts.findById = (workspaceId, idempotencyKey, exec) => {
+        if (!missedOnce) {
+          missedOnce = true;
+          return null;
+        }
+        return realFindById(workspaceId, idempotencyKey, exec);
+      };
+
+      const loser = h.service.executeCommand(
+        createCommand({ idempotency_key: "race-key", payload: { title: "loser, same key" } }),
+      );
+
+      // The raw constraint error never escapes: the loser replayed the
+      // winner's recorded result verbatim.
+      expect(loser).toEqual(winner);
+      expect(loser.title).toBe("first commit");
+
+      // The loser's transition, event, and receipt write rolled back with its
+      // failed unit — exactly one of each exists, the winner's.
+      expect(h.conversations.countInWorkspace(WS_A, h.conn.db)).toBe(1);
+      expect(h.receipts.countInWorkspace(WS_A, h.conn.db)).toBe(1);
+      expect(
+        h.journal.countStream(conversationStreamFor(winner.conversation_id), WS_A, h.conn.db),
+      ).toBe(1);
+    } finally {
+      h.conn.close();
+    }
+  });
+
   it("returns a typed conflict for a stale expected_revision and consumes no receipt", () => {
     const h = newHarness();
     try {

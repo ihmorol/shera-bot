@@ -10,7 +10,9 @@
  *   - task_command proposals -> parseTaskCommand -> evaluateTaskTransition
  *     (the D8 table; typed rejections are recorded as data, never thrown);
  *   - journal_event proposals -> parsed against the D26 envelope contract and
- *     journalled without a state change.
+ *     journalled without a state change; a proposal that fails the envelope
+ *     contract is a typed rejection recorded as data — the run continues (B2;
+ *     adapters are untrusted, their faults never crash the gateway).
  *
  * Every applied unit journals its FULL contract-valid D26 envelope as the
  * journal row payload (the envelope IS the durable event; the registry
@@ -229,7 +231,13 @@ export class HarnessRunService {
     // sequence-derived id would fork on replay and duplicate the event.
     const occurrence = (journalEventCounts.get(proposal.event_type) ?? 0) + 1;
     journalEventCounts.set(proposal.event_type, occurrence);
-    const envelope = EVENT_ENVELOPES[proposal.event_type].parse({
+    // Adapters are UNTRUSTED (D51/G2): a proposal that fails the D26 envelope
+    // contract is a typed rejection recorded as data — exactly like a failed
+    // command proposal — and the run continues. Nothing is appended or fanned
+    // out, and the raw invalid payload never enters the journal or the
+    // rejection detail (G3): only the schema's own issues (paths + messages,
+    // no received values) are recorded.
+    const parsedEnvelope = EVENT_ENVELOPES[proposal.event_type].safeParse({
       event_id: `evt_${proposal.event_type.replaceAll(".", "_")}_${run.task_id}_${occurrence}`,
       event_type: proposal.event_type,
       stream_id: streamId,
@@ -242,6 +250,22 @@ export class HarnessRunService {
       redaction_class: "public",
       payload: proposal.payload,
     });
+    if (!parsedEnvelope.success) {
+      rejections.push({
+        kind: "malformed_command",
+        code: "JOURNAL_EVENT_MALFORMED",
+        safe_message: `The proposed journal event ${proposal.event_type} failed the D26 envelope contract.`,
+        detail: {
+          event_type: proposal.event_type,
+          issues: parsedEnvelope.error.issues.map((issue) => ({
+            path: issue.path.map(String).join("."),
+            message: issue.message,
+          })),
+        },
+      });
+      return run;
+    }
+    const envelope = parsedEnvelope.data;
     this.appendContractEvent(envelope as TypedExecutionEvent, envelope.event_id, exec, published);
     return run;
   }

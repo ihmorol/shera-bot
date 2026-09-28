@@ -261,4 +261,104 @@ describe("harness run service — the gateway validates what adapters propose (G
       h.conn.close();
     }
   });
+
+  it("records an invalid journal_event proposal as a typed rejection and the run still completes (B2)", () => {
+    // A misbehaving adapter: a journal_event payload that fails the D26
+    // envelope contract FIRST, then the normal valid script.
+    const invalidThenValid: HarnessAdapter = {
+      harness: "fake",
+      driveRun(request: HarnessRunRequest, sink: HarnessEventSink) {
+        const base = {
+          workspace_id: request.workspace_id,
+          task_id: request.task_id,
+          actor: { type: "runtime" as const, id: "harness:fake" },
+          issued_at: NOW,
+        };
+        sink.propose({
+          kind: "journal_event",
+          event_type: "progress.reported",
+          // Strict payload schema rejects the unknown key; the VALUE must
+          // never surface in the recorded rejection (G3).
+          payload: { notes: "SECRET-HARNESS-VALUE" },
+        });
+        sink.propose({
+          kind: "task_command",
+          command: {
+            type: "queue_task",
+            command_id: `cmd_queue_${request.task_id}`,
+            idempotency_key: `idem_queue_${request.task_id}`,
+            expected_version: 1,
+            ...base,
+          },
+        });
+        sink.propose({
+          kind: "task_command",
+          command: {
+            type: "start_task",
+            command_id: `cmd_start_${request.task_id}`,
+            idempotency_key: `idem_start_${request.task_id}`,
+            expected_version: 2,
+            ...base,
+          },
+        });
+        sink.propose({
+          kind: "journal_event",
+          event_type: "progress.reported",
+          payload: { summary: "valid progress", fraction: 0.5 },
+        });
+        sink.propose({
+          kind: "task_command",
+          command: {
+            type: "complete_task",
+            command_id: `cmd_complete_${request.task_id}`,
+            idempotency_key: `idem_complete_${request.task_id}`,
+            expected_version: 3,
+            ...base,
+          },
+        });
+      },
+    };
+    const h = newHarness(invalidThenValid);
+    try {
+      const result = h.service.startRun(TRIGGER);
+      // The invalid proposal did NOT crash the run: it was recorded as data
+      // and skipped, and the valid script drove to completion.
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.state).toBe("SUCCEEDED");
+      expect(result.version).toBe(4);
+      expect(result.rejections).toHaveLength(1);
+      const rejection = result.rejections[0]!;
+      expect(rejection).toMatchObject({
+        kind: "malformed_command",
+        code: "JOURNAL_EVENT_MALFORMED",
+        safe_message:
+          "The proposed journal event progress.reported failed the D26 envelope contract.",
+      });
+      const detail = rejection.detail as { event_type: string; issues: unknown[] };
+      expect(detail.event_type).toBe("progress.reported");
+      expect(detail.issues.length).toBeGreaterThan(0);
+      expect(JSON.stringify(rejection)).not.toContain("SECRET-HARNESS-VALUE");
+
+      // Nothing was appended or fanned out for the invalid proposal: the
+      // stream holds exactly the valid script's five events.
+      const stream = h.journal.listStream(taskStreamId("task_evt_trig_1"), WS_A, h.conn.db);
+      expect(stream.map((row) => row.event_type)).toEqual([
+        "task.created",
+        "task.queued",
+        "task.started",
+        "progress.reported",
+        "task.succeeded",
+      ]);
+      expect(h.published.map((event) => event.type)).toEqual([
+        "task.created",
+        "task.queued",
+        "task.started",
+        "progress.reported",
+        "task.succeeded",
+      ]);
+    } finally {
+      h.conn.close();
+    }
+  });
 });

@@ -17,6 +17,7 @@ import { relations, sql } from "drizzle-orm";
 
 import {
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -120,31 +121,49 @@ export const controlSessions = pgTable(
 );
 
 /**
- * S06 placeholder (out of S05 scope): the user→container mapping plus the
- * provisioning/health summary columns D2 assigns to the control plane. S06
- * fills container_ref/runtime_endpoint and drives the status machine; the
- * schema (and thus the migration history) is established here.
+ * S06: the user→container mapping plus the provisioning/health summary and
+ * the runtime endpoint metadata D2 assigns to the control plane (tier,
+ * provisioning state, health, resource summary, container placement). All
+ * infrastructure identifiers (container ref, internal endpoint, channel
+ * credential digest) live here and NEVER cross the user boundary (D12).
  */
-export const controlContainerMappings = pgTable("control_container_mappings", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  accountId: uuid("account_id")
-    .notNull()
-    .unique()
-    .references(() => controlAccounts.id, { onDelete: "cascade" }),
-  /** Opaque container reference; assigned by S06 provisioning. */
-  containerRef: text("container_ref"),
-  tier: resourceTierEnum("tier").notNull().default("balanced"),
-  provisioningStatus: text("provisioning_status").notNull().default("pending"),
-  /** Bounded health summary (PRD §15 view), written by the S06+ channel. */
-  healthSummary: jsonb("health_summary")
-    .$type<Record<string, unknown>>()
-    .notNull()
-    .default(sql`'{}'::jsonb`),
-  runtimeEndpoint: text("runtime_endpoint"),
-  lastHealthCheckAt: timestamp("last_health_check_at", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const controlContainerMappings = pgTable(
+  "control_container_mappings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .unique()
+      .references(() => controlAccounts.id, { onDelete: "cascade" }),
+    /** Opaque handle handed to the web client (D12); infrastructure-free. */
+    runtimeHandle: text("runtime_handle").unique(),
+    /** Engine-scoped container reference — internal bookkeeping only. */
+    containerRef: text("container_ref"),
+    /** Internal endpoint on the management network — internal bookkeeping only. */
+    runtimeEndpoint: text("runtime_endpoint"),
+    tier: resourceTierEnum("tier").notNull().default("balanced"),
+    provisioningStatus: text("provisioning_status").notNull().default("pending"),
+    /** SHA-256 of the per-container channel credential — never the raw token (G3). */
+    internalChannelTokenHash: text("internal_channel_token_hash"),
+    tokenRotatedAt: timestamp("token_rotated_at", { withTimezone: true }),
+    /** Bounded health summary (PRD §15 view), written by the S06 channel. */
+    healthSummary: jsonb("health_summary")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    lastHealthCheckAt: timestamp("last_health_check_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    // The provisioning state machine vocabulary (packages/contracts) is
+    // enforced at the database layer too — an unrecorded state cannot exist.
+    check(
+      "control_container_mappings_status_check",
+      sql`${t.provisioningStatus} in ('pending', 'provisioning', 'running', 'stopped', 'failed')`,
+    ),
+  ],
+);
 
 /**
  * Backup/snapshot metadata (D2; PRD §12 six-hour snapshots, retain seven).

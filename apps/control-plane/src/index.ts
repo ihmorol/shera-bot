@@ -29,11 +29,15 @@ import {
 } from "./errors.ts";
 import { createControlPlaneLogger, type ControlPlaneLogger } from "./logger.ts";
 import { SecretRegistry } from "./redaction.ts";
+import { ProvisioningService } from "./modules/runtime-provisioning.ts";
+import { RuntimeChannelClient } from "./runtime/channel-client.ts";
+import { LocalContainerBackend } from "./runtime/local-container-backend.ts";
 import { SecurityEventService } from "./modules/security-events.ts";
 import { SignupCapService } from "./modules/signup-cap.ts";
 import { createSheraAuthAdapter } from "./auth/adapter.ts";
 import { buildAuthConfig } from "./auth/auth-config.ts";
 import { createRoutes } from "./routes.ts";
+import type { RuntimeBackend } from "@shera-bot/contracts";
 
 export interface ControlPlaneOptions {
   /**
@@ -53,6 +57,13 @@ export interface ControlPlaneOptions {
   googleIssuer?: string;
   /** Log sink injection for the redaction test. */
   logSink?: (line: string) => void;
+  /**
+   * Runtime backend override (TEST SEAM and future remote/cloud backends,
+   * D12). Defaults to the LocalContainerBackend for the local single-host
+   * deployment (S35); the engine client connects lazily, so an engine-less
+   * environment constructs fine and provisioning fails truthfully (G4).
+   */
+  runtimeBackend?: RuntimeBackend;
 }
 
 export interface ControlPlaneApp {
@@ -62,6 +73,7 @@ export interface ControlPlaneApp {
   registry: SecretRegistry;
   securityEvents: SecurityEventService;
   signupCap: SignupCapService;
+  provisioning: ProvisioningService;
   authConfigured: boolean;
   env: ReturnType<typeof readEnv>;
   close(): Promise<void>;
@@ -87,6 +99,21 @@ export async function createControlPlaneApp(
 
   const securityEvents = new SecurityEventService(db, registry, logger);
   const signupCap = new SignupCapService(db, securityEvents, logger);
+
+  // S06 runtime provisioning (D12): the typed backend seam. Tests and future
+  // remote/cloud backends inject their implementation; the default speaks to
+  // the local engine for the local single-host deployment (S35).
+  const runtimeBackend =
+    options.runtimeBackend ?? new LocalContainerBackend({ env: options.env ?? process.env });
+  const provisioning = new ProvisioningService({
+    db,
+    backend: runtimeBackend,
+    channel: new RuntimeChannelClient(),
+    securityEvents,
+    registry,
+    logger,
+  });
+
   const adapter = createSheraAuthAdapter({ db, signupCap, registry });
   const authConfigured = isAuthConfigured(env);
 
@@ -157,6 +184,7 @@ export async function createControlPlaneApp(
       registry,
       authConfigured,
       logger,
+      provisioning,
     }),
   );
 
@@ -191,6 +219,7 @@ export async function createControlPlaneApp(
     registry,
     securityEvents,
     signupCap,
+    provisioning,
     authConfigured,
     env,
     async close() {

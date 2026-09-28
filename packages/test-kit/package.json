@@ -11,5 +11,9 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@shera-bot/contracts": "workspace:*",
+    "zod": "4.6.5"
   }
 }

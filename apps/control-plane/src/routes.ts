@@ -7,8 +7,14 @@ import { Router, type Request, type Response } from "express";
 import type { ExpressAuthConfig } from "@auth/express";
 
 import type { ControlPlaneDb } from "./db/client.ts";
-import { authSignInFailedError, signupCapReachedError } from "./errors.ts";
+import {
+  authSignInFailedError,
+  statusForError,
+  signupCapReachedError,
+  RuntimeOperationError,
+} from "./errors.ts";
 import type { ControlPlaneLogger } from "./logger.ts";
+import type { ProvisioningService } from "./modules/runtime-provisioning.ts";
 import type { SecretRegistry } from "./redaction.ts";
 import { loadSessionProjection, touchLastActive } from "./modules/session-projection.ts";
 import type { SecurityEventService } from "./modules/security-events.ts";
@@ -23,6 +29,7 @@ export interface RouteDependencies {
   registry: SecretRegistry;
   authConfigured: boolean;
   logger: ControlPlaneLogger;
+  provisioning: ProvisioningService;
 }
 
 export function createRoutes(deps: RouteDependencies): Router {
@@ -80,6 +87,62 @@ export function createRoutes(deps: RouteDependencies): Router {
       auth: { configured: deps.authConfigured, provider: "google" },
     });
   });
+
+  /**
+   * S06 runtime lifecycle routes (issue #7; D12, PRD §6). Every route derives
+   * the target runtime from the SESSION account — there is no route parameter
+   * that could address another user's runtime, which is the local-setup
+   * cross-tenant guarantee (AC6; the attempt record for S27 lives in the
+   * integration suite). Responses carry only the contract's web-facing shape:
+   * opaque runtime handle + resource summary, never a container ID, host
+   * path, internal port, or credential (D12; asserted by the
+   * response-scanning suite).
+   */
+  const runtimeHandler =
+    (operation: (accountId: string, correlationId?: string) => Promise<unknown>) =>
+    async (req: Request, res: Response): Promise<void> => {
+      const accountId: string | undefined = res.locals.session?.user?.id;
+      if (!accountId) {
+        throw new Error("session gate passed without an account id");
+      }
+      try {
+        const result = await operation(accountId);
+        res.status(200).json(result);
+      } catch (error) {
+        if (error instanceof RuntimeOperationError) {
+          res.status(statusForError(error.sheraError)).json(error.sheraError);
+          return;
+        }
+        throw error;
+      }
+    };
+
+  router.post(
+    "/api/runtime/provision",
+    requireSessionMiddleware,
+    runtimeHandler((accountId, correlationId) =>
+      deps.provisioning.ensureProvisioned(accountId, correlationId),
+    ),
+  );
+  router.get(
+    "/api/runtime/status",
+    requireSessionMiddleware,
+    runtimeHandler((accountId, correlationId) =>
+      deps.provisioning.getStatus(accountId, correlationId),
+    ),
+  );
+  router.post(
+    "/api/runtime/restart",
+    requireSessionMiddleware,
+    runtimeHandler((accountId, correlationId) =>
+      deps.provisioning.restart(accountId, correlationId),
+    ),
+  );
+  router.post(
+    "/api/runtime/stop",
+    requireSessionMiddleware,
+    runtimeHandler((accountId, correlationId) => deps.provisioning.stop(accountId, correlationId)),
+  );
 
   return router;
 }

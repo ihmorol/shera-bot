@@ -19,6 +19,16 @@ export const AUTH_ERROR_CODES = [
   "INTERNAL_ERROR",
 ] as const;
 
+/** S06 runtime-provisioning error codes (also registered in contracts KNOWN_ERROR_CODES). */
+export const RUNTIME_ERROR_CODES = [
+  "RUNTIME_PROVISION_FAILED",
+  "RUNTIME_PROVISION_IN_PROGRESS",
+  "RUNTIME_NOT_PROVISIONED",
+  "RUNTIME_UNAVAILABLE",
+  "RUNTIME_TENANT_MISMATCH",
+  "INTERNAL_CHANNEL_UNAUTHORIZED",
+] as const;
+
 export type AuthErrorCode = (typeof AUTH_ERROR_CODES)[number];
 
 /** The exact S1 refusal copy (docs/UI_DESIGN.md S1). No retry affordance. */
@@ -26,7 +36,7 @@ export const SIGNUP_CAP_REFUSAL_MESSAGE =
   "Shera is in private testing and is at its five-account limit.";
 
 export interface TypedErrorInput {
-  code: AuthErrorCode;
+  code: AuthErrorCode | (typeof RUNTIME_ERROR_CODES)[number];
   category: SheraError["category"];
   safe_message: string;
   retryable: boolean;
@@ -124,6 +134,12 @@ export function statusForError(error: SheraError): number {
       return 403;
     case "validation":
       return 404;
+    case "conflict":
+      return 409;
+    case "state":
+      return 409;
+    case "resource":
+      return 503;
     case "internal":
       return 503;
     case "provider":
@@ -131,4 +147,84 @@ export function statusForError(error: SheraError): number {
     default:
       return 500;
   }
+}
+
+/**
+ * S06 runtime operations: an error that carries the typed taxonomy through
+ * service boundaries so routes can answer with the safe payload while the
+ * redacted internals reach the log.
+ */
+export class RuntimeOperationError extends Error {
+  readonly sheraError: SheraError;
+
+  constructor(sheraError: SheraError) {
+    super(sheraError.safe_message);
+    this.name = "RuntimeOperationError";
+    this.sheraError = sheraError;
+  }
+}
+
+export function runtimeProvisionFailedError(correlationId?: string): RuntimeOperationError {
+  return new RuntimeOperationError(
+    makeSheraError({
+      code: "RUNTIME_PROVISION_FAILED",
+      category: "resource",
+      safe_message: "Your runtime could not be provisioned. The failure has been recorded.",
+      retryable: true,
+      user_action: "Try again; if it keeps failing, contact the operator.",
+      correlation_id: correlationId,
+    }),
+  );
+}
+
+export function runtimeProvisionInProgressError(correlationId?: string): RuntimeOperationError {
+  return new RuntimeOperationError(
+    makeSheraError({
+      code: "RUNTIME_PROVISION_IN_PROGRESS",
+      category: "conflict",
+      safe_message: "Your runtime is already being provisioned.",
+      retryable: true,
+      user_action: "Check the runtime status in a moment.",
+      correlation_id: correlationId,
+    }),
+  );
+}
+
+export function runtimeNotProvisionedError(correlationId?: string): RuntimeOperationError {
+  return new RuntimeOperationError(
+    makeSheraError({
+      code: "RUNTIME_NOT_PROVISIONED",
+      category: "state",
+      safe_message: "No runtime has been provisioned for this account yet.",
+      retryable: false,
+      user_action: "Provision your runtime first.",
+      correlation_id: correlationId,
+    }),
+  );
+}
+
+export function runtimeUnavailableError(correlationId?: string): RuntimeOperationError {
+  return new RuntimeOperationError(
+    makeSheraError({
+      code: "RUNTIME_UNAVAILABLE",
+      category: "resource",
+      safe_message: "The runtime is not available right now. The failure has been recorded.",
+      retryable: true,
+      user_action: "Try again shortly.",
+      correlation_id: correlationId,
+    }),
+  );
+}
+
+export function runtimeTenantMismatchError(correlationId?: string): RuntimeOperationError {
+  return new RuntimeOperationError(
+    makeSheraError({
+      code: "RUNTIME_TENANT_MISMATCH",
+      category: "policy",
+      safe_message: "This runtime belongs to another account.",
+      retryable: false,
+      user_action: null,
+      correlation_id: correlationId,
+    }),
+  );
 }

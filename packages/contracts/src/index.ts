@@ -32,4 +32,5 @@ export * from "./memory.ts";
 export * from "./tool.ts";
 export * from "./collaboration.ts";
 export * from "./api.ts";
+export * from "./runtime.ts";
 export * from "./registry.ts";

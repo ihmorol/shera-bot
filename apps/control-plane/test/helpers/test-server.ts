@@ -84,6 +84,7 @@ export class CookieJar {
     const setCookies = response.headers.getSetCookie();
     for (const line of setCookies) {
       const [pair] = line.split(";");
+      if (pair === undefined) continue;
       const eq = pair.indexOf("=");
       if (eq > 0) {
         const name = pair.slice(0, eq).trim();

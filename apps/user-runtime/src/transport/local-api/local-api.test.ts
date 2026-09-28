@@ -362,6 +362,20 @@ describe("local API — replay cursors (AC4, E10)", () => {
   });
 });
 
+describe("local API — health probe (transport status, not a business event)", () => {
+  it("serves /internal/v1/health with the same spelling and shape as the internal API", async () => {
+    const running = await composeAndListen();
+    try {
+      const response = await getJson(running.origin, "/internal/v1/health");
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ status: "ok" });
+    } finally {
+      await running.close();
+      running.api.close();
+    }
+  });
+});
+
 describe("local API — typed error middleware integration", () => {
   it("answers unknown routes with the typed 404", async () => {
     const running = await composeAndListen();

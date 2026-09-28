@@ -101,6 +101,15 @@ export function createLocalApi(deps: LocalApiDeps): Express {
     res.status(200).json(result);
   });
 
+  /**
+   * Health probe (transport status only, never a business event). Same path
+   * and response shape as the S06 internal API's probe; the local surface is
+   * loopback-only in the prototype, so it carries no credential gate here.
+   */
+  app.get("/internal/v1/health", (_req, res) => {
+    res.status(200).json({ status: "ok" });
+  });
+
   // Typed failures and unknown routes: the SheraError taxonomy, never an
   // Express default page, a stack trace, or raw internals (D23 rule 4, G3).
   app.use(notFoundRequestHandler);

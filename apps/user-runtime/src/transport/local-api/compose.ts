@@ -22,6 +22,7 @@
 import { createServer, type Server as HTTPServer } from "node:http";
 
 import type { Express } from "express";
+import type { PackSnapshot } from "@shera-bot/contracts";
 
 import { openDatabase, type SqliteConnection } from "../../adapters/sqlite/connection.ts";
 import { applyMigrations } from "../../adapters/sqlite/migrations.ts";
@@ -29,17 +30,35 @@ import { CommandReceiptsRepository } from "../../adapters/sqlite/command-receipt
 import { ConversationsRepository } from "../../adapters/sqlite/conversations-repository.ts";
 import { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
 import { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
+import type { HarnessAdapter } from "../../adapters/process/harness-adapter.ts";
+import { FakeHarnessAdapter } from "../../adapters/process/fake-harness-adapter.ts";
 import { EventsService } from "../../modules/events/events.service.ts";
 import { ReplayService } from "../../modules/events/replay.service.ts";
 import {
   ConversationsService,
   type ConversationPublisher,
 } from "../../modules/conversations/conversations.service.ts";
+import { HarnessRunService } from "../../modules/runtime/harness-run-service.ts";
 import { createLocalApi } from "./app.ts";
 import {
   attachWebSocketGateway,
   type WebSocketGatewayHandle,
 } from "../websocket/gateway.ts";
+
+/**
+ * The container's default workspace (E12: every product-state record carries
+ * workspace_id; the prototype container has exactly one). PROTOTYPE DEFAULT —
+ * owner-confirmable: production wiring supersedes this via the
+ * RUNTIME_DEFAULT_WORKSPACE_ID environment variable (main.ts).
+ */
+export const DEFAULT_WORKSPACE_ID = "ws-local-default";
+
+/** The prototype's pinned pack (D28): a fixed snapshot, no pack store yet. */
+const DEFAULT_PACK: PackSnapshot = {
+  pack_id: "pack_default",
+  pack_version: "0.1.0",
+  pack_hash: "0".repeat(64),
+};
 
 export interface ComposeLocalApiOptions {
   /** Path of the container-local SQLite database file. */
@@ -63,6 +82,12 @@ export interface ComposeRuntimeOptions extends ComposeLocalApiOptions {
   /** Transport heartbeats (engine.io ping/pong); defaults documented in the gateway. */
   pingIntervalMs?: number;
   pingTimeoutMs?: number;
+  /** D51 seam: the harness adapter to drive task runs. Default: the deterministic fake. */
+  harnessAdapter?: HarnessAdapter;
+  /** E12: the container's default workspace. Default: DEFAULT_WORKSPACE_ID. */
+  workspaceId?: string;
+  /** D28: the pinned pack recorded on harness-created runs. Default: DEFAULT_PACK. */
+  pinnedPack?: PackSnapshot;
 }
 
 export interface RuntimeHandle {
@@ -70,6 +95,8 @@ export interface RuntimeHandle {
   /** The one HTTP server serving BOTH the local API and the WS gateway. */
   httpServer: HTTPServer;
   gateway: WebSocketGatewayHandle;
+  /** The harness seam: later slices (and tests) start runs; the fake is default. */
+  harness: HarnessRunService;
   /** Closes the gateway (and with it the HTTP server), then SQLite. */
   close(): Promise<void>;
 }
@@ -78,6 +105,9 @@ interface Wired {
   conn: SqliteConnection;
   app: Express;
   replay: ReplayService;
+  tx: SqliteTransactions;
+  journal: EventJournalRepository;
+  events: EventsService;
   setPublisher(publisher: ConversationPublisher): void;
 }
 
@@ -130,6 +160,9 @@ function wire(options: ComposeLocalApiOptions): Wired {
     conn,
     app,
     replay,
+    tx,
+    journal,
+    events,
     setPublisher(next) {
       publisher = next;
     },
@@ -142,9 +175,10 @@ export function composeLocalApi(options: ComposeLocalApiOptions): LocalApiHandle
 }
 
 /**
- * Full runtime composition: local API + WebSocket gateway on one HTTP server.
- * Live fanout flows from the conversations service's post-commit publish hook
- * into the gateway's per-stream rooms; the WS layer itself stays read-only.
+ * Full runtime composition: local API + WebSocket gateway on one HTTP server,
+ * plus the harness seam. Live fanout flows from the post-commit publish hooks
+ * (conversations AND harness runs) into the gateway's per-stream rooms; the
+ * WS layer itself stays read-only (D26).
  */
 export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
   const wired = wire(options);
@@ -154,11 +188,29 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     ...(options.pingIntervalMs ? { pingIntervalMs: options.pingIntervalMs } : {}),
     ...(options.pingTimeoutMs ? { pingTimeoutMs: options.pingTimeoutMs } : {}),
   });
-  wired.setPublisher((event) => gateway.broadcastConversationEvent(event));
+  const broadcast = (event: Parameters<WebSocketGatewayHandle["broadcastStreamEvent"]>[0]) =>
+    gateway.broadcastStreamEvent(event);
+  wired.setPublisher(broadcast);
+
+  // D51 seam wiring: adapters propose through the sink; the service validates
+  // and executes into the journal; committed envelopes fan out on the WS task
+  // stream through the same gateway rooms as every other stream.
+  const harness = new HarnessRunService({
+    adapter: options.harnessAdapter ?? new FakeHarnessAdapter(),
+    tx: wired.tx,
+    journal: wired.journal,
+    events: wired.events,
+    pinned_pack: options.pinnedPack ?? DEFAULT_PACK,
+    workspace_id: options.workspaceId ?? DEFAULT_WORKSPACE_ID,
+    policy: { max_retries: 3 },
+    publish: broadcast,
+  });
+
   return {
     app: wired.app,
     httpServer,
     gateway,
+    harness,
     close: async () => {
       // io.close() also closes the attached HTTP server (socket.io v4).
       await gateway.close();

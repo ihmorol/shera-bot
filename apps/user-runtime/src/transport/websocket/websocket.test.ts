@@ -14,8 +14,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterAll, describe, expect, it } from "vitest";
+import type { TypedExecutionEvent } from "@shera-bot/contracts";
 
-import { composeRuntime, type ComposeRuntimeOptions, type RuntimeHandle } from "../local-api/compose.ts";
+import { DEFAULT_WORKSPACE_ID, composeRuntime, type ComposeRuntimeOptions, type RuntimeHandle } from "../local-api/compose.ts";
 import { DEFAULT_PING_INTERVAL_MS, DEFAULT_PING_TIMEOUT_MS } from "./gateway.ts";
 
 const tempDirs: string[] = [];
@@ -488,6 +489,85 @@ describe("websocket gateway — the WS layer cannot mutate state (D26)", () => {
           `${file} must not reference the command surface "${symbol}" (D26: WS is read-only fanout)`,
         ).toBe(false);
       }
+    }
+  });
+});
+
+describe("websocket gateway — harness-driven runs over the seam (D51, G2)", () => {
+  const TRIGGER: TypedExecutionEvent = {
+    event_id: "evt_trig_ws_1",
+    stream_id: "conversation:conv_ws_harness",
+    sequence: 1,
+    event_version: 1,
+    actor: { type: "system", id: "scheduler" },
+    task_id: "task_evt_trig_ws_1",
+    conversation_id: "conv_ws_harness",
+    occurred_at: "2026-09-28T12:00:00.000Z",
+    redaction_class: "internal",
+    event_type: "trigger.scheduled",
+    payload: { schedule_id: "sch_ws_1", due_at: "2026-09-28T12:00:00.000Z" },
+  };
+
+  it("drives a fake harness run end-to-end: journal + WS fanout + replay resume", async () => {
+    const running = await composeAndListen();
+    try {
+      const streamId = "task:task_evt_trig_ws_1";
+      const client = await WsTestClient.open(running.origin);
+      try {
+        // Subscribe to the TASK stream before the run starts.
+        const ack = (await client.emitWithAck("stream.subscribe", {
+          workspace_id: DEFAULT_WORKSPACE_ID,
+          stream_id: streamId,
+        })) as Record<string, unknown>;
+        expect(ack).toMatchObject({ subscribed: true, workspace_id: DEFAULT_WORKSPACE_ID });
+
+        // The fake adapter drives the run through the composed runtime.
+        const result = running.runtime.harness.startRun(TRIGGER);
+        expect(result).toMatchObject({
+          ok: true,
+          task_id: "task_evt_trig_ws_1",
+          state: "SUCCEEDED",
+          version: 4,
+          rejections: [],
+        });
+
+        // All five committed envelopes fan out on the WS task stream, in order.
+        const succeeded = await client.waitForEvent(
+          (name, payload) =>
+            name === "stream.event" &&
+            (payload as Record<string, unknown>)["type"] === "task.succeeded",
+          "task.succeeded fanout",
+        );
+        expect((succeeded.payload as Record<string, unknown>)["sequence"]).toBe(5);
+        expect(
+          client.events
+            .filter((event) => event.name === "stream.event")
+            .map((event) => (event.payload as Record<string, unknown>)["type"]),
+        ).toEqual([
+          "task.created",
+          "task.queued",
+          "task.started",
+          "progress.reported",
+          "task.succeeded",
+        ]);
+
+        // Durable replay resume on the same task stream (AC4): exactly the
+        // missed events in order once, from the SQLite journal — never from
+        // in-memory WS state.
+        const replay = (await client.emitWithAck("replay.request", {
+          workspace_id: DEFAULT_WORKSPACE_ID,
+          stream_id: streamId,
+          last_acknowledged_sequence: 0,
+        })) as Record<string, unknown>;
+        expect(replay).toMatchObject({ kind: "events", replayed: true, next_cursor: 5 });
+        expect(
+          (replay["events"] as Array<{ sequence: number }>).map((event) => event.sequence),
+        ).toEqual([1, 2, 3, 4, 5]);
+      } finally {
+        client.close();
+      }
+    } finally {
+      await running.close();
     }
   });
 });

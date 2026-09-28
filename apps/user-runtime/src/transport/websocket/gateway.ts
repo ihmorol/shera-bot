@@ -31,7 +31,7 @@ import { z } from "zod";
 
 import { Id, WorkspaceId } from "@shera-bot/contracts";
 
-import type { ConversationEvent } from "../../modules/conversations/conversations.events.ts";
+import type { EventEnvelope } from "../../modules/events/events.types.ts";
 import type { ReplayService } from "../../modules/events/replay.service.ts";
 import { contractValidationResponse } from "../http/typed-errors.ts";
 
@@ -78,10 +78,12 @@ export interface WebSocketGatewayDeps {
 export interface WebSocketGatewayHandle {
   io: SocketIOServer;
   /**
-   * Live fanout of one committed event (D26/AC8: called strictly AFTER the
-   * committing transaction; the WS layer owns no mutation path).
+   * Live fanout of one committed journal envelope (D26/AC8: called strictly
+   * AFTER the committing transaction; the WS layer owns no mutation path).
+   * General over streams: conversation and task envelopes both route to their
+   * workspace-scoped room (E12).
    */
-  broadcastConversationEvent(event: ConversationEvent): void;
+  broadcastStreamEvent(event: EventEnvelope): void;
   /** Closes the gateway AND the HTTP server it is mounted on. */
   close(): Promise<void>;
 }
@@ -148,7 +150,7 @@ export function attachWebSocketGateway(
 
   return {
     io,
-    broadcastConversationEvent(event) {
+    broadcastStreamEvent(event) {
       io.to(streamRoom(event.workspace_id, event.stream_id)).emit(STREAM_EVENT, event);
     },
     close: () => io.close(),

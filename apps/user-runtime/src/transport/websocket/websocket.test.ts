@@ -316,6 +316,44 @@ describe("websocket gateway — live fanout (D26/AC8)", () => {
       await running.close();
     }
   });
+
+  it("room names are injective: a colon-crafted workspace selector cannot alias another workspace's room (E12, C-2)", async () => {
+    const running = await composeAndListen();
+    try {
+      const created = await postJson(running.origin, createCommand(WS_A, "idem-ws-alias-1"));
+      const conversationId = created.body["conversation_id"] as string;
+      const streamId = `conversation:${conversationId}`;
+
+      const clientA = await WsTestClient.open(running.origin);
+      const clientB = await WsTestClient.open(running.origin);
+      try {
+        // clientB's forged selector pre-C-2 produced the IDENTICAL room name
+        // as WS_A + the conversation stream: with ":" permitted inside both
+        // components, `stream:${WS_A}:conversation:${conversationId}` collided.
+        await clientA.emitWithAck("stream.subscribe", { workspace_id: WS_A, stream_id: streamId });
+        await clientB.emitWithAck("stream.subscribe", {
+          workspace_id: `${WS_A}:conversation`,
+          stream_id: conversationId,
+        });
+
+        const forA = clientA.waitForEvent((name) => name === "stream.event", "fanout to WS_A");
+        await postJson(
+          running.origin,
+          renameCommand(WS_A, "idem-ws-alias-2", conversationId, 1, "v2"),
+        );
+        await forA;
+
+        // Give any wrongly-aliased frame a beat to arrive; there must be none.
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        expect(clientB.events).toHaveLength(0);
+      } finally {
+        clientA.close();
+        clientB.close();
+      }
+    } finally {
+      await running.close();
+    }
+  });
 });
 
 describe("websocket gateway — durable replay resume (AC4, E10)", () => {
@@ -511,9 +549,7 @@ describe("websocket gateway — handler faults are contained (B3)", () => {
       expect(recorded.event).toBe("ws_handler_failed");
       expect(Object.keys(recorded.fields).sort()).toEqual(["handler", "message", "name", "stack"]);
       expect(recorded.fields.handler).toBe("replay.request");
-      expect(recorded.fields.message).toBe(
-        "corrupt journal row: event_journal.sequence malformed",
-      );
+      expect(recorded.fields.message).toBe("corrupt journal row: event_journal.sequence malformed");
 
       // The connection survived: the same socket still completes a read-only
       // subscription and can leave cleanly.

@@ -68,9 +68,17 @@ const ReplayRequestBody = z.strictObject({
     .default(0),
 });
 
-/** E12: the room name carries the workspace, so twin streams never cross. */
+/**
+ * E12: the room name carries the workspace, so twin streams never cross.
+ * Each component is percent-encoded so the ":" separator is unambiguous:
+ * workspace "ws1:conversation" + stream "abc" lands in a DIFFERENT room than
+ * workspace "ws1" + stream "conversation:abc" (the encoding is lossless and
+ * injective — "%" itself becomes "%25"), so a crafted selector can never
+ * alias another workspace's room. ALL room names must come from THIS helper
+ * (subscribe, replay-resume join, and broadcast share it).
+ */
 export function streamRoom(workspaceId: string, streamId: string): string {
-  return `stream:${workspaceId}:${streamId}`;
+  return `stream:${encodeURIComponent(workspaceId)}:${encodeURIComponent(streamId)}`;
 }
 
 export interface WebSocketGatewayDeps {
@@ -145,15 +153,21 @@ export function attachWebSocketGateway(
     // Read-only subscription: join the stream's room, ack the receipt. No
     // command surface is reachable from here (D26 — WS never mutates state).
     socket.on(STREAM_SUBSCRIBE, (payload: unknown, ack?: (response: unknown) => void) => {
-      guarded("stream.subscribe", () => {
-        const parsed = StreamSelector.safeParse(payload);
-        if (!parsed.success) {
-          ack?.(contractValidationResponse("The subscription is not a valid stream selector.").body);
-          return;
-        }
-        socket.join(streamRoom(parsed.data.workspace_id, parsed.data.stream_id));
-        ack?.(subscribeAck(parsed.data.workspace_id, parsed.data.stream_id));
-      }, ack);
+      guarded(
+        "stream.subscribe",
+        () => {
+          const parsed = StreamSelector.safeParse(payload);
+          if (!parsed.success) {
+            ack?.(
+              contractValidationResponse("The subscription is not a valid stream selector.").body,
+            );
+            return;
+          }
+          socket.join(streamRoom(parsed.data.workspace_id, parsed.data.stream_id));
+          ack?.(subscribeAck(parsed.data.workspace_id, parsed.data.stream_id));
+        },
+        ack,
+      );
     });
 
     // Durable replay resume (AC4): the client's cursor is answered from the
@@ -163,24 +177,28 @@ export function attachWebSocketGateway(
     // (no durability), so it is not used here. Live delivery then resumes in
     // the joined stream room.
     socket.on(REPLAY_REQUEST, (payload: unknown, ack?: (response: unknown) => void) => {
-      guarded("replay.request", () => {
-        const parsed = ReplayRequestBody.safeParse(payload);
-        if (!parsed.success) {
-          ack?.(
-            contractValidationResponse(
-              "The replay request is not valid: workspace_id, stream_id and last_acknowledged_sequence are required.",
-            ).body,
+      guarded(
+        "replay.request",
+        () => {
+          const parsed = ReplayRequestBody.safeParse(payload);
+          if (!parsed.success) {
+            ack?.(
+              contractValidationResponse(
+                "The replay request is not valid: workspace_id, stream_id and last_acknowledged_sequence are required.",
+              ).body,
+            );
+            return;
+          }
+          const result = deps.replay.resolve(
+            parsed.data.workspace_id,
+            parsed.data.stream_id,
+            parsed.data.last_acknowledged_sequence,
           );
-          return;
-        }
-        const result = deps.replay.resolve(
-          parsed.data.workspace_id,
-          parsed.data.stream_id,
-          parsed.data.last_acknowledged_sequence,
-        );
-        socket.join(streamRoom(parsed.data.workspace_id, parsed.data.stream_id));
-        ack?.(result);
-      }, ack);
+          socket.join(streamRoom(parsed.data.workspace_id, parsed.data.stream_id));
+          ack?.(result);
+        },
+        ack,
+      );
     });
   });
 

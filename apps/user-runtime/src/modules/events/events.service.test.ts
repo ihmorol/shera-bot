@@ -113,6 +113,34 @@ describe("events journal service (AC3 — monotonic sequences, idempotent event_
     }
   });
 
+  it("treats the same event_id in two workspaces as independent rows (UNIQUE is workspace-scoped, C-3)", () => {
+    const { service, journal, conn } = newService();
+    try {
+      const inA = service.appendEvent(createdEvent({ event_id: "shared-event-1" }));
+      const inB = service.appendEvent(
+        createdEvent({ event_id: "shared-event-1", workspace_id: WS_B }),
+      );
+
+      // Both rows exist — one per workspace, each with its own stream
+      // sequence space (the row column is the scoping authority, E12).
+      expect(inA.sequence).toBe(1);
+      expect(inB.sequence).toBe(1);
+      expect(journal.findById(WS_A, "shared-event-1", conn.db)?.workspace_id).toBe(WS_A);
+      expect(journal.findById(WS_B, "shared-event-1", conn.db)?.workspace_id).toBe(WS_B);
+      expect(journal.countStream("conversation:journal-check", WS_A, conn.db)).toBe(1);
+      expect(journal.countStream("conversation:journal-check", WS_B, conn.db)).toBe(1);
+
+      // The idempotent no-op stays scoped: repeating in A returns A's
+      // original and leaves B's row untouched.
+      const repeat = service.appendEvent(createdEvent({ event_id: "shared-event-1" }));
+      expect(repeat.event_id).toBe(inA.event_id);
+      expect(repeat.workspace_id).toBe(WS_A);
+      expect(journal.countStream("conversation:journal-check", WS_B, conn.db)).toBe(1);
+    } finally {
+      conn.close();
+    }
+  });
+
   it("rejects an unknown event type and an invalid payload with typed failures (G2)", () => {
     const { service } = newService();
     expect(() =>

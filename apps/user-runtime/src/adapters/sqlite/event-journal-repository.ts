@@ -3,10 +3,14 @@
  *
  * The journal is append-only. Per-stream sequences are strictly monotonic:
  * the next sequence is allocated inside the same transaction as the insert,
- * and PRIMARY KEY (stream_id, sequence) makes any duplicate allocation fail
- * rather than silently overwrite. Duplicate event_id inserts are idempotently
- * ignored (AC3): the original row stays intact and the caller learns no new
- * row was written. Every read and write is workspace-scoped (E12).
+ * and PRIMARY KEY (workspace_id, stream_id, sequence) makes any duplicate
+ * allocation fail rather than silently overwrite. Duplicate (workspace_id,
+ * event_id) inserts are idempotently ignored (AC3): the original row stays
+ * intact and the caller learns no new row was written. Uniqueness — like
+ * everything else in this table — is workspace-scoped (E12): the same
+ * event_id in two workspaces are independent rows (C-3), so the no-op path
+ * can only ever match a row the SAME workspace wrote. Every read and write
+ * is workspace-scoped (E12).
  */
 import type { DatabaseSync } from "node:sqlite";
 
@@ -53,9 +57,9 @@ export class EventJournalRepository {
 
   /**
    * Append one event. Returns the inserted row, or null when an event with
-   * the same event_id already exists (idempotent no-op — AC3). A conflicting
-   * (stream_id, sequence) with a NEW event_id is a hard failure, never a
-   * silent drop.
+   * the same (workspace_id, event_id) already exists (idempotent no-op —
+   * AC3). A conflicting (workspace_id, stream_id, sequence) with a NEW
+   * event_id is a hard failure, never a silent drop.
    */
   append(row: EventJournalRow, exec?: DatabaseSync): EventJournalRow | null {
     const db = exec ?? this.tx.connection();
@@ -65,7 +69,7 @@ export class EventJournalRepository {
            (stream_id, sequence, event_id, event_type, schema_version,
             payload, workspace_id, occurred_at, correlation_id)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT (event_id) DO NOTHING`,
+         ON CONFLICT (workspace_id, event_id) DO NOTHING`,
       )
       .run(
         row.stream_id,

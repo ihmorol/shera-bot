@@ -10,7 +10,12 @@
  * carry workspace_id from day one (E12): every row is tenant-scoped at the
  * storage layer, not only at the API layer. The journal's primary key is
  * (workspace_id, stream_id, sequence): streams live INSIDE workspaces, so the
- * same aggregate id in two workspaces never collides (AC3).
+ * same aggregate id in two workspaces never collides (AC3). event_id
+ * uniqueness is workspace-scoped too — UNIQUE (workspace_id, event_id), so
+ * the same event id in two workspaces are independent rows (E12) and the
+ * idempotent no-op for a repeated event_id can only ever match a row the
+ * SAME workspace wrote (C-3; schema not shipped anywhere — branch unmerged,
+ * edited in place per the committed-migration discipline).
  *
  * v2 — command receipts (D23 rule 6): one row per accepted command keyed by
  * (workspace_id, idempotency_key), recorded in the SAME transaction as the
@@ -41,7 +46,7 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
         occurred_at    TEXT    NOT NULL,
         correlation_id TEXT    NOT NULL,
         PRIMARY KEY (workspace_id, stream_id, sequence),
-        UNIQUE (event_id)
+        UNIQUE (workspace_id, event_id)
       ) STRICT;
 
       CREATE INDEX IF NOT EXISTS event_journal_workspace_idx

@@ -247,10 +247,7 @@ export class ConversationsService {
       });
     } catch (error) {
       if (isReceiptKeyConflict(error)) {
-        const winner = this.deps.receipts.findById(
-          command.workspace_id,
-          command.idempotency_key,
-        );
+        const winner = this.deps.receipts.findById(command.workspace_id, command.idempotency_key);
         if (winner) {
           return this.replayReceipt(winner);
         }

@@ -24,7 +24,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import type { ErrorRequestHandler, RequestHandler, Request } from "express";
+import type { ErrorRequestHandler, RequestHandler } from "express";
 
 import type { SheraError } from "@shera-bot/contracts";
 

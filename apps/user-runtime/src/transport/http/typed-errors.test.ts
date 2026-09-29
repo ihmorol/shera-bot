@@ -224,7 +224,9 @@ describe("createTypedErrorRequestHandler — untyped faults are recorded, not si
 
   it("does not log typed rejections — they are answered precisely and recorded as data", () => {
     const logged: Array<{ event: string; fields: Record<string, unknown> }> = [];
-    const handler = createTypedErrorRequestHandler((event, fields) => logged.push({ event, fields }));
+    const handler = createTypedErrorRequestHandler((event, fields) =>
+      logged.push({ event, fields }),
+    );
     const res = stubResponse();
 
     callHandler(
@@ -241,7 +243,9 @@ describe("createTypedErrorRequestHandler — untyped faults are recorded, not si
 
   it("delegates headers-sent failures to Express and logs nothing", () => {
     const logged: Array<{ event: string; fields: Record<string, unknown> }> = [];
-    const handler = createTypedErrorRequestHandler((event, fields) => logged.push({ event, fields }));
+    const handler = createTypedErrorRequestHandler((event, fields) =>
+      logged.push({ event, fields }),
+    );
     const res = stubResponse(true);
     let delegated: unknown = null;
     callHandler(handler, new Error("late failure"), { method: "GET", path: "/x" }, res, () => {
@@ -254,7 +258,9 @@ describe("createTypedErrorRequestHandler — untyped faults are recorded, not si
 
   it("a non-Error fault is still recorded with its stringified form", () => {
     const logged: Array<{ event: string; fields: Record<string, unknown> }> = [];
-    const handler = createTypedErrorRequestHandler((event, fields) => logged.push({ event, fields }));
+    const handler = createTypedErrorRequestHandler((event, fields) =>
+      logged.push({ event, fields }),
+    );
     const res = stubResponse();
 
     callHandler(handler, "raw string fault", { method: "GET", path: "/x" }, res, () => {});

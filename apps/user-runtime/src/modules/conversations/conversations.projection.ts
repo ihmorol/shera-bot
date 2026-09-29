@@ -61,6 +61,7 @@ export function rebuildConversationProjections(
         // never silently repaired (G2/G5).
         throw new Error(
           `conversation projection: event ${row.event_id} failed registry validation: ${String(error)}`,
+          { cause: error },
         );
       }
 
@@ -92,7 +93,10 @@ export function rebuildConversationProjections(
             `conversation projection: rename before creation for conversation ${payload.conversation_id}`,
           );
         }
-        if (payload.previous_revision !== existing.revision || payload.new_revision !== existing.revision + 1) {
+        if (
+          payload.previous_revision !== existing.revision ||
+          payload.new_revision !== existing.revision + 1
+        ) {
           throw new Error(
             `conversation projection: gapless revision check failed for conversation ${payload.conversation_id} (journal ${payload.previous_revision}->${payload.new_revision}, projected ${existing.revision})`,
           );

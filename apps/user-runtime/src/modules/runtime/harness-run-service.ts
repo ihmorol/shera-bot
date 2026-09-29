@@ -24,6 +24,8 @@
  * the injected publish hook — the WebSocket layer implements it and owns no
  * mutation path (D26).
  */
+import type { ZodType } from "zod";
+
 import {
   EVENT_ENVELOPES,
   type Actor,
@@ -224,6 +226,28 @@ export class HarnessRunService {
     }
 
     // journal_event proposal: durable, non-transition (progress/artifact/checkpoint).
+    // C-1: the registry lookup is GUARDED. TypeScript narrows event_type to
+    // the D26 vocabulary, but adapter values are RUNTIME data (D51/G2 —
+    // adapters are untrusted), so an unregistered type must be a typed
+    // rejection recorded as data, never an undefined-schema crash (the exact
+    // crash class B2 fixed). The run continues; nothing is appended or fanned
+    // out, and the unregistered value surfaces only as the rejection's
+    // event_type detail (schema vocabulary, not payload content — G3).
+    const envelopeSchema = (EVENT_ENVELOPES as Record<string, ZodType | undefined>)[
+      proposal.event_type
+    ];
+    if (!envelopeSchema) {
+      rejections.push({
+        kind: "malformed_command",
+        code: "JOURNAL_EVENT_UNKNOWN_TYPE",
+        safe_message: `The proposed journal event ${proposal.event_type} is not in the D26 envelope registry.`,
+        detail: {
+          event_type: proposal.event_type,
+          registered_types: Object.keys(EVENT_ENVELOPES),
+        },
+      });
+      return run;
+    }
     const sequence = this.deps.journal.nextSequence(streamId, run.workspace_id, exec);
     const actor: Actor = { type: "runtime", id: `harness:${this.deps.adapter.harness}` };
     // The occurrence counter (not the allocation-time sequence) keys the event
@@ -237,7 +261,7 @@ export class HarnessRunService {
     // out, and the raw invalid payload never enters the journal or the
     // rejection detail (G3): only the schema's own issues (paths + messages,
     // no received values) are recorded.
-    const parsedEnvelope = EVENT_ENVELOPES[proposal.event_type].safeParse({
+    const parsedEnvelope = envelopeSchema.safeParse({
       event_id: `evt_${proposal.event_type.replaceAll(".", "_")}_${run.task_id}_${occurrence}`,
       event_type: proposal.event_type,
       stream_id: streamId,
@@ -265,8 +289,11 @@ export class HarnessRunService {
       });
       return run;
     }
-    const envelope = parsedEnvelope.data;
-    this.appendContractEvent(envelope as TypedExecutionEvent, envelope.event_id, exec, published);
+    // safeParse's output is `unknown` through the guarded lookup (C-1); the
+    // cast is justified because the envelope schema IS the D26 contract for
+    // this event type — the parse just proved it.
+    const envelope = parsedEnvelope.data as TypedExecutionEvent;
+    this.appendContractEvent(envelope, envelope.event_id, exec, published);
     return run;
   }
 

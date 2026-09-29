@@ -361,4 +361,103 @@ describe("harness run service — the gateway validates what adapters propose (G
       h.conn.close();
     }
   });
+
+  it("records an unregistered event_type as a typed rejection and the run still completes (C-1)", () => {
+    // A misbehaving adapter proposing an event_type that is NOT in the D26
+    // envelope registry (runtime data, whatever the TS union claims), then
+    // the normal valid script.
+    const unknownTypeThenValid: HarnessAdapter = {
+      harness: "fake",
+      driveRun(request: HarnessRunRequest, sink: HarnessEventSink) {
+        sink.propose({
+          kind: "journal_event",
+          event_type: "not.in.registry",
+          payload: { summary: "unregistered type" },
+        } as unknown as HarnessProposal);
+        const base = {
+          workspace_id: request.workspace_id,
+          task_id: request.task_id,
+          actor: { type: "runtime" as const, id: "harness:fake" },
+          issued_at: NOW,
+        };
+        sink.propose({
+          kind: "task_command",
+          command: {
+            type: "queue_task",
+            command_id: `cmd_queue_${request.task_id}`,
+            idempotency_key: `idem_queue_${request.task_id}`,
+            expected_version: 1,
+            ...base,
+          },
+        });
+        sink.propose({
+          kind: "task_command",
+          command: {
+            type: "start_task",
+            command_id: `cmd_start_${request.task_id}`,
+            idempotency_key: `idem_start_${request.task_id}`,
+            expected_version: 2,
+            ...base,
+          },
+        });
+        sink.propose({
+          kind: "journal_event",
+          event_type: "progress.reported",
+          payload: { summary: "valid progress", fraction: 0.5 },
+        });
+        sink.propose({
+          kind: "task_command",
+          command: {
+            type: "complete_task",
+            command_id: `cmd_complete_${request.task_id}`,
+            idempotency_key: `idem_complete_${request.task_id}`,
+            expected_version: 3,
+            ...base,
+          },
+        });
+      },
+    };
+    const h = newHarness(unknownTypeThenValid);
+    try {
+      const result = h.service.startRun(TRIGGER);
+      // The unregistered type did NOT crash the run (no undefined-schema
+      // TypeError): it was recorded as data and skipped, and the valid script
+      // drove to completion.
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.state).toBe("SUCCEEDED");
+      expect(result.version).toBe(4);
+      expect(result.rejections).toHaveLength(1);
+      const rejection = result.rejections[0]!;
+      expect(rejection).toMatchObject({
+        kind: "malformed_command",
+        code: "JOURNAL_EVENT_UNKNOWN_TYPE",
+        safe_message:
+          "The proposed journal event not.in.registry is not in the D26 envelope registry.",
+      });
+      const detail = rejection.detail as { event_type: string; registered_types: string[] };
+      expect(detail.event_type).toBe("not.in.registry");
+      expect(detail.registered_types).toContain("progress.reported");
+
+      // Nothing was appended or fanned out for the unregistered type: the
+      // stream holds exactly the valid script's five events.
+      const stream = h.journal.listStream(taskStreamId("task_evt_trig_1"), WS_A, h.conn.db);
+      expect(stream.map((row) => row.event_type)).toEqual([
+        "task.created",
+        "task.queued",
+        "task.started",
+        "progress.reported",
+        "task.succeeded",
+      ]);
+      expect(h.published.map((event) => event.type)).toEqual([
+        "task.created",
+        "task.queued",
+        "task.started",
+        "progress.reported",
+        "task.succeeded",
+      ]);
+    } finally {
+      h.conn.close();
+    }
+  });
 });

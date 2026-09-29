@@ -54,6 +54,11 @@ const SQL_PATTERNS: Array<[RegExp, string]> = [
   [/\bcreate\s+(table|index)\b/i, "CREATE TABLE/INDEX"],
   [/\bpragma\b/i, "PRAGMA"],
   [/\bbegin\s+(immediate|deferred|exclusive|transaction)\b/i, "BEGIN TRANSACTION"],
+  // C-5: ATTACH DATABASE (and VACUUM INTO, which copies the database to an
+  // arbitrary file) reach OUTSIDE the fenced database file — they must stay
+  // inside the SQLite adapter like every other statement.
+  [/\battach\s+database\b/i, "ATTACH DATABASE"],
+  [/\bvacuum\b/i, "VACUUM"],
   [/node:sqlite/, "node:sqlite import"],
 ];
 

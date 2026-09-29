@@ -24,16 +24,21 @@ export interface CommandReceiptRow {
  * True when the error is the (workspace_id, idempotency_key) primary-key
  * conflict: two concurrent executions of the same key both missed the
  * fast-path receipt read, and the loser's INSERT hit the winner's committed
- * row. The node:sqlite driver surfaces it as ERR_SQLITE_ERROR with the table
- * named in the message; the caller must then re-read and replay the winner's
- * receipt instead of leaking the raw constraint error (B5).
+ * row. The node:sqlite driver surfaces it as ERR_SQLITE_ERROR naming the
+ * violated constraint's qualified columns in the message; the caller must
+ * then re-read and replay the winner's receipt instead of leaking the raw
+ * constraint error (B5). BOTH qualified column names are required (C-4
+ * hardening): a future differently-named unique index on this table must
+ * never be misread as an idempotency race, and the messages name columns,
+ * never user values, so no crafted input can forge a match.
  */
 export function isReceiptKeyConflict(error: unknown): boolean {
   return (
     error instanceof Error &&
     (error as { code?: unknown }).code === "ERR_SQLITE_ERROR" &&
     error.message.includes("UNIQUE constraint failed") &&
-    error.message.includes("command_receipts")
+    error.message.includes("command_receipts.workspace_id") &&
+    error.message.includes("command_receipts.idempotency_key")
   );
 }
 

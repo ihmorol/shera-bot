@@ -13,7 +13,10 @@ import { join } from "node:path";
 
 import { afterAll, describe, expect, it } from "vitest";
 
-import { CommandReceiptsRepository } from "../../adapters/sqlite/command-receipts-repository.ts";
+import {
+  CommandReceiptsRepository,
+  isReceiptKeyConflict,
+} from "../../adapters/sqlite/command-receipts-repository.ts";
 import {
   ConversationsRepository,
   type ConversationRow,
@@ -351,6 +354,54 @@ describe("conversations commands (AC6 — idempotency, conflicts, typed rejectio
   });
 });
 
+describe("receipt-key conflict classification (B5 hardening, C-4)", () => {
+  it("classifies the (workspace_id, idempotency_key) PK violation message as a receipt-key conflict", () => {
+    const pkViolation = Object.assign(
+      new Error(
+        "UNIQUE constraint failed: command_receipts.workspace_id, command_receipts.idempotency_key",
+      ),
+      { code: "ERR_SQLITE_ERROR" },
+    );
+    expect(isReceiptKeyConflict(pkViolation)).toBe(true);
+  });
+
+  it("does NOT classify a differently-named unique constraint as a receipt-key race (C-4)", () => {
+    // A future second unique index on the same table must not be mistaken
+    // for the idempotency race.
+    const otherIndex = Object.assign(
+      new Error("UNIQUE constraint failed: command_receipts.command_type"),
+      { code: "ERR_SQLITE_ERROR" },
+    );
+    expect(isReceiptKeyConflict(otherIndex)).toBe(false);
+
+    // Same columns, different constraint class (e.g. NOT NULL on one of the
+    // key columns): not a race.
+    const notNull = Object.assign(
+      new Error("NOT NULL constraint failed: command_receipts.idempotency_key"),
+      {
+        code: "ERR_SQLITE_ERROR",
+      },
+    );
+    expect(isReceiptKeyConflict(notNull)).toBe(false);
+
+    // The right message shape from another table: not this table's race.
+    const otherTable = Object.assign(
+      new Error("UNIQUE constraint failed: event_journal.workspace_id, event_journal.event_id"),
+      { code: "ERR_SQLITE_ERROR" },
+    );
+    expect(isReceiptKeyConflict(otherTable)).toBe(false);
+
+    // Not a driver error at all: never classified.
+    const plain = new Error(
+      "UNIQUE constraint failed: command_receipts.workspace_id, command_receipts.idempotency_key",
+    );
+    expect(isReceiptKeyConflict(plain)).toBe(false);
+    expect(isReceiptKeyConflict("UNIQUE constraint failed: command_receipts.workspace_id")).toBe(
+      false,
+    );
+  });
+});
+
 describe("conversations commands (E12/AC5 — workspace scoping)", () => {
   it("a foreign workspace can neither read, write, nor rename another workspace's conversation", () => {
     const h = newHarness();
@@ -464,12 +515,20 @@ describe("conversation projection rebuild (D5 — state rebuildable from the jou
       const renamedTwice = h.service.executeCommand(createCommand());
       h.service.executeCommand(
         renameCommand(renamedTwice.conversation_id, {
-          payload: { conversation_id: renamedTwice.conversation_id, title: "v2", expected_revision: 1 },
+          payload: {
+            conversation_id: renamedTwice.conversation_id,
+            title: "v2",
+            expected_revision: 1,
+          },
         }),
       );
       h.service.executeCommand(
         renameCommand(renamedTwice.conversation_id, {
-          payload: { conversation_id: renamedTwice.conversation_id, title: "v3", expected_revision: 2 },
+          payload: {
+            conversation_id: renamedTwice.conversation_id,
+            title: "v3",
+            expected_revision: 2,
+          },
         }),
       );
       const untouched = h.service.executeCommand(

@@ -7,7 +7,7 @@
  * handling is wired but not exercised here — signal delivery belongs to
  * process supervision in a later slice.
  */
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -96,5 +96,54 @@ describe("runtime node config from environment (no secrets cross this path, G3)"
     expect(() => runtimeConfigFromEnv({ RUNTIME_PORT: "99999" })).toThrow(
       /RUNTIME_PORT is not a valid port/,
     );
+  });
+
+  it("accepts loopback RUNTIME_HOST values without any opt-in (C-6)", () => {
+    expect(runtimeConfigFromEnv({ RUNTIME_HOST: "127.0.0.1" }).host).toBe("127.0.0.1");
+    expect(runtimeConfigFromEnv({ RUNTIME_HOST: "localhost" }).host).toBe("localhost");
+    expect(runtimeConfigFromEnv({ RUNTIME_HOST: "127.9.9.9" }).host).toBe("127.9.9.9");
+    expect(runtimeConfigFromEnv({ RUNTIME_HOST: "::1" }).host).toBe("::1");
+  });
+
+  it("refuses a non-loopback RUNTIME_HOST unless RUNTIME_ALLOW_NON_LOOPBACK_BIND=1 (G4, C-6)", () => {
+    expect(() => runtimeConfigFromEnv({ RUNTIME_HOST: "0.0.0.0" })).toThrow(
+      /RUNTIME_ALLOW_NON_LOOPBACK_BIND/,
+    );
+    expect(() => runtimeConfigFromEnv({ RUNTIME_HOST: "192.168.1.10" })).toThrow(
+      /RUNTIME_ALLOW_NON_LOOPBACK_BIND/,
+    );
+    const optedIn = runtimeConfigFromEnv({
+      RUNTIME_HOST: "0.0.0.0",
+      RUNTIME_ALLOW_NON_LOOPBACK_BIND: "1",
+    });
+    expect(optedIn.host).toBe("0.0.0.0");
+  });
+
+  it("binds a non-loopback host end-to-end only when the environment opt-in is set (C-6)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "shera-runtime-node-"));
+    tempDirs.push(dir);
+
+    // Without the opt-in in process.env, startRuntimeNode refuses before any
+    // socket is opened or the database file is created.
+    await expect(
+      startRuntimeNode({ host: "0.0.0.0", port: 0, dbPath: join(dir, "refused.db") }),
+    ).rejects.toThrow(/RUNTIME_ALLOW_NON_LOOPBACK_BIND/);
+    expect(existsSync(join(dir, "refused.db"))).toBe(false);
+
+    // With the opt-in, the node binds and serves (reachability on loopback).
+    process.env["RUNTIME_ALLOW_NON_LOOPBACK_BIND"] = "1";
+    try {
+      const node = await startRuntimeNode({
+        host: "0.0.0.0",
+        port: 0,
+        dbPath: join(dir, "bound.db"),
+      });
+      expect(node.host).toBe("0.0.0.0");
+      const health = await fetch(`http://127.0.0.1:${node.port}/internal/v1/health`);
+      expect(health.status).toBe(200);
+      await node.stop();
+    } finally {
+      delete process.env["RUNTIME_ALLOW_NON_LOOPBACK_BIND"];
+    }
   });
 });

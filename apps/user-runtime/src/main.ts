@@ -2,8 +2,10 @@
  * Runtime node bootstrap (S07 5a) — minimal composition root entry.
  *
  * Config comes from the environment with loopback-safe defaults: RUNTIME_HOST
- * (default 127.0.0.1 — the gateway never binds a public interface here; D2,
- * D11), RUNTIME_PORT (default 8080), RUNTIME_DB_PATH (default ./data/runtime.db).
+ * (default 127.0.0.1; a non-loopback bind is REFUSED unless
+ * RUNTIME_ALLOW_NON_LOOPBACK_BIND=1 is set — the unauthenticated local surface
+ * stays scoped to the container, PRD §16; D2, D11), RUNTIME_PORT (default
+ * 8080), RUNTIME_DB_PATH (default ./data/runtime.db).
  * No secrets are read from the environment (G3) — credentials belong to the
  * internal channel's credential store, provisioned by the control plane (S06).
  *
@@ -29,7 +31,11 @@ export interface RuntimeNodeConfig {
   host?: string;
   /** Listen port; 0 picks an ephemeral port. Default 8080. */
   port?: number;
-  /** SQLite database path; parent directory is created if missing. */
+  /**
+   * SQLite database path; parent directory is created if missing. The
+   * journal's lifetime is the container filesystem's lifetime — a container
+   * recreate wipes it; recovery/restore is owned by S31/S32.
+   */
   dbPath?: string;
   /**
    * E12: the container's default workspace for harness-driven runs.
@@ -60,6 +66,11 @@ const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = 8080;
 const DEFAULT_DB_PATH = join("data", "runtime.db");
 
+/** Loopback hosts: localhost, the 127.0.0.0/8 range, and ::1. Anything else needs the opt-in. */
+function isLoopbackHost(host: string): boolean {
+  return host === "localhost" || host === "::1" || host.startsWith("127.");
+}
+
 /** Parse the environment into a node config; explicit values win. Pure (G3). */
 export function runtimeConfigFromEnv(
   env: Record<string, string | undefined>,
@@ -77,6 +88,16 @@ export function runtimeConfigFromEnv(
       // never a silent fallback.
       throw new Error(`RUNTIME_PORT is not a valid port: ${String(rawPort)}`);
     }
+  }
+  if (!isLoopbackHost(host) && env["RUNTIME_ALLOW_NON_LOOPBACK_BIND"] !== "1") {
+    // Honest configuration failure (G4, C-6): the local API is unauthenticated
+    // in this slice and PRD §16 scopes localhost services to the container, so
+    // a non-loopback bind is refused unless explicitly opted in. The opt-in is
+    // read from the ENVIRONMENT only — an explicit programmatic override
+    // cannot grant it to itself.
+    throw new Error(
+      `RUNTIME_HOST ${host} is not a loopback address; refusing to bind the unauthenticated local surface. Set RUNTIME_ALLOW_NON_LOOPBACK_BIND=1 to allow it.`,
+    );
   }
   const dbPath = overrides.dbPath ?? env["RUNTIME_DB_PATH"] ?? DEFAULT_DB_PATH;
   const defaultWorkspaceId =

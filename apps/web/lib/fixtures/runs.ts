@@ -214,7 +214,7 @@ export const RUNS: TaskRun[] = [
 /**
  * Sidebar state derivation (PRD §4.1 five states). Active (non-terminal)
  * runs drive attention states honestly; PAUSED and RECOVERY_REQUIRED both
- * need the user, so they surface under the failed dot. Unread is a
+ * need the user, so they surface under the failed state. Unread is a
  * conversation property, not a run property — it wins only when no run is
  * in an attention state.
  */
@@ -249,6 +249,28 @@ export function sidebarStateFor(
     return "unread";
   }
   return "quiet";
+}
+
+/**
+ * §2.1 status-palette semantics for the failed sidebar state: red means a
+ * genuinely FAILED run only. A run that is merely waiting on the user —
+ * PAUSED (e.g. credits) or RECOVERY_REQUIRED ("a task needs your review") —
+ * is an attention/review-requested state and reads amber, matching the
+ * approval-required treatment; only the actual failure keeps red.
+ */
+export function attentionVariantFor(
+  conversationId: string,
+  runs: readonly TaskRun[] = RUNS,
+): "error" | "review" | undefined {
+  const conversationRuns = runs.filter((run) => run.conversation_id === conversationId);
+  if (conversationRuns.some((run) => run.state === "FAILED")) {
+    return "error";
+  }
+  const reviewStates: ReadonlySet<RunState> = new Set(["PAUSED", "RECOVERY_REQUIRED"]);
+  if (conversationRuns.some((run) => reviewStates.has(run.state))) {
+    return "review";
+  }
+  return undefined;
 }
 
 /**

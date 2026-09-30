@@ -69,16 +69,19 @@ function useScriptedStream(stream: FixtureStream | null) {
 }
 
 function PresencePill({ presence }: { presence: SessionPresence }) {
+  const label = presence === "active" ? "session active" : "hibernating";
   return (
     <span
-      className="hidden shrink-0 items-center gap-1.5 rounded-full border border-line px-2.5 py-1 text-[11px] text-muted sm:flex"
+      className="flex shrink-0 items-center gap-1.5 rounded-full border border-line px-2.5 py-1 text-[11px] text-muted"
       title="On-demand session — it wakes when work starts and hibernates when idle (D32)"
     >
       <span
         aria-hidden="true"
         className={cn("size-1.5 rounded-full", presence === "active" ? "bg-live" : "bg-muted")}
       />
-      {presence === "active" ? "session active" : "hibernating"}
+      {/* Below md the pill collapses to the dot + screen-reader label so the
+          Agent name keeps width priority at 360px (§2.2 min breakpoint). */}
+      <span className="sr-only md:not-sr-only">{label}</span>
     </span>
   );
 }
@@ -219,11 +222,13 @@ export function AgentChatView({
           <p className="truncate text-xs text-muted">{agent.role_description}</p>
         </div>
         <PresencePill presence={presence} />
+        {/* Model placeholder collapses away below md — the identity (name +
+            role) keeps width priority at the 360px min breakpoint (§2.2). */}
         <button
           type="button"
           disabled
           title="Provider and model overrides arrive with the settings pass (demo)"
-          className="shrink-0 rounded-lg border border-line px-3 py-1.5 text-xs text-muted opacity-70"
+          className="hidden shrink-0 rounded-lg border border-line px-3 py-1.5 text-xs text-muted opacity-70 md:block"
         >
           Platform default
         </button>

@@ -73,7 +73,7 @@ export function Composer({
           rows={1}
           disabled={disabled}
           placeholder={disabled ? disabledReason : `Message ${agentName}`}
-          className="max-h-40 min-h-11 flex-1 resize-none rounded-xl border border-line bg-surface-elevated px-3 py-2.5 text-base text-text placeholder:text-muted"
+          className="max-h-40 min-h-11 min-w-0 flex-1 resize-none rounded-xl border border-line bg-surface-elevated px-3 py-2.5 text-base text-text placeholder:text-muted"
         />
         <Button type="submit" size="icon" disabled={!canSend} aria-label="Send message">
           <Send className="size-4" aria-hidden="true" />

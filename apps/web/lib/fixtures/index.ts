@@ -7,7 +7,7 @@ import {
   conversationForAgent,
   rosterSubtitle,
 } from "./conversations";
-import { RUNS, sidebarStateFor } from "./runs";
+import { RUNS, attentionVariantFor, sidebarStateFor } from "./runs";
 import { STUDENT_PACK } from "./pack";
 
 /**
@@ -52,12 +52,22 @@ export function entitySlug(entityId: string): string {
   return entityId.replace(/^(agent|operation)_/, "").replace(/_/g, "-");
 }
 
+/**
+ * §2.1 status-palette refinement for the failed sidebar state: red is kept
+ * for genuinely FAILED runs ("error"); PAUSED/RECOVERY_REQUIRED are
+ * attention/review-requested states and render amber ("review") — a pause
+ * is never an error.
+ */
+export type AttentionVariant = "error" | "review" | undefined;
+
 export interface SidebarAgentEntry {
   agent: Agent;
   conversation: ConversationSummary;
   state: ConversationState;
   /** Runs waiting on an approval decision (drives the amber badge count). */
   approvalCount: number;
+  /** Why the failed state fired — picks red vs amber per §2.1. */
+  attention: AttentionVariant;
 }
 
 export interface SidebarOperationEntry {
@@ -66,6 +76,7 @@ export interface SidebarOperationEntry {
   subtitle: string;
   state: ConversationState;
   approvalCount: number;
+  attention: AttentionVariant;
 }
 
 export interface SidebarTemplateEntry {
@@ -101,6 +112,7 @@ export function sidebarModel(): SidebarModel {
       conversation,
       state: sidebarStateFor(conversation.conversation_id, conversation.unread_count),
       approvalCount: approvalCount(conversation.conversation_id),
+      attention: attentionVariantFor(conversation.conversation_id),
     };
   });
 
@@ -117,6 +129,7 @@ export function sidebarModel(): SidebarModel {
       subtitle: rosterSubtitle(operation),
       state: sidebarStateFor(conversation.conversation_id, conversation.unread_count),
       approvalCount: approvalCount(conversation.conversation_id),
+      attention: attentionVariantFor(conversation.conversation_id),
     };
   });
 

@@ -11,6 +11,7 @@ import {
   entitySlug,
   sessionPresenceFor,
   sidebarModel,
+  type AttentionVariant,
   type ConversationState,
 } from "@/lib/fixtures";
 import { routes } from "@/lib/routes";
@@ -19,16 +20,18 @@ import { cn } from "@/lib/utils";
 import { Wordmark } from "./wordmark";
 
 /**
- * Sidebar (UI_DESIGN §3.2, PRD §4.1): global chrome row, the six pack Agents
- * as persistent direct chats (AC3), the pack-defined Operation templates
- * (launch → preview, D30), the active Operation chats group, and the pack
- * footer label. Two sections only (D41); no workspace switcher, no pack
- * switcher (D40, D19).
+ * Sidebar (UI_DESIGN §3.2, §2.1, PRD §4.1): global chrome row, the six pack
+ * Agents as persistent direct chats (AC3), the pack-defined Operation
+ * templates (launch → preview, D30), the active Operation chats group, and
+ * the pack footer label. Two sections only (D41); no workspace switcher, no
+ * pack switcher (D40, D19).
  *
  * All rows and states come from the §9 fixture model: unread (count pill),
  * running (spinner), approval_required (amber dot + count — a pending
- * proposal, never a granted state, G2), failed (red dot), quiet (no marker).
- * Color is never the only signal — every dot pairs with a glyph, count, or
+ * proposal, never a granted state, G2), failed (red dot for genuinely
+ * FAILED runs; amber "needs your review" for PAUSED/RECOVERY_REQUIRED per
+ * the §2.1 palette — red means error only), quiet (no marker). Color is
+ * never the only signal — every dot pairs with a glyph, count, or
  * screen-reader label (§2.1).
  */
 
@@ -59,11 +62,16 @@ function StateTrail({
   state,
   unreadCount,
   approvalCount,
+  attention,
 }: {
   state: ConversationState;
   unreadCount: number;
   approvalCount: number;
+  attention: AttentionVariant;
 }) {
+  // §2.1 palette: red marks a genuinely FAILED run only; a run that is
+  // paused or needs recovery review reads amber (attention), never red.
+  const failedLabel = attention === "error" ? "failed" : "needs your review";
   return (
     <span className="flex shrink-0 items-center gap-1.5">
       {state === "running" ? (
@@ -76,10 +84,19 @@ function StateTrail({
         </>
       ) : null}
       {state === "failed" ? (
-        <span className="size-2 rounded-full bg-failed" aria-hidden="true" />
+        <>
+          <span
+            className={cn(
+              "size-2 rounded-full",
+              attention === "error" ? "bg-failed" : "bg-approval",
+            )}
+            aria-hidden="true"
+          />
+          <span className="sr-only">{failedLabel}</span>
+        </>
       ) : null}
       {state === "unread" ? <UnreadPill count={unreadCount} /> : null}
-      <span className="sr-only">{STATE_LABELS[state]}</span>
+      <span className="sr-only">{state === "failed" ? failedLabel : STATE_LABELS[state]}</span>
     </span>
   );
 }
@@ -112,7 +129,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         <section>
           <SidebarSectionLabel>Agents</SidebarSectionLabel>
           <ul>
-            {model.agents.map(({ agent, conversation, state, approvalCount }) => {
+            {model.agents.map(({ agent, conversation, state, approvalCount, attention }) => {
               const href = routes.agent(entitySlug(agent.agent_id));
               const active = pathname === href || pathname.startsWith(`${href}/`);
               const presence = sessionPresenceFor(conversation.conversation_id);
@@ -141,6 +158,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                       state={state}
                       unreadCount={conversation.unread_count}
                       approvalCount={approvalCount}
+                      attention={attention}
                     />
                   </Link>
                 </li>
@@ -185,7 +203,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           </p>
           <ul>
             {model.operationChats.map(
-              ({ operation, conversation, subtitle, state, approvalCount }) => {
+              ({ operation, conversation, subtitle, state, approvalCount, attention }) => {
                 return (
                   <li key={operation.operation_id}>
                     <Link
@@ -202,6 +220,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                         state={state}
                         unreadCount={conversation.unread_count}
                         approvalCount={approvalCount}
+                        attention={attention}
                       />
                     </Link>
                   </li>

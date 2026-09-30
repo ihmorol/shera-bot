@@ -1,7 +1,10 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import { AgentChatView } from "../components/chat/agent-chat-view";
 import { MessageList } from "../components/chat/message-list";
 import { ArtifactCard, ReplayBoundary, RunCard, ToolCallCard } from "../components/chat/cards";
 import { Composer } from "../components/chat/composer";
@@ -12,8 +15,10 @@ import {
   EVENT_TUTOR_APPROVAL,
   FIXTURE_ARTIFACTS,
   RUNS,
+  agentById,
   buildThread,
   ChatMessage,
+  conversationForAgent,
 } from "../lib/fixtures";
 import type { ThreadItem } from "../lib/fixtures";
 import { insertDaySeparators, withSentMessages, type TimelineItem } from "../lib/thread-layout";
@@ -24,6 +29,8 @@ import { insertDaySeparators, withSentMessages, type TimelineItem } from "../lib
  * attribution, §S3 day separators and jump-to-unread, the §6.2 replayed
  * marker, the §2.4 state language, and the G2 honesty of the inline cards.
  */
+
+const APP_DIR = join(import.meta.dirname, "..");
 
 const render = (element: ReactElement): string => renderToStaticMarkup(element);
 
@@ -241,5 +248,55 @@ describe("composer (§S3)", () => {
     );
     expect(html).toContain("No provider is configured for this conversation yet.");
     expect(html).toContain("disabled");
+  });
+});
+
+describe("360px responsive constraints (§2.2 craft floor)", () => {
+  const readSource = (relative: string): string => readFileSync(join(APP_DIR, relative), "utf8");
+
+  it("gives the chat header identity priority — model control collapses below md", () => {
+    const source = readSource("components/chat/agent-chat-view.tsx");
+    // The disabled placeholder is not rendered below md, so the name and
+    // role line keep the width (360px: no "Re…" truncation).
+    expect(source).toMatch(/hidden shrink-0[^"]*md:block/);
+    // The presence pill collapses to dot + sr-only label below md.
+    expect(source).toContain("sr-only md:not-sr-only");
+  });
+
+  it("constrains the attribution rows that overflowed at 360px", () => {
+    // Root cause of the horizontal overflow: inside items-start flex columns
+    // the attribution row sized to max-content, so the nowrap role line
+    // pushed the thread wider than the viewport. The rows must be capped.
+    for (const file of [
+      "components/chat/message-list.tsx",
+      "components/chat/streaming-message.tsx",
+    ]) {
+      const source = readSource(file);
+      expect(source, `${file} attribution row`).toMatch(
+        /flex min-w-0 max-w-full items-center gap-2/,
+      );
+      expect(source, `${file} role span`).toMatch(/min-w-0 truncate text-xs/);
+    }
+    // The composer textarea must not carry an intrinsic minimum width.
+    const composer = readSource("components/chat/composer.tsx");
+    expect(composer).toMatch(/min-w-0 flex-1 resize-none/);
+  });
+
+  it("renders the compact presence pill at every breakpoint", () => {
+    const conversation = conversationForAgent("agent_general_assistant")!;
+    const agent = agentById("agent_general_assistant")!;
+    const html = render(
+      createElement(AgentChatView, {
+        agent,
+        conversation,
+        thread: buildThread(conversation.conversation_id),
+      }),
+    );
+    // The label announces via sr-only below md and becomes visible at md+.
+    expect(html).toContain('class="sr-only md:not-sr-only"');
+    // The General Assistant has a RUNNING run → active presence.
+    expect(html).toContain("session active");
+    // The model placeholder is hidden below md.
+    expect(html).toMatch(/class="hidden shrink-0[^"]*md:block"/);
   });
 });

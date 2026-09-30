@@ -128,7 +128,10 @@ function MessageRow({
       ref={anchorRef}
       className={cn("flex flex-col items-start", replayed && "border-l-2 border-line-accent pl-3")}
     >
-      <div className="flex items-center gap-2">
+      {/* min-w-0 max-w-full: inside the items-start column this row would
+          otherwise size to max-content and let the nowrap role line overflow
+          the 360px min breakpoint (§2.2). */}
+      <div className="flex min-w-0 max-w-full items-center gap-2">
         <AgentAvatar
           agentId={message.sender.agent_id}
           name={agent?.display_name ?? "?"}
@@ -138,7 +141,7 @@ function MessageRow({
           {agent?.display_name ?? message.sender.agent_id}
         </span>
         {agent ? (
-          <span className="truncate text-xs text-muted">{agent.role_description}</span>
+          <span className="min-w-0 truncate text-xs text-muted">{agent.role_description}</span>
         ) : null}
       </div>
       <div className="ml-8 max-w-[78%] rounded-2xl rounded-tl-sm border border-line bg-surface px-4 py-2.5 text-base">

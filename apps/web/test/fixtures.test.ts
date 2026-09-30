@@ -154,6 +154,20 @@ describe("sidebar model (§3.2, PRD §4.1)", () => {
     expect(model.operationChats[1]?.state).toBe("failed");
   });
 
+  it("splits the failed state per §2.1: red for FAILED runs, amber for review", () => {
+    const model = sidebarModel();
+    const byAgent = new Map(model.agents.map((entry) => [entry.agent.agent_id, entry]));
+    // Developer: RECOVERY_REQUIRED — waiting on the user, not an error → review (amber).
+    expect(byAgent.get("agent_developer")?.attention).toBe("review");
+    // Study Planner: PAUSED (insufficient credits) — attention, not an error → review (amber).
+    expect(byAgent.get("agent_study_planner")?.attention).toBe("review");
+    // Ad-hoc Operation: a genuinely FAILED run → error (red).
+    expect(model.operationChats[1]?.attention).toBe("error");
+    // Non-failed conversations carry no attention variant.
+    expect(byAgent.get("agent_general_assistant")?.attention).toBeUndefined();
+    expect(byAgent.get("agent_researcher")?.attention).toBeUndefined();
+  });
+
   it("renders approval_required only for WAITING_FOR_APPROVAL runs (G2)", () => {
     const model = sidebarModel();
     const approvalEntries = [...model.agents, ...model.operationChats].filter(

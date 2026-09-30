@@ -268,7 +268,7 @@ describe("conversations commands (AC6 — idempotency, conflicts, typed rejectio
       // The raw constraint error never escapes: the loser replayed the
       // winner's recorded result verbatim.
       expect(loser).toEqual(winner);
-      expect(loser.title).toBe("first commit");
+      expect(loser.kind === "created" && loser.title).toBe("first commit");
 
       // The loser's transition, event, and receipt write rolled back with its
       // failed unit — exactly one of each exists, the winner's.
@@ -453,7 +453,7 @@ describe("conversations commands (E12/AC5 — workspace scoping)", () => {
       );
       expect(inB.kind).toBe("created");
       expect(inB.conversation_id).not.toBe(inA.conversation_id);
-      expect(inB.title).toBe("B side");
+      expect(inB.kind === "created" && inB.title).toBe("B side");
       expect(inB.event_id).not.toBe(inA.event_id);
 
       // Workspace A's receipt and result are untouched by B's execution: the

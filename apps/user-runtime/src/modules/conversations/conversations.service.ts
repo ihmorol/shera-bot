@@ -46,9 +46,10 @@ export interface ConversationsServiceDeps {
 }
 
 interface StoredReceipt {
-  kind: "created" | "renamed";
+  kind: "created" | "renamed" | "message_sent";
   conversation_id: string;
-  title: string;
+  title?: string;
+  message_id?: string;
   revision: number;
   event_id: string;
 }
@@ -88,6 +89,8 @@ export class ConversationsService {
         return this.executeCreate(command);
       case "conversation.rename":
         return this.executeRename(command);
+      case "message.send":
+        return this.executeMessageSend(command);
       default: {
         // The discriminated union makes this unreachable; a bad type arriving
         // here means the transport skipped validation (G2 — fail loudly).
@@ -212,8 +215,62 @@ export class ConversationsService {
   }
 
   /**
+   * Send one message (S09 chunk 2): an append to the conversation's stream —
+   * no aggregate transition, so the revision is unchanged (it guards the
+   * title). The durable event carries the sender and the full text; its
+   * correlation_id IS the command's idempotency key, which is the identity
+   * clients use to reconcile their optimistic copy against the authoritative
+   * journal event (D26/D23 rule 6: one key → one message, forever).
+   */
+  private executeMessageSend(
+    command: Extract<ConversationCommand, { type: "message.send" }>,
+  ): ConversationCommandResult {
+    return this.runWithReceipt(command, (exec) => {
+      const existing = this.deps.conversations.findById(
+        command.workspace_id,
+        command.payload.conversation_id,
+        exec,
+      );
+      if (!existing) {
+        throw new ConversationsServiceError(
+          "CONVERSATION_NOT_FOUND",
+          "state",
+          `conversation ${command.payload.conversation_id} does not exist in this workspace`,
+        );
+      }
+
+      const messageId = randomUUID();
+      const event = this.deps.journal.appendEvent({
+        event_id: randomUUID(),
+        stream_id: conversationStreamFor(command.payload.conversation_id),
+        type: "message.appended",
+        payload: {
+          conversation_id: command.payload.conversation_id,
+          workspace_id: command.workspace_id,
+          message_id: messageId,
+          sender: command.payload.sender,
+          text: command.payload.text,
+        },
+        workspace_id: command.workspace_id,
+        correlation_id: command.idempotency_key,
+      });
+
+      return {
+        stored: {
+          kind: "message_sent",
+          conversation_id: command.payload.conversation_id,
+          message_id: messageId,
+          revision: existing.revision,
+          event_id: event.event_id,
+        },
+        event,
+      };
+    });
+  }
+
+  /**
    * One transaction wraps the transition, the event append, and the receipt
-   * write; the publish hook fires strictly after COMMIT so live subscribers
+   * write; the publish hook fires strictly AFTER COMMIT so live subscribers
    * never see a rolled-back event (AC2, D26).
    *
    * Race containment (B5): two concurrent executions of the same
@@ -256,26 +313,34 @@ export class ConversationsService {
     }
 
     this.deps.publish?.(committed.event);
-    return {
-      kind: committed.stored.kind,
-      conversation_id: committed.stored.conversation_id,
-      title: committed.stored.title,
-      revision: committed.stored.revision,
-      event_id: committed.stored.event_id,
-    };
+    return resultFromStored(committed.stored);
   }
 
   /** The recorded receipt replays verbatim: effects are never duplicated. */
   private replayReceipt(receipt: CommandReceiptRow): ConversationCommandResult {
     const stored = JSON.parse(receipt.result_json) as StoredReceipt;
+    return resultFromStored(stored);
+  }
+}
+
+/** The stored receipt shape maps onto the public result union verbatim. */
+function resultFromStored(stored: StoredReceipt): ConversationCommandResult {
+  if (stored.kind === "message_sent") {
     return {
-      kind: stored.kind,
+      kind: "message_sent",
       conversation_id: stored.conversation_id,
-      title: stored.title,
+      message_id: stored.message_id ?? "",
       revision: stored.revision,
       event_id: stored.event_id,
     };
   }
+  return {
+    kind: stored.kind,
+    conversation_id: stored.conversation_id,
+    title: stored.title ?? "",
+    revision: stored.revision,
+    event_id: stored.event_id,
+  };
 }
 
 /** Re-export for transport mapping without widening the service surface. */

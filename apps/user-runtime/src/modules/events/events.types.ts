@@ -33,6 +33,29 @@ export const ConversationRenamedPayload = z.strictObject({
 export type ConversationRenamedPayload = z.infer<typeof ConversationRenamedPayload>;
 
 /**
+ * Who authored a conversation message (S09). The local API is the container's
+ * trusted loopback surface in this slice — the principal-to-sender binding
+ * arrives with the authenticated transport (same posture as workspace_id,
+ * recorded S07/S09).
+ */
+export const MessageSender = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("user"), display_name: z.string().min(1).max(200) }),
+  z.strictObject({ kind: z.literal("agent"), agent_id: z.string().min(1).max(200) }),
+]);
+export type MessageSender = z.infer<typeof MessageSender>;
+
+/** One durable conversation message (S09 chunk 2; the stream IS the history). */
+export const MessageAppendedPayload = z.strictObject({
+  conversation_id: z.string().min(1),
+  workspace_id: z.string().min(1),
+  /** Stable identity of the message for UI reconciliation (D26). */
+  message_id: z.string().min(1),
+  sender: MessageSender,
+  text: z.string().min(1).max(4000),
+});
+export type MessageAppendedPayload = z.infer<typeof MessageAppendedPayload>;
+
+/**
  * The D26 task-execution vocabulary (S07; D51 seam) journaled on `task:<id>`
  * streams. The journal row stores the FULL contract envelope as its payload —
  * the envelope IS the durable D26 event — so each registry entry validates the
@@ -59,6 +82,7 @@ const TASK_EVENT_REGISTRY = Object.fromEntries(
 export const EVENT_TYPES = {
   "conversation.created": { schema_version: 1, payload: ConversationCreatedPayload },
   "conversation.renamed": { schema_version: 1, payload: ConversationRenamedPayload },
+  "message.appended": { schema_version: 1, payload: MessageAppendedPayload },
   ...TASK_EVENT_REGISTRY,
 } as const;
 

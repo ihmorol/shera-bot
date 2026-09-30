@@ -9,6 +9,8 @@
  */
 import { z } from "zod";
 
+import { MessageSender } from "../events/events.types.ts";
+
 export const ConversationCreateCommand = z.strictObject({
   type: z.literal("conversation.create"),
   workspace_id: z.string().min(1),
@@ -31,16 +33,44 @@ export const ConversationRenameCommand = z.strictObject({
 });
 export type ConversationRenameCommand = z.infer<typeof ConversationRenameCommand>;
 
+/**
+ * Send one message into a conversation (S09 chunk 2): the send is an
+ * idempotent typed command like every other mutation (D26, D23 rule 6) — the
+ * same idempotency_key always resolves to the SAME durable message, so a
+ * client retry after an ambiguous failure can never duplicate a turn.
+ * The conversation aggregate's revision guards the TITLE only; message
+ * appends land on the stream without moving it.
+ */
+export const MessageSendCommand = z.strictObject({
+  type: z.literal("message.send"),
+  workspace_id: z.string().min(1),
+  idempotency_key: z.string().min(8).max(200),
+  payload: z.strictObject({
+    conversation_id: z.string().min(1),
+    text: z.string().min(1).max(4000),
+    sender: MessageSender,
+  }),
+});
+export type MessageSendCommand = z.infer<typeof MessageSendCommand>;
+
 /** The discriminated command union the local API accepts. */
 export const ConversationCommand = z.discriminatedUnion("type", [
   ConversationCreateCommand,
   ConversationRenameCommand,
+  MessageSendCommand,
 ]);
 export type ConversationCommand = z.infer<typeof ConversationCommand>;
 
 export type ConversationCommandResult =
   | { kind: "created"; conversation_id: string; title: string; revision: number; event_id: string }
-  | { kind: "renamed"; conversation_id: string; title: string; revision: number; event_id: string };
+  | { kind: "renamed"; conversation_id: string; title: string; revision: number; event_id: string }
+  | {
+      kind: "message_sent";
+      conversation_id: string;
+      message_id: string;
+      revision: number;
+      event_id: string;
+    };
 
 /** Stable failure codes for the conversations boundary (SCREAMING_SNAKE). */
 export type ConversationsFailureCode =

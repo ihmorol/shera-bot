@@ -20,12 +20,13 @@ export function threadItemsFromEvents(events: RuntimeEvent[]): ThreadItem[] {
   const items: ThreadItem[] = events.map((event) => ({
     kind: "system" as const,
     at: event.occurred_at,
-    text: textForEvent(event),
+    text: systemTextForEvent(event),
   }));
   return items.sort(compareThreadItems);
 }
 
-function textForEvent(event: RuntimeEvent): string {
+/** The honest system record for one journal event (verbatim for unknown types). */
+export function systemTextForEvent(event: RuntimeEvent): string {
   if (event.type === "conversation.created") {
     const title =
       typeof event.payload["title"] === "string" ? (event.payload["title"] as string) : null;

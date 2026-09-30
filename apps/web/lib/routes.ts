@@ -33,4 +33,11 @@ export const routes = {
   workspace: (chatId: string) => `/app/chat/${chatId}/workspace`,
   workspaceFull: (chatId: string) => `/app/chat/${chatId}/workspace/full`,
   settings: (section?: string) => (section ? `/app/settings/${section}` : "/app/settings"),
+  /**
+   * S09: the Auth.js sign-in surface lives on the control plane; the web
+   * origin reaches it through the /api/control proxy. Not an app-router
+   * route — it resolves on the control plane, so it is deliberately absent
+   * from ROUTE_MANIFEST (whose entries must have a local page.tsx).
+   */
+  controlPlaneSignIn: () => "/api/control/api/auth/signin/google",
 } as const;

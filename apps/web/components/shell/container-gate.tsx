@@ -24,6 +24,7 @@ import {
   useRetryResolution,
   useStartStoppedWorkspace,
 } from "@/lib/container-connection";
+import { routes } from "@/lib/routes";
 
 /**
  * Container gate (S09 chunk 1): the /app entry resolves the signed-in user's
@@ -75,7 +76,7 @@ export function ContainerGateSurface({
             // proxy exposes it on this origin. After signing in, returning to
             // /app re-runs resolution.
             <Button asChild>
-              <a href="/api/control/api/auth/signin/google">Continue with Google</a>
+              <a href={routes.controlPlaneSignIn()}>Continue with Google</a>
             </Button>
           }
         />

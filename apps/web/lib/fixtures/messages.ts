@@ -175,7 +175,7 @@ export const MESSAGES: ChatMessage[] = [
 ];
 
 export function messagesForConversation(conversationId: string): ChatMessage[] {
-  return MESSAGES.filter((message) => message.conversation_id === conversationId).sort(
-    (a, b) => a.sent_at.localeCompare(b.sent_at),
+  return MESSAGES.filter((message) => message.conversation_id === conversationId).sort((a, b) =>
+    a.sent_at.localeCompare(b.sent_at),
   );
 }

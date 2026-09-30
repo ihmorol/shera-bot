@@ -26,30 +26,23 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
     <SurfaceFrame title="Settings" meta={sectionLabel}>
       <div className="mx-auto max-w-xl">
         <p className="text-sm text-muted">
-          Settings sections land one surface at a time. Nothing here renders secrets:
-          provider keys stay masked with revoke/replace only, and memory rejects
-          secrets outright.
+          Settings sections land one surface at a time. Nothing here renders secrets: provider keys
+          stay masked with revoke/replace only, and memory rejects secrets outright.
         </p>
         <ul className="mt-6 space-y-2">
-          {[
-            "Profile",
-            "Providers",
-            "Tools",
-            "Git",
-            "Memory",
-            "Credits",
-            "Workspace",
-          ].map((item) => (
-            <li
-              key={item}
-              className="flex items-center justify-between rounded-xl border border-line bg-surface px-4 py-3"
-            >
-              <span className="text-sm text-text">{item}</span>
-              <span className="font-mono text-xs uppercase tracking-[0.16em] text-muted">
-                pending
-              </span>
-            </li>
-          ))}
+          {["Profile", "Providers", "Tools", "Git", "Memory", "Credits", "Workspace"].map(
+            (item) => (
+              <li
+                key={item}
+                className="flex items-center justify-between rounded-xl border border-line bg-surface px-4 py-3"
+              >
+                <span className="text-sm text-text">{item}</span>
+                <span className="font-mono text-xs uppercase tracking-[0.16em] text-muted">
+                  pending
+                </span>
+              </li>
+            ),
+          )}
         </ul>
         <p className="mt-6">
           <Link

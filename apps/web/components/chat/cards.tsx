@@ -45,9 +45,7 @@ function RiskBadge({ riskClass }: { riskClass: string }) {
 
 function CardShell({ children }: { children: ReactNode }) {
   return (
-    <div className="w-full max-w-xl rounded-xl border border-line bg-surface p-3">
-      {children}
-    </div>
+    <div className="w-full max-w-xl rounded-xl border border-line bg-surface p-3">{children}</div>
   );
 }
 
@@ -66,9 +64,7 @@ function CardHeader({
     <div className="flex items-center gap-2">
       {icon}
       <span className="min-w-0 flex-1 truncate text-sm font-medium text-text">{title}</span>
-      {meta ? (
-        <span className="shrink-0 font-mono text-[11px] text-muted">v{meta}</span>
-      ) : null}
+      {meta ? <span className="shrink-0 font-mono text-[11px] text-muted">v{meta}</span> : null}
       {badge}
     </div>
   );
@@ -80,13 +76,7 @@ function CardHeader({
  * (§7 copy: "pausing for your approval"). The five-choice approval dialog
  * lands with the approvals surface — this card never offers decisions.
  */
-export function ToolCallCard({
-  event,
-  status,
-}: {
-  event: TypedExecutionEvent;
-  status: "proposed" | "pausing_for_approval";
-}) {
+export function ToolCallCard({ event }: { event: TypedExecutionEvent }) {
   if (event.event_type === "tool.proposed") {
     const payload = event.payload;
     const info = toolInfoById(payload.tool_id);

@@ -16,7 +16,10 @@ import { cn } from "@/lib/utils";
 
 function SkeletonBlock({ className }: { className?: string }) {
   return (
-    <div aria-hidden="true" className={cn("animate-pulse rounded bg-surface-elevated", className)} />
+    <div
+      aria-hidden="true"
+      className={cn("animate-pulse rounded bg-surface-elevated", className)}
+    />
   );
 }
 
@@ -60,7 +63,11 @@ export function SidebarSkeleton() {
 /** Chat-list skeleton (list rows with avatar, two lines, trailing pill). */
 export function ChatListSkeleton({ rows = 6 }: { rows?: number }) {
   return (
-    <div aria-hidden="true" data-testid="chat-list-skeleton" className="flex flex-col gap-3 px-4 py-6 lg:px-6">
+    <div
+      aria-hidden="true"
+      data-testid="chat-list-skeleton"
+      className="flex flex-col gap-3 px-4 py-6 lg:px-6"
+    >
       {Array.from({ length: rows }, (_, index) => (
         <div key={index} className="flex items-center gap-3">
           <SkeletonBlock className="size-8 rounded-full" />

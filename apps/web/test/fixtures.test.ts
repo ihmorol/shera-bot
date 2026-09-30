@@ -79,7 +79,9 @@ describe("pack fixture (§9 #1)", () => {
 describe("conversation fixtures (§9 #2)", () => {
   it("seeds one direct chat per Agent plus two Operation chats", () => {
     expect(CONVERSATIONS).toHaveLength(8);
-    const directChats = CONVERSATIONS.filter((conversation) => conversation.kind === "agent_direct");
+    const directChats = CONVERSATIONS.filter(
+      (conversation) => conversation.kind === "agent_direct",
+    );
     expect(directChats).toHaveLength(6);
     for (const agent of STUDENT_PACK.agents) {
       expect(conversationForAgent(agent.agent_id)).toBeDefined();
@@ -250,14 +252,12 @@ describe("thread assembly (§6.2 replay honesty)", () => {
     expect(researcher.some((item) => item.kind === "artifact")).toBe(true);
     const tutor = buildThread("conversation_agent_programming_tutor");
     expect(
-      tutor.some(
-        (item) => item.kind === "tool_card" && item.status === "pausing_for_approval",
-      ),
+      tutor.some((item) => item.kind === "tool_card" && item.status === "pausing_for_approval"),
     ).toBe(true);
     const general = buildThread("conversation_agent_general_assistant");
-    expect(
-      general.some((item) => item.kind === "tool_card" && item.status === "proposed"),
-    ).toBe(true);
+    expect(general.some((item) => item.kind === "tool_card" && item.status === "proposed")).toBe(
+      true,
+    );
     expect(general.some((item) => item.kind === "run")).toBe(true);
   });
 });
@@ -272,7 +272,9 @@ describe("message fixtures (§21.5 attribution data)", () => {
   });
 
   it("keeps every message inside a seeded conversation with a delivery class", () => {
-    const conversationIds = new Set(CONVERSATIONS.map((conversation) => conversation.conversation_id));
+    const conversationIds = new Set(
+      CONVERSATIONS.map((conversation) => conversation.conversation_id),
+    );
     for (const message of MESSAGES) {
       expect(conversationIds.has(message.conversation_id)).toBe(true);
       expect(["live", "replayed"]).toContain(message.delivery_class);

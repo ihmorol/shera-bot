@@ -119,9 +119,7 @@ describe("replayed-batch honesty (§6.2)", () => {
 
 describe("inline cards (G2 honest placeholders)", () => {
   it("renders a read-only tool proposal as pending, never executed", () => {
-    const html = render(
-      createElement(ToolCallCard, { event: EVENT_GA_WEB_SEARCH, status: "proposed" }),
-    );
+    const html = render(createElement(ToolCallCard, { event: EVENT_GA_WEB_SEARCH }));
     expect(html).toContain("Web search");
     expect(html).toContain("1.4.0");
     expect(html).toContain("READ_ONLY");
@@ -131,12 +129,7 @@ describe("inline cards (G2 honest placeholders)", () => {
   });
 
   it("renders an external write as pausing for approval without decision buttons", () => {
-    const html = render(
-      createElement(ToolCallCard, {
-        event: EVENT_TUTOR_APPROVAL,
-        status: "pausing_for_approval",
-      }),
-    );
+    const html = render(createElement(ToolCallCard, { event: EVENT_TUTOR_APPROVAL }));
     expect(html).toContain("Pausing for your approval");
     expect(html).toContain("EXTERNAL_WRITE");
     // The five-choice dialog belongs to the approvals surface (S8) — the
@@ -174,9 +167,7 @@ describe("inline cards (G2 honest placeholders)", () => {
 describe("jump-to-unread (§S3)", () => {
   it("offers the jump pill on the anchored message", () => {
     const thread = buildThread("conversation_agent_general_assistant");
-    const anchorId = thread
-      .filter((item) => item.kind === "message")
-      .at(-2)!.message.message_id;
+    const anchorId = thread.filter((item) => item.kind === "message").at(-2)!.message.message_id;
     const html = render(
       createElement(MessageList, {
         items: withSentMessages(thread, []),
@@ -189,7 +180,11 @@ describe("jump-to-unread (§S3)", () => {
 
   it("renders no pill when everything is read", () => {
     const html = render(
-      createElement(MessageList, { items: RESEARCHER_TIMELINE, jumpTargetId: null, unreadCount: 0 }),
+      createElement(MessageList, {
+        items: RESEARCHER_TIMELINE,
+        jumpTargetId: null,
+        unreadCount: 0,
+      }),
     );
     expect(html).not.toContain("Jump to unread");
   });
@@ -220,9 +215,7 @@ describe("§2.4 state language", () => {
     // Internal details never render (D23 rule 4).
     expect(retryable).not.toMatch(/stack|exception|error:/i);
 
-    const terminal = render(
-      createElement(ErrorState, { safeMessage: "Something went wrong." }),
-    );
+    const terminal = render(createElement(ErrorState, { safeMessage: "Something went wrong." }));
     expect(terminal).toContain("Something went wrong.");
     expect(terminal).not.toContain("Retry");
   });

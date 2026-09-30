@@ -80,7 +80,11 @@ export function Composer({
         </Button>
       </form>
       <p className="mt-1.5 px-1 font-mono text-[11px] text-muted" role="status">
-        {disabled ? disabledReason : sending ? "Sending…" : "Enter to send · Shift+Enter for a new line"}
+        {disabled
+          ? disabledReason
+          : sending
+            ? "Sending…"
+            : "Enter to send · Shift+Enter for a new line"}
       </p>
     </div>
   );

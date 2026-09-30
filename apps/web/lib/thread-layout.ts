@@ -9,9 +9,7 @@ import { compareThreadItems } from "@/lib/fixtures";
  */
 
 /** A thread item or a day-separator row inserted between calendar days. */
-export type TimelineItem =
-  | ThreadItem
-  | { kind: "day_separator"; at: string; label: string };
+export type TimelineItem = ThreadItem | { kind: "day_separator"; at: string; label: string };
 
 const DAY_FORMATTER = new Intl.DateTimeFormat("en-US", {
   timeZone: "UTC",

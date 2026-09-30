@@ -22,9 +22,7 @@ function DaySeparatorRow({ label }: { label: string }) {
   return (
     <li className="my-4 flex items-center gap-3" aria-hidden="true">
       <span className="h-px flex-1 bg-line" />
-      <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted">
-        {label}
-      </span>
+      <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted">{label}</span>
       <span className="h-px flex-1 bg-line" />
     </li>
   );
@@ -107,10 +105,7 @@ function MessageRow({
     return (
       <li
         ref={anchorRef}
-        className={cn(
-          "flex flex-col items-end",
-          replayed && "border-l-2 border-line-accent pl-3",
-        )}
+        className={cn("flex flex-col items-end", replayed && "border-l-2 border-line-accent pl-3")}
       >
         <div className="max-w-[78%] rounded-2xl rounded-br-sm bg-surface-elevated px-4 py-2.5 text-base">
           <p className="whitespace-pre-wrap">{message.text}</p>
@@ -134,7 +129,11 @@ function MessageRow({
       className={cn("flex flex-col items-start", replayed && "border-l-2 border-line-accent pl-3")}
     >
       <div className="flex items-center gap-2">
-        <AgentAvatar agentId={message.sender.agent_id} name={agent?.display_name ?? "?"} size="sm" />
+        <AgentAvatar
+          agentId={message.sender.agent_id}
+          name={agent?.display_name ?? "?"}
+          size="sm"
+        />
         <span className="text-sm font-medium text-text">
           {agent?.display_name ?? message.sender.agent_id}
         </span>
@@ -204,7 +203,7 @@ export function MessageList({
           case "tool_card":
             return (
               <li key={key} className="flex justify-start">
-                <ToolCallCard event={item.event} status={item.status} />
+                <ToolCallCard event={item.event} />
               </li>
             );
           case "artifact":

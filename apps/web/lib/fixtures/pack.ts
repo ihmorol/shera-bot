@@ -154,7 +154,12 @@ export type FixtureToolInfo = z.infer<typeof FixtureToolInfo>;
 export const FIXTURE_TOOLS: FixtureToolInfo[] = [
   { tool_id: "tool_web_search", name: "Web search", version: "1.4.0", risk_class: "READ_ONLY" },
   { tool_id: "tool_file_read", name: "Read file", version: "1.2.0", risk_class: "READ_ONLY" },
-  { tool_id: "tool_file_write", name: "Write file", version: "1.1.0", risk_class: "LOCAL_MUTATION" },
+  {
+    tool_id: "tool_file_write",
+    name: "Write file",
+    version: "1.1.0",
+    risk_class: "LOCAL_MUTATION",
+  },
   { tool_id: "tool_code_exec", name: "Run code", version: "2.0.1", risk_class: "LOCAL_MUTATION" },
   {
     tool_id: "tool_repo_push",
@@ -169,9 +174,7 @@ export function agentById(agentId: string): Agent | undefined {
 }
 
 export function operationDefinitionById(operationId: string): OperationDefinition | undefined {
-  return STUDENT_PACK.operations.find(
-    (operation) => operation.operation_id === operationId,
-  );
+  return STUDENT_PACK.operations.find((operation) => operation.operation_id === operationId);
 }
 
 export function toolInfoById(toolId: string): FixtureToolInfo | undefined {

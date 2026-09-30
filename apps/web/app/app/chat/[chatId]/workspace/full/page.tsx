@@ -46,9 +46,9 @@ export default async function WorkspaceFullPage({ params }: WorkspacePageProps) 
     >
       <div className="mx-auto max-w-xl">
         <p className="text-sm text-muted">
-          Files, the editor, read-only live views, task runs, and tool history for
-          this conversation mount here. Write access is lease-controlled — conflicts
-          are prevented, never merged by hand.
+          Files, the editor, read-only live views, task runs, and tool history for this conversation
+          mount here. Write access is lease-controlled — conflicts are prevented, never merged by
+          hand.
         </p>
         <ul className="mt-6 space-y-2">
           {WORKSPACE_SECTIONS.map((section) => (

@@ -10,9 +10,7 @@ interface LaunchPreviewPageProps {
   params: Promise<{ operationId: string }>;
 }
 
-export async function generateMetadata({
-  params,
-}: LaunchPreviewPageProps): Promise<Metadata> {
+export async function generateMetadata({ params }: LaunchPreviewPageProps): Promise<Metadata> {
   const { operationId } = await params;
   const template = findOperationTemplate(operationId);
   return { title: template ? `Launch: ${template.name}` : "Launch preview" };
@@ -57,9 +55,8 @@ export default async function LaunchPreviewPage({ params }: LaunchPreviewPagePro
     >
       <div className="mx-auto max-w-xl">
         <p className="text-sm text-muted">
-          This preview shows what the Operation will run with, before anything
-          executes. The sections below fill in from the pack definition when the pack
-          fixtures land.
+          This preview shows what the Operation will run with, before anything executes. The
+          sections below fill in from the pack definition when the pack fixtures land.
         </p>
         <ul className="mt-6 space-y-2">
           {PREVIEW_SECTIONS.map((section) => (

@@ -40,13 +40,7 @@ export function SurfaceFrame({
 }
 
 /** §2.4 empty state: centered, one-line explanation, one obvious action. */
-export function EmptyState({
-  explanation,
-  action,
-}: {
-  explanation: string;
-  action?: ReactNode;
-}) {
+export function EmptyState({ explanation, action }: { explanation: string; action?: ReactNode }) {
   return (
     <div className="mx-auto flex h-full max-w-md flex-col items-center justify-center text-center">
       <p className="text-sm text-muted">{explanation}</p>

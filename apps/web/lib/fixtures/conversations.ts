@@ -92,16 +92,14 @@ const LAST_ACTIVITY: Record<string, string> = {
 
 /** Per §9 #2: one seeded direct chat per Agent, plus the two Operation chats. */
 export const CONVERSATIONS: ConversationSummary[] = [
-  ...STUDENT_PACK.agents.map(
-    (agent): ConversationSummary => ({
-      conversation_id: conversationIdForAgent(agent.agent_id),
-      kind: "agent_direct",
-      agent_id: agent.agent_id,
-      title: agent.display_name,
-      unread_count: UNREAD_COUNTS[agent.agent_id] ?? 0,
-      last_activity_at: LAST_ACTIVITY[agent.agent_id] ?? "2026-09-19T12:00:00Z",
-    }),
-  ),
+  ...STUDENT_PACK.agents.map((agent): ConversationSummary => ({
+    conversation_id: conversationIdForAgent(agent.agent_id),
+    kind: "agent_direct",
+    agent_id: agent.agent_id,
+    title: agent.display_name,
+    unread_count: UNREAD_COUNTS[agent.agent_id] ?? 0,
+    last_activity_at: LAST_ACTIVITY[agent.agent_id] ?? "2026-09-19T12:00:00Z",
+  })),
   {
     conversation_id: "conversation_op_research_paper",
     kind: "operation",

@@ -43,9 +43,7 @@ const STATE_LABELS: Record<ConversationState, string> = {
 
 function SidebarSectionLabel({ children }: { children: string }) {
   return (
-    <p className="px-3 pb-2 font-mono text-xs uppercase tracking-[0.16em] text-muted">
-      {children}
-    </p>
+    <p className="px-3 pb-2 font-mono text-xs uppercase tracking-[0.16em] text-muted">{children}</p>
   );
 }
 
@@ -86,8 +84,7 @@ function StateTrail({
   );
 }
 
-const ITEM_BASE =
-  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors";
+const ITEM_BASE = "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors";
 const ITEM_ACTIVE = "bg-surface-elevated text-text";
 const ITEM_IDLE = "text-muted hover:bg-surface-elevated hover:text-text";
 
@@ -187,28 +184,30 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             Active chats
           </p>
           <ul>
-            {model.operationChats.map(({ operation, conversation, subtitle, state, approvalCount }) => {
-              return (
-                <li key={operation.operation_id}>
-                  <Link
-                    href={routes.operation(operation.operation_id)}
-                    className={cn(ITEM_BASE, ITEM_IDLE)}
-                    {...linkProps}
-                  >
-                    <Layers className="size-4 shrink-0 text-sky" aria-hidden="true" />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate">{conversation.title}</span>
-                      <span className="block truncate text-xs text-muted">{subtitle}</span>
-                    </span>
-                    <StateTrail
-                      state={state}
-                      unreadCount={conversation.unread_count}
-                      approvalCount={approvalCount}
-                    />
-                  </Link>
-                </li>
-              );
-            })}
+            {model.operationChats.map(
+              ({ operation, conversation, subtitle, state, approvalCount }) => {
+                return (
+                  <li key={operation.operation_id}>
+                    <Link
+                      href={routes.operation(operation.operation_id)}
+                      className={cn(ITEM_BASE, ITEM_IDLE)}
+                      {...linkProps}
+                    >
+                      <Layers className="size-4 shrink-0 text-sky" aria-hidden="true" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate">{conversation.title}</span>
+                        <span className="block truncate text-xs text-muted">{subtitle}</span>
+                      </span>
+                      <StateTrail
+                        state={state}
+                        unreadCount={conversation.unread_count}
+                        approvalCount={approvalCount}
+                      />
+                    </Link>
+                  </li>
+                );
+              },
+            )}
           </ul>
         </section>
       </nav>
@@ -216,9 +215,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       {/* Footer: pinned pack shown once as a label, not a control (D40) */}
       <Separator />
       <div className="px-4 py-3">
-        <p className="font-mono text-xs uppercase tracking-[0.16em] text-muted">
-          student pack v1
-        </p>
+        <p className="font-mono text-xs uppercase tracking-[0.16em] text-muted">student pack v1</p>
       </div>
     </div>
   );

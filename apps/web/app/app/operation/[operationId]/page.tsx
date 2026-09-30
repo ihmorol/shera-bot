@@ -10,9 +10,7 @@ interface OperationChatPageProps {
   params: Promise<{ operationId: string }>;
 }
 
-export async function generateMetadata({
-  params,
-}: OperationChatPageProps): Promise<Metadata> {
+export async function generateMetadata({ params }: OperationChatPageProps): Promise<Metadata> {
   const { operationId } = await params;
   const instance = operationInstanceById(operationId);
   const template = findOperationTemplate(operationId);

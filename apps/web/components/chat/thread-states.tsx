@@ -12,7 +12,12 @@ import { EmptyState } from "@/components/shell/surface-frame";
  */
 
 function SkeletonBlock({ className }: { className?: string }) {
-  return <div aria-hidden="true" className={`animate-pulse rounded bg-surface-elevated ${className ?? ""}`} />;
+  return (
+    <div
+      aria-hidden="true"
+      className={`animate-pulse rounded bg-surface-elevated ${className ?? ""}`}
+    />
+  );
 }
 
 function SkeletonAgentRow({ width }: { width: string }) {

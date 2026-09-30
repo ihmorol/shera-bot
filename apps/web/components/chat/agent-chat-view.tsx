@@ -124,7 +124,12 @@ export function AgentChatView({
     <div className="flex h-full min-h-0 flex-col">
       {/* Header: identity + role + presence + provider/model placeholder (§S3) */}
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-surface px-4 lg:px-6">
-        <AgentAvatar agentId={agent.agent_id} name={agent.display_name} size="lg" presence={presence} />
+        <AgentAvatar
+          agentId={agent.agent_id}
+          name={agent.display_name}
+          size="lg"
+          presence={presence}
+        />
         <div className="min-w-0 flex-1">
           <h1 className="truncate font-display text-lg font-semibold tracking-tight text-text">
             {agent.display_name}

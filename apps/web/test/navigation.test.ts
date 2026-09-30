@@ -86,7 +86,10 @@ describe("route manifest (UI_DESIGN §3.1)", () => {
       });
       return matches.length === 0;
     });
-    expect(dead, `builder outputs that do not resolve to a manifest route: ${dead.map(([name]) => name).join(", ")}`).toEqual([]);
+    expect(
+      dead,
+      `builder outputs that do not resolve to a manifest route: ${dead.map(([name]) => name).join(", ")}`,
+    ).toEqual([]);
   });
 });
 

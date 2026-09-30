@@ -26,8 +26,8 @@ export default function LoginPage() {
           Sign in with Google
         </Button>
         <p className="mt-4 text-xs text-muted">
-          Google sign-in is not wired into this prototype build yet. When it goes live,
-          access is capped at five accounts.
+          Google sign-in is not wired into this prototype build yet. When it goes live, access is
+          capped at five accounts.
         </p>
       </div>
     </main>

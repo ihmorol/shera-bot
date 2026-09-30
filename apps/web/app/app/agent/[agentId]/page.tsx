@@ -1,46 +1,48 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { EmptyState, SurfaceFrame } from "@/components/shell/surface-frame";
+import { AgentChatView } from "@/components/chat/agent-chat-view";
+import { agentById, buildThread, conversationForAgent } from "@/lib/fixtures";
 import { findAgent } from "@/lib/navigation";
-import { routes } from "@/lib/routes";
 
 interface AgentChatPageProps {
   params: Promise<{ agentId: string }>;
 }
 
+function agentIdForSlug(slug: string): string {
+  return `agent_${slug.replace(/-/g, "_")}`;
+}
+
 export async function generateMetadata({ params }: AgentChatPageProps): Promise<Metadata> {
   const { agentId } = await params;
-  const agent = findAgent(agentId);
-  return { title: agent ? agent.name : "Agent chat" };
+  const agent = agentById(agentIdForSlug(agentId));
+  return { title: agent ? agent.display_name : "Agent chat" };
 }
 
 /**
- * S3 Agent direct chat. One persistent identity per Agent (D39): this route
- * is the single direct conversation for the Agent across the whole app.
- * Unknown slugs 404 — the six pack Agents are the enumerable roster.
+ * S3 Agent direct chat (UI_DESIGN §3.1, §4 S3). One persistent identity per
+ * Agent (D39): this route is the single direct conversation for the Agent
+ * across the whole app. Unknown slugs 404 — the six pack Agents are the
+ * enumerable roster. The thread is seeded from the §9 fixtures and rendered
+ * by AgentChatView (the composer demo appends to local fixture state only).
  */
 export default async function AgentChatPage({ params }: AgentChatPageProps) {
-  const { agentId } = await params;
-  const agent = findAgent(agentId);
+  const { agentId: slug } = await params;
+  const knownSlug = findAgent(slug);
+  const agent = knownSlug ? agentById(agentIdForSlug(slug)) : undefined;
   if (!agent) {
+    notFound();
+  }
+  const conversation = conversationForAgent(agent.agent_id);
+  if (!conversation) {
     notFound();
   }
 
   return (
-    <SurfaceFrame title={agent.name} meta="Agent · direct chat">
-      <EmptyState
-        explanation={`No messages yet. Sending messages to ${agent.name} lands with the first runtime pass — this build wires the shell and navigation.`}
-        action={
-          <Link
-            href={routes.app()}
-            className="text-sm text-sky underline underline-offset-4 hover:text-cool-highlight"
-          >
-            Back to conversations
-          </Link>
-        }
-      />
-    </SurfaceFrame>
+    <AgentChatView
+      agent={agent}
+      conversation={conversation}
+      thread={buildThread(conversation.conversation_id)}
+    />
   );
 }

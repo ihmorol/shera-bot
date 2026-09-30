@@ -30,7 +30,7 @@ export { RUNS, sidebarStateFor, sessionPresenceFor } from "./runs";
 export { FIXTURE_EVENTS, ingestEvents, sortBySequence } from "./events";
 export { FIXTURE_ARTIFACTS, artifactsForTask } from "./artifacts";
 export { MESSAGES, messagesForConversation, ChatMessage } from "./messages";
-export { buildThread, type ThreadItem } from "./threads";
+export { buildThread, compareThreadItems, type ThreadItem } from "./threads";
 
 /** Presence type for S3 headers and sidebar avatars (D32 on-demand sessions). */
 export type SessionPresence = "active" | "hibernating";

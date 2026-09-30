@@ -34,10 +34,13 @@ const KIND_RANK: Record<ThreadItem["kind"], number> = {
   replay_boundary: 5,
 };
 
+/** Single ordering definition for thread items (time, then kind rank). */
+export function compareThreadItems(a: ThreadItem, b: ThreadItem): number {
+  return a.at.localeCompare(b.at) || KIND_RANK[a.kind] - KIND_RANK[b.kind];
+}
+
 function sortItems(items: ThreadItem[]): ThreadItem[] {
-  return items.sort(
-    (a, b) => a.at.localeCompare(b.at) || KIND_RANK[a.kind] - KIND_RANK[b.kind],
-  );
+  return items.sort(compareThreadItems);
 }
 
 /**

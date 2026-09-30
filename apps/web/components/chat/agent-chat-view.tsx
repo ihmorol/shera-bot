@@ -7,6 +7,7 @@ import { AgentAvatar } from "@/components/chat/agent-avatar";
 import { Composer } from "@/components/chat/composer";
 import { EmptyThread, ThreadSkeleton } from "@/components/chat/thread-states";
 import { MessageList } from "@/components/chat/message-list";
+import { ConnectionBanner } from "@/components/shell/connection-banner";
 import { ErrorState } from "@/components/shell/states";
 import {
   ChatMessage,
@@ -15,7 +16,13 @@ import {
   type SessionPresence,
   type ThreadItem,
 } from "@/lib/fixtures";
-import { firstUnreadMessageId, insertDaySeparators, withSentMessages } from "@/lib/thread-layout";
+import type { ConnectionState } from "@/lib/connection";
+import {
+  firstUnreadMessageId,
+  flushReplayed,
+  insertDaySeparators,
+  withSentMessages,
+} from "@/lib/thread-layout";
 import { cn } from "@/lib/utils";
 
 /**
@@ -54,6 +61,9 @@ export function AgentChatView({
   thread,
   surfaceState = "ready",
   safeErrorMessage = "This conversation could not be loaded.",
+  connectionState = "connected",
+  replay,
+  pendingReplay,
 }: {
   agent: Agent;
   conversation: ConversationSummary;
@@ -62,8 +72,19 @@ export function AgentChatView({
   surfaceState?: ChatSurfaceState;
   /** Redacted message for the error surface (D23 rule 4). */
   safeErrorMessage?: string;
+  /**
+   * §6.4 connection lifecycle (scripted demo / later the real socket). While
+   * disconnected the banner shows and reading stays possible; while
+   * reconnecting it shows replay progress; on connected the queued replay
+   * flushes into the thread as a replayed batch (§6.2 marker).
+   */
+  connectionState?: ConnectionState;
+  /** Replay progress shown on the reconnecting banner (§6.4). */
+  replay?: { done: number; total: number } | undefined;
+  /** Missed messages queued for the cursor replay (§6.2 handoff). */
+  pendingReplay?: ChatMessage[] | undefined;
 }) {
-  const [sent, setSent] = useState<ChatMessage[]>([]);
+  const [localMessages, setLocalMessages] = useState<ChatMessage[]>([]);
   const timersRef = useRef<number[]>([]);
 
   useEffect(
@@ -77,9 +98,16 @@ export function AgentChatView({
 
   const presence = sessionPresenceFor(conversation.conversation_id);
 
+  // §6.2 handoff: queued replayed messages render only while the connection
+  // is (back) in the connected state, closed by the batch boundary marker.
+  const replayed =
+    connectionState === "connected" ? (pendingReplay ?? []) : [];
   const timeline = useMemo(
-    () => insertDaySeparators(withSentMessages(thread, sent)),
-    [thread, sent],
+    () =>
+      insertDaySeparators(
+        flushReplayed(withSentMessages(thread, localMessages), replayed),
+      ),
+    [thread, localMessages, replayed],
   );
   const jumpTargetId = useMemo(
     () => firstUnreadMessageId(thread, conversation.unread_count),
@@ -88,7 +116,7 @@ export function AgentChatView({
 
   const settleAfterAck = (messageId: string) => {
     const timer = window.setTimeout(() => {
-      setSent((prev) =>
+      setLocalMessages((prev) =>
         prev.map((message) =>
           message.message_id === messageId ? { ...message, delivery: "sent" } : message,
         ),
@@ -98,7 +126,7 @@ export function AgentChatView({
   };
 
   const handleSend = (text: string) => {
-    const messageId = `msg_local_${Date.now()}_${sent.length}`;
+    const messageId = `msg_local_${Date.now()}_${localMessages.length}`;
     const message = ChatMessage.parse({
       message_id: messageId,
       conversation_id: conversation.conversation_id,
@@ -107,12 +135,12 @@ export function AgentChatView({
       sent_at: new Date().toISOString(),
       delivery: "sending",
     });
-    setSent((prev) => [...prev, message]);
+    setLocalMessages((prev) => [...prev, message]);
     settleAfterAck(messageId);
   };
 
   const handleRetry = (messageId: string) => {
-    setSent((prev) =>
+    setLocalMessages((prev) =>
       prev.map((message) =>
         message.message_id === messageId ? { ...message, delivery: "sending" } : message,
       ),
@@ -146,6 +174,12 @@ export function AgentChatView({
           Platform default
         </button>
       </header>
+
+      {/* §6.4 banner: a strip above the thread — reading stays possible while
+          disconnected; it never blocks or overlays the conversation. */}
+      {connectionState !== "connected" ? (
+        <ConnectionBanner state={connectionState} replay={replay} />
+      ) : null}
 
       {surfaceState === "loading" ? (
         <ThreadSkeleton />

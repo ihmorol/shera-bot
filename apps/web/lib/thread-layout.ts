@@ -91,3 +91,30 @@ export function firstUnreadMessageId(
   const target = first >= 0 ? messages[first] : undefined;
   return target?.message.message_id ?? null;
 }
+
+/**
+ * The replay handoff (§6.2): after a reconnect completes, the queued missed
+ * messages enter the thread as a replayed batch closed by the batch boundary
+ * ("N missed events replayed") — never silently interleaved as live. The
+ * boundary carries the last replayed timestamp so day separators and ordering
+ * stay intact.
+ */
+export function flushReplayed(
+  items: readonly ThreadItem[],
+  replayed: readonly ChatMessage[],
+): ThreadItem[] {
+  if (replayed.length === 0) {
+    return [...items];
+  }
+  const merged: ThreadItem[] = [...items];
+  for (const message of replayed) {
+    merged.push({ kind: "message", at: message.sent_at, message });
+  }
+  const lastReplayed = replayed[replayed.length - 1]!;
+  merged.push({
+    kind: "replay_boundary",
+    at: lastReplayed.sent_at,
+    count: replayed.length,
+  });
+  return merged.sort(compareThreadItems);
+}

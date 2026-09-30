@@ -16,6 +16,10 @@
  * WebSocket replay) — this package exports no persistence or process behavior
  * yet, and nothing here throws instead of rejecting.
  * Governing records: D5, D8, D10, D11, D13, D26, D34, G2.
+ *
+ * S09 adds the E8 mock-runtime mode (src/mock): the deterministic in-process
+ * composition (FakeHarnessAdapter, fixed clock, disposable SQLite) the E2E
+ * thin-slice test drives — no Docker, no live providers, RUNTIME_E2E_MOCK=1.
  */
 export * from "./modules/tasks/task-events.ts";
 export * from "./modules/tasks/task-transitions.ts";
@@ -24,3 +28,4 @@ export * from "./modules/runtime/channel-credentials.ts";
 export * from "./modules/runtime/channel-security-events.ts";
 export * from "./modules/runtime/runtime-registration.ts";
 export * from "./modules/runtime/internal-api.ts";
+export * from "./mock/e2e-mode.ts";

@@ -89,6 +89,11 @@ export interface ComposeRuntimeOptions extends ComposeLocalApiOptions {
   workspaceId?: string;
   /** D28: the pinned pack recorded on harness-created runs. Default: DEFAULT_PACK. */
   pinnedPack?: PackSnapshot;
+  /**
+   * Deterministic clock for harness-run journal envelopes. Default: wall
+   * clock; the E8 mock mode pins it so runs are byte-comparable.
+   */
+  now?: () => string;
 }
 
 export interface RuntimeHandle {
@@ -243,6 +248,7 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     workspace_id: options.workspaceId ?? DEFAULT_WORKSPACE_ID,
     policy: { max_retries: 3 },
     publish: broadcast,
+    ...(options.now ? { now: options.now } : {}),
   });
 
   return {

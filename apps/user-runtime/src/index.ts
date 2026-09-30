@@ -19,7 +19,7 @@
  *
  * S09 adds the E8 mock-runtime mode (src/mock): the deterministic in-process
  * composition (FakeHarnessAdapter, fixed clock, disposable SQLite) the E2E
- * thin-slice test drives — no Docker, no live providers, RUNTIME_E2E_MOCK=1.
+ * thin-slice test drives — no container engine, no live providers, RUNTIME_E2E_MOCK=1.
  */
 export * from "./modules/tasks/task-events.ts";
 export * from "./modules/tasks/task-transitions.ts";

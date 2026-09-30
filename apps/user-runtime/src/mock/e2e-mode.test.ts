@@ -1,7 +1,7 @@
 /**
  * E8 mock-runtime mode tests (S09 chunk 1): the deterministic in-process
  * runtime drives the REAL stack — real SQLite, real HTTP, the real gateway —
- * with the FakeHarnessAdapter's fixed D8 script and a fixed clock. No Docker,
+ * with the FakeHarnessAdapter's fixed D8 script and a fixed clock. No container engine,
  * no live providers, no child processes.
  */
 import { rmSync } from "node:fs";

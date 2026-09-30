@@ -6,7 +6,7 @@
  * + container-local SQLite + the D51 harness seam) running entirely in
  * process, driven by the FakeHarnessAdapter's FIXED D8 script (queue → start
  * → one progress report → complete). The E2E test can drive the whole path —
- * sign-in surface aside, which belongs to the control plane — with no Docker
+ * sign-in surface aside, which belongs to the control plane — with no container engine
  * and no live providers, and every run proposal arrives in the same order
  * with the same payloads.
  *

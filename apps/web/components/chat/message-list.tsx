@@ -156,12 +156,15 @@ export function MessageList({
   jumpTargetId,
   unreadCount,
   onRetry,
+  streamingSlot,
 }: {
   items: readonly TimelineItem[];
   /** Anchor message id for jump-to-unread (null = nothing unread). */
   jumpTargetId: string | null;
   unreadCount: number;
   onRetry?: ((messageId: string) => void) | undefined;
+  /** Live row rendered after the timeline — the §6.1 demo stream message. */
+  streamingSlot?: ReactNode | undefined;
 }) {
   const unreadAnchorRef = useRef<HTMLLIElement | null>(null);
 
@@ -228,6 +231,7 @@ export function MessageList({
             return <ReplayBoundary key={key} count={item.count} />;
         }
       })}
+      {streamingSlot ? <li key="streaming">{streamingSlot}</li> : null}
     </ol>
   );
 }

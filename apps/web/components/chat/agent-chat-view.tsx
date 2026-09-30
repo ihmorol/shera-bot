@@ -7,16 +7,20 @@ import { AgentAvatar } from "@/components/chat/agent-avatar";
 import { Composer } from "@/components/chat/composer";
 import { EmptyThread, ThreadSkeleton } from "@/components/chat/thread-states";
 import { MessageList } from "@/components/chat/message-list";
+import { StreamingMessage } from "@/components/chat/streaming-message";
 import { ConnectionBanner } from "@/components/shell/connection-banner";
 import { ErrorState } from "@/components/shell/states";
 import {
   ChatMessage,
+  DEMO_STREAM,
   sessionPresenceFor,
   type ConversationSummary,
+  type FixtureStream,
   type SessionPresence,
   type ThreadItem,
 } from "@/lib/fixtures";
 import type { ConnectionState } from "@/lib/connection";
+import { STREAM_THROTTLE_MS, streamFrameAt } from "@/lib/streaming";
 import {
   firstUnreadMessageId,
   flushReplayed,
@@ -39,6 +43,30 @@ const LOCAL_USER_NAME = "Emon";
 const LOCAL_ACK_MS = 500;
 
 export type ChatSurfaceState = "ready" | "loading" | "error";
+
+/**
+ * §6.1 demo streaming driver: one interval at the throttle budget flushes
+ * state, so DOM updates never exceed ~30fps no matter how fast the scripted
+ * chunks arrive. DEMO STREAMING — the chunks come from the fixture stream;
+ * the real runtime later replaces this with the message_delta socket.
+ */
+function useScriptedStream(stream: FixtureStream | null) {
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const [stopped, setStopped] = useState(false);
+
+  useEffect(() => {
+    if (!stream || stopped) {
+      return;
+    }
+    const interval = window.setInterval(() => {
+      setElapsedMs((ms) => ms + STREAM_THROTTLE_MS);
+    }, STREAM_THROTTLE_MS);
+    return () => window.clearInterval(interval);
+  }, [stream, stopped]);
+
+  const frame = stream ? streamFrameAt(stream.chunks, elapsedMs, stream.chunk_cadence_ms) : null;
+  return { frame, stopped, stop: () => setStopped(true) };
+}
 
 function PresencePill({ presence }: { presence: SessionPresence }) {
   return (
@@ -98,16 +126,39 @@ export function AgentChatView({
 
   const presence = sessionPresenceFor(conversation.conversation_id);
 
+  // §6.1 demo streaming: the scripted stream runs only in its own conversation
+  // (the General Assistant chat) and is labeled as demo streaming in the UI.
+  const demoStream =
+    DEMO_STREAM.conversation_id === conversation.conversation_id ? DEMO_STREAM : null;
+  const { frame: streamFrame, stopped: streamStopped, stop: stopStream } =
+    useScriptedStream(demoStream);
+
+  // Once the demo stream completes, its fixture text becomes a normal Agent
+  // message in the local thread (never before, and only in this browser).
+  const [streamedMessage, setStreamedMessage] = useState<ChatMessage | null>(null);
+  useEffect(() => {
+    if (demoStream && streamFrame?.done && !streamStopped && !streamedMessage) {
+      setStreamedMessage(
+        ChatMessage.parse({
+          message_id: demoStream.message_id,
+          conversation_id: demoStream.conversation_id,
+          sender: { kind: "agent", agent_id: demoStream.agent_id },
+          text: streamFrame.visibleText,
+          sent_at: new Date().toISOString(),
+          delivery: "sent",
+          delivery_class: "live",
+        }),
+      );
+    }
+  }, [demoStream, streamFrame, streamStopped, streamedMessage]);
+
   // §6.2 handoff: queued replayed messages render only while the connection
   // is (back) in the connected state, closed by the batch boundary marker.
-  const replayed =
-    connectionState === "connected" ? (pendingReplay ?? []) : [];
+  const replayed = connectionState === "connected" ? (pendingReplay ?? []) : [];
+  const localAll = streamedMessage ? [...localMessages, streamedMessage] : localMessages;
   const timeline = useMemo(
-    () =>
-      insertDaySeparators(
-        flushReplayed(withSentMessages(thread, localMessages), replayed),
-      ),
-    [thread, localMessages, replayed],
+    () => insertDaySeparators(flushReplayed(withSentMessages(thread, localAll), replayed)),
+    [thread, localAll, replayed],
   );
   const jumpTargetId = useMemo(
     () => firstUnreadMessageId(thread, conversation.unread_count),
@@ -194,6 +245,17 @@ export function AgentChatView({
             jumpTargetId={jumpTargetId}
             unreadCount={conversation.unread_count}
             onRetry={handleRetry}
+            streamingSlot={
+              demoStream && streamFrame && !streamedMessage ? (
+                <StreamingMessage
+                  agentId={demoStream.agent_id}
+                  visibleText={streamFrame.visibleText}
+                  done={streamFrame.done}
+                  stopped={streamStopped}
+                  onStop={stopStream}
+                />
+              ) : undefined
+            }
           />
         </div>
       )}

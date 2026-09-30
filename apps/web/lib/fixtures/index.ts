@@ -37,6 +37,7 @@ export {
 export { FIXTURE_ARTIFACTS, artifactsForTask } from "./artifacts";
 export { MESSAGES, messagesForConversation, ChatMessage } from "./messages";
 export { buildThread, compareThreadItems, type ThreadItem } from "./threads";
+export { DEMO_STREAM, FixtureStream, splitStreamChunks } from "./streaming";
 
 /** Presence type for S3 headers and sidebar avatars (D32 on-demand sessions). */
 export type SessionPresence = "active" | "hibernating";

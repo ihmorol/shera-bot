@@ -78,6 +78,18 @@ export function conversationIdForAgent(agentId: string): string {
   return `conversation_agent_${agentId.replace("agent_", "")}`;
 }
 
+/** Declared before CONVERSATIONS — the map below evaluates at module load. */
+const UNREAD_COUNTS: Record<string, number> = {
+  agent_general_assistant: 2,
+  agent_researcher: 1,
+};
+
+const LAST_ACTIVITY: Record<string, string> = {
+  agent_general_assistant: "2026-09-20T10:16:00Z",
+  agent_researcher: "2026-09-20T09:48:00Z",
+  agent_programming_tutor: "2026-09-20T14:02:00Z",
+};
+
 /** Per §9 #2: one seeded direct chat per Agent, plus the two Operation chats. */
 export const CONVERSATIONS: ConversationSummary[] = [
   ...STUDENT_PACK.agents.map(
@@ -109,17 +121,6 @@ export const CONVERSATIONS: ConversationSummary[] = [
     last_activity_at: "2026-09-20T16:05:00Z",
   },
 ];
-
-const UNREAD_COUNTS: Record<string, number> = {
-  agent_general_assistant: 2,
-  agent_researcher: 1,
-};
-
-const LAST_ACTIVITY: Record<string, string> = {
-  agent_general_assistant: "2026-09-20T10:16:00Z",
-  agent_researcher: "2026-09-20T09:48:00Z",
-  agent_programming_tutor: "2026-09-20T14:02:00Z",
-};
 
 export function conversationById(conversationId: string): ConversationSummary | undefined {
   return CONVERSATIONS.find((conversation) => conversation.conversation_id === conversationId);

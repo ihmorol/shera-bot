@@ -1,12 +1,13 @@
 import { ArtifactRef } from "@shera-bot/contracts";
-import { createHash } from "node:crypto";
+
+import { fixtureHash } from "./fixture-hash";
 
 /**
  * MOCK DATA — ArtifactRef fixtures (§5 artifact card; §9 "SUCCEEDED with
  * artifacts"). Typed with the real `ArtifactRef` contract. Download/open
  * actions stay disabled in the UI until the runtime serves files.
  */
-const sha = (label: string) => createHash("sha256").update(label).digest("hex");
+const sha = fixtureHash;
 
 export const FIXTURE_ARTIFACTS = [
   ArtifactRef.parse({

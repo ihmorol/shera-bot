@@ -26,11 +26,24 @@ export {
   operationInstanceById,
   rosterSubtitle,
 } from "./conversations";
-export { RUNS, sidebarStateFor } from "./runs";
+export { RUNS, sidebarStateFor, sessionPresenceFor } from "./runs";
 export { FIXTURE_EVENTS, ingestEvents, sortBySequence } from "./events";
 export { FIXTURE_ARTIFACTS, artifactsForTask } from "./artifacts";
 export { MESSAGES, messagesForConversation, ChatMessage } from "./messages";
 export { buildThread, type ThreadItem } from "./threads";
+
+/** Presence type for S3 headers and sidebar avatars (D32 on-demand sessions). */
+export type SessionPresence = "active" | "hibernating";
+
+/**
+ * Route slug for a fixture entity id ("operation_research_paper" →
+ * "research-paper", "agent_general_assistant" → "general-assistant"),
+ * matching the chunk-1 navigation seed. The fixtures test asserts the
+ * derived slugs resolve to the navigation-seeded routes.
+ */
+export function entitySlug(entityId: string): string {
+  return entityId.replace(/^(agent|operation)_/, "").replace(/_/g, "-");
+}
 
 export interface SidebarAgentEntry {
   agent: Agent;

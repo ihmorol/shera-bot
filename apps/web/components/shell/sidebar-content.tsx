@@ -1,33 +1,45 @@
 "use client";
 
-import { Layers, Settings2 } from "lucide-react";
+import { Layers, Loader2, Settings2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { AgentAvatar } from "@/components/chat/agent-avatar";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { PACK_AGENTS, PACK_OPERATION_TEMPLATES } from "@/lib/navigation";
+import {
+  entitySlug,
+  sessionPresenceFor,
+  sidebarModel,
+  type ConversationState,
+} from "@/lib/fixtures";
 import { routes } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
 import { Wordmark } from "./wordmark";
 
 /**
- * Sidebar (UI_DESIGN §3.2): global chrome row, fixed Agents section, fixed
- * Operations section, pack footer label. Two sections only (D41); no
- * workspace switcher, no pack switcher (D40, D19).
+ * Sidebar (UI_DESIGN §3.2, PRD §4.1): global chrome row, the six pack Agents
+ * as persistent direct chats (AC3), the pack-defined Operation templates
+ * (launch → preview, D30), the active Operation chats group, and the pack
+ * footer label. Two sections only (D41); no workspace switcher, no pack
+ * switcher (D40, D19).
  *
- * Chunk-1 shell: per-item state trails (unread / running / approval-required /
- * failed) and the Operation chats group arrive with the §9 mock fixtures —
- * nothing here pretends state that does not exist yet (G4).
+ * All rows and states come from the §9 fixture model: unread (count pill),
+ * running (spinner), approval_required (amber dot + count — a pending
+ * proposal, never a granted state, G2), failed (red dot), quiet (no marker).
+ * Color is never the only signal — every dot pairs with a glyph, count, or
+ * screen-reader label (§2.1).
  */
-function agentInitials(name: string): string {
-  return name
-    .split(" ")
-    .map((word) => word[0])
-    .slice(0, 2)
-    .join("");
-}
+
+/** Screen-reader label per sidebar state (color is never the only signal). */
+const STATE_LABELS: Record<ConversationState, string> = {
+  unread: "unread messages",
+  running: "work in progress",
+  approval_required: "waiting for your approval",
+  failed: "needs your review",
+  quiet: "no new activity",
+};
 
 function SidebarSectionLabel({ children }: { children: string }) {
   return (
@@ -37,9 +49,51 @@ function SidebarSectionLabel({ children }: { children: string }) {
   );
 }
 
+function UnreadPill({ count }: { count: number }) {
+  return (
+    <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-surface-elevated px-1.5 py-0.5 font-mono text-[11px] leading-none text-text">
+      {count}
+    </span>
+  );
+}
+
+function StateTrail({
+  state,
+  unreadCount,
+  approvalCount,
+}: {
+  state: ConversationState;
+  unreadCount: number;
+  approvalCount: number;
+}) {
+  return (
+    <span className="flex shrink-0 items-center gap-1.5">
+      {state === "running" ? (
+        <Loader2 className="size-3.5 animate-spin text-sky" aria-hidden="true" />
+      ) : null}
+      {state === "approval_required" ? (
+        <>
+          <span className="size-2 rounded-full bg-approval" aria-hidden="true" />
+          <UnreadPill count={approvalCount} />
+        </>
+      ) : null}
+      {state === "failed" ? (
+        <span className="size-2 rounded-full bg-failed" aria-hidden="true" />
+      ) : null}
+      {state === "unread" ? <UnreadPill count={unreadCount} /> : null}
+      <span className="sr-only">{STATE_LABELS[state]}</span>
+    </span>
+  );
+}
+
+const ITEM_BASE =
+  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors";
+const ITEM_ACTIVE = "bg-surface-elevated text-text";
+const ITEM_IDLE = "text-muted hover:bg-surface-elevated hover:text-text";
+
 export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
-
+  const model = sidebarModel();
   const linkProps = onNavigate ? { onClick: onNavigate } : {};
 
   return (
@@ -57,33 +111,40 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       <Separator />
 
       <nav className="min-h-0 flex-1 overflow-y-auto px-2 py-4" aria-label="Primary">
-        {/* Agents — six pack Agents as persistent direct chats (AC3) */}
+        {/* Agents — six pack Agents as persistent direct chats (AC3, §3.2) */}
         <section>
           <SidebarSectionLabel>Agents</SidebarSectionLabel>
           <ul>
-            {PACK_AGENTS.map((agent) => {
-              const href = routes.agent(agent.slug);
+            {model.agents.map(({ agent, conversation, state, approvalCount }) => {
+              const href = routes.agent(entitySlug(agent.agent_id));
               const active = pathname === href || pathname.startsWith(`${href}/`);
+              const presence = sessionPresenceFor(conversation.conversation_id);
               return (
-                <li key={agent.slug}>
+                <li key={agent.agent_id}>
                   <Link
                     href={href}
                     aria-current={active ? "page" : undefined}
-                    className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
-                      active
-                        ? "bg-surface-elevated text-text"
-                        : "text-muted hover:bg-surface-elevated hover:text-text",
-                    )}
+                    title={agent.role_description}
+                    className={cn(ITEM_BASE, active ? ITEM_ACTIVE : ITEM_IDLE)}
                     {...linkProps}
                   >
-                    <span
-                      aria-hidden="true"
-                      className="flex size-6 shrink-0 items-center justify-center rounded-full border border-line bg-surface-elevated font-mono text-[10px] font-medium text-sky"
-                    >
-                      {agentInitials(agent.name)}
+                    <AgentAvatar
+                      agentId={agent.agent_id}
+                      name={agent.display_name}
+                      size="sm"
+                      presence={presence}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-text">{agent.display_name}</span>
+                      <span className="block truncate text-xs text-muted">
+                        {agent.role_description}
+                      </span>
                     </span>
-                    <span className="truncate">{agent.name}</span>
+                    <StateTrail
+                      state={state}
+                      unreadCount={conversation.unread_count}
+                      approvalCount={approvalCount}
+                    />
                   </Link>
                 </li>
               );
@@ -93,7 +154,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
         <Separator className="my-4" />
 
-        {/* Operations — pack-defined templates open the launch preview (D30) */}
+        {/* Operations — templates open the launch preview (D30); chats open directly */}
         <section>
           <div className="flex items-center justify-between pr-2">
             <SidebarSectionLabel>Operations</SidebarSectionLabel>
@@ -104,17 +165,46 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             </Button>
           </div>
           <ul>
-            {PACK_OPERATION_TEMPLATES.map((operation) => {
-              const href = routes.operationPreview(operation.slug);
+            {model.templates.map(({ definition }) => {
+              const slug = entitySlug(definition.operation_id);
               return (
-                <li key={operation.slug}>
+                <li key={definition.operation_id}>
                   <Link
-                    href={href}
-                    className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted transition-colors hover:bg-surface-elevated hover:text-text"
+                    href={routes.operationPreview(slug)}
+                    className={cn(ITEM_BASE, ITEM_IDLE)}
                     {...linkProps}
                   >
                     <Layers className="size-4 shrink-0 text-sky" aria-hidden="true" />
-                    <span className="truncate">{operation.name}</span>
+                    <span className="min-w-0 flex-1 truncate">{definition.title}</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+
+          {/* Active Operation chats group (§3.2: "── active chats ──") */}
+          <p className="px-3 pb-1 pt-3 font-mono text-[11px] uppercase tracking-[0.16em] text-muted">
+            Active chats
+          </p>
+          <ul>
+            {model.operationChats.map(({ operation, conversation, subtitle, state, approvalCount }) => {
+              return (
+                <li key={operation.operation_id}>
+                  <Link
+                    href={routes.operation(operation.operation_id)}
+                    className={cn(ITEM_BASE, ITEM_IDLE)}
+                    {...linkProps}
+                  >
+                    <Layers className="size-4 shrink-0 text-sky" aria-hidden="true" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate">{conversation.title}</span>
+                      <span className="block truncate text-xs text-muted">{subtitle}</span>
+                    </span>
+                    <StateTrail
+                      state={state}
+                      unreadCount={conversation.unread_count}
+                      approvalCount={approvalCount}
+                    />
                   </Link>
                 </li>
               );

@@ -250,3 +250,29 @@ export function sidebarStateFor(
   }
   return "quiet";
 }
+
+/**
+ * Presence for the S3 header and sidebar avatars (D32 on-demand sessions): a
+ * session counts as active only while work is actually executing. A run
+ * paused for approval, credits, or recovery is not executing — the session
+ * hibernates and the pause shows up as its own state marker instead (G2:
+ * nothing renders an agent action as done, and a pause is never shown as
+ * progress).
+ */
+const EXECUTING_STATES: ReadonlySet<RunState> = new Set([
+  "RUNNING",
+  "RETRYING",
+  "WAITING_FOR_AGENT",
+  "WAITING_FOR_RESOURCE",
+  "CANCELLING",
+]);
+
+export function sessionPresenceFor(
+  conversationId: string,
+  runs: readonly TaskRun[] = RUNS,
+): "active" | "hibernating" {
+  const executing = runs.some(
+    (run) => run.conversation_id === conversationId && EXECUTING_STATES.has(run.state),
+  );
+  return executing ? "active" : "hibernating";
+}

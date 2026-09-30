@@ -1,5 +1,3 @@
-import { createHash } from "node:crypto";
-
 import {
   DEFAULT_COORDINATOR_SENTINEL,
   Pack,
@@ -7,6 +5,8 @@ import {
   type OperationDefinition,
 } from "@shera-bot/contracts";
 import { z } from "zod";
+
+import { fixtureHash } from "./fixture-hash";
 
 /**
  * MOCK DATA — the §9 #1 pack fixture (student pack v1), typed with the real
@@ -17,7 +17,7 @@ import { z } from "zod";
 export const STUDENT_PACK = Pack.parse({
   pack_id: "pack_student",
   version: "1.0.0",
-  manifest_hash: createHash("sha256").update("pack_student/v1.0.0").digest("hex"),
+  manifest_hash: fixtureHash("pack_student/v1.0.0"),
   default_coordinator_agent_id: DEFAULT_COORDINATOR_SENTINEL,
   agents: [
     {
@@ -114,7 +114,7 @@ export const STUDENT_PACK = Pack.parse({
       // coordinates by role; it is not a roster assignment.
       skills: ["skill_research_core", "skill_citation_core", "skill_writing_core"],
       connectors: ["connector_scholar_library"],
-      content_hash: createHash("sha256").update("operation_research_paper/v1.0.0").digest("hex"),
+      content_hash: fixtureHash("operation_research_paper/v1.0.0"),
     },
     {
       operation_id: "operation_programming_assignment",
@@ -125,9 +125,7 @@ export const STUDENT_PACK = Pack.parse({
       roster: ["agent_developer"],
       skills: ["skill_development_core", "skill_writing_core"],
       connectors: [],
-      content_hash: createHash("sha256")
-        .update("operation_programming_assignment/v1.0.0")
-        .digest("hex"),
+      content_hash: fixtureHash("operation_programming_assignment/v1.0.0"),
     },
     {
       operation_id: "operation_exam_preparation",
@@ -138,7 +136,7 @@ export const STUDENT_PACK = Pack.parse({
       roster: ["agent_programming_tutor", "agent_study_planner"],
       skills: ["skill_tutoring_core", "skill_planning_core"],
       connectors: [],
-      content_hash: createHash("sha256").update("operation_exam_preparation/v1.0.0").digest("hex"),
+      content_hash: fixtureHash("operation_exam_preparation/v1.0.0"),
     },
   ],
   runtime_compatibility: ">=0.1.0 <1.0.0",

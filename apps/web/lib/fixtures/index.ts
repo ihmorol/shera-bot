@@ -27,7 +27,13 @@ export {
   rosterSubtitle,
 } from "./conversations";
 export { RUNS, sidebarStateFor, sessionPresenceFor } from "./runs";
-export { FIXTURE_EVENTS, ingestEvents, sortBySequence } from "./events";
+export {
+  EVENT_GA_WEB_SEARCH,
+  EVENT_TUTOR_APPROVAL,
+  FIXTURE_EVENTS,
+  ingestEvents,
+  sortBySequence,
+} from "./events";
 export { FIXTURE_ARTIFACTS, artifactsForTask } from "./artifacts";
 export { MESSAGES, messagesForConversation, ChatMessage } from "./messages";
 export { buildThread, compareThreadItems, type ThreadItem } from "./threads";

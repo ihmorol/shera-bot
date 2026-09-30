@@ -39,6 +39,10 @@ import {
   ConversationsService,
   type ConversationPublisher,
 } from "../../modules/conversations/conversations.service.ts";
+import {
+  ScriptedReplyStreamer,
+  type ScriptedReplyOptions,
+} from "../../modules/conversations/reply-streamer.ts";
 import { HarnessRunService } from "../../modules/runtime/harness-run-service.ts";
 import { createLocalApi } from "./app.ts";
 import { consoleRedactedLogger, type RedactedLogger } from "../http/typed-errors.ts";
@@ -94,6 +98,14 @@ export interface ComposeRuntimeOptions extends ComposeLocalApiOptions {
    * clock; the E8 mock mode pins it so runs are byte-comparable.
    */
   now?: () => string;
+  /**
+   * S09 chunk 2: enable the scripted reply producer for conversation turns
+   * (the mock/E2E "demo stream equivalent"). When set, every durable USER
+   * message triggers transient message.delta frames followed by ONE durable
+   * agent reply through the command path. Default: undefined — NO replies are
+   * produced (G4: nothing fabricates a response without configuration).
+   */
+  scriptedReplies?: ScriptedReplyOptions;
 }
 
 export interface RuntimeHandle {
@@ -103,6 +115,8 @@ export interface RuntimeHandle {
   gateway: WebSocketGatewayHandle;
   /** The harness seam: later slices (and tests) start runs; the fake is default. */
   harness: HarnessRunService;
+  /** The scripted reply producer when enabled; undefined otherwise (G4). */
+  replyStreamer: ScriptedReplyStreamer | undefined;
   /** Closes the gateway (and with it the HTTP server), then SQLite. */
   close(): Promise<void>;
 }
@@ -114,6 +128,7 @@ interface Wired {
   tx: SqliteTransactions;
   journal: EventJournalRepository;
   events: EventsService;
+  conversations: ConversationsService;
   setPublisher(publisher: ConversationPublisher): void;
 }
 
@@ -203,6 +218,7 @@ function wire(options: ComposeLocalApiOptions): Wired {
     tx,
     journal,
     events,
+    conversations,
     setPublisher(next) {
       publisher = next;
     },
@@ -230,10 +246,27 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
   });
   // Every fanout route (conversation commands AND harness runs) flows through
   // the same containment (B4): a broadcast failure is recorded, never fatal.
-  const broadcast = containFanout(
-    (event) => gateway.broadcastStreamEvent(event),
-    options.logUntypedFault ?? consoleRedactedLogger,
-  );
+  const logFault = options.logUntypedFault ?? consoleRedactedLogger;
+  // S09 chunk 2: the scripted reply producer (mock/E2E) reacts to committed
+  // user messages with delta frames + ONE durable agent reply through the
+  // command path. Default: absent — a turn simply receives no reply (G4).
+  const replyStreamer = options.scriptedReplies
+    ? new ScriptedReplyStreamer({
+        conversations: wired.conversations,
+        broadcastFrame: (workspaceId, streamId, payload) =>
+          gateway.broadcastStreamFrame(workspaceId, streamId, payload),
+        options: options.scriptedReplies,
+        onFault: (fault) =>
+          logFault("reply_stream_failed", {
+            name: fault instanceof Error ? fault.name : "Error",
+            message: fault instanceof Error ? fault.message : String(fault),
+          }),
+      })
+    : undefined;
+  const broadcast = containFanout((event) => {
+    gateway.broadcastStreamEvent(event);
+    replyStreamer?.handleCommittedEvent(event);
+  }, logFault);
   wired.setPublisher(broadcast);
 
   // D51 seam wiring: adapters propose through the sink; the service validates
@@ -256,7 +289,9 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     httpServer,
     gateway,
     harness,
+    replyStreamer,
     close: async () => {
+      replyStreamer?.stopAll();
       // io.close() also closes the attached HTTP server (socket.io v4).
       await gateway.close();
       wired.conn.close();

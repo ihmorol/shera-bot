@@ -39,6 +39,7 @@ import { join } from "node:path";
 
 import { FakeHarnessAdapter } from "../adapters/process/fake-harness-adapter.ts";
 import { HarnessRunService } from "../modules/runtime/harness-run-service.ts";
+import { DEFAULT_SCRIPTED_REPLY } from "../modules/conversations/reply-streamer.ts";
 import {
   composeRuntime,
   DEFAULT_WORKSPACE_ID,
@@ -66,6 +67,13 @@ export interface E2eMockRuntimeOptions {
   workspaceId?: string;
   /** Deterministic clock for the fake harness script; default: fixed epoch. */
   now?: () => string;
+  /**
+   * Scripted agent replies for conversation turns (S09 chunk 2). ON by
+   * default in the mock mode — the E2E path needs the reply leg; pass false
+   * to start a reply-less mock (G4: the default composition without this
+   * produces no replies at all).
+   */
+  scriptedReplies?: boolean;
 }
 
 export interface E2eMockRuntime {
@@ -105,6 +113,12 @@ export async function startE2eMockRuntime(
     // The fixed clock must reach the JOURNAL too — the service stamps every
     // harness-run envelope with it (adapter proposals alone are not enough).
     now,
+    // The E2E path needs the reply leg: scripted agent replies with
+    // deterministic content on a fast cadence (real-timer driven). The
+    // composition without this produces no replies at all (G4).
+    ...(options.scriptedReplies === false
+      ? {}
+      : { scriptedReplies: { ...DEFAULT_SCRIPTED_REPLY, deltaIntervalMs: 15 } }),
   });
 
   await new Promise<void>((resolve, reject) => {

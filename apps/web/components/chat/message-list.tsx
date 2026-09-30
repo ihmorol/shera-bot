@@ -142,7 +142,11 @@ function MessageRow({
         ) : null}
       </div>
       <div className="ml-8 max-w-[78%] rounded-2xl rounded-tl-sm border border-line bg-surface px-4 py-2.5 text-base">
-        <p className="whitespace-pre-wrap">{message.text}</p>
+        <p className="whitespace-pre-wrap">
+          {/* §2.3: Agent messages announce the sender ("Researcher said:"). */}
+          <span className="sr-only">{agent?.display_name ?? message.sender.agent_id} said: </span>
+          {message.text}
+        </p>
         <p className="mt-1 text-right font-mono text-[11px] text-muted">
           {timeLabel(message.sent_at)}
         </p>

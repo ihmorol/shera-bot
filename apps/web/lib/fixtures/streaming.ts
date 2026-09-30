@@ -26,9 +26,7 @@ export type FixtureStream = z.infer<typeof FixtureStream>;
 /** Split a scripted reply into deterministic token-ish chunks (word + space). */
 export function splitStreamChunks(text: string): string[] {
   const words = text.split(" ").filter((word) => word.length > 0);
-  return words.map((word, index) =>
-    index === words.length - 1 ? word : `${word} `,
-  );
+  return words.map((word, index) => (index === words.length - 1 ? word : `${word} `));
 }
 
 const DEMO_STREAM_TEXT =

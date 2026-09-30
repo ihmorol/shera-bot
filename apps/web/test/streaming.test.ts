@@ -63,7 +63,7 @@ describe("stream frame math (§6.1 throttling)", () => {
     expect(mid.announcementText.length).toBeLessThan(mid.visibleText.length);
     expect(mid.announcementText).toBe(
       chunks
-        .slice(0, Math.floor(Math.floor(300 / STREAM_ANNOUNCE_MS) * STREAM_ANNOUNCE_MS / cadence))
+        .slice(0, Math.floor((Math.floor(300 / STREAM_ANNOUNCE_MS) * STREAM_ANNOUNCE_MS) / cadence))
         .join(""),
     );
     // On completion the announcement carries the full text.
@@ -88,7 +88,7 @@ describe("streaming message component (§6.1 + §2.3)", () => {
     expect(html).toContain("Default coordinator of every Operation");
     expect(html).toContain("spaced repetition outperforms");
     expect(html).toContain('data-streaming-cursor=""');
-    expect(html).toContain("aria-live=\"polite\"");
+    expect(html).toContain('aria-live="polite"');
   });
 
   it("labels the mechanism as demo streaming and names the Stop control", () => {

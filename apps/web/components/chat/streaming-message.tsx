@@ -36,7 +36,9 @@ export function StreamingMessage({
       <div className="flex items-center gap-2">
         <AgentAvatar agentId={agentId} name={name} size="sm" />
         <span className="text-sm font-medium text-text">{name}</span>
-        {agent ? <span className="truncate text-xs text-muted">{agent.role_description}</span> : null}
+        {agent ? (
+          <span className="truncate text-xs text-muted">{agent.role_description}</span>
+        ) : null}
       </div>
       <div className="ml-8 max-w-[78%] rounded-2xl rounded-tl-sm border border-line bg-surface px-4 py-2.5 text-base">
         <p className="whitespace-pre-wrap">
@@ -65,7 +67,11 @@ export function StreamingMessage({
               </button>
             </>
           ) : null}
-          {stopped ? <span aria-hidden="true">demo stream · stopped locally (D32: a real stop is a runtime command)</span> : null}
+          {stopped ? (
+            <span aria-hidden="true">
+              demo stream · stopped locally (D32: a real stop is a runtime command)
+            </span>
+          ) : null}
         </p>
       </div>
     </div>

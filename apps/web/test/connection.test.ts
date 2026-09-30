@@ -97,9 +97,7 @@ describe("connection state machine (§6.4)", () => {
 describe("connection banner (§6.4 exact copy)", () => {
   it("shows the disconnected banner with the exact §6.4 copy", () => {
     const html = render(createElement(ConnectionBanner, { state: "disconnected" }));
-    expect(html).toContain(
-      "Connection lost — you can keep reading; work continues server-side",
-    );
+    expect(html).toContain("Connection lost — you can keep reading; work continues server-side");
     expect(html).toContain('role="alert"');
     expect(html).toContain('data-connection-banner="disconnected"');
   });

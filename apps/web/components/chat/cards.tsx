@@ -43,9 +43,20 @@ function RiskBadge({ riskClass }: { riskClass: string }) {
   );
 }
 
-function CardShell({ children }: { children: ReactNode }) {
+/**
+ * Card shell. `live="assertive"` marks tool/approval event cards as
+ * assertive live regions (§2.3: "tool/approval events use aria-live=
+ * 'assertive'") — static markup is not announced; insertions are.
+ */
+function CardShell({ children, live }: { children: ReactNode; live?: "assertive" | undefined }) {
   return (
-    <div className="w-full max-w-xl rounded-xl border border-line bg-surface p-3">{children}</div>
+    <div
+      aria-live={live}
+      aria-atomic={live ? true : undefined}
+      className="w-full max-w-xl rounded-xl border border-line bg-surface p-3"
+    >
+      {children}
+    </div>
   );
 }
 
@@ -81,7 +92,7 @@ export function ToolCallCard({ event }: { event: TypedExecutionEvent }) {
     const payload = event.payload;
     const info = toolInfoById(payload.tool_id);
     return (
-      <CardShell>
+      <CardShell live="assertive">
         <CardHeader
           icon={<Wrench className="size-4 shrink-0 text-sky" aria-hidden="true" />}
           title={info?.name ?? payload.tool_id}
@@ -102,7 +113,7 @@ export function ToolCallCard({ event }: { event: TypedExecutionEvent }) {
     const payload = event.payload;
     const info = toolInfoById(payload.tool_id);
     return (
-      <CardShell>
+      <CardShell live="assertive">
         <CardHeader
           icon={<Wrench className="size-4 shrink-0 text-approval" aria-hidden="true" />}
           title={info?.name ?? payload.tool_id}
@@ -153,9 +164,11 @@ export function ArtifactCard({ artifact }: { artifact: ArtifactRef }) {
         {producerRun ? ` · from run ${producerRun.task_id.replace("task_run_", "")}` : ""}
       </p>
       <div className="mt-2 flex items-center gap-2">
+        {/* aria-disabled (not disabled): stays keyboard-reachable and
+            announced as dimmed, while the demo explains why it is inert
+            (§2.3 reachability; G2: no fake file serving). */}
         <button
           type="button"
-          disabled
           aria-disabled="true"
           title="Demo data — file serving arrives with the runtime"
           className="rounded-lg border border-line px-2.5 py-1 text-xs text-muted opacity-60"

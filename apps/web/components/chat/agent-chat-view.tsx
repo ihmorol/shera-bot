@@ -130,8 +130,11 @@ export function AgentChatView({
   // (the General Assistant chat) and is labeled as demo streaming in the UI.
   const demoStream =
     DEMO_STREAM.conversation_id === conversation.conversation_id ? DEMO_STREAM : null;
-  const { frame: streamFrame, stopped: streamStopped, stop: stopStream } =
-    useScriptedStream(demoStream);
+  const {
+    frame: streamFrame,
+    stopped: streamStopped,
+    stop: stopStream,
+  } = useScriptedStream(demoStream);
 
   // Once the demo stream completes, its fixture text becomes a normal Agent
   // message in the local thread (never before, and only in this browser).

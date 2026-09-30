@@ -3,8 +3,9 @@ import {
   ResumeRuntimeResult,
   RuntimeStatus,
   Session,
-  type SheraError,
 } from "@shera-bot/contracts";
+
+import { TypedHttpError, UNREACHABLE_ERROR, typedErrorFromPayload } from "@/lib/typed-error";
 
 /**
  * Typed browser client for the control plane (S09 chunk 1), reached through
@@ -17,61 +18,16 @@ import {
  * fails loudly instead of leaking a malformed session into the UI.
  */
 
-export class ControlPlaneError extends Error {
-  readonly sheraError: SheraError;
-
-  constructor(sheraError: SheraError) {
-    super(sheraError.safe_message);
+export class ControlPlaneError extends TypedHttpError {
+  constructor(sheraError: TypedHttpError["sheraError"]) {
+    super(sheraError);
     this.name = "ControlPlaneError";
-    this.sheraError = sheraError;
   }
 }
 
-/** A body that is not the typed taxonomy (transport noise) maps to honest fallback copy. */
-const FALLBACK_ERROR: SheraError = {
-  code: "INTERNAL_ERROR",
-  category: "internal",
-  safe_message: "Something went wrong. The failure has been recorded.",
-  retryable: false,
-  user_action: "Try again later.",
-  internal_details: null,
-  correlation_id: "client-fallback",
-};
-
-/** The app origin itself was unreachable — a transport failure, retryable. */
-const UNREACHABLE_ERROR: SheraError = {
-  code: "RESOURCE_UNAVAILABLE",
-  category: "resource",
-  safe_message: "The connection to Shera failed. You can try again.",
-  retryable: true,
-  user_action: "Try again shortly.",
-  internal_details: null,
-  correlation_id: "client-unreachable",
-};
-
-function typedErrorFromPayload(payload: unknown): ControlPlaneError {
-  if (
-    payload !== null &&
-    typeof payload === "object" &&
-    typeof (payload as Record<string, unknown>)["safe_message"] === "string" &&
-    typeof (payload as Record<string, unknown>)["retryable"] === "boolean"
-  ) {
-    const candidate = payload as Record<string, unknown>;
-    return new ControlPlaneError({
-      code: typeof candidate["code"] === "string" ? candidate["code"] : FALLBACK_ERROR.code,
-      category: "internal",
-      safe_message: candidate["safe_message"] as string,
-      retryable: candidate["retryable"] as boolean,
-      user_action:
-        typeof candidate["user_action"] === "string" ? (candidate["user_action"] as string) : null,
-      internal_details: null,
-      correlation_id:
-        typeof candidate["correlation_id"] === "string"
-          ? (candidate["correlation_id"] as string)
-          : FALLBACK_ERROR.correlation_id,
-    });
-  }
-  return new ControlPlaneError(FALLBACK_ERROR);
+function toControlPlaneError(payload: unknown): ControlPlaneError {
+  const typed = typedErrorFromPayload(payload);
+  return typed instanceof ControlPlaneError ? typed : new ControlPlaneError(typed.sheraError);
 }
 
 async function requestTyped<T>(
@@ -94,13 +50,13 @@ async function requestTyped<T>(
   }
   const payload: unknown = await response.json().catch(() => null);
   if (!response.ok) {
-    throw typedErrorFromPayload(payload);
+    throw toControlPlaneError(payload);
   }
   try {
     return parse(payload);
   } catch {
     // A 2xx body that fails its contract is a server drift, not user error.
-    throw typedErrorFromPayload(null);
+    throw toControlPlaneError(null);
   }
 }
 

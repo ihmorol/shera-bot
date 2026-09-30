@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Agent } from "@shera-bot/contracts";
 
 import { AgentAvatar } from "@/components/chat/agent-avatar";
-import { Composer } from "@/components/chat/composer";
+import { Composer, NO_PROVIDER_COMPOSER_COPY } from "@/components/chat/composer";
 import { EmptyThread, ThreadSkeleton } from "@/components/chat/thread-states";
 import { MessageList } from "@/components/chat/message-list";
 import { StreamingMessage } from "@/components/chat/streaming-message";
@@ -95,6 +95,7 @@ export function AgentChatView({
   connectionState = "connected",
   replay,
   pendingReplay,
+  mode = "demo",
 }: {
   agent: Agent;
   conversation: ConversationSummary;
@@ -102,7 +103,7 @@ export function AgentChatView({
   /** §2.4 surface state; the demo runs "ready", the others are wired + tested. */
   surfaceState?: ChatSurfaceState;
   /** Redacted message for the error surface (D23 rule 4). */
-  safeErrorMessage?: string;
+  safeErrorMessage?: string | undefined;
   /**
    * §6.4 connection lifecycle (scripted demo / later the real socket). While
    * disconnected the banner shows and reading stays possible; while
@@ -114,6 +115,14 @@ export function AgentChatView({
   replay?: { done: number; total: number } | undefined;
   /** Missed messages queued for the cursor replay (§6.2 handoff). */
   pendingReplay?: ChatMessage[] | undefined;
+  /**
+   * S09 chunk 1: "runtime" is the REAL conversation backing — the thread is
+   * real journal data, the fixture demo stream never runs (G4: no fabricated
+   * assistant message), the composer is disabled while no provider is
+   * configured, and no local demo sends are appended. "demo" (default) keeps
+   * the S08 fixture behavior for the not-ready container state.
+   */
+  mode?: "demo" | "runtime";
 }) {
   const [localMessages, setLocalMessages] = useState<ChatMessage[]>([]);
   const timersRef = useRef<number[]>([]);
@@ -127,12 +136,20 @@ export function AgentChatView({
     [],
   );
 
-  const presence = sessionPresenceFor(conversation.conversation_id);
+  const runtimeMode = mode === "runtime";
+
+  // D32 session presence is not reported by the runtime in this slice — the
+  // demo derives it from run fixtures, which would fabricate presence on real
+  // data. Runtime mode therefore shows no presence pill (G4).
+  const presence = runtimeMode ? undefined : sessionPresenceFor(conversation.conversation_id);
 
   // §6.1 demo streaming: the scripted stream runs only in its own conversation
-  // (the General Assistant chat) and is labeled as demo streaming in the UI.
+  // (the General Assistant chat) and only in demo mode — on real rows nothing
+  // fabricated ever streams (G4).
   const demoStream =
-    DEMO_STREAM.conversation_id === conversation.conversation_id ? DEMO_STREAM : null;
+    !runtimeMode && DEMO_STREAM.conversation_id === conversation.conversation_id
+      ? DEMO_STREAM
+      : null;
   const {
     frame: streamFrame,
     stopped: streamStopped,
@@ -183,6 +200,11 @@ export function AgentChatView({
   };
 
   const handleSend = (text: string) => {
+    // Runtime mode has no message command in this slice and its composer is
+    // disabled (G4) — the guard keeps the demo-only append out of real data.
+    if (runtimeMode) {
+      return;
+    }
     const messageId = `msg_local_${Date.now()}_${localMessages.length}`;
     const message = ChatMessage.parse({
       message_id: messageId,
@@ -209,25 +231,33 @@ export function AgentChatView({
     <div className="flex h-full min-h-0 flex-col">
       {/* Header: identity + role + presence + provider/model placeholder (§S3) */}
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-surface px-4 lg:px-6">
-        <AgentAvatar
-          agentId={agent.agent_id}
-          name={agent.display_name}
-          size="lg"
-          presence={presence}
-        />
+        {presence ? (
+          <AgentAvatar
+            agentId={agent.agent_id}
+            name={agent.display_name}
+            size="lg"
+            presence={presence}
+          />
+        ) : (
+          <AgentAvatar agentId={agent.agent_id} name={agent.display_name} size="lg" />
+        )}
         <div className="min-w-0 flex-1">
           <h1 className="truncate font-display text-lg font-semibold tracking-tight text-text">
             {agent.display_name}
           </h1>
           <p className="truncate text-xs text-muted">{agent.role_description}</p>
         </div>
-        <PresencePill presence={presence} />
+        {presence ? <PresencePill presence={presence} /> : null}
         {/* Model placeholder collapses away below md — the identity (name +
             role) keeps width priority at the 360px min breakpoint (§2.2). */}
         <button
           type="button"
           disabled
-          title="Provider and model overrides arrive with the settings pass (demo)"
+          title={
+            runtimeMode
+              ? "Provider and model overrides arrive with the settings pass"
+              : "Provider and model overrides arrive with the settings pass (demo)"
+          }
           className="hidden shrink-0 rounded-lg border border-line px-3 py-1.5 text-xs text-muted opacity-70 md:block"
         >
           Platform default
@@ -268,7 +298,19 @@ export function AgentChatView({
         </div>
       )}
 
-      <Composer agentName={agent.display_name} onSend={handleSend} />
+      {runtimeMode ? (
+        // G4 / D17: with no provider configured for the container the composer
+        // is a clear configuration state — never a fake send, never a
+        // fabricated reply. Provider reporting lands with the settings slice.
+        <Composer
+          agentName={agent.display_name}
+          onSend={handleSend}
+          disabled
+          disabledReason={NO_PROVIDER_COMPOSER_COPY}
+        />
+      ) : (
+        <Composer agentName={agent.display_name} onSend={handleSend} />
+      )}
     </div>
   );
 }

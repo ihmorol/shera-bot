@@ -22,7 +22,7 @@ import { threadItemsFromEvents } from "@/lib/runtime-thread";
  */
 
 const GENERIC_RUNTIME_ERROR_MESSAGE = "This conversation could not be loaded.";
-const SNAPSHOT_REQUIRED_MESSAGE =
+export const SNAPSHOT_REQUIRED_MESSAGE =
   "This conversation's full history could not be replayed right now.";
 
 export interface RealConversationThread {

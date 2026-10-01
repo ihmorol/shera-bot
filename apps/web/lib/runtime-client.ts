@@ -170,3 +170,35 @@ export function fetchConversationEvents(
     (payload) => ReplayResult.parse(payload),
   );
 }
+
+/**
+ * Send one conversation message (S09 chunk 2 — the composer's path): an
+ * idempotent typed command per send. The caller owns the idempotency key — it
+ * is the optimistic copy's identity and the durable event's correlation id,
+ * so a retry after an ambiguous failure can never duplicate the turn.
+ */
+export function sendConversationMessage(args: {
+  workspaceId: string;
+  conversationId: string;
+  text: string;
+  displayName: string;
+  idempotencyKey: string;
+}): Promise<ConversationCommandResult> {
+  return requestRuntime(
+    "/api/runtime/v1/conversations/commands",
+    (payload) => ConversationCommandResult.parse(payload),
+    {
+      method: "POST",
+      body: JSON.stringify({
+        type: "message.send",
+        workspace_id: args.workspaceId,
+        idempotency_key: args.idempotencyKey,
+        payload: {
+          conversation_id: args.conversationId,
+          text: args.text,
+          sender: { kind: "user", display_name: args.displayName },
+        },
+      }),
+    },
+  );
+}

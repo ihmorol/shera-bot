@@ -9,11 +9,16 @@ import { describe, expect, it } from "vitest";
  * code, schemas, fixtures, or comments. "Subagent" (D46) is allowed: it names a
  * subordinate agent execution within an Operation, not a separate object type.
  *
- * This file is the only file exempt from its own scan — it must quote the
- * banned terms to ban them (same pattern as apps/web/test/vocabulary.test.ts).
+ * This file and pack-content.test.ts are the only files exempt from the scan —
+ * they must quote the banned terms to ban them (same pattern as
+ * apps/web/test/vocabulary.test.ts).
  */
 const PACKAGE_ROOT = join(import.meta.dirname, "..");
 const SELF_PATH = join(import.meta.dirname, "vocabulary.test.ts");
+// pack-content.test.ts bans the retired aliases for agent-packs/ and therefore
+// must quote them too — same exemption as this file's own patterns.
+const PACK_CONTENT_TEST_PATH = join(import.meta.dirname, "pack-content.test.ts");
+const SKIP_FILES = new Set([SELF_PATH, PACK_CONTENT_TEST_PATH]);
 const SKIP_DIRS = new Set(["node_modules", "dist", "coverage", ".turbo"]);
 const SCAN_EXTENSIONS = [".ts", ".json", ".md"];
 
@@ -40,7 +45,7 @@ describe("canonical vocabulary (D44) in @shera-bot/agent-pack-sdk", () => {
   it("never uses the retired aliases Expert or Scene", () => {
     const violations: string[] = [];
     for (const file of listFiles(PACKAGE_ROOT)) {
-      if (file === SELF_PATH) continue;
+      if (SKIP_FILES.has(file)) continue;
       const lines = readFileSync(file, "utf8").split("\n");
       lines.forEach((line, index) => {
         for (const { pattern, reason } of BANNED_TERMS) {

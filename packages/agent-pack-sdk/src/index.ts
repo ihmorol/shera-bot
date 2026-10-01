@@ -14,3 +14,6 @@
  */
 export * from "./primitives.ts";
 export * from "./manifest.ts";
+export * from "./integrity.ts";
+export * from "./compatibility.ts";
+export * from "./loader.ts";

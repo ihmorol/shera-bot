@@ -26,6 +26,7 @@ import {
   flushReplayed,
   insertDaySeparators,
   withSentMessages,
+  type TimelineItem,
 } from "@/lib/thread-layout";
 import { cn } from "@/lib/utils";
 
@@ -96,6 +97,10 @@ export function AgentChatView({
   replay,
   pendingReplay,
   mode = "demo",
+  timelineOverride,
+  liveStream,
+  onRuntimeSend,
+  onRuntimeRetry,
 }: {
   agent: Agent;
   conversation: ConversationSummary;
@@ -123,6 +128,23 @@ export function AgentChatView({
    * the S08 fixture behavior for the not-ready container state.
    */
   mode?: "demo" | "runtime";
+  /**
+   * S09 chunk 2 (runtime live): a fully assembled timeline (ordered,
+   * day-separated, replay boundary marked by the live reducer) that replaces
+   * the demo merge pipeline's output. The live surface's durable items are
+   * journal truth — they must not run through the fixture handoff again.
+   */
+  timelineOverride?: TimelineItem[] | undefined;
+  /** The real reply's transient delta bubble (§6.1), if one is streaming. */
+  liveStream?: { agentId: string; text: string } | null | undefined;
+  /**
+   * S09 chunk 2: the real composer's path — the idempotent `message.send`
+   * command through the live conversation (§6.3). Providing it ENABLES the
+   * composer in runtime mode; without it the no-provider state stays (G4).
+   */
+  onRuntimeSend?: ((text: string) => void) | undefined;
+  /** Retry a failed real send with the SAME idempotency key (receipt replay). */
+  onRuntimeRetry?: ((messageId: string) => void) | undefined;
 }) {
   const [localMessages, setLocalMessages] = useState<ChatMessage[]>([]);
   const timersRef = useRef<number[]>([]);
@@ -137,6 +159,8 @@ export function AgentChatView({
   );
 
   const runtimeMode = mode === "runtime";
+  /** The runtime surface with the live send path wired (chunk 2). */
+  const runtimeLive = runtimeMode && onRuntimeSend !== undefined;
 
   // D32 session presence is not reported by the runtime in this slice — the
   // demo derives it from run fixtures, which would fabricate presence on real
@@ -183,6 +207,9 @@ export function AgentChatView({
     () => insertDaySeparators(flushReplayed(withSentMessages(thread, localAll), replayed)),
     [thread, localAll, replayed],
   );
+  // Runtime live: the reducer-assembled timeline (journal truth + optimistic
+  // sends + the §6.2 marker) replaces the demo merge pipeline's output.
+  const renderedTimeline = timelineOverride ?? timeline;
   const jumpTargetId = useMemo(
     () => firstUnreadMessageId(thread, conversation.unread_count),
     [thread, conversation.unread_count],
@@ -200,9 +227,11 @@ export function AgentChatView({
   };
 
   const handleSend = (text: string) => {
-    // Runtime mode has no message command in this slice and its composer is
-    // disabled (G4) — the guard keeps the demo-only append out of real data.
+    // Runtime mode: the real send path — the idempotent command through the
+    // live conversation (§6.3). Without the live send prop the composer stays
+    // disabled and this guard keeps demo-only appends out of real data (G4).
     if (runtimeMode) {
+      onRuntimeSend?.(text);
       return;
     }
     const messageId = `msg_local_${Date.now()}_${localMessages.length}`;
@@ -219,6 +248,12 @@ export function AgentChatView({
   };
 
   const handleRetry = (messageId: string) => {
+    // Runtime live: retry re-dispatches the SAME idempotency key — the
+    // receipt replay makes it safe even if the first attempt committed (D26).
+    if (runtimeLive) {
+      onRuntimeRetry?.(messageId);
+      return;
+    }
     setLocalMessages((prev) =>
       prev.map((message) =>
         message.message_id === messageId ? { ...message, delivery: "sending" } : message,
@@ -274,12 +309,12 @@ export function AgentChatView({
         <ThreadSkeleton />
       ) : surfaceState === "error" ? (
         <ErrorState safeMessage={safeErrorMessage} onRetry={() => undefined} />
-      ) : timeline.length === 0 ? (
+      ) : renderedTimeline.length === 0 ? (
         <EmptyThread agentName={agent.display_name} />
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto">
           <MessageList
-            items={timeline}
+            items={renderedTimeline}
             jumpTargetId={jumpTargetId}
             unreadCount={conversation.unread_count}
             onRetry={handleRetry}
@@ -292,13 +327,27 @@ export function AgentChatView({
                   stopped={streamStopped}
                   onStop={stopStream}
                 />
+              ) : liveStream ? (
+                <StreamingMessage
+                  agentId={liveStream.agentId}
+                  visibleText={liveStream.text}
+                  done={false}
+                  stopped={false}
+                  onStop={() => undefined}
+                  variant="live"
+                />
               ) : undefined
             }
           />
         </div>
       )}
 
-      {runtimeMode ? (
+      {runtimeLive ? (
+        // S09 chunk 2: the real composer — every send is the idempotent
+        // message.send command (§6.3); replies are journal events, never a
+        // local fabrication (G4).
+        <Composer agentName={agent.display_name} onSend={handleSend} />
+      ) : runtimeMode ? (
         // G4 / D17: with no provider configured for the container the composer
         // is a clear configuration state — never a fake send, never a
         // fabricated reply. Provider reporting lands with the settings slice.

@@ -29,6 +29,11 @@ export interface RealConversationThread {
   surfaceState: "ready" | "loading" | "error";
   items: ThreadItem[];
   safeErrorMessage: string | undefined;
+  /**
+   * The ensured conversation id once known (null while loading/failed) — the
+   * live conversation's stream subscribes and replays against it (chunk 2).
+   */
+  conversationId: string | null;
 }
 
 function safeMessageOf(error: unknown): string {
@@ -58,23 +63,25 @@ export function useRealConversationThread(workspaceId: string): RealConversation
   });
 
   if (conversationQuery.isPending) {
-    return { surfaceState: "loading", items: [], safeErrorMessage: undefined };
+    return { surfaceState: "loading", items: [], safeErrorMessage: undefined, conversationId: null };
   }
   if (conversationQuery.isError) {
     return {
       surfaceState: "error",
       items: [],
       safeErrorMessage: safeMessageOf(conversationQuery.error),
+      conversationId: null,
     };
   }
   if (eventsQuery.isPending) {
-    return { surfaceState: "loading", items: [], safeErrorMessage: undefined };
+    return { surfaceState: "loading", items: [], safeErrorMessage: undefined, conversationId };
   }
   if (eventsQuery.isError) {
     return {
       surfaceState: "error",
       items: [],
       safeErrorMessage: safeMessageOf(eventsQuery.error),
+      conversationId,
     };
   }
 
@@ -82,11 +89,17 @@ export function useRealConversationThread(workspaceId: string): RealConversation
   if (replay.kind === "snapshot_required") {
     // E10 honesty: the cursor is below the retention horizon (or the stream
     // is unknown) — never render fabricated history in its place.
-    return { surfaceState: "error", items: [], safeErrorMessage: SNAPSHOT_REQUIRED_MESSAGE };
+    return {
+      surfaceState: "error",
+      items: [],
+      safeErrorMessage: SNAPSHOT_REQUIRED_MESSAGE,
+      conversationId,
+    };
   }
   return {
     surfaceState: "ready",
     items: threadItemsFromEvents(replay.events),
     safeErrorMessage: undefined,
+    conversationId,
   };
 }

@@ -4,6 +4,7 @@ import type { ChatMessage } from "../lib/fixtures";
 import {
   advanceLiveThread,
   assembleLiveTimeline,
+  connectionStateOf,
   INITIAL_LIVE_STATE,
   type LiveThreadState,
 } from "../lib/runtime-live";
@@ -253,5 +254,37 @@ describe("connection lifecycle + replay (§6.2/§6.4)", () => {
     // Initial history is NOT a reconnect batch: no replayed rows, no marker.
     expect(assembleLiveTimeline(state).replayBoundary).toBeNull();
     expect(messagesOf(state)).toEqual([{ id: "msg_2", delivery: "sent", klass: "live" }]);
+  });
+});
+
+describe("§6.4 banner mapping — the REAL connection drives the banner", () => {
+  it("connecting shows no banner; live, disconnected, and reconnecting map exactly", () => {
+    // While connecting the surface shows the loading state, never a banner.
+    expect(connectionStateOf("connecting")).toBe("connected");
+    expect(connectionStateOf("live")).toBe("connected");
+    expect(connectionStateOf("offline")).toBe("disconnected");
+    expect(connectionStateOf("reconnecting")).toBe("reconnecting");
+  });
+
+  it("a real disconnect raises the banner; reconnect carries replay progress; live clears it", () => {
+    let state = live();
+    state = advanceLiveThread(state, {
+      type: "live_event",
+      event: messageEvent({ sequence: 1, correlationId: "k1" }),
+    });
+
+    state = advanceLiveThread(state, { type: "disconnected" });
+    expect(connectionStateOf(state.phase)).toBe("disconnected");
+
+    // Reconnecting: the banner shows "Replaying missed events…" with the
+    // real replay progress from the reconnect replay.request (§6.4).
+    state = advanceLiveThread(state, { type: "reconnecting" });
+    state = advanceLiveThread(state, { type: "replay_started", total: 3 });
+    expect(connectionStateOf(state.phase)).toBe("reconnecting");
+    expect(state.replay).toEqual({ done: 0, total: 3 });
+
+    state = advanceLiveThread(state, { type: "replay_complete" });
+    expect(connectionStateOf(state.phase)).toBe("connected");
+    expect(state.replay).toBeNull();
   });
 });

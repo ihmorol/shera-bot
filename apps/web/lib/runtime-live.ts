@@ -80,6 +80,13 @@ export interface LiveThreadState {
   journalItems: ThreadItem[];
   /** Sends that have not been reconciled with the journal yet. */
   optimistic: ChatMessage[];
+  /**
+   * Correlation keys of APPLIED journal events. send_started refuses them: a
+   * retry after an ambiguous failure (the POST died after the runtime had
+   * already committed) must not re-add an optimistic copy beside the durable
+   * message — that would duplicate the visible turn.
+   */
+  reconciledKeys: ReadonlySet<string>;
   /** The active streaming reply bubble (transient deltas), if any. */
   stream: LiveStreamState | null;
   /** Replay progress while reconnecting (§6.4). */
@@ -94,6 +101,7 @@ export const INITIAL_LIVE_STATE: LiveThreadState = {
   acknowledged: 0,
   journalItems: [],
   optimistic: [],
+  reconciledKeys: new Set<string>(),
   stream: null,
   replay: null,
   error: null,
@@ -148,6 +156,25 @@ function messageFromEvent(event: RuntimeEvent, deliveryClass: "live" | "replayed
   });
 }
 
+/**
+ * Record an applied event's correlation key, bounded: keys are one-shot
+ * idempotency ids, so once full the oldest half is evicted — a duplicate
+ * delivery is a same-session retry window, never an arbitrarily old event.
+ */
+function withReconciledKey(keys: ReadonlySet<string>, key: string): ReadonlySet<string> {
+  const next = new Set(keys);
+  next.add(key);
+  if (next.size > 256) {
+    for (const oldest of next) {
+      next.delete(oldest);
+      if (next.size <= 128) {
+        break;
+      }
+    }
+  }
+  return next;
+}
+
 /** Apply one durable journal event to the thread; returns the next state. */
 function applyJournalEvent(
   state: LiveThreadState,
@@ -162,6 +189,9 @@ function applyJournalEvent(
   const optimistic = event.correlation_id
     ? state.optimistic.filter((message) => message.message_id !== event.correlation_id)
     : state.optimistic;
+  const reconciledKeys = event.correlation_id
+    ? withReconciledKey(state.reconciledKeys, event.correlation_id)
+    : state.reconciledKeys;
 
   // The durable reply reconciles the transient bubble: the reply is now
   // visible exactly once — as the journal message.
@@ -178,7 +208,7 @@ function applyJournalEvent(
     ];
   }
 
-  return { ...state, cursor: event.sequence, journalItems, optimistic, stream };
+  return { ...state, cursor: event.sequence, journalItems, optimistic, reconciledKeys, stream };
 }
 
 export function advanceLiveThread(state: LiveThreadState, event: LiveThreadEvent): LiveThreadState {
@@ -220,7 +250,14 @@ export function advanceLiveThread(state: LiveThreadState, event: LiveThreadEvent
       };
     case "send_started":
       // A retry re-dispatches the same key: replace the existing optimistic
-      // copy so a retried send never appears twice.
+      // copy so a retried send never appears twice. But a key whose durable
+      // event ALREADY applied (ambiguous failure: the POST died after the
+      // runtime committed) is reconciled — re-adding an optimistic copy
+      // beside the durable message would duplicate the visible turn, so the
+      // durable copy stands and the dispatch is a no-op.
+      if (state.reconciledKeys.has(event.message.message_id)) {
+        return state;
+      }
       return {
         ...state,
         optimistic: [
@@ -518,6 +555,23 @@ export function useLiveConversation(args: UseLiveConversationArgs): LiveConversa
     };
     const flushInterval = window.setInterval(flushDeltas, STREAM_THROTTLE_MS);
 
+    // ONE reconnect scheduler per lifecycle: both the socket-close path and
+    // the attempt-failure path land here. The pending-timer guard keeps a
+    // failure episode (the close AND a subscribe/replay timeout firing for
+    // the same socket) to exactly ONE retry — and the backoff counter to one
+    // step per episode.
+    const scheduleReconnect = () => {
+      if (cancelled || reconnectTimer !== null) {
+        return;
+      }
+      const delay = Math.min(RECONNECT_BASE_MS * 2 ** reconnectAttempt, RECONNECT_MAX_MS);
+      reconnectAttempt += 1;
+      reconnectTimer = window.setTimeout(() => {
+        reconnectTimer = null;
+        connect();
+      }, delay);
+    };
+
     const connect = () => {
       const isReconnect = reconnectAttempt > 0;
       if (isReconnect) {
@@ -531,10 +585,41 @@ export function useLiveConversation(args: UseLiveConversationArgs): LiveConversa
             return;
           }
           socket = opened;
+
+          // Live fanout handlers are registered BEFORE the subscribe/replay
+          // round-trips: events fanned out while those awaits are in flight
+          // are dispatched too, and the `sequence <= cursor` exactly-once
+          // dedupe absorbs the overlap with the replay. Registering after the
+          // replay awaited would DROP that window instead (events the runtime
+          // committed while the client was still loading history).
+          socket.onEvent((name, payload) => {
+            if (name === "stream.event" && payload && typeof payload === "object") {
+              dispatchJournalEvent(payload as RuntimeEvent, "live");
+              return;
+            }
+            if (name === "stream.frame" && payload && typeof payload === "object") {
+              const frame = payload as { frame?: string; stream_key?: string; text_delta?: string };
+              if (frame.frame === "message.delta" && typeof frame.stream_key === "string") {
+                deltas.push(frame.stream_key, frame.text_delta ?? "");
+              }
+            }
+          });
+          socket.onClose(() => {
+            if (cancelled) {
+              return;
+            }
+            flushDeltas();
+            dispatch({ type: "disconnected" });
+            scheduleReconnect();
+          });
+
           await socket.request("stream.subscribe", {
             workspace_id: workspaceId,
             stream_id: streamId,
           });
+          if (cancelled) {
+            return;
+          }
 
           // Durable history from the ACKNOWLEDGED cursor — the last sequence
           // this client has actually rendered (never ahead of the visible
@@ -567,38 +652,19 @@ export function useLiveConversation(args: UseLiveConversationArgs): LiveConversa
           }
           dispatch({ type: "replay_complete" });
           reconnectAttempt = 0;
-
-          // Live fanout: committed journal events + transient delta frames.
-          socket.onEvent((name, payload) => {
-            if (name === "stream.event" && payload && typeof payload === "object") {
-              dispatchJournalEvent(payload as RuntimeEvent, "live");
-              return;
-            }
-            if (name === "stream.frame" && payload && typeof payload === "object") {
-              const frame = payload as { frame?: string; stream_key?: string; text_delta?: string };
-              if (frame.frame === "message.delta" && typeof frame.stream_key === "string") {
-                deltas.push(frame.stream_key, frame.text_delta ?? "");
-              }
-            }
-          });
-          socket.onClose(() => {
-            if (cancelled) {
-              return;
-            }
-            flushDeltas();
-            dispatch({ type: "disconnected" });
-            const delay = Math.min(RECONNECT_BASE_MS * 2 ** reconnectAttempt, RECONNECT_MAX_MS);
-            reconnectAttempt += 1;
-            reconnectTimer = window.setTimeout(connect, delay);
-          });
         } catch {
+          // The attempt died (open/subscribe/replay): close the socket this
+          // attempt opened — no zombie connection may linger alongside the
+          // retry loop. Its close notification (if any) folds into the same
+          // scheduleReconnect guard below.
+          socket?.close();
+          socket = null;
           if (cancelled) {
             return;
           }
+          flushDeltas();
           dispatch({ type: "disconnected" });
-          const delay = Math.min(RECONNECT_BASE_MS * 2 ** reconnectAttempt, RECONNECT_MAX_MS);
-          reconnectAttempt += 1;
-          reconnectTimer = window.setTimeout(connect, delay);
+          scheduleReconnect();
         }
       })();
     };

@@ -128,6 +128,45 @@ describe("send → reconcile (D26/D23 rule 6)", () => {
     expect(messagesOf(state)).toHaveLength(1);
     expect(state.cursor).toBe(1);
   });
+
+  it("a send_started for an ALREADY-APPLIED key is refused — an ambiguous-failure retry never duplicates the turn", () => {
+    let state = live();
+    state = advanceLiveThread(state, {
+      type: "send_started",
+      message: optimisticMessage("idem-ambig", "sending"),
+    });
+    // The POST died ambiguously but the runtime committed: the authoritative
+    // event arrives and reconciles the key (the optimistic copy is replaced
+    // by the durable message).
+    state = advanceLiveThread(state, {
+      type: "live_event",
+      event: messageEvent({ sequence: 1, correlationId: "idem-ambig", text: "durable turn" }),
+    });
+    expect(messagesOf(state)).toEqual([{ id: "msg_1", delivery: "sent", klass: "live" }]);
+
+    // The retry dispatches send_started with the SAME key — re-adding the
+    // optimistic copy would mount a second message under the durable one.
+    state = advanceLiveThread(state, {
+      type: "send_started",
+      message: optimisticMessage("idem-ambig", "sending"),
+    });
+    expect(messagesOf(state)).toEqual([{ id: "msg_1", delivery: "sent", klass: "live" }]);
+    expect(state.optimistic).toHaveLength(0);
+  });
+
+  it("a send_started for a FAILED (not applied) key still replaces the optimistic copy — retry stays available", () => {
+    let state = live();
+    state = advanceLiveThread(state, {
+      type: "send_started",
+      message: optimisticMessage("idem-retry", "sending"),
+    });
+    state = advanceLiveThread(state, { type: "send_failed", key: "idem-retry" });
+    state = advanceLiveThread(state, {
+      type: "send_started",
+      message: optimisticMessage("idem-retry", "sending"),
+    });
+    expect(messagesOf(state)).toEqual([{ id: "idem-retry", delivery: "sending", klass: "live" }]);
+  });
 });
 
 describe("reply streaming (transient deltas, durable truth)", () => {
@@ -235,6 +274,29 @@ describe("reply streaming (transient deltas, durable truth)", () => {
 });
 
 describe("connection lifecycle + replay (§6.2/§6.4)", () => {
+  it("a replayed event whose sequence was already applied live is absorbed by the dedupe (onEvent-before-replay overlap)", () => {
+    let state = live();
+    // The live fanout lands while the replay request is still in flight —
+    // the hook registers its event handler BEFORE awaiting replay.request.
+    state = advanceLiveThread(state, {
+      type: "live_event",
+      event: messageEvent({ sequence: 1, correlationId: "k1", text: "fanned out live" }),
+    });
+    // The replay then re-delivers the same sequence — the exactly-once
+    // dedupe (sequence <= cursor) absorbs the overlap, never double-mounts.
+    state = advanceLiveThread(state, { type: "replay_started", total: 1 });
+    state = advanceLiveThread(state, {
+      type: "replay_event",
+      event: messageEvent({ sequence: 1, correlationId: "k1", text: "fanned out live" }),
+      mode: "initial",
+    });
+    state = advanceLiveThread(state, { type: "replay_complete" });
+
+    expect(messagesOf(state)).toHaveLength(1);
+    expect(state.cursor).toBe(1);
+    expect(state.phase).toBe("live");
+  });
+
   it("reconnect replays missed events as the marked replayed batch, then resumes live", () => {
     let state = live();
     state = advanceLiveThread(state, {

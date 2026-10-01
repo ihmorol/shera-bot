@@ -5,8 +5,9 @@ import { proxyToControlPlane, proxyToLocalApi } from "../lib/server/proxies";
 /**
  * The web server-side proxies (S09 chunk 1) as their own module contract: the
  * browser talks to THIS origin only, and the forwarder must be transparent —
- * status, typed bodies, set-cookie, and (fix round) REDIRECTS. The Google
- * sign-in 302's `location` header IS the OAuth handoff (container-gate links
+ * status, typed bodies, set-cookie, redirects (location), cache directives,
+ * and request bodies for every body-bearing method. The Google sign-in 302's
+ * `location` header IS the OAuth handoff (container-gate links
  * /api/control/api/auth/signin/google on this origin); a proxy that dropped
  * it broke the sign-in button silently. fetch is stubbed at the boundary —
  * the E2E exercises proxyToLocalApi against the real mock runtime.
@@ -15,7 +16,26 @@ import { proxyToControlPlane, proxyToLocalApi } from "../lib/server/proxies";
 const CONTROL_BASE = "http://control-plane.test";
 const RUNTIME_BASE = "http://runtime-local.test";
 
-function upstream_302(): Response {
+/** The stubbed fetch's captured calls (input URL + the forwarded init). */
+interface FetchCall {
+  input: RequestInfo | URL;
+  init?: RequestInit | undefined;
+}
+
+/** A fetch stub that records every call and answers with the given response. */
+function stubFetch(respond: () => Response): { calls: FetchCall[] } {
+  const calls: FetchCall[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ input, init });
+      return Promise.resolve(respond());
+    }),
+  );
+  return { calls };
+}
+
+function upstream302(): Response {
   return new Response(null, {
     status: 302,
     headers: {
@@ -35,8 +55,7 @@ afterEach(() => {
 describe("control-plane proxy — redirect passthrough (sign-in 302)", () => {
   it("a 302's location (and cache-control) reaches the client — the OAuth handoff works", async () => {
     process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
-    const fetchMock = vi.fn(() => Promise.resolve(upstream_302()));
-    vi.stubGlobal("fetch", fetchMock);
+    const { calls } = stubFetch(() => upstream302());
 
     const request = new Request("http://web.test/api/control/api/auth/signin/google", {
       method: "GET",
@@ -44,8 +63,8 @@ describe("control-plane proxy — redirect passthrough (sign-in 302)", () => {
     const response = await proxyToControlPlane(request, "/api/auth/signin/google");
 
     // The upstream was called on the control-plane leg with the forwarded path.
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(String(fetchMock.mock.calls[0]![0])).toBe(`${CONTROL_BASE}/api/auth/signin/google`);
+    expect(calls).toHaveLength(1);
+    expect(String(calls[0]!.input)).toBe(`${CONTROL_BASE}/api/auth/signin/google`);
 
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(
@@ -62,15 +81,13 @@ describe("control-plane proxy — redirect passthrough (sign-in 302)", () => {
 describe("runtime proxy — allowlist + passthrough", () => {
   it("an allowed GET keeps transparent headers — cache-control reaches the client", async () => {
     process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
-    const fetchMock = vi.fn(() =>
-      Promise.resolve(
+    stubFetch(
+      () =>
         new Response(JSON.stringify({ kind: "events", events: [] }), {
           status: 200,
           headers: { "content-type": "application/json", "cache-control": "no-store" },
         }),
-      ),
     );
-    vi.stubGlobal("fetch", fetchMock);
 
     const request = new Request("http://web.test/api/runtime/v1/conversations/conv-1/events", {
       method: "GET",
@@ -81,10 +98,37 @@ describe("runtime proxy — allowlist + passthrough", () => {
     expect(response.headers.get("cache-control")).toBe("no-store");
   });
 
+  it("bodies forward for every body-bearing method, not only POST", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    const { calls } = stubFetch(() => new Response(JSON.stringify({ ok: true }), { status: 200 }));
+
+    for (const method of ["PUT", "PATCH", "DELETE"] as const) {
+      const request = new Request("http://web.test/api/control/api/resource/1", {
+        method,
+        body: JSON.stringify({ value: 1 }),
+        headers: { "content-type": "application/json" },
+      });
+      await proxyToControlPlane(request, "/api/resource/1");
+      const call = calls.at(-1)!;
+      expect(call.init?.method).toBe(method);
+      expect(call.init?.body).toBe(JSON.stringify({ value: 1 }));
+    }
+    // GET never carries a body.
+    const get = new Request("http://web.test/api/control/api/resource/1", { method: "GET" });
+    await proxyToControlPlane(get, "/api/resource/1");
+    expect(calls.at(-1)!.init?.body).toBeUndefined();
+  });
+
   it("the strict allowlist still refuses non-conversation paths", async () => {
     process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
+    const calls: FetchCall[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({ input, init });
+        return Promise.resolve(new Response(null, { status: 500 }));
+      }),
+    );
 
     const request = new Request("http://web.test/api/runtime/internal/whatever", {
       method: "GET",
@@ -92,6 +136,6 @@ describe("runtime proxy — allowlist + passthrough", () => {
     const response = await proxyToLocalApi(request, "/internal/whatever");
 
     expect(response.status).toBe(404);
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(calls).toHaveLength(0);
   });
 });

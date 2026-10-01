@@ -111,12 +111,19 @@ async function forward(
     headers.set("content-type", contentType);
   }
 
+  // Bodies forward for EVERY body-bearing method (POST, PUT, PATCH, DELETE —
+  // not GET/HEAD): the runtime leg's allowlist only admits GET + POST, but
+  // the control-plane leg owns its own routing and may grow body-bearing
+  // methods; a dropped body would be a silent corruption, not a typed error.
+  const hasBody = request.method !== "GET" && request.method !== "HEAD";
+  const body = hasBody ? await request.text() : undefined;
+
   let response: Response;
   try {
     response = await fetch(upstream, {
       method: request.method,
       headers,
-      ...(request.method === "POST" ? { body: await request.text() } : {}),
+      ...(body === undefined ? {} : { body }),
     });
   } catch {
     return typedFailure(PROXY_UNREACHABLE, 503);

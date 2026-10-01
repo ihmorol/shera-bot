@@ -288,3 +288,148 @@ describe("§6.4 banner mapping — the REAL connection drives the banner", () =>
     expect(state.replay).toBeNull();
   });
 });
+
+describe("refresh mid-stream + cursor acknowledgement (E10/D26, chunk 3)", () => {
+  it("applied events advance the cursor; the acknowledged cursor moves only via the render ack", () => {
+    let state = live();
+    state = advanceLiveThread(state, {
+      type: "live_event",
+      event: messageEvent({ sequence: 1, correlationId: "k1" }),
+    });
+    state = advanceLiveThread(state, {
+      type: "live_event",
+      event: messageEvent({ sequence: 2, correlationId: "k2", kind: "agent" }),
+    });
+    // Applied but not yet acknowledged: the replay.resume cursor must not
+    // claim this history until the render that includes it has committed.
+    expect(state.cursor).toBe(2);
+    expect(state.acknowledged).toBe(0);
+
+    // The hook's post-render dispatch.
+    state = advanceLiveThread(state, { type: "cursor_acknowledged", sequence: 2 });
+    expect(state.acknowledged).toBe(2);
+  });
+
+  it("the acknowledged cursor is clamped to the applied cursor — never ahead of the visible thread", () => {
+    let state = live();
+    state = advanceLiveThread(state, {
+      type: "live_event",
+      event: messageEvent({ sequence: 1, correlationId: "k1" }),
+    });
+    // A late ack from a superseded render (or a bug) can never claim history
+    // the thread has not applied.
+    state = advanceLiveThread(state, { type: "cursor_acknowledged", sequence: 99 });
+    expect(state.acknowledged).toBe(1);
+    // Monotonic: a lower late ack never moves it back.
+    state = advanceLiveThread(state, { type: "cursor_acknowledged", sequence: 0 });
+    expect(state.acknowledged).toBe(1);
+  });
+
+  it("a hard refresh mid-stream renders exactly the durable prefix — deltas and optimistic copies are gone", () => {
+    // The pre-refresh session: two durable turns, an in-flight optimistic
+    // send, and a live delta bubble with unpersisted text.
+    let before = live();
+    before = advanceLiveThread(before, {
+      type: "live_event",
+      event: messageEvent({ sequence: 1, correlationId: "k1", text: "durable turn one" }),
+    });
+    before = advanceLiveThread(before, {
+      type: "live_event",
+      event: messageEvent({
+        sequence: 2,
+        correlationId: "k2",
+        kind: "agent",
+        text: "durable reply",
+      }),
+    });
+    before = advanceLiveThread(before, {
+      type: "send_started",
+      message: optimisticMessage("idem-in-flight", "sending"),
+    });
+    before = advanceLiveThread(before, {
+      type: "stream_text",
+      streamKey: "reply-x",
+      agentId: "agent_general_assistant",
+      text: "half a sentence that was never persisted",
+    });
+    expect(before.optimistic).toHaveLength(1);
+    expect(before.stream).not.toBeNull();
+
+    // The hard reload: fresh client state, the initial replay (cursor 0) is
+    // the ONLY history source — the same path the E2E drives over the wire.
+    let after = INITIAL_LIVE_STATE;
+    after = advanceLiveThread(after, {
+      type: "replay_event",
+      event: messageEvent({ sequence: 1, correlationId: "k1", text: "durable turn one" }),
+      mode: "initial",
+    });
+    after = advanceLiveThread(after, {
+      type: "replay_event",
+      event: messageEvent({
+        sequence: 2,
+        correlationId: "k2",
+        kind: "agent",
+        text: "durable reply",
+      }),
+      mode: "initial",
+    });
+    after = advanceLiveThread(after, { type: "replay_complete" });
+
+    expect(after.optimistic).toHaveLength(0);
+    expect(after.stream).toBeNull();
+    expect(assembleLiveTimeline(after).replayBoundary).toBeNull();
+    // Exactly the durable prefix — the unpersisted delta text and the
+    // in-flight send appear NOWHERE (E10: nothing is fabricated in their place).
+    expect(messagesOf(after)).toEqual([
+      { id: "msg_1", delivery: "sent", klass: "live" },
+      { id: "msg_2", delivery: "sent", klass: "live" },
+    ]);
+  });
+
+  it("a reconnect after a mid-stream refresh replays the missed events as the marked batch from the acknowledged cursor", () => {
+    // Post-refresh: the durable prefix rendered and acknowledged.
+    let state = live();
+    state = advanceLiveThread(state, {
+      type: "replay_event",
+      event: messageEvent({ sequence: 1, correlationId: "k1" }),
+      mode: "initial",
+    });
+    state = advanceLiveThread(state, { type: "replay_complete" });
+    state = advanceLiveThread(state, { type: "cursor_acknowledged", sequence: 1 });
+    expect(state.acknowledged).toBe(1);
+
+    // The connection drops; two turns commit server-side; the client reconnects
+    // and asks the runtime for everything after its acknowledged cursor (1).
+    state = advanceLiveThread(state, { type: "disconnected" });
+    state = advanceLiveThread(state, { type: "reconnecting" });
+    state = advanceLiveThread(state, { type: "replay_started", total: 2 });
+    state = advanceLiveThread(state, {
+      type: "replay_event",
+      event: messageEvent({
+        sequence: 2,
+        correlationId: "k2",
+        kind: "agent",
+        occurredAt: "2026-09-30T10:05:00Z",
+      }),
+      mode: "reconnect",
+    });
+    state = advanceLiveThread(state, {
+      type: "replay_event",
+      event: messageEvent({
+        sequence: 3,
+        correlationId: "k3",
+        occurredAt: "2026-09-30T10:06:00Z",
+      }),
+      mode: "reconnect",
+    });
+    state = advanceLiveThread(state, { type: "replay_complete" });
+
+    // The batch is marked, the cursor re-acknowledges after render.
+    expect(assembleLiveTimeline(state).replayBoundary).toEqual({
+      at: "2026-09-30T10:06:00Z",
+      count: 2,
+    });
+    state = advanceLiveThread(state, { type: "cursor_acknowledged", sequence: 3 });
+    expect(state.acknowledged).toBe(3);
+  });
+});

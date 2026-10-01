@@ -29,8 +29,16 @@ import { RuntimeSocket } from "@/lib/ws-socket";
  *
  * REPLAY (§6.2/§6.4): reconnect replays missed durable events from the last
  * acknowledged sequence; they enter the thread as a replayed batch closed by
- * the "N missed events replayed" marker — never silently as live. The cursor
- * advances only as events are applied (acknowledged after render).
+ * the "N missed events replayed" marker — never silently as live. Two cursors
+ * keep that honest (E10/D26): `cursor` advances as events are APPLIED;
+ * `acknowledged` — the value replay.request carries — advances only through
+ * the post-render `cursor_acknowledged` dispatch, so a hard refresh mid-stream
+ * replays anything applied but not yet rendered instead of skipping it.
+ *
+ * REFRESH (chunk 3): nothing in this state survives a hard reload — optimistic
+ * copies and the transient bubble are gone by construction. The reload's
+ * initial replay renders exactly the durable journal prefix; unpersisted
+ * deltas are never rendered as history (E10 honesty).
  *
  * Deltas are the ONLY state-less content here: without a durable event,
  * nothing in this reducer fabricates an assistant message (G4).
@@ -48,8 +56,20 @@ export interface LiveStreamState {
 
 export interface LiveThreadState {
   phase: LivePhase;
-  /** Last acknowledged sequence — drives replay.request on reconnect. */
+  /**
+   * The highest APPLIED sequence (the exactly-once dedupe boundary). Events
+   * advance it the moment they enter the reducer state — the next render is
+   * what makes them visible.
+   */
   cursor: number;
+  /**
+   * The highest ACKNOWLEDGED sequence — the value `replay.request` carries on
+   * reconnect (E10/D26). It trails `cursor` on purpose: acknowledging an
+   * event before it has RENDERED would let a hard refresh silently skip
+   * applied-but-unseen history. The hook acknowledges only after the render
+   * that includes the event commits.
+   */
+  acknowledged: number;
   /** Durable thread items derived ONLY from journal events. */
   journalItems: ThreadItem[];
   /** Sends that have not been reconciled with the journal yet. */
@@ -65,6 +85,7 @@ export interface LiveThreadState {
 export const INITIAL_LIVE_STATE: LiveThreadState = {
   phase: "connecting",
   cursor: 0,
+  acknowledged: 0,
   journalItems: [],
   optimistic: [],
   stream: null,
@@ -85,6 +106,12 @@ export type LiveThreadEvent =
   | { type: "send_started"; message: ChatMessage }
   | { type: "send_acked"; key: string }
   | { type: "send_failed"; key: string }
+  /**
+   * Post-render cursor acknowledgement (E10/D26): the hook dispatches this
+   * after the render that includes the events up to `sequence` has committed,
+   * so the reconnect replay.request never skips applied-but-unseen history.
+   */
+  | { type: "cursor_acknowledged"; sequence: number }
   | { type: "transport_error"; message: string };
 
 function messageFromEvent(event: RuntimeEvent, deliveryClass: "live" | "replayed"): ChatMessage {
@@ -196,6 +223,14 @@ export function advanceLiveThread(state: LiveThreadState, event: LiveThreadEvent
         optimistic: state.optimistic.map((message) =>
           message.message_id === event.key ? { ...message, delivery: "failed" as const } : message,
         ),
+      };
+    case "cursor_acknowledged":
+      // The acknowledgement can never run ahead of what is applied: it is
+      // clamped to the applied cursor, so a late ack from a superseded render
+      // is harmless and the acknowledged cursor stays a safe replay resume.
+      return {
+        ...state,
+        acknowledged: Math.max(state.acknowledged, Math.min(event.sequence, state.cursor)),
       };
     case "transport_error":
       // Redacted safe copy only (D23 rule 4) — the thread stays readable.
@@ -321,6 +356,18 @@ export function useLiveConversation(args: UseLiveConversationArgs): LiveConversa
   stateRef.current = state;
   const deltaBufferRef = useRef<{ key: string; text: string } | null>(null);
 
+  // E10/D26 cursor acknowledgement: APPLIED is not RENDERED. This effect runs
+  // only after a committed render, so `acknowledged` — the value
+  // replay.request carries on reconnect — never covers history the user has
+  // not seen yet. A hard refresh mid-stream therefore replays any applied but
+  // unrendered events instead of silently skipping them.
+  useEffect(() => {
+    const rendered = stateRef.current;
+    if (rendered.acknowledged < rendered.cursor) {
+      dispatch({ type: "cursor_acknowledged", sequence: rendered.cursor });
+    }
+  });
+
   const { wsUrl, workspaceId, conversationId, agentId, enabled } = args;
   const streamId = conversationStreamId(conversationId);
 
@@ -365,12 +412,14 @@ export function useLiveConversation(args: UseLiveConversationArgs): LiveConversa
             stream_id: streamId,
           });
 
-          // Durable history from the applied cursor — initial load (cursor 0)
-          // renders live-class; a RECONNECT replay renders the §6.2 batch.
+          // Durable history from the ACKNOWLEDGED cursor — the last sequence
+          // this client has actually rendered (never ahead of the visible
+          // thread). Initial load (0) renders live-class; a RECONNECT replay
+          // renders the §6.2 batch.
           const replay = await socket.request("replay.request", {
             workspace_id: workspaceId,
             stream_id: streamId,
-            last_acknowledged_sequence: stateRef.current.cursor,
+            last_acknowledged_sequence: stateRef.current.acknowledged,
           });
           if (cancelled) {
             return;

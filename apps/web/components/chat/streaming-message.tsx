@@ -5,17 +5,20 @@ import { agentById } from "@/lib/fixtures";
 
 /**
  * The streaming Assistant message (UI_DESIGN §6.1): incremental text with a
- * typing cursor, full §21.5 sender attribution, aria-live="polite" (§2.3 —
- * the DOM itself is throttled to the 30fps budget, which also throttles the
- * polite announcement). DEMO STREAMING: the text comes from the scripted
- * fixture stream, the footer labels the mechanism, and the Stop control
- * stops only this local demo stream — real cancellation is a typed runtime
- * command (D32). The cursor is a CSS animation, so the global
+ * typing cursor, full §21.5 sender attribution. The polite live region is a
+ * dedicated sr-only element carrying the throttled announcement snapshot
+ * (lib/streaming STREAM_ANNOUNCE_MS) — §2.3: announcements advance on their
+ * own cadence rather than riding the ~30fps visible-text mutations, which
+ * would flood screen readers. DEMO STREAMING: the text comes from the
+ * scripted fixture stream, the footer labels the mechanism, and the Stop
+ * control stops only this local demo stream — real cancellation is a typed
+ * runtime command (D32). The cursor is a CSS animation, so the global
  * prefers-reduced-motion rule in globals.css stills it (§2.3).
  */
 export function StreamingMessage({
   agentId,
   visibleText,
+  announcementText,
   done,
   stopped,
   onStop,
@@ -24,6 +27,8 @@ export function StreamingMessage({
   agentId: string;
   /** Text visible so far (throttled frame from lib/streaming). */
   visibleText: string;
+  /** Throttled polite-announcement snapshot (§2.3) — lags the visible text. */
+  announcementText: string;
   done: boolean;
   stopped: boolean;
   onStop: () => void;
@@ -40,7 +45,13 @@ export function StreamingMessage({
   const streaming = !done && !stopped;
 
   return (
-    <div className="flex flex-col items-start" aria-live="polite">
+    <div className="flex flex-col items-start">
+      {/* §2.3 throttled announcement: a dedicated live region carrying the
+          slow snapshot — the fast-mutating visible paragraph below is
+          deliberately outside any live region. */}
+      <p className="sr-only" aria-live="polite">
+        {announcementText}
+      </p>
       {/* min-w-0 max-w-full: constrain the row inside the items-start column
           so the nowrap role line cannot overflow at 360px (§2.2). */}
       <div className="flex min-w-0 max-w-full items-center gap-2">

@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { StreamingMessage } from "../components/chat/streaming-message";
-import { DEMO_STREAM, splitStreamChunks } from "../lib/fixtures";
+import { DEMO_STREAM, MESSAGES, splitStreamChunks } from "../lib/fixtures";
 import { STREAM_ANNOUNCE_MS, STREAM_THROTTLE_MS, streamFrameAt } from "../lib/streaming";
 
 /**
@@ -31,6 +31,21 @@ describe("stream fixture (§9 scripted scenario)", () => {
   it("belongs to the General Assistant conversation only", () => {
     expect(DEMO_STREAM.conversation_id).toBe("conversation_agent_general_assistant");
     expect(DEMO_STREAM.agent_id).toBe("agent_general_assistant");
+  });
+
+  it("stamps the completed reply after the last live GA message (§6.2 ordering)", () => {
+    // The completed reply continues the scripted conversation: it must sort
+    // after the last live seeded GA message (the replayed batch lands even
+    // later, via the connection demo). Relational, not exact-value, so the
+    // fixture timestamps can move together.
+    const gaLive = MESSAGES.filter(
+      (message) =>
+        message.conversation_id === DEMO_STREAM.conversation_id &&
+        message.delivery_class === "live",
+    ).map((message) => message.sent_at);
+    const lastLive = gaLive.at(-1);
+    expect(lastLive).toBeDefined();
+    expect(DEMO_STREAM.completed_sent_at > lastLive!).toBe(true);
   });
 });
 
@@ -79,6 +94,7 @@ describe("streaming message component (§6.1 + §2.3)", () => {
       createElement(StreamingMessage, {
         agentId: DEMO_STREAM.agent_id,
         visibleText: frame.visibleText,
+        announcementText: frame.announcementText,
         done: frame.done,
         stopped: false,
         onStop: () => undefined,
@@ -96,6 +112,7 @@ describe("streaming message component (§6.1 + §2.3)", () => {
       createElement(StreamingMessage, {
         agentId: DEMO_STREAM.agent_id,
         visibleText: "partial",
+        announcementText: "partial",
         done: false,
         stopped: false,
         onStop: () => undefined,
@@ -110,6 +127,7 @@ describe("streaming message component (§6.1 + §2.3)", () => {
       createElement(StreamingMessage, {
         agentId: DEMO_STREAM.agent_id,
         visibleText: DEMO_STREAM.chunks.join(""),
+        announcementText: DEMO_STREAM.chunks.join(""),
         done: true,
         stopped: false,
         onStop: () => undefined,
@@ -122,6 +140,7 @@ describe("streaming message component (§6.1 + §2.3)", () => {
       createElement(StreamingMessage, {
         agentId: DEMO_STREAM.agent_id,
         visibleText: "partial",
+        announcementText: "partial",
         done: false,
         stopped: true,
         onStop: () => undefined,
@@ -133,17 +152,36 @@ describe("streaming message component (§6.1 + §2.3)", () => {
     expect(stopped).toContain("D32");
   });
 
-  it("announces the sender — the stream region carries the 'said:' prefix", () => {
+  it("announces the sender — the visible paragraph carries the 'said:' prefix", () => {
     const html = render(
       createElement(StreamingMessage, {
         agentId: DEMO_STREAM.agent_id,
         visibleText: "partial",
+        announcementText: "partial",
         done: false,
         stopped: false,
         onStop: () => undefined,
       }),
     );
     expect(html).toContain("General Assistant said:");
+  });
+
+  it("carries the throttled snapshot in a dedicated live region — the fast visible text stays outside", () => {
+    const html = render(
+      createElement(StreamingMessage, {
+        agentId: DEMO_STREAM.agent_id,
+        visibleText: "fast visible text",
+        announcementText: "slow announcement snapshot",
+        done: false,
+        stopped: false,
+        onStop: () => undefined,
+      }),
+    );
+    // Exactly one polite region, holding the throttled snapshot (§2.3)…
+    expect(html.match(/aria-live="polite"/g)).toHaveLength(1);
+    expect(html).toMatch(/aria-live="polite"[^>]*>[^<]*slow announcement snapshot</);
+    // …while the visible paragraph renders the fast text outside any live region.
+    expect(html).toContain("fast visible text");
   });
 
   it("cursor blink is a CSS animation covered by prefers-reduced-motion", () => {

@@ -103,7 +103,15 @@ function RuntimeGeneralAssistantChat({
         timelineOverride={live.timeline}
         connectionState={live.connectionState}
         replay={live.replay}
-        liveStream={live.stream ? { agentId: live.stream.agentId, text: live.stream.text } : null}
+        liveStream={
+          live.stream
+            ? {
+                agentId: live.stream.agentId,
+                text: live.stream.text,
+                announcementText: live.stream.announcementText,
+              }
+            : null
+        }
         onRuntimeSend={live.sendMessage}
         onRuntimeRetry={live.retry}
         surfaceState={live.error ? "error" : live.loading ? "loading" : "ready"}

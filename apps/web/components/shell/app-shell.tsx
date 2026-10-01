@@ -46,7 +46,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </header>
 
         <Group orientation="horizontal" className="min-h-0 flex-1">
-          <Panel id="conversation" className="min-w-0">
+          <Panel id="conversation-panel" className="min-w-0">
             <main id="conversation" className="h-full overflow-y-auto">
               {children}
             </main>

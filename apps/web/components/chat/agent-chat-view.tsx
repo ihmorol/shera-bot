@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { Agent } from "@shera-bot/contracts";
 
 import { AgentAvatar } from "@/components/chat/agent-avatar";
@@ -19,7 +19,15 @@ import {
   type SessionPresence,
   type ThreadItem,
 } from "@/lib/fixtures";
-import type { ConnectionState } from "@/lib/connection";
+import {
+  advanceConnection,
+  DEMO_CONNECTION_CONVERSATION_ID,
+  DEMO_CONNECTION_INITIAL_DELAY_MS,
+  DEMO_CONNECTION_SCRIPT,
+  DEMO_REPLAY_QUEUE,
+  INITIAL_CONNECTION,
+  type ConnectionState,
+} from "@/lib/connection";
 import { STREAM_THROTTLE_MS, streamFrameAt } from "@/lib/streaming";
 import {
   firstUnreadMessageId,
@@ -55,18 +63,54 @@ function useScriptedStream(stream: FixtureStream | null) {
   const [elapsedMs, setElapsedMs] = useState(0);
   const [stopped, setStopped] = useState(false);
 
+  const frame = stream ? streamFrameAt(stream.chunks, elapsedMs, stream.chunk_cadence_ms) : null;
+  const done = frame?.done ?? false;
+
+  // The interval stops itself at completion: without the `done` gate it kept
+  // flushing state at the throttle rate for the lifetime of the mount (~30fps
+  // re-renders of the whole chat view long after the stream finished).
   useEffect(() => {
-    if (!stream || stopped) {
+    if (!stream || stopped || done) {
       return;
     }
     const interval = window.setInterval(() => {
       setElapsedMs((ms) => ms + STREAM_THROTTLE_MS);
     }, STREAM_THROTTLE_MS);
     return () => window.clearInterval(interval);
-  }, [stream, stopped]);
+  }, [stream, stopped, done]);
 
-  const frame = stream ? streamFrameAt(stream.chunks, elapsedMs, stream.chunk_cadence_ms) : null;
   return { frame, stopped, stop: () => setStopped(true) };
+}
+
+/**
+ * §6.4 scripted demo driver: after a quiet period (so "connected" is visible
+ * first) it fires the DEMO_CONNECTION_SCRIPT steps on timers, making the
+ * banner, the replay progress, and the §6.2 handoff reachable in the running
+ * demo app. No socket exists yet — the real runtime later drives the same
+ * machine from connection events; tests pin the state explicitly instead.
+ */
+function useScriptedConnection(active: boolean) {
+  const [machine, dispatch] = useReducer(advanceConnection, INITIAL_CONNECTION);
+
+  useEffect(() => {
+    if (!active) {
+      return;
+    }
+    const timers: number[] = [];
+    let elapsed = DEMO_CONNECTION_INITIAL_DELAY_MS;
+    for (const step of DEMO_CONNECTION_SCRIPT) {
+      const { event, holdMs } = step;
+      timers.push(window.setTimeout(() => dispatch(event), elapsed));
+      elapsed += holdMs;
+    }
+    return () => {
+      for (const timer of timers) {
+        window.clearTimeout(timer);
+      }
+    };
+  }, [active]);
+
+  return machine;
 }
 
 function PresencePill({ presence }: { presence: SessionPresence }) {
@@ -93,7 +137,7 @@ export function AgentChatView({
   thread,
   surfaceState = "ready",
   safeErrorMessage = "This conversation could not be loaded.",
-  connectionState = "connected",
+  connectionState,
   replay,
   pendingReplay,
   mode = "demo",
@@ -110,10 +154,12 @@ export function AgentChatView({
   /** Redacted message for the error surface (D23 rule 4). */
   safeErrorMessage?: string | undefined;
   /**
-   * §6.4 connection lifecycle (scripted demo / later the real socket). While
-   * disconnected the banner shows and reading stays possible; while
-   * reconnecting it shows replay progress; on connected the queued replay
-   * flushes into the thread as a replayed batch (§6.2 marker).
+   * §6.4 connection lifecycle. Explicit override for tests / the later real
+   * socket; when omitted, the scripted demo drives the state in its own
+   * conversation (connected elsewhere): disconnected shows the banner while
+   * reading stays possible, reconnecting shows replay progress, and the
+   * resumed connection flushes the queued missed messages as a §6.2
+   * replayed batch.
    */
   connectionState?: ConnectionState;
   /** Replay progress shown on the reconnecting banner (§6.4). */
@@ -136,7 +182,14 @@ export function AgentChatView({
    */
   timelineOverride?: TimelineItem[] | undefined;
   /** The real reply's transient delta bubble (§6.1), if one is streaming. */
-  liveStream?: { agentId: string; text: string } | null | undefined;
+  liveStream?:
+    | {
+        agentId: string;
+        text: string;
+        announcementText: string;
+      }
+    | null
+    | undefined;
   /**
    * S09 chunk 2: the real composer's path — the idempotent `message.send`
    * command through the live conversation (§6.3). Providing it ENABLES the
@@ -180,29 +233,57 @@ export function AgentChatView({
     stop: stopStream,
   } = useScriptedStream(demoStream);
 
-  // Once the demo stream completes, its fixture text becomes a normal Agent
+  // Once the demo stream completes, its fixture text IS a normal Agent
   // message in the local thread (never before, and only in this browser).
-  const [streamedMessage, setStreamedMessage] = useState<ChatMessage | null>(null);
-  useEffect(() => {
-    if (demoStream && streamFrame?.done && !streamStopped && !streamedMessage) {
-      setStreamedMessage(
-        ChatMessage.parse({
-          message_id: demoStream.message_id,
-          conversation_id: demoStream.conversation_id,
-          sender: { kind: "agent", agent_id: demoStream.agent_id },
-          text: streamFrame.visibleText,
-          sent_at: new Date().toISOString(),
-          delivery: "sent",
-          delivery_class: "live",
-        }),
-      );
+  // Derived during render — no state, no effect: the react-hooks
+  // set-state-in-effect rule (and React's own guidance) both reject
+  // syncing derived data through setState-in-effect, and the derived
+  // message is fully determined by the completed frame + fixture stamp.
+  const streamedMessage = useMemo(() => {
+    if (!demoStream || !streamFrame?.done || streamStopped) {
+      return null;
     }
-  }, [demoStream, streamFrame, streamStopped, streamedMessage]);
+    return ChatMessage.parse({
+      message_id: demoStream.message_id,
+      conversation_id: demoStream.conversation_id,
+      sender: { kind: "agent", agent_id: demoStream.agent_id },
+      text: streamFrame.visibleText,
+      sent_at: demoStream.completed_sent_at,
+      delivery: "sent",
+      delivery_class: "live",
+    });
+  }, [demoStream, streamFrame, streamStopped]);
+
+  // §6.4 demo: the scripted connection lifecycle runs only in its own
+  // conversation (the General Assistant chat) and only when the caller did
+  // not pin the state explicitly (tests / later the real socket).
+  const scriptedConnection =
+    connectionState === undefined &&
+    conversation.conversation_id === DEMO_CONNECTION_CONVERSATION_ID;
+  const connectionMachine = useScriptedConnection(scriptedConnection);
+  const connection = connectionState ?? connectionMachine.state;
+  const replayProgress =
+    replay ??
+    (connectionState === undefined && connectionMachine.state === "reconnecting"
+      ? { done: connectionMachine.replayDone, total: connectionMachine.replayTotal }
+      : undefined);
+  const replayQueue = useMemo(
+    () => pendingReplay ?? (scriptedConnection ? DEMO_REPLAY_QUEUE : undefined),
+    [pendingReplay, scriptedConnection],
+  );
 
   // §6.2 handoff: queued replayed messages render only while the connection
   // is (back) in the connected state, closed by the batch boundary marker.
-  const replayed = connectionState === "connected" ? (pendingReplay ?? []) : [];
-  const localAll = streamedMessage ? [...localMessages, streamedMessage] : localMessages;
+  // Both inputs are memoized so their identities stay stable across renders —
+  // otherwise the timeline memo below re-sorts the thread on every render.
+  const localAll = useMemo(
+    () => (streamedMessage ? [...localMessages, streamedMessage] : localMessages),
+    [streamedMessage, localMessages],
+  );
+  const replayed = useMemo(
+    () => (connection === "connected" ? (replayQueue ?? []) : []),
+    [connection, replayQueue],
+  );
   const timeline = useMemo(
     () => insertDaySeparators(flushReplayed(withSentMessages(thread, localAll), replayed)),
     [thread, localAll, replayed],
@@ -301,8 +382,8 @@ export function AgentChatView({
 
       {/* §6.4 banner: a strip above the thread — reading stays possible while
           disconnected; it never blocks or overlays the conversation. */}
-      {connectionState !== "connected" ? (
-        <ConnectionBanner state={connectionState} replay={replay} />
+      {connection !== "connected" ? (
+        <ConnectionBanner state={connection} replay={replayProgress} />
       ) : null}
 
       {surfaceState === "loading" ? (
@@ -323,6 +404,7 @@ export function AgentChatView({
                 <StreamingMessage
                   agentId={demoStream.agent_id}
                   visibleText={streamFrame.visibleText}
+                  announcementText={streamFrame.announcementText}
                   done={streamFrame.done}
                   stopped={streamStopped}
                   onStop={stopStream}
@@ -331,6 +413,7 @@ export function AgentChatView({
                 <StreamingMessage
                   agentId={liveStream.agentId}
                   visibleText={liveStream.text}
+                  announcementText={liveStream.announcementText}
                   done={false}
                   stopped={false}
                   onStop={() => undefined}

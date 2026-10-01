@@ -6,6 +6,8 @@ import { AgentChatView } from "../components/chat/agent-chat-view";
 import { ConnectionBanner } from "../components/shell/connection-banner";
 import {
   CONNECTION_STATES,
+  DEMO_CONNECTION_CONVERSATION_ID,
+  DEMO_CONNECTION_INITIAL_DELAY_MS,
   DEMO_CONNECTION_SCRIPT,
   DEMO_REPLAY_QUEUE,
   INITIAL_CONNECTION,
@@ -91,6 +93,29 @@ describe("connection state machine (§6.4)", () => {
     expect(DEMO_CONNECTION_SCRIPT[1]?.event.type).toBe("reconnect_start");
     expect(DEMO_CONNECTION_SCRIPT.at(-1)?.event.type).toBe("replay_complete");
     expect(CONNECTION_STATES).toEqual(["connected", "disconnected", "reconnecting"]);
+  });
+});
+
+describe("scripted connection demo wiring (§6.4 demo driver)", () => {
+  it("targets one seeded conversation — the General Assistant chat — with the replay queue", () => {
+    expect(DEMO_CONNECTION_CONVERSATION_ID).toBe("conversation_agent_general_assistant");
+    expect(
+      DEMO_REPLAY_QUEUE.every(
+        (message) => message.conversation_id === DEMO_CONNECTION_CONVERSATION_ID,
+      ),
+    ).toBe(true);
+    // Other conversations (and explicit overrides) never enter the script.
+    expect(DEMO_CONNECTION_CONVERSATION_ID).not.toBe("conversation_agent_researcher");
+  });
+
+  it("starts from connected after a visible quiet period, then runs the §6.4 sequence", () => {
+    expect(INITIAL_CONNECTION.state).toBe("connected");
+    expect(DEMO_CONNECTION_INITIAL_DELAY_MS).toBeGreaterThan(0);
+    expect(DEMO_CONNECTION_SCRIPT[0]?.event.type).toBe("disconnect");
+    // The demo mounts in the connected state and ends connected, so the
+    // banner, progress, and handoff are all transient states of one run.
+    const final = DEMO_CONNECTION_SCRIPT.at(-1)?.event;
+    expect(final?.type).toBe("replay_complete");
   });
 });
 

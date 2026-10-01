@@ -5,7 +5,7 @@ import type { RuntimeEvent } from "@/lib/runtime-client";
 import { sendConversationMessage } from "@/lib/runtime-client";
 import { systemTextForEvent } from "@/lib/runtime-thread";
 import { SNAPSHOT_REQUIRED_MESSAGE } from "@/lib/runtime-data";
-import { STREAM_THROTTLE_MS } from "@/lib/streaming";
+import { STREAM_ANNOUNCE_MS, STREAM_THROTTLE_MS } from "@/lib/streaming";
 import { insertDaySeparators, type TimelineItem } from "@/lib/thread-layout";
 import { RuntimeSocket } from "@/lib/ws-socket";
 
@@ -52,6 +52,12 @@ export interface LiveStreamState {
   agentId: string;
   /** Full visible text so far (hook-throttled to the §6.1 30fps budget). */
   text: string;
+  /**
+   * Throttled §2.3 polite-announcement snapshot — advances on its own
+   * STREAM_ANNOUNCE_MS cadence (the dedicated sr-only live region reads this),
+   * lagging the visible text exactly like the demo stream's frame.
+   */
+  announcementText: string;
 }
 
 export interface LiveThreadState {
@@ -102,7 +108,13 @@ export type LiveThreadEvent =
   | { type: "replay_event"; event: RuntimeEvent; mode: "initial" | "reconnect" }
   | { type: "replay_complete" }
   | { type: "live_event"; event: RuntimeEvent }
-  | { type: "stream_text"; streamKey: string; agentId: string; text: string }
+  | {
+      type: "stream_text";
+      streamKey: string;
+      agentId: string;
+      text: string;
+      announcementText: string;
+    }
   | { type: "send_started"; message: ChatMessage }
   | { type: "send_acked"; key: string }
   | { type: "send_failed"; key: string }
@@ -195,10 +207,16 @@ export function advanceLiveThread(state: LiveThreadState, event: LiveThreadEvent
       return applyJournalEvent(state, event.event, "live");
     case "stream_text":
       // The hook flushes buffered deltas on the §6.1 throttle budget; the
-      // reducer only mirrors the visible text.
+      // reducer only mirrors the visible text and the §2.3 announcement
+      // snapshot — both hook-computed presentation state, never durable.
       return {
         ...state,
-        stream: { key: event.streamKey, agentId: event.agentId, text: event.text },
+        stream: {
+          key: event.streamKey,
+          agentId: event.agentId,
+          text: event.text,
+          announcementText: event.announcementText,
+        },
       };
     case "send_started":
       // A retry re-dispatches the same key: replace the existing optimistic
@@ -352,21 +370,29 @@ const RECONNECT_MAX_MS = 3000;
  */
 export function useLiveConversation(args: UseLiveConversationArgs): LiveConversation {
   const [state, dispatch] = useReducer(advanceLiveThread, INITIAL_LIVE_STATE);
+  // Latest-committed-state ref for the async closures (the replay.request
+  // cursor, retry): synced in an effect — refs must not be written during
+  // render (react-hooks/refs).
   const stateRef = useRef(state);
-  stateRef.current = state;
-  const deltaBufferRef = useRef<{ key: string; text: string } | null>(null);
+  useEffect(() => {
+    stateRef.current = state;
+  });
 
   // E10/D26 cursor acknowledgement: APPLIED is not RENDERED. This effect runs
   // only after a committed render, so `acknowledged` — the value
   // replay.request carries on reconnect — never covers history the user has
   // not seen yet. A hard refresh mid-stream therefore replays any applied but
-  // unrendered events instead of silently skipping them.
+  // unrendered events instead of silently skipping them. It reads THIS
+  // render's committed state, so the ack never trails a render.
   useEffect(() => {
-    const rendered = stateRef.current;
-    if (rendered.acknowledged < rendered.cursor) {
-      dispatch({ type: "cursor_acknowledged", sequence: rendered.cursor });
+    if (state.acknowledged < state.cursor) {
+      dispatch({ type: "cursor_acknowledged", sequence: state.cursor });
     }
   });
+
+  const deltaBufferRef = useRef<{ key: string; text: string } | null>(null);
+  /** The §2.3 announcement snapshot (key-scoped): text + when it advanced. */
+  const announceRef = useRef<{ key: string; text: string; at: number } | null>(null);
 
   const { wsUrl, workspaceId, conversationId, agentId, enabled } = args;
   const streamId = conversationStreamId(conversationId);
@@ -384,11 +410,27 @@ export function useLiveConversation(args: UseLiveConversationArgs): LiveConversa
       const buffered = deltaBufferRef.current;
       if (buffered) {
         deltaBufferRef.current = null;
+        // §2.3 announcement throttle (mirrors the demo's streamFrameAt): the
+        // polite snapshot advances on its own slower STREAM_ANNOUNCE_MS
+        // cadence, so the dedicated sr-only live region never rides the
+        // ~30fps visible-text mutations.
+        const announce = announceRef.current;
+        let announcementText = buffered.text;
+        if (
+          announce &&
+          announce.key === buffered.key &&
+          Date.now() - announce.at < STREAM_ANNOUNCE_MS
+        ) {
+          announcementText = announce.text;
+        } else {
+          announceRef.current = { key: buffered.key, text: buffered.text, at: Date.now() };
+        }
         dispatch({
           type: "stream_text",
           streamKey: buffered.key,
           agentId,
           text: buffered.text,
+          announcementText,
         });
       }
     };

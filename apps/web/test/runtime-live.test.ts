@@ -137,11 +137,13 @@ describe("reply streaming (transient deltas, durable truth)", () => {
       streamKey: "reply-evt_1",
       agentId: "agent_general_assistant",
       text: "Here is my initi",
+      announcementText: "Here is my initi",
     });
     expect(state.stream).toEqual({
       key: "reply-evt_1",
       agentId: "agent_general_assistant",
       text: "Here is my initi",
+      announcementText: "Here is my initi",
     });
 
     // The durable agent reply carries the reply key as its correlation id.
@@ -167,6 +169,7 @@ describe("reply streaming (transient deltas, durable truth)", () => {
       streamKey: "reply-x",
       agentId: "agent_general_assistant",
       text: "Looks like a reply…",
+      announcementText: "Looks like a reply…",
     });
     // No journal event arrived: nothing in the thread, only the bubble.
     expect(messagesOf(state)).toHaveLength(0);
@@ -351,6 +354,7 @@ describe("refresh mid-stream + cursor acknowledgement (E10/D26, chunk 3)", () =>
       streamKey: "reply-x",
       agentId: "agent_general_assistant",
       text: "half a sentence that was never persisted",
+      announcementText: "half a sentence that was never persisted",
     });
     expect(before.optimistic).toHaveLength(1);
     expect(before.stream).not.toBeNull();

@@ -351,6 +351,7 @@ describe("S09 mock-runtime E2E (E8): login → chat → send → stream → refr
           streamKey: replyKey,
           agentId: "agent_general_assistant",
           text: streamedText,
+          announcementText: streamedText,
         });
         expect(state.stream!.text).toBe(streamedText);
 

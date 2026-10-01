@@ -13,3 +13,4 @@
  * bridges manifest values into @shera-bot/contracts at runtime.
  */
 export * from "./primitives.ts";
+export * from "./manifest.ts";

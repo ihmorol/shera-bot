@@ -10,6 +10,7 @@ import {
   type LiveThreadState,
 } from "../lib/runtime-live";
 import type { RuntimeEvent } from "../lib/runtime-client";
+import { SNAPSHOT_REQUIRED_MESSAGE } from "../lib/runtime-data";
 
 /**
  * The live thread state machine (S09 chunk 2): optimistic sends reconcile
@@ -430,6 +431,22 @@ describe("refresh mid-stream + cursor acknowledgement (E10/D26, chunk 3)", () =>
     // The hook's post-render dispatch.
     state = advanceLiveThread(state, { type: "cursor_acknowledged", sequence: 2 });
     expect(state.acknowledged).toBe(2);
+  });
+
+  it("the E10 snapshot fallback is the honest typed surface — the SNAPSHOT_REQUIRED_MESSAGE state, never fabricated history", () => {
+    // The live replay request answered `snapshot_required` (cursor below the
+    // retention horizon / unknown stream): the hook dispatches the typed
+    // transport error — the thread stays EMPTY, nothing is fabricated in the
+    // place of the unrenderable history (E10/G4).
+    let state = live();
+    state = advanceLiveThread(state, {
+      type: "transport_error",
+      message: SNAPSHOT_REQUIRED_MESSAGE,
+    });
+    expect(state.error).toBe(SNAPSHOT_REQUIRED_MESSAGE);
+    expect(state.journalItems).toHaveLength(0);
+    expect(state.cursor).toBe(0);
+    expect(state.stream).toBeNull();
   });
 
   it("the acknowledged cursor is clamped to the applied cursor — never ahead of the visible thread", () => {

@@ -271,6 +271,7 @@ export function AgentChatView({
                 <StreamingMessage
                   agentId={demoStream.agent_id}
                   visibleText={streamFrame.visibleText}
+                  announcementText={streamFrame.announcementText}
                   done={streamFrame.done}
                   stopped={streamStopped}
                   onStop={stopStream}

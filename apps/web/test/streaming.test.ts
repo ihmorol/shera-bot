@@ -77,9 +77,10 @@ describe("streaming message component (§6.1 + §2.3)", () => {
     const frame = streamFrameAt(DEMO_STREAM.chunks, 120, DEMO_STREAM.chunk_cadence_ms);
     const html = render(
       createElement(StreamingMessage, {
-        agentId: DEMO_STREAM.agent_id,
-        visibleText: frame.visibleText,
-        done: frame.done,
+      agentId: DEMO_STREAM.agent_id,
+      visibleText: frame.visibleText,
+      announcementText: frame.announcementText,
+      done: frame.done,
         stopped: false,
         onStop: () => undefined,
       }),
@@ -96,6 +97,7 @@ describe("streaming message component (§6.1 + §2.3)", () => {
       createElement(StreamingMessage, {
         agentId: DEMO_STREAM.agent_id,
         visibleText: "partial",
+        announcementText: "partial",
         done: false,
         stopped: false,
         onStop: () => undefined,
@@ -110,6 +112,7 @@ describe("streaming message component (§6.1 + §2.3)", () => {
       createElement(StreamingMessage, {
         agentId: DEMO_STREAM.agent_id,
         visibleText: DEMO_STREAM.chunks.join(""),
+        announcementText: DEMO_STREAM.chunks.join(""),
         done: true,
         stopped: false,
         onStop: () => undefined,
@@ -122,6 +125,7 @@ describe("streaming message component (§6.1 + §2.3)", () => {
       createElement(StreamingMessage, {
         agentId: DEMO_STREAM.agent_id,
         visibleText: "partial",
+        announcementText: "partial",
         done: false,
         stopped: true,
         onStop: () => undefined,
@@ -133,17 +137,36 @@ describe("streaming message component (§6.1 + §2.3)", () => {
     expect(stopped).toContain("D32");
   });
 
-  it("announces the sender — the stream region carries the 'said:' prefix", () => {
+  it("announces the sender — the visible paragraph carries the 'said:' prefix", () => {
     const html = render(
       createElement(StreamingMessage, {
         agentId: DEMO_STREAM.agent_id,
         visibleText: "partial",
+        announcementText: "partial",
         done: false,
         stopped: false,
         onStop: () => undefined,
       }),
     );
     expect(html).toContain("General Assistant said:");
+  });
+
+  it("carries the throttled snapshot in a dedicated live region — the fast visible text stays outside", () => {
+    const html = render(
+      createElement(StreamingMessage, {
+        agentId: DEMO_STREAM.agent_id,
+        visibleText: "fast visible text",
+        announcementText: "slow announcement snapshot",
+        done: false,
+        stopped: false,
+        onStop: () => undefined,
+      }),
+    );
+    // Exactly one polite region, holding the throttled snapshot (§2.3)…
+    expect(html.match(/aria-live="polite"/g)).toHaveLength(1);
+    expect(html).toMatch(/aria-live="polite"[^>]*>[^<]*slow announcement snapshot</);
+    // …while the visible paragraph renders the fast text outside any live region.
+    expect(html).toContain("fast visible text");
   });
 
   it("cursor blink is a CSS animation covered by prefers-reduced-motion", () => {

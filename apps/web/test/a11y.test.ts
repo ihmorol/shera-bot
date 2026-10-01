@@ -106,6 +106,7 @@ describe("accessible names on icon-only controls (§2.3)", () => {
       createElement(StreamingMessage, {
         agentId: "agent_general_assistant",
         visibleText: "partial",
+        announcementText: "partial",
         done: false,
         stopped: false,
         onStop: () => undefined,

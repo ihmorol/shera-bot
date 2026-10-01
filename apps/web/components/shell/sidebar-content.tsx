@@ -84,16 +84,13 @@ function StateTrail({
         </>
       ) : null}
       {state === "failed" ? (
-        <>
-          <span
-            className={cn(
-              "size-2 rounded-full",
-              attention === "error" ? "bg-failed" : "bg-approval",
-            )}
-            aria-hidden="true"
-          />
-          <span className="sr-only">{failedLabel}</span>
-        </>
+        // §2.1 palette: red marks a genuinely FAILED run only; PAUSED /
+        // RECOVERY_REQUIRED read amber. The sr-only label renders once,
+        // in the shared trailing span below.
+        <span
+          className={cn("size-2 rounded-full", attention === "error" ? "bg-failed" : "bg-approval")}
+          aria-hidden="true"
+        />
       ) : null}
       {state === "unread" ? <UnreadPill count={unreadCount} /> : null}
       <span className="sr-only">{state === "failed" ? failedLabel : STATE_LABELS[state]}</span>

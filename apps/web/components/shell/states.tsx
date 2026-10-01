@@ -10,8 +10,10 @@ import { cn } from "@/lib/utils";
  * retryable (D23 rule 4: internal details never render).
  *
  * The fixture-backed demo has no async surface, so nothing renders these
- * during the demo; tests exercise them and the runtime-backed pass mounts
- * them unchanged.
+ * during the demo: ThreadSkeleton and ErrorState render under AgentChatView's
+ * explicit `surfaceState` prop (exercised by tests); SidebarSkeleton and
+ * ChatListSkeleton are wired for the S09 real-data mode, which mounts them
+ * unchanged — no loading path renders them yet.
  */
 
 function SkeletonBlock({ className }: { className?: string }) {

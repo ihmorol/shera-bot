@@ -11,6 +11,7 @@
  * banner and the replay handoff (lib/thread-layout flushReplayed → §6.2
  * marker) are already wired for it.
  */
+import { ChatMessage } from "@/lib/fixtures";
 
 export const CONNECTION_STATES = ["connected", "disconnected", "reconnecting"] as const;
 export type ConnectionState = (typeof CONNECTION_STATES)[number];
@@ -81,8 +82,6 @@ export const DEMO_CONNECTION_SCRIPT: readonly { event: ConnectionEvent; holdMs: 
  * This fixture queue (demo data for the General Assistant chat) is what the
  * scripted connection replays; tests use it to assert the handoff.
  */
-import { ChatMessage } from "@/lib/fixtures";
-
 export const DEMO_REPLAY_QUEUE: ChatMessage[] = [
   ChatMessage.parse({
     message_id: "msg_replay_ga_1",

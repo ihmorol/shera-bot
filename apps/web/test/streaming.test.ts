@@ -92,10 +92,10 @@ describe("streaming message component (§6.1 + §2.3)", () => {
     const frame = streamFrameAt(DEMO_STREAM.chunks, 120, DEMO_STREAM.chunk_cadence_ms);
     const html = render(
       createElement(StreamingMessage, {
-      agentId: DEMO_STREAM.agent_id,
-      visibleText: frame.visibleText,
-      announcementText: frame.announcementText,
-      done: frame.done,
+        agentId: DEMO_STREAM.agent_id,
+        visibleText: frame.visibleText,
+        announcementText: frame.announcementText,
+        done: frame.done,
         stopped: false,
         onStop: () => undefined,
       }),

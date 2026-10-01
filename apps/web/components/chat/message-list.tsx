@@ -158,6 +158,32 @@ function MessageRow({
   );
 }
 
+/**
+ * Stable React key per timeline item: record ids where the record carries
+ * one (message/event/artifact/run), kind + timestamp for the synthetic rows
+ * (day separators, seeded system notices, replay boundaries — unique per
+ * timestamp in the fixture corpus). Index keys would re-mount rows whenever
+ * a replay flush or local send shifts the ordering.
+ */
+function timelineKey(item: TimelineItem): string {
+  switch (item.kind) {
+    case "message":
+      return `message-${item.message.message_id}`;
+    case "tool_card":
+      return `tool_card-${item.event.event_id}`;
+    case "artifact":
+      return `artifact-${item.artifact.artifact_id}`;
+    case "run":
+      return `run-${item.run.task_id}`;
+    case "system":
+      return `system-${item.at}`;
+    case "replay_boundary":
+      return `replay_boundary-${item.at}-${item.count}`;
+    case "day_separator":
+      return `day_separator-${item.at}`;
+  }
+}
+
 export function MessageList({
   items,
   jumpTargetId,
@@ -181,8 +207,8 @@ export function MessageList({
 
   return (
     <ol className="flex flex-col gap-3 px-4 py-6 lg:px-6" aria-label="Conversation messages">
-      {items.map((item, index) => {
-        const key = `${item.kind}-${index}`;
+      {items.map((item) => {
+        const key = timelineKey(item);
         const isAnchor =
           item.kind === "message" &&
           jumpTargetId !== null &&

@@ -77,6 +77,22 @@ const ConversationCommandResult = z.strictObject({
 });
 export type ConversationCommandResult = z.infer<typeof ConversationCommandResult>;
 
+/** The message.send receipt (S09 chunk 2): one durable message per key. */
+const MessageSentResult = z.strictObject({
+  kind: z.literal("message_sent"),
+  conversation_id: z.string(),
+  message_id: z.string(),
+  revision: z.number().int().positive(),
+  event_id: z.string(),
+});
+
+/** The typed command outcome union, verbatim from the S07 conversations module. */
+const ConversationCommandOutcome = z.discriminatedUnion("kind", [
+  ConversationCommandResult,
+  MessageSentResult,
+]);
+export type ConversationCommandOutcome = z.infer<typeof ConversationCommandOutcome>;
+
 const ReplayEventsResult = z.strictObject({
   kind: z.literal("events"),
   stream_id: z.string(),
@@ -183,10 +199,10 @@ export function sendConversationMessage(args: {
   text: string;
   displayName: string;
   idempotencyKey: string;
-}): Promise<ConversationCommandResult> {
+}): Promise<ConversationCommandOutcome> {
   return requestRuntime(
     "/api/runtime/v1/conversations/commands",
-    (payload) => ConversationCommandResult.parse(payload),
+    (payload) => ConversationCommandOutcome.parse(payload),
     {
       method: "POST",
       body: JSON.stringify({

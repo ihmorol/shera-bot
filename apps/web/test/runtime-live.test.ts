@@ -5,6 +5,7 @@ import {
   advanceLiveThread,
   assembleLiveTimeline,
   connectionStateOf,
+  DeltaBuffer,
   INITIAL_LIVE_STATE,
   type LiveThreadState,
 } from "../lib/runtime-live";
@@ -174,6 +175,62 @@ describe("reply streaming (transient deltas, durable truth)", () => {
     // No journal event arrived: nothing in the thread, only the bubble.
     expect(messagesOf(state)).toHaveLength(0);
     expect(state.journalItems).toHaveLength(0);
+  });
+
+  it("a flush tick landing AFTER the durable reply cleared the stream never re-creates the bubble (ghost-bubble race)", () => {
+    // Deterministic sequencing of the hook's real pipeline: buffer → flush →
+    // reconcile (the durable journal event) → apply → flush again.
+    const deltas = new DeltaBuffer();
+    let state = live();
+
+    // Deltas buffer outside React state and flush on the throttle budget:
+    // the bubble shows the tail.
+    deltas.push("reply-evt_1", "Here is my initi");
+    deltas.push("reply-evt_1", "al tail");
+    const flushed = deltas.flush(0);
+    expect(flushed).not.toBeNull();
+    state = advanceLiveThread(state, {
+      type: "stream_text",
+      streamKey: flushed!.key,
+      agentId: "agent_general_assistant",
+      text: flushed!.text,
+      announcementText: flushed!.announcementText,
+    });
+    expect(state.stream?.text).toBe("Here is my initial tail");
+
+    // The durable reply arrives: the hook reconciles the stream key BEFORE
+    // dispatching the event, and the reducer's apply clears the bubble.
+    deltas.reconcile("reply-evt_1");
+    state = advanceLiveThread(state, {
+      type: "live_event",
+      event: messageEvent({
+        sequence: 1,
+        correlationId: "reply-evt_1",
+        messageId: "durable_reply_1",
+        kind: "agent",
+        text: "Here is my initial tail",
+      }),
+    });
+    expect(state.stream).toBeNull();
+
+    // THE RACE: a flush tick lands after the apply with a trailing delta
+    // still arriving for the same key. The unconditional stream_text of the
+    // old flush path re-mounted a stale tail bubble BELOW the durable reply;
+    // the guard drops it — the reply stays visible exactly once.
+    deltas.push("reply-evt_1", " trailing");
+    expect(deltas.flush(1_000)).toBeNull();
+    expect(state.stream).toBeNull();
+    expect(messagesOf(state)).toEqual([{ id: "durable_reply_1", delivery: "sent", klass: "live" }]);
+  });
+
+  it("reconciling drops an unflushed buffered tail — a post-apply flush finds nothing", () => {
+    // The other half of the race: the tail sat in the buffer UNflushed when
+    // the durable reply applied; reconcile must clear it eagerly so the next
+    // flush tick dispatches nothing.
+    const deltas = new DeltaBuffer();
+    deltas.push("reply-2", "half a tail");
+    deltas.reconcile("reply-2");
+    expect(deltas.flush(0)).toBeNull();
   });
 });
 

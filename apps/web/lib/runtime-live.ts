@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef } from "react";
+import { useEffect, useMemo, useReducer, useRef } from "react";
 
 import { compareThreadItems, ChatMessage, type ThreadItem } from "@/lib/fixtures";
 import type { RuntimeEvent } from "@/lib/runtime-client";
@@ -314,6 +314,91 @@ export function assembleLiveTimeline(state: LiveThreadState): LiveTimeline {
 
 // ---------------------------------------------------------------------------
 
+/**
+ * The transient delta buffer (§6.1): `message.delta` frames accumulate OUTSIDE
+ * React state and flush on the 33ms budget, so DOM updates stay within ~30fps
+ * no matter how fast the runtime streams. GHOST-BUBBLE GUARD (S09 fix round):
+ * a flush tick can land after `applyJournalEvent` already cleared the stream
+ * (the durable reply reconciled it) — re-dispatching the buffered tail then
+ * would re-mount a stale bubble BELOW the durable reply. `reconcile` closes a
+ * key the moment its durable journal event is dispatched for application: the
+ * buffered tail is dropped, and any trailing delta frames for the closed key
+ * are refused by `flush` — the reply stays visible exactly once.
+ */
+export class DeltaBuffer {
+  private buffered: { key: string; text: string } | null = null;
+  /** Stream keys whose durable journal event has been applied. */
+  private readonly reconciled = new Set<string>();
+  /** The §2.3 announcement snapshot: key-scoped text + when it advanced. */
+  private announce: { key: string; text: string; at: number } | null = null;
+
+  /** Buffer one `message.delta` frame (concatenating per stream key). */
+  push(key: string, delta: string): void {
+    const previous = this.buffered;
+    const text = previous && previous.key === key ? previous.text + (delta ?? "") : (delta ?? "");
+    this.buffered = { key, text };
+  }
+
+  /**
+   * Close a stream key: its durable journal event was applied, so the
+   * transient bubble is gone and any tail for that key is stale by definition.
+   */
+  reconcile(key: string): void {
+    this.reconciled.add(key);
+    if (this.buffered?.key === key) {
+      this.buffered = null;
+    }
+    if (this.announce?.key === key) {
+      this.announce = null;
+    }
+    // Bounded memory: keys are one-shot reply ids, so an evicted oldest entry
+    // can never be re-buffered by an honest runtime.
+    if (this.reconciled.size > 256) {
+      for (const oldest of this.reconciled) {
+        this.reconciled.delete(oldest);
+        if (this.reconciled.size <= 128) {
+          break;
+        }
+      }
+    }
+  }
+
+  /**
+   * Flush on the §6.1 budget: returns the frame to render (with the throttled
+   * §2.3 announcement snapshot), or null when there is nothing to render —
+   * including a buffered tail whose key was already reconciled (the
+   * ghost-bubble guard): DROPPED, never dispatched as stream_text.
+   */
+  flush(now: number): { key: string; text: string; announcementText: string } | null {
+    const buffered = this.buffered;
+    if (!buffered) {
+      return null;
+    }
+    this.buffered = null;
+    if (this.reconciled.has(buffered.key)) {
+      return null;
+    }
+    // §2.3 announcement throttle (mirrors the demo's streamFrameAt): the
+    // polite snapshot advances on its own slower STREAM_ANNOUNCE_MS cadence,
+    // so the dedicated sr-only live region never rides the ~30fps
+    // visible-text mutations.
+    const announce = this.announce;
+    let announcementText = buffered.text;
+    if (announce && announce.key === buffered.key && now - announce.at < STREAM_ANNOUNCE_MS) {
+      announcementText = announce.text;
+    } else {
+      this.announce = { key: buffered.key, text: buffered.text, at: now };
+    }
+    return { key: buffered.key, text: buffered.text, announcementText };
+  }
+
+  /** Drop transient content — the conversation identity changed (cleanup). */
+  reset(): void {
+    this.buffered = null;
+    this.announce = null;
+  }
+}
+
 /** The conversation stream id for the WS gateway rooms and replay requests. */
 export function conversationStreamId(conversationId: string): string {
   return `conversation:${conversationId}`;
@@ -365,8 +450,9 @@ const RECONNECT_MAX_MS = 3000;
  * reducer, wired to REAL socket lifecycle. Subscribes to the conversation's
  * stream, loads history via replay.request from the applied cursor, applies
  * live events, reconciles sends, and drives the §6.4 banner machine from the
- * real connection state — never the demo script. Deltas buffer in a ref and
- * flush on the §6.1 33ms budget, so DOM updates stay within ~30fps.
+ * real connection state — never the demo script. Deltas buffer in a
+ * DeltaBuffer and flush on the §6.1 33ms budget, so DOM updates stay within
+ * ~30fps and a flush tick can never resurrect a reconciled stream.
  */
 export function useLiveConversation(args: UseLiveConversationArgs): LiveConversation {
   const [state, dispatch] = useReducer(advanceLiveThread, INITIAL_LIVE_STATE);
@@ -390,9 +476,10 @@ export function useLiveConversation(args: UseLiveConversationArgs): LiveConversa
     }
   });
 
-  const deltaBufferRef = useRef<{ key: string; text: string } | null>(null);
-  /** The §2.3 announcement snapshot (key-scoped): text + when it advanced. */
-  const announceRef = useRef<{ key: string; text: string; at: number } | null>(null);
+  // One delta buffer per hook lifetime; the conversation effect's cleanup
+  // resets it, so a stale conversation's unflushed tail can never flush into
+  // the next conversation's reducer.
+  const deltas = useMemo(() => new DeltaBuffer(), []);
 
   const { wsUrl, workspaceId, conversationId, agentId, enabled } = args;
   const streamId = conversationStreamId(conversationId);
@@ -407,32 +494,27 @@ export function useLiveConversation(args: UseLiveConversationArgs): LiveConversa
     let reconnectAttempt = 0;
 
     const flushDeltas = () => {
-      const buffered = deltaBufferRef.current;
-      if (buffered) {
-        deltaBufferRef.current = null;
-        // §2.3 announcement throttle (mirrors the demo's streamFrameAt): the
-        // polite snapshot advances on its own slower STREAM_ANNOUNCE_MS
-        // cadence, so the dedicated sr-only live region never rides the
-        // ~30fps visible-text mutations.
-        const announce = announceRef.current;
-        let announcementText = buffered.text;
-        if (
-          announce &&
-          announce.key === buffered.key &&
-          Date.now() - announce.at < STREAM_ANNOUNCE_MS
-        ) {
-          announcementText = announce.text;
-        } else {
-          announceRef.current = { key: buffered.key, text: buffered.text, at: Date.now() };
-        }
+      const flushed = deltas.flush(Date.now());
+      if (flushed) {
         dispatch({
           type: "stream_text",
-          streamKey: buffered.key,
+          streamKey: flushed.key,
           agentId,
-          text: buffered.text,
-          announcementText,
+          text: flushed.text,
+          announcementText: flushed.announcementText,
         });
       }
+    };
+    // Every durable journal event closes its stream key BEFORE it is applied:
+    // a flush tick landing after applyJournalEvent cleared the bubble must
+    // never re-create it from the stale buffered tail (ghost-bubble guard).
+    const dispatchJournalEvent = (event: RuntimeEvent, mode: "initial" | "reconnect" | "live") => {
+      if (event.correlation_id) {
+        deltas.reconcile(event.correlation_id);
+      }
+      dispatch(
+        mode === "live" ? { type: "live_event", event } : { type: "replay_event", event, mode },
+      );
     };
     const flushInterval = window.setInterval(flushDeltas, STREAM_THROTTLE_MS);
 
@@ -477,11 +559,7 @@ export function useLiveConversation(args: UseLiveConversationArgs): LiveConversa
               if (cancelled) {
                 return;
               }
-              dispatch({
-                type: "replay_event",
-                event: event as RuntimeEvent,
-                mode: isReconnect ? "reconnect" : "initial",
-              });
+              dispatchJournalEvent(event as RuntimeEvent, isReconnect ? "reconnect" : "initial");
             }
           } else {
             // E10 snapshot fallback / unknown stream: honest typed surface.
@@ -493,18 +571,13 @@ export function useLiveConversation(args: UseLiveConversationArgs): LiveConversa
           // Live fanout: committed journal events + transient delta frames.
           socket.onEvent((name, payload) => {
             if (name === "stream.event" && payload && typeof payload === "object") {
-              dispatch({ type: "live_event", event: payload as RuntimeEvent });
+              dispatchJournalEvent(payload as RuntimeEvent, "live");
               return;
             }
             if (name === "stream.frame" && payload && typeof payload === "object") {
               const frame = payload as { frame?: string; stream_key?: string; text_delta?: string };
               if (frame.frame === "message.delta" && typeof frame.stream_key === "string") {
-                const previous = deltaBufferRef.current;
-                const next =
-                  previous && previous.key === frame.stream_key
-                    ? previous.text + (frame.text_delta ?? "")
-                    : (frame.text_delta ?? "");
-                deltaBufferRef.current = { key: frame.stream_key, text: next };
+                deltas.push(frame.stream_key, frame.text_delta ?? "");
               }
             }
           });
@@ -537,11 +610,13 @@ export function useLiveConversation(args: UseLiveConversationArgs): LiveConversa
       if (reconnectTimer !== null) {
         window.clearTimeout(reconnectTimer);
       }
+      deltas.reset();
       socket?.close();
     };
     // The conversation identity + connection configuration own the lifecycle;
-    // attribution strings are stable per surface and listed as dependencies.
-  }, [enabled, wsUrl, workspaceId, conversationId, streamId, agentId]);
+    // attribution strings are stable per surface, and the delta buffer is a
+    // mount-stable useMemo — all listed as dependencies.
+  }, [enabled, wsUrl, workspaceId, conversationId, streamId, agentId, deltas]);
 
   const send = (key: string, text: string) => {
     const message = ChatMessage.parse({

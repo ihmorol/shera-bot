@@ -54,17 +54,22 @@ function useScriptedStream(stream: FixtureStream | null) {
   const [elapsedMs, setElapsedMs] = useState(0);
   const [stopped, setStopped] = useState(false);
 
+  const frame = stream ? streamFrameAt(stream.chunks, elapsedMs, stream.chunk_cadence_ms) : null;
+  const done = frame?.done ?? false;
+
+  // The interval stops itself at completion: without the `done` gate it kept
+  // flushing state at the throttle rate for the lifetime of the mount (~30fps
+  // re-renders of the whole chat view long after the stream finished).
   useEffect(() => {
-    if (!stream || stopped) {
+    if (!stream || stopped || done) {
       return;
     }
     const interval = window.setInterval(() => {
       setElapsedMs((ms) => ms + STREAM_THROTTLE_MS);
     }, STREAM_THROTTLE_MS);
     return () => window.clearInterval(interval);
-  }, [stream, stopped]);
+  }, [stream, stopped, done]);
 
-  const frame = stream ? streamFrameAt(stream.chunks, elapsedMs, stream.chunk_cadence_ms) : null;
   return { frame, stopped, stop: () => setStopped(true) };
 }
 
@@ -160,8 +165,16 @@ export function AgentChatView({
 
   // §6.2 handoff: queued replayed messages render only while the connection
   // is (back) in the connected state, closed by the batch boundary marker.
-  const replayed = connectionState === "connected" ? (pendingReplay ?? []) : [];
-  const localAll = streamedMessage ? [...localMessages, streamedMessage] : localMessages;
+  // Both inputs are memoized so their identities stay stable across renders —
+  // otherwise the timeline memo below re-sorts the thread on every render.
+  const localAll = useMemo(
+    () => (streamedMessage ? [...localMessages, streamedMessage] : localMessages),
+    [streamedMessage, localMessages],
+  );
+  const replayed = useMemo(
+    () => (connectionState === "connected" ? (pendingReplay ?? []) : []),
+    [connectionState, pendingReplay],
+  );
   const timeline = useMemo(
     () => insertDaySeparators(flushReplayed(withSentMessages(thread, localAll), replayed)),
     [thread, localAll, replayed],

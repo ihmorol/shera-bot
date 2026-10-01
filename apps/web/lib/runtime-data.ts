@@ -63,7 +63,12 @@ export function useRealConversationThread(workspaceId: string): RealConversation
   });
 
   if (conversationQuery.isPending) {
-    return { surfaceState: "loading", items: [], safeErrorMessage: undefined, conversationId: null };
+    return {
+      surfaceState: "loading",
+      items: [],
+      safeErrorMessage: undefined,
+      conversationId: null,
+    };
   }
   if (conversationQuery.isError) {
     return {

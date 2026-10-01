@@ -360,7 +360,10 @@ export function useLiveConversation(args: UseLiveConversationArgs): LiveConversa
             return;
           }
           socket = opened;
-          await socket.request("stream.subscribe", { workspace_id: workspaceId, stream_id: streamId });
+          await socket.request("stream.subscribe", {
+            workspace_id: workspaceId,
+            stream_id: streamId,
+          });
 
           // Durable history from the applied cursor — initial load (cursor 0)
           // renders live-class; a RECONNECT replay renders the §6.2 batch.
@@ -373,7 +376,11 @@ export function useLiveConversation(args: UseLiveConversationArgs): LiveConversa
             return;
           }
           const replayResult = replay as { kind?: string; events?: unknown[] } | null;
-          if (replayResult && replayResult.kind === "events" && Array.isArray(replayResult.events)) {
+          if (
+            replayResult &&
+            replayResult.kind === "events" &&
+            Array.isArray(replayResult.events)
+          ) {
             dispatch({ type: "replay_started", total: replayResult.events.length });
             for (const event of replayResult.events) {
               if (cancelled) {
@@ -481,9 +488,7 @@ export function useLiveConversation(args: UseLiveConversationArgs): LiveConversa
       send(`msg-${crypto.randomUUID()}`, trimmed);
     },
     retry: (key: string) => {
-      const original = stateRef.current.optimistic.find(
-        (message) => message.message_id === key,
-      );
+      const original = stateRef.current.optimistic.find((message) => message.message_id === key);
       if (original) {
         send(key, original.text);
       }

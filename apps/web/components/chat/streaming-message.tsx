@@ -77,9 +77,7 @@ export function StreamingMessage({
               </button>
             </>
           ) : null}
-          {streaming && variant === "live" ? (
-            <span aria-hidden="true">replying…</span>
-          ) : null}
+          {streaming && variant === "live" ? <span aria-hidden="true">replying…</span> : null}
           {stopped && variant === "demo" ? (
             <span aria-hidden="true">
               demo stream · stopped locally (D32: a real stop is a runtime command)

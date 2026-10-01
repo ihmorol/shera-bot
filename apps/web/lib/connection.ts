@@ -5,10 +5,11 @@
  * possible while disconnected — the banner never blocks the thread.
  *
  * Demo mechanism: in the UI-first build nothing opens a socket, so this
- * machine is driven by the scripted fixture below (and by tests). The real
- * runtime stream later drives the same states from the socket — the banner
- * and the replay handoff (lib/thread-layout flushReplayed → §6.2 marker)
- * are already wired for it.
+ * machine is driven by the scripted fixture below — by the demo hook in the
+ * General Assistant chat (components/chat/agent-chat-view.tsx) and by tests.
+ * The real runtime stream later drives the same states from the socket — the
+ * banner and the replay handoff (lib/thread-layout flushReplayed → §6.2
+ * marker) are already wired for it.
  */
 
 export const CONNECTION_STATES = ["connected", "disconnected", "reconnecting"] as const;
@@ -92,3 +93,13 @@ export const DEMO_REPLAY_QUEUE: ChatMessage[] = [
     delivery_class: "replayed",
   }),
 ];
+
+/** Quiet period before the scripted disconnect fires, so the connected state is visible first (§6.4 demo). */
+export const DEMO_CONNECTION_INITIAL_DELAY_MS = 2500;
+
+/**
+ * The conversation the scripted §6.4 demo runs in — the General Assistant
+ * chat, matching the replay queue above (and the demo stream's home).
+ */
+export const DEMO_CONNECTION_CONVERSATION_ID: string | null =
+  DEMO_REPLAY_QUEUE[0]?.conversation_id ?? null;

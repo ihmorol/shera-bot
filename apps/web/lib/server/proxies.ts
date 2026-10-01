@@ -18,7 +18,8 @@ import { randomUUID } from "node:crypto";
  *    posture). Documented honestly here rather than hidden (G4).
  *
  * Both are transport-only: typed SheraError bodies the services already
- * redacted pass through verbatim (D23 rule 4); nothing is logged or rewritten
+ * redacted pass through verbatim (D23 rule 4), as do response redirects
+ * (location) and cache-control directives; nothing is logged or rewritten
  * (G3). An unconfigured deployment is a first-class honest state, never a
  * fake success.
  */
@@ -128,6 +129,19 @@ async function forward(
   });
   for (const setCookie of response.headers.getSetCookie()) {
     downstream.headers.append("set-cookie", setCookie);
+  }
+  // Redirect + cache directives pass through verbatim, like the typed bodies:
+  // the Google sign-in 302's `location` IS the OAuth handoff (container-gate
+  // links /api/control/api/auth/signin/google on this origin), so dropping it
+  // silently broke the sign-in button; `cache-control` carries the upstream's
+  // no-store directive so a redirect or session-bearing response is never
+  // cached by the browser. Same-origin hop only — the location points at the
+  // control plane's upstream OAuth provider, never at an internal surface.
+  for (const header of ["location", "cache-control"] as const) {
+    const value = response.headers.get(header);
+    if (value) {
+      downstream.headers.set(header, value);
+    }
   }
   return downstream;
 }

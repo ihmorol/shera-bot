@@ -49,7 +49,9 @@ function waitForExit(child: ChildProcess, label: string, timeoutMs = 10_000): Pr
         resolve();
         return;
       }
-      reject(new Error(`mock runtime ${label} failed: code=${String(code)} signal=${String(signal)}`));
+      reject(
+        new Error(`mock runtime ${label} failed: code=${String(code)} signal=${String(signal)}`),
+      );
     };
     if (child.exitCode !== null || child.signalCode !== null) {
       settle(child.exitCode, child.signalCode);
@@ -100,7 +102,11 @@ export async function startMockRuntimeProcess(options: {
     });
     child.once("exit", (code, signal) => {
       clearTimeout(timer);
-      reject(new Error(`mock runtime exited before ready: code=${String(code)} signal=${String(signal)}`));
+      reject(
+        new Error(
+          `mock runtime exited before ready: code=${String(code)} signal=${String(signal)}`,
+        ),
+      );
     });
   });
 

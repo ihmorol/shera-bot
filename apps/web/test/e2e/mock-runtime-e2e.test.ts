@@ -24,9 +24,8 @@
  * stable windows. The ~500ms send-ack target (§6.3) is asserted loosely and
  * the measured value is printed (the demo-path doc cites it).
  */
-import { mkdtempSync, rmSync } from "node:fs";
+import { rmSync } from "node:fs";
 import { createServer, type Server as HTTPServer } from "node:http";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { createElement } from "react";
@@ -51,10 +50,12 @@ import {
 import { proxyToLocalApi } from "@/lib/server/proxies";
 import { RuntimeSocket } from "@/lib/ws-socket";
 
-import { startE2eMockRuntime, type E2eMockRuntime } from "../../../user-runtime/src/mock/e2e-mode.ts";
+import {
+  startE2eMockRuntime,
+  type E2eMockRuntime,
+} from "../../../user-runtime/src/mock/e2e-mode.ts";
 
 const tempDirs: string[] = [];
-const WORKSPACE_TITLE = "General Assistant";
 const SESSION_USER = "Emon";
 
 interface E2eHarness {
@@ -307,9 +308,7 @@ describe("S09 mock-runtime E2E (E8): login → chat → send → stream → refr
         state = acknowledge(state);
         const userMessageId = (userEvent.payload as { payload: { message_id: string } }).payload
           .message_id;
-        expect(messagesOf(state)).toEqual([
-          { id: userMessageId, klass: "live", text: sendText },
-        ]);
+        expect(messagesOf(state)).toEqual([{ id: userMessageId, klass: "live", text: sendText }]);
 
         // -- Phase 4: STREAM — transient deltas, then the durable reply -------
         const deltaFrame = await waitForEvent(

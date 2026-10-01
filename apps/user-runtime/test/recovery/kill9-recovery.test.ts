@@ -47,7 +47,10 @@ async function postCommand(
   return { status: response.status, body: (await response.json()) as Record<string, unknown> };
 }
 
-async function replay(origin: string, conversationId: string): Promise<{
+async function replay(
+  origin: string,
+  conversationId: string,
+): Promise<{
   kind: string;
   events: Array<{ sequence: number; type: string; payload: Record<string, unknown> }>;
 }> {

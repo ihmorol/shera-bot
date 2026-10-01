@@ -222,7 +222,11 @@ describe("recovery: duplicate send under the probe harness (receipt replay)", ()
     const running = await composeAndListen();
     try {
       const conversationId = await createConversation(running.origin, "s09-recovery-seed-4");
-      const send = sendBody(conversationId, "s09-recovery-duplicate-1", "sent once, receipted twice");
+      const send = sendBody(
+        conversationId,
+        "s09-recovery-duplicate-1",
+        "sent once, receipted twice",
+      );
       const first = await postCommand(running.origin, send);
       expect(first.status).toBe(200);
       const second = await postCommand(running.origin, send);
@@ -413,9 +417,9 @@ describe("recovery: two tabs on one conversation (fanout, reconnect replay, no d
               (event.payload as { type?: string }).type === "message.appended",
             `${label}: durable user message`,
           );
-          expect((userEvent.payload as { payload: { sender: { kind: string } } }).payload.sender.kind).toBe(
-            "user",
-          );
+          expect(
+            (userEvent.payload as { payload: { sender: { kind: string } } }).payload.sender.kind,
+          ).toBe("user");
           await tab.waitForEvent(
             (event) =>
               event.name === "stream.frame" &&

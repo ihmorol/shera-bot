@@ -78,9 +78,10 @@ export async function runMockRuntimeMain(
   );
 
   const drain = (): void => {
-    void runtime
-      .stop()
-      .then(() => process.exit(0), () => process.exit(1));
+    void runtime.stop().then(
+      () => process.exit(0),
+      () => process.exit(1),
+    );
   };
   process.on("SIGINT", drain);
   process.on("SIGTERM", drain);

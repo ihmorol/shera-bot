@@ -1,7 +1,7 @@
 # Shera Bot — Decision and Requirement Traceability
 
 **Status:** Working traceability baseline for the synchronized PRD and the post-PRD decision records.  
-**Last updated:** 2026-09-18  
+**Last updated:** 2026-10-01 (S09 chunk 3 — evidence appended to the D26/D34/E8/E10/E13 rows; no decision statuses changed)  
 **Canonical vocabulary:** [`GLOSSARY.md`](GLOSSARY.md)  
 **Decision index:** [`decisions/README.md`](decisions/README.md)  
 **Full session evidence:** `history/2026-09-08-to-2026-09-11/README.md` — removed from the working tree in commit `9d8b81c`; retrieve from Git history (for example `cea3ba1`) or the local `.session-archive/` copy.
@@ -54,7 +54,7 @@ On 2026-09-19 the owner directed dual harness support — "i want pi as a defaul
 | D23 | Confirmed / revised | Repository comparison + Q23 | Replaces 20-package proposal | §17, §22 | Monorepo boundary/CI checks |
 | D24 | Confirmed | Codex Q24 | — | §17, §22 | Drizzle migration checks |
 | D25 | Confirmed | Codex Q25 | — | §§14, 17 | Zod/OpenAPI contract tests |
-| D26 | Confirmed | Codex Q26 | — | §§8, 14 | Replay cursor/reconnect tests |
+| D26 | Confirmed | Codex Q26 | — | §§8, 14 | Replay cursor/reconnect tests. S09 (2026-10-01): idempotent `message.send` + receipt replay (`e248490`, `messages.test.ts`); WS transport + live reducer with the reconnect replay batch marker (`66e7506`, `runtime-live.test.ts`); cursor-ack-on-render so the replay resume covers rendered history only (`8cc44c2`); two-tab fanout + reconnect replay-once probe (`65876dd`, `recovery-probes.test.ts`); full-path replay leg in the mock-runtime E2E (`0780ba3`) |
 | D27 | Confirmed | Codex Q27 | — | §§6, 7, 16 | Escape/resource/network tests |
 | D28 | Confirmed | Codex Q28 | — | §§5, 17 | Pack loader/hash tests |
 | D29 | Confirmed / product model revision | User image + taxonomy clarification | Extends D18/D19 | §§4, 5 | Pack/Operation/Agent model |
@@ -62,7 +62,7 @@ On 2026-09-19 the owner directed dual harness support — "i want pi as a defaul
 | D31 | Confirmed | Codex Q31 | — | §4 | Multiple task runs per Operation |
 | D32 | Confirmed / supersedes D3 | Codex Q32 + long-running-job clarification | D3 | §§6, 13 | Session/worker/recovery tests |
 | D33 | Confirmed | Codex Q33 | — | §13 | Semantic checkpoint tests |
-| D34 | Confirmed / refined | Codex Q34 + user objection | — | §8 | Runtime task-detection tests |
+| D34 | Confirmed / refined | Codex Q34 + user objection | — | §8 | Runtime task-detection tests. S09 (2026-10-01): G2/D34 regression — a plain conversation turn creates NO task run and no `task.*` journal events anywhere (`e248490`, `messages.test.ts`; whole-path assertion in the mock-runtime E2E, `0780ba3`) |
 | D35 | Confirmed / refined | Codex Q35 + full-access clarification | — | §§7, 8, 16 | Tool approval/grant tests |
 | D36 | Confirmed | Codex Q36 | — | §8 | Roster validation tests |
 | D37 | Confirmed | Codex Q37 | — | §11 | Memory publication/provenance tests |
@@ -90,12 +90,12 @@ On 2026-09-19 the owner directed dual harness support — "i want pi as a defaul
 | E5 | Engineering | PRD §24 delegation; PRD §§8, 13 | — | §§8, 13 | Watcher dedup/recovery tests |
 | E6 | Engineering | PRD §24 delegation; PRD §10 | — | §10 | Worktree/merge approval tests |
 | E7 | Engineering | PRD §24 delegation; D23 + D45 | — | §§19, 22 | Phase gates and acceptance runner |
-| E8 | Engineering | PRD §24 delegation; D23 | — | §19, §22 | CI suite configuration |
+| E8 | Engineering | PRD §24 delegation; D23 | — | §19, §22 | CI suite configuration. S09 (2026-10-01): the E8 mock-runtime mode is executable acceptance — deterministic in-process runtime (`8079f76`, `e2e-mode.test.ts`), the mock-runtime E2E driving login → chat → send → stream → refresh → replay through the real client/proxy/runtime (`0780ba3`, `apps/web/test/e2e/mock-runtime-e2e.test.ts`), and the recovery probes (`3b3cd5f`, `65876dd`) |
 | E9 | Delegated engineering (pending owner review) | PRD §§9, 12 + D17/D22; owner instruction 2026-09-17 | Clarifies the §12 boundary | §§9, 12 | Secret-redaction/custody tests |
-| E10 | Delegated engineering (pending owner review) | E2 + owner instruction 2026-09-17 | Refines E2 for the prototype | §14 | Snapshot-fallback contract test |
+| E10 | Delegated engineering (pending owner review) | E2 + owner instruction 2026-09-17 | Refines E2 for the prototype | §14 | Snapshot-fallback contract test. S09 (2026-10-01): the fallback is an honest typed surface — `snapshot_required` replays as the typed `SNAPSHOT_REQUIRED_MESSAGE` state, never fabricated history (chunk 1 `5128959`, `s09-real-rows.test.ts`); unknown streams replay as an honest empty batch (`e2e-mode.test.ts`); the reconnect resume cursor acknowledges after render (`8cc44c2`) |
 | E11 | Delegated engineering (pending owner review) | PRD §12/§21; D10, D13; owner instruction 2026-09-17 | Details D10 | §§12, 21 | Stage 7 restore drill; acceptance 18 |
 | E12 | Delegated engineering (pending owner review) | D40 + owner instruction 2026-09-17 | Applies D40 to the schema | §§12, 17 | Workspace-scoping repository tests |
-| E13 | Delegated engineering (pending owner review) | PRD §13; D33, E2; owner instruction 2026-09-17 | Details D33 | §13 | Recovery-class test matrix |
+| E13 | Delegated engineering (pending owner review) | PRD §13; D33, E2; owner instruction 2026-09-17 | Details D33 | §13 | Recovery-class test matrix. S09 (2026-10-01) first recovery-class probes for the conversation slice: kill -9 mid-stream restart on the same SQLite file — journal intact, receipt replays, nothing invented (`3b3cd5f`, `kill9-recovery.test.ts`); oversized/empty typed rejections with no partial effects, duplicate-send receipt replay (referencing `messages.test.ts`), and the two-tab fanout/reconnect probe (`65876dd`, `recovery-probes.test.ts`) |
 | E14 | Delegated engineering (pending owner review) | PRD §§21–22; owner instruction 2026-09-17 | Defines register closure policy | §§21, 22 | Ledger accuracy at stage gates |
 | E15 | Delegated engineering (pending owner review) | Owner instructions 2026-09-18 (leverage OSS across the build; per-issue references); 2026-09-18 research with license verification | — | §§17, 22, 23 (no product text changes) | S01 license-allowlist CI gate; per-slice "Open-source leverage" sections in issues #1–#36; per-slice E-notes |
 | E16 | Delegated engineering (pending owner review) | Issue #2 (S01); `BUILD_MAP` §5–§6; phase-0 plan §1/§8; owner instructions 2026-09-17, including the `ihmorol/shera-pi` fork URL | Resolves the S01 plan-confirmation conflict for this slice only; fork evidence update supersedes the missing-source blocker in decision 9, preserving its history. **Recorded as "E15" on 2026-09-17 and renumbered to E16 on 2026-09-19**: the E15 identifier had been taken on `main` by the 2026-09-18 OSS-leverage record; the renumbering is mechanical and preserves the record's full content (G5, surfaced not buried) | §17, §22.1, §22.22, §23 | Last pushed S01 CI green on PR #37; 15 tests incl. license-expression regressions; [fork source/license verification](pi-fork/verification-2026-09-17.md), not runtime acceptance |

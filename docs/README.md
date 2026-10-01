@@ -25,6 +25,7 @@ This directory contains the product baseline and decision records. **Read this i
 
 ## Development process
 
+- [`e2e-demo-path.md`](e2e-demo-path.md) — the S09 E2E demo path (login → chat → send → stream → refresh → replay) with its executable evidence and the pending browser-verification checklist.
 - [`DEV_WORKFLOW.md`](DEV_WORKFLOW.md) — solo-developer workflow from current state through production shipment, using AI agents under explicit verification gates. Process documentation only; subordinate to the PRD and decision records.
 - [`BUILD_MAP.md`](BUILD_MAP.md) — the 35-slice build plan with live GitHub issue numbers, the agent working protocol, guardrails G1–G8, the UI gate, and the open items. Process index only; subordinate to the PRD and decision records.
 - [`decisions/engineering-record-e16-2026-09-17.md`](decisions/engineering-record-e16-2026-09-17.md) — E16: S01 scaffold/CI choices (Delegated, pending owner review), review corrections, and the owner-supplied Pi fork evidence update. Filed as "E15" on 2026-09-17; renumbered E16 on 2026-09-19 (identifier collision with the OSS-leverage record) and incorporated in the decision index.

@@ -185,24 +185,26 @@ export function AgentChatView({
     stop: stopStream,
   } = useScriptedStream(demoStream);
 
-  // Once the demo stream completes, its fixture text becomes a normal Agent
+  // Once the demo stream completes, its fixture text IS a normal Agent
   // message in the local thread (never before, and only in this browser).
-  const [streamedMessage, setStreamedMessage] = useState<ChatMessage | null>(null);
-  useEffect(() => {
-    if (demoStream && streamFrame?.done && !streamStopped && !streamedMessage) {
-      setStreamedMessage(
-        ChatMessage.parse({
-          message_id: demoStream.message_id,
-          conversation_id: demoStream.conversation_id,
-          sender: { kind: "agent", agent_id: demoStream.agent_id },
-          text: streamFrame.visibleText,
-          sent_at: new Date().toISOString(),
-          delivery: "sent",
-          delivery_class: "live",
-        }),
-      );
+  // Derived during render — no state, no effect: the react-hooks
+  // set-state-in-effect rule (and React's own guidance) both reject
+  // syncing derived data through setState-in-effect, and the derived
+  // message is fully determined by the completed frame + fixture stamp.
+  const streamedMessage = useMemo(() => {
+    if (!demoStream || !streamFrame?.done || streamStopped) {
+      return null;
     }
-  }, [demoStream, streamFrame, streamStopped, streamedMessage]);
+    return ChatMessage.parse({
+      message_id: demoStream.message_id,
+      conversation_id: demoStream.conversation_id,
+      sender: { kind: "agent", agent_id: demoStream.agent_id },
+      text: streamFrame.visibleText,
+      sent_at: demoStream.completed_sent_at,
+      delivery: "sent",
+      delivery_class: "live",
+    });
+  }, [demoStream, streamFrame, streamStopped]);
 
   // §6.4 demo: the scripted connection lifecycle runs only in its own
   // conversation (the General Assistant chat) and only when the caller did

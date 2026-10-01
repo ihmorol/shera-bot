@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { StreamingMessage } from "../components/chat/streaming-message";
-import { DEMO_STREAM, splitStreamChunks } from "../lib/fixtures";
+import { DEMO_STREAM, MESSAGES, splitStreamChunks } from "../lib/fixtures";
 import { STREAM_ANNOUNCE_MS, STREAM_THROTTLE_MS, streamFrameAt } from "../lib/streaming";
 
 /**
@@ -31,6 +31,21 @@ describe("stream fixture (§9 scripted scenario)", () => {
   it("belongs to the General Assistant conversation only", () => {
     expect(DEMO_STREAM.conversation_id).toBe("conversation_agent_general_assistant");
     expect(DEMO_STREAM.agent_id).toBe("agent_general_assistant");
+  });
+
+  it("stamps the completed reply after the last live GA message (§6.2 ordering)", () => {
+    // The completed reply continues the scripted conversation: it must sort
+    // after the last live seeded GA message (the replayed batch lands even
+    // later, via the connection demo). Relational, not exact-value, so the
+    // fixture timestamps can move together.
+    const gaLive = MESSAGES.filter(
+      (message) =>
+        message.conversation_id === DEMO_STREAM.conversation_id &&
+        message.delivery_class === "live",
+    ).map((message) => message.sent_at);
+    const lastLive = gaLive.at(-1);
+    expect(lastLive).toBeDefined();
+    expect(DEMO_STREAM.completed_sent_at > lastLive!).toBe(true);
   });
 });
 

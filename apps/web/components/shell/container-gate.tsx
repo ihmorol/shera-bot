@@ -13,6 +13,8 @@ import {
   PREPARING_WORKSPACE_TITLE,
   SIGN_IN_REQUIRED_COPY,
   SIGN_IN_REQUIRED_TITLE,
+  STARTING_WORKSPACE_COPY,
+  STARTING_WORKSPACE_TITLE,
   WORKSPACE_STOPPED_ACTION,
   WORKSPACE_STOPPED_COPY,
   WORKSPACE_STOPPED_TITLE,
@@ -98,6 +100,14 @@ export function ContainerGateSurface({
       return (
         <div aria-busy="true">
           <GatePanel title={PREPARING_WORKSPACE_TITLE} copy={PREPARING_WORKSPACE_COPY} />
+        </div>
+      );
+    case "starting":
+      // A stopped workspace booting is NOT the one-time creation step — the
+      // copy keeps the two lifecycle moments distinct (§2.4 honesty).
+      return (
+        <div aria-busy="true">
+          <GatePanel title={STARTING_WORKSPACE_TITLE} copy={STARTING_WORKSPACE_COPY} />
         </div>
       );
     case "stopped":

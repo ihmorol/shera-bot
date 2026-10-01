@@ -142,7 +142,9 @@ export function useStartStoppedWorkspace() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: restartRuntime,
-    onMutate: () => applyResolutionEvent(queryClient, { type: "provision_started" }),
+    // The OPTIMISTIC state is "starting" — a stopped container booting is not
+    // a container being created, and the gate copy says exactly that.
+    onMutate: () => applyResolutionEvent(queryClient, { type: "start_started" }),
     onSuccess: () => {
       void queryClient.refetchQueries({ queryKey: CONTAINER_RESOLUTION_QUERY_KEY });
     },

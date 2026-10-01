@@ -47,6 +47,7 @@ import { cn } from "@/lib/utils";
  * call and no fabricated reply (G2: an absent runtime is never rendered as
  * an Agent action).
  */
+/** Fixture/demo user: local demo sends are attributed to the fixture user. */
 const LOCAL_USER_NAME = "Emon";
 /** §6.3 ack target ≈500 ms — the demo settles a local send after this. */
 const LOCAL_ACK_MS = 500;

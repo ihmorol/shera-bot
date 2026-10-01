@@ -185,6 +185,23 @@ describe("honest states beyond the happy path", () => {
     expect(recovered.kind).toBe("ready");
   });
 
+  it("starting a stopped workspace is its own state — distinct from first-time creation", () => {
+    const stopped = advanceContainerResolution(resolved(), {
+      type: "runtime_observed",
+      runtime: snapshot({ provisioning_status: "stopped", health: "unknown" }),
+    });
+    // The explicit start trigger (not the prepare trigger) yields "starting".
+    const starting = advanceContainerResolution(stopped, { type: "start_started" });
+    expect(starting).toEqual({ kind: "starting", workspace_id: WORKSPACE });
+
+    // The post-start refetch observes the running container → ready.
+    const recovered = advanceContainerResolution(starting, {
+      type: "runtime_observed",
+      runtime: snapshot(),
+    });
+    expect(recovered.kind).toBe("ready");
+  });
+
   it("a failed status record (no typed payload on a 200) uses the truthful fallback", () => {
     const state = advanceContainerResolution(resolved(), {
       type: "runtime_observed",

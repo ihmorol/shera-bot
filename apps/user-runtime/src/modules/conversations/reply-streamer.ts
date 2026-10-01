@@ -69,8 +69,15 @@ export interface ReplyStreamerDeps {
 
 export class ScriptedReplyStreamer {
   private readonly activeTimers = new Set<() => void>();
-  /** User event ids already streamed — a redelivered post-commit hook must not duplicate a reply. */
+  /**
+   * User event ids already streamed — a redelivered post-commit hook must not
+   * duplicate a reply. BOUNDED: once past the cap the oldest half is evicted;
+   * redelivery is a same-session retry window, never an arbitrarily old
+   * event, so eviction cannot resurrect a double reply in practice.
+   */
   private readonly handledUserEvents = new Set<string>();
+  /** Cap above which the oldest handled ids are evicted (see handledUserEvents). */
+  private static readonly HANDLED_CAP = 512;
 
   constructor(private readonly deps: ReplyStreamerDeps) {}
 
@@ -94,6 +101,14 @@ export class ScriptedReplyStreamer {
       return;
     }
     this.handledUserEvents.add(event.event_id);
+    if (this.handledUserEvents.size > ScriptedReplyStreamer.HANDLED_CAP) {
+      for (const oldest of this.handledUserEvents) {
+        this.handledUserEvents.delete(oldest);
+        if (this.handledUserEvents.size <= ScriptedReplyStreamer.HANDLED_CAP / 2) {
+          break;
+        }
+      }
+    }
 
     const replyKey = `reply-${event.event_id}`;
     const chunks = splitReplyChunks(this.deps.options.replyText);

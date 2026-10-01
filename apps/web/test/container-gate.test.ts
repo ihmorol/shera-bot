@@ -11,6 +11,7 @@ import {
   PREPARE_WORKSPACE_TITLE,
   PREPARING_WORKSPACE_COPY,
   SIGN_IN_REQUIRED_COPY,
+  STARTING_WORKSPACE_COPY,
   WORKSPACE_STOPPED_COPY,
   type ContainerResolutionState,
   type RuntimeSnapshot,
@@ -104,6 +105,15 @@ describe("gate states", () => {
     const html = render({ kind: "stopped", workspace_id: WORKSPACE });
     expect(html).toContain(WORKSPACE_STOPPED_COPY);
     expect(html).toContain("Start my workspace");
+  });
+
+  it("starting is its own busy state — a booting container is not a container being created", () => {
+    const html = render({ kind: "starting", workspace_id: WORKSPACE });
+    expect(html).toContain(STARTING_WORKSPACE_COPY);
+    expect(html).toContain('aria-busy="true"');
+    // Distinct from the creation copy, and no second start trigger.
+    expect(html).not.toContain(PREPARING_WORKSPACE_COPY);
+    expect(html).not.toContain("Start my workspace");
   });
 
   it("failed renders the safe_message with retry only when retryable", () => {

@@ -39,6 +39,7 @@ export type ContainerResolutionState =
   | { kind: "preparing"; workspace_id: string }
   | { kind: "provisioning"; workspace_id: string }
   | { kind: "stopped"; workspace_id: string }
+  | { kind: "starting"; workspace_id: string }
   | { kind: "failed"; workspace_id: string | null; error: SheraError }
   | {
       kind: "ready";
@@ -58,6 +59,8 @@ export type ContainerResolutionEvent =
   | { type: "runtime_failed"; error: SheraError }
   /** The EXPLICIT trigger: the user asked for the workspace to be prepared. */
   | { type: "provision_started" }
+  /** The EXPLICIT trigger: the user asked a STOPPED workspace to start. */
+  | { type: "start_started" }
   | { type: "provision_accepted"; runtime: RuntimeSnapshot }
   /** RUNTIME_PROVISION_IN_PROGRESS — the control plane is already on it. */
   | { type: "provision_in_progress" }
@@ -122,6 +125,10 @@ export function advanceContainerResolution(
       return { kind: "failed", workspace_id: workspaceId, error: event.error };
     case "provision_started":
       return workspaceId === null ? state : { kind: "preparing", workspace_id: workspaceId };
+    case "start_started":
+      // A STOPPED container starting is a distinct lifecycle moment from a
+      // container being created for the first time — the gate says so.
+      return workspaceId === null ? state : { kind: "starting", workspace_id: workspaceId };
     case "provision_accepted":
       if (workspaceId === null) {
         return state;
@@ -153,6 +160,9 @@ export const PREPARE_WORKSPACE_ACTION = "Prepare my workspace";
 export const PREPARING_WORKSPACE_TITLE = "Preparing your workspace…";
 export const PREPARING_WORKSPACE_COPY =
   "The workspace container is being created. This runs once; your conversations unlock when it is ready.";
+export const STARTING_WORKSPACE_TITLE = "Starting your workspace…";
+export const STARTING_WORKSPACE_COPY =
+  "Your workspace container is starting — it already exists, so this usually takes only a moment. Your conversations unlock when it is running.";
 export const WORKSPACE_STOPPED_TITLE = "Your workspace is stopped";
 export const WORKSPACE_STOPPED_COPY =
   "The workspace container is not running right now. Start it to continue where you left off.";

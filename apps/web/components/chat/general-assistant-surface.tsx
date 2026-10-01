@@ -133,5 +133,10 @@ function RuntimeGeneralAssistantChat({
   );
 }
 
-/** The S02 session user's display name — real sends are attributed to them. */
+/**
+ * Fixture/demo user attribution (S01 fixture session). Real sends in this
+ * slice are attributed to this named FIXTURE user — reading the REAL
+ * signed-in session's display name is later-slice work and is deliberately
+ * not faked here (G4: no fabricated identity).
+ */
 const LOCAL_USER_NAME = "Emon";

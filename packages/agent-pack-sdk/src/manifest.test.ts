@@ -1,11 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  PackManifest,
-  validateManifest,
-  type PackManifestRule,
-  type ValidateResult,
-} from "./manifest.ts";
+import { PackManifest, validateManifest, type PackManifestRule } from "./manifest.ts";
 
 /**
  * Manifest rejection-rule tests (S10 chunk 1). Every rule below is enforced by

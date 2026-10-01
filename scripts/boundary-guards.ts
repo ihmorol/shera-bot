@@ -37,6 +37,10 @@ const PROCESS_EXCEPTIONS = new Set([
   "apps/control-plane/test/helpers/test-app.ts",
   // Spawns the ephemeral postgres cluster the S04/S05 DB suites run against.
   "apps/control-plane/test/helpers/pg-cluster.ts",
+  // S09 kill -9 recovery probe: spawns the E8 mock runtime as a child process
+  // so the probe can SIGKILL it mid-stream and verify restart recovery on the
+  // same SQLite file (test-only; the runtime never spawns processes itself).
+  "apps/user-runtime/test/helpers/mock-runtime-process.ts",
 ]);
 
 /** The only place SQL (and sqlite itself) may live in the runtime. */

@@ -320,6 +320,10 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
           pack_hash: pack.manifest_hash,
         }
       : (options.pinnedPack ?? DEFAULT_PACK),
+    // S10 (D29): the loaded manifest feeds the creation-time snapshots —
+    // every runtime-created run stamps the skill/connector/provider snapshots
+    // it can resolve from the pinned pack's definitions.
+    ...(pack ? { pack_content: pack.manifest } : {}),
     workspace_id: workspaceId,
     policy: { max_retries: 3 },
     publish: broadcast,

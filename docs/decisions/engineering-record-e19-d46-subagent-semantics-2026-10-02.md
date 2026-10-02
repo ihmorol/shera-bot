@@ -43,5 +43,5 @@ PRD §5 (Agent model — read, unchanged), §7 (Operations — read, unchanged),
 ## Verification coverage
 
 - Pack-level: `packages/agent-pack-sdk/src/manifest.test.ts` (D46 single-membership + coordinator exemption; the schema test the D46 record promised).
-- Runtime-level: `apps/user-runtime/src/modules/tasks/messages.test.ts` "no task run on normal messages" (G2/D34) and the `HarnessRunService` typed-trigger tests (S07).
+- Runtime-level: `apps/user-runtime/src/modules/tasks/task-run-creator.test.ts` (typed non-trigger rejections) and `apps/user-runtime/src/modules/runtime/harness-run-service.test.ts` "no task run on normal messages" coverage (G2/D34); the S10 `pack-pin.test.ts` end-to-end test additionally proves the subordinate run stamps its D29 snapshots.
 - Owner veto point: the S10 merge gate (G8) — a product-level reversal supersedes this record via a recorded decision (PRD §24), never a silent edit.

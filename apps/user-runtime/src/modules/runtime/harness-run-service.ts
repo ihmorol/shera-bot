@@ -29,6 +29,7 @@ import type { ZodType } from "zod";
 import {
   EVENT_ENVELOPES,
   type Actor,
+  type Pack,
   type PackSnapshot,
   type RunState,
   type TaskJournalEventType,
@@ -60,6 +61,13 @@ export interface HarnessRunServiceDeps {
   publish?: (event: EventEnvelope) => void;
   /** The workspace's pinned pack (D28) recorded on every run this service creates. */
   pinned_pack: PackSnapshot;
+  /**
+   * S10 (D29): the pinned pack's DEFINITIONS, from which the creation-time
+   * skill/connector/provider snapshots resolve. Optional for direct service
+   * callers (older tests); the runtime composition always supplies it, and
+   * every runtime-created run stamps all resolvable fields.
+   */
+  pack_content?: Pack;
   /** E12: the container's default workspace (the prototype has one). */
   workspace_id: string;
   policy: TaskPolicy;
@@ -104,6 +112,7 @@ export class HarnessRunService {
     // natural language dies, G2).
     const created = createTaskRunFromTypedEvent(rawTrigger, {
       pinned_pack: this.deps.pinned_pack,
+      ...(this.deps.pack_content ? { pack_content: this.deps.pack_content } : {}),
       workspace_id: this.deps.workspace_id,
       clock: { now: this.now(), next_sequence: 1 },
     });

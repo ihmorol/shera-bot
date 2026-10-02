@@ -188,6 +188,7 @@ export const PACK_MANIFEST_RULES = [
   "tool-not-in-allow-list",
   "d46-single-membership",
   "duplicate-roster-entry",
+  "duplicate-id",
   "secret-looking-value",
   "host-path-value",
   "executable-content",
@@ -205,6 +206,65 @@ interface ManifestIssue {
 
 function checkReferences(manifest: PackManifestData): ManifestIssue[] {
   const issues: ManifestIssue[] = [];
+  // Duplicate ids inside one catalog array would make every reference
+  // ambiguous (which "researcher" did a roster mean?). Each catalog must
+  // declare unique ids; the loader's separate "ambiguous" check covers two
+  // DIRECTORIES claiming the same pack version, not this.
+  const duplicateIdIssues = (
+    entries: { id: string }[],
+    catalog: "agents" | "operations" | "skills" | "connectors",
+  ): ManifestIssue[] => {
+    const seen = new Set<string>();
+    const found: ManifestIssue[] = [];
+    entries.forEach((entry, index) => {
+      if (seen.has(entry.id)) {
+        found.push({
+          path: [catalog, index],
+          rule: "duplicate-id",
+          detail: `duplicate ${catalog} id ${entry.id} (declared more than once)`,
+        });
+      }
+      seen.add(entry.id);
+    });
+    return found;
+  };
+  issues.push(
+    ...duplicateIdIssues(
+      manifest.agents.map((agent) => ({ id: agent.agent_id })),
+      "agents",
+    ),
+    ...duplicateIdIssues(
+      manifest.operations.map((operation) => ({ id: operation.operation_id })),
+      "operations",
+    ),
+    ...duplicateIdIssues(
+      manifest.skills.map((skill) => ({ id: skill.skill_id })),
+      "skills",
+    ),
+    ...duplicateIdIssues(
+      manifest.connectors.map((connector) => ({ id: connector.connector_id })),
+      "connectors",
+    ),
+  );
+  const duplicateAllowListIssues = (
+    entries: { tool_id: string; version: string }[],
+  ): ManifestIssue[] => {
+    const seen = new Set<string>();
+    const found: ManifestIssue[] = [];
+    entries.forEach((entry, index) => {
+      const key = `${entry.tool_id}@${entry.version}`;
+      if (seen.has(key)) {
+        found.push({
+          path: ["tool_allow_list", index],
+          rule: "duplicate-id",
+          detail: `duplicate tool_allow_list entry ${key}`,
+        });
+      }
+      seen.add(key);
+    });
+    return found;
+  };
+  issues.push(...duplicateAllowListIssues(manifest.tool_allow_list));
   const declaredAgents = new Set(manifest.agents.map((agent) => agent.agent_id));
   const declaredOperations = new Set(
     manifest.operations.map((operation) => operation.operation_id),

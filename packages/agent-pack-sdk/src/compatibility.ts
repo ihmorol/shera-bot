@@ -30,14 +30,18 @@ function compareTuple(a: SemVerParts, b: SemVerParts): number {
   return a.patch - b.patch;
 }
 
-/** The exclusive upper bound a caret/tilde range allows. */
+/** The exclusive upper bound a caret/tilde range allows (standard npm semantics). */
 function rangeUpperBound(mode: "^" | "~", target: SemVerParts): SemVerParts {
   if (mode === "~") {
     return { major: target.major, minor: target.minor + 1, patch: 0 };
   }
+  // npm caret: ^1.2.3 → <2.0.0; ^0.2.3 → <0.3.0; ^0.0.3 → <0.0.4 (the patch
+  // is pinned on the 0.0.x line — a caret there admits exactly one patch).
   return target.major > 0
     ? { major: target.major + 1, minor: 0, patch: 0 }
-    : { major: 0, minor: target.minor + 1, patch: 0 };
+    : target.minor > 0
+      ? { major: 0, minor: target.minor + 1, patch: 0 }
+      : { major: 0, minor: 0, patch: target.patch + 1 };
 }
 
 function satisfiesRange(version: SemVerParts, range: string): boolean {

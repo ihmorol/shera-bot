@@ -468,6 +468,39 @@ describe("manifest shape rules", () => {
     );
   });
 
+  it("rejects duplicate catalog ids (agents, operations, skills, connectors, tool allow-list)", () => {
+    expectRejection(
+      manifest((m) => {
+        m.agents.push(structuredClone(m.agents[0]));
+      }),
+      "duplicate-id",
+    );
+    expectRejection(
+      manifest((m) => {
+        m.operations.push(structuredClone(m.operations[0]));
+      }),
+      "duplicate-id",
+    );
+    expectRejection(
+      manifest((m) => {
+        m.skills.push(structuredClone(m.skills[0]));
+      }),
+      "duplicate-id",
+    );
+    expectRejection(
+      manifest((m) => {
+        m.connectors.push(structuredClone(m.connectors[0]));
+      }),
+      "duplicate-id",
+    );
+    expectRejection(
+      manifest((m) => {
+        m.tool_allow_list.push(structuredClone(m.tool_allow_list[0]));
+      }),
+      "duplicate-id",
+    );
+  });
+
   it("rejects out-of-range avatar hues and multi-character initial glyphs", () => {
     expectRejection(
       manifest((m) => {

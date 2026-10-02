@@ -98,7 +98,19 @@ function parseManifestFile(manifestPath: string, packId: string, version?: strin
 }
 
 function readRecordedHash(sidecarPath: string, packId: string, version?: string): Sha256Hex {
-  const recorded = readFileSync(sidecarPath, "utf8").trim().toLowerCase();
+  let recorded: string;
+  try {
+    recorded = readFileSync(sidecarPath, "utf8").trim().toLowerCase();
+  } catch (error) {
+    // An unreadable sidecar is a pack-resolution failure, not a crash — the
+    // loader's typed-error contract covers every I/O path (P3 review finding).
+    throw new PackResolutionError({
+      pack_id: packId,
+      version,
+      reason: "invalid-manifest",
+      detail: `manifest.sha256 could not be read: ${error instanceof Error ? error.message : String(error)}`,
+    });
+  }
   if (!/^[a-f0-9]{64}$/.test(recorded)) {
     throw new PackResolutionError({
       pack_id: packId,
@@ -119,13 +131,35 @@ export class BuiltInPackLoader implements PackLoader {
   }
 
   resolve(packId: string, version?: string): PackRecord {
+    // Public-seam hygiene (P3 review finding): the pack id is joined into a
+    // filesystem path, so a traversal-shaped id (`../x`) is a resolution
+    // failure, never a directory escape.
+    if (!/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(packId)) {
+      throw new PackResolutionError({
+        pack_id: packId,
+        version,
+        reason: "not-found",
+        detail: "pack id must match [A-Za-z0-9][A-Za-z0-9_-]*",
+      });
+    }
     const packDir = join(this.#packsRoot, packId);
     if (!existsSync(packDir)) {
       throw new PackResolutionError({ pack_id: packId, version, reason: "not-found" });
     }
 
     const candidates: Candidate[] = [];
-    for (const entry of readdirSync(packDir, { withFileTypes: true })) {
+    let entries: import("node:fs").Dirent[];
+    try {
+      entries = readdirSync(packDir, { withFileTypes: true });
+    } catch (error) {
+      throw new PackResolutionError({
+        pack_id: packId,
+        version,
+        reason: "invalid-manifest",
+        detail: `pack directory could not be read: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
+    for (const entry of entries) {
       if (!entry.isDirectory()) continue;
       const dir = join(packDir, entry.name);
       const manifestPath = join(dir, MANIFEST_FILE);

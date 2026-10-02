@@ -21,9 +21,11 @@ import { openDatabase, type SqliteConnection } from "../../adapters/sqlite/conne
 import { applyMigrations } from "../../adapters/sqlite/migrations.ts";
 import { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import { WorkspacesRepository } from "../../adapters/sqlite/workspaces-repository.ts";
+import { FakeHarnessAdapter } from "../../adapters/process/fake-harness-adapter.ts";
 import { EventsService } from "../events/events.service.ts";
 import { createTaskRunFromTypedEvent } from "../tasks/task-run-creator.ts";
 import { RUNTIME_VERSION } from "../../version.ts";
+import { HarnessRunService } from "./harness-run-service.ts";
 import { loadWorkspacePack } from "./pack-pin.ts";
 
 const tempDirs: string[] = [];
@@ -237,8 +239,6 @@ describe("pack upgrade affects NEW tasks only (D19 — the journal proves it)", 
     db.workspaces.ensureWorkspace(WS);
 
     // Task A is created under the v1 pin; its task.created payload records it.
-    const workspaces = new WorkspacesRepository(db.tx);
-    void workspaces;
     /** Map the built envelope onto the journal's AppendEventInput shape. */
     const appendCreated = (created: typeof a.creation_event) => {
       const payload = created.payload as Record<string, unknown> & { correlation_id: string };
@@ -298,5 +298,89 @@ describe("pack upgrade affects NEW tasks only (D19 — the journal proves it)", 
     };
     expect(snapOf("task_evt_trig_a")?.pack_snapshot?.pack_version).toBe("1.0.0");
     expect(snapOf("task_evt_trig_b")?.pack_snapshot?.pack_version).toBe("2.0.0");
+  });
+});
+
+describe("the composition feeds the loaded pack to the harness (S10 D29 end-to-end)", () => {
+  it("stamps skill/connector/provider snapshots from the real pack onto an Operation run", () => {
+    const packsRoot = join(import.meta.dirname, "../../../../../agent-packs");
+    const db = newDb();
+    const events = new EventsService(db.journal, db.tx);
+    const loaded = loadWorkspacePack({
+      packsRoot,
+      packId: "student",
+      packVersion: "1.0.0",
+      workspaceId: WS,
+      workspaces: db.workspaces,
+      now: NOW,
+    });
+    const service = new HarnessRunService({
+      adapter: new FakeHarnessAdapter({ now: () => NOW }),
+      tx: db.tx,
+      journal: db.journal,
+      events,
+      pinned_pack: {
+        pack_id: loaded.manifest.pack_id,
+        pack_version: loaded.manifest.version,
+        pack_hash: loaded.manifest_hash,
+      },
+      // THE PLUMB UNDER TEST: the composition supplies the loaded manifest.
+      pack_content: loaded.manifest,
+      workspace_id: WS,
+      policy: { max_retries: 3 },
+      now: () => NOW,
+    });
+    const researchPaper = loaded.manifest.operations.find(
+      (operation) => operation.operation_id === "operation_research_paper",
+    );
+    if (!researchPaper) throw new Error("student pack lost its Research Paper operation");
+    const confirmed = {
+      event_id: "evt_confirm_rp",
+      stream_id: "conversation:conv_op",
+      sequence: 1,
+      event_version: 1,
+      actor: { type: "user", id: "user-1" },
+      task_id: "task_evt_confirm_rp",
+      conversation_id: "conv_op",
+      occurred_at: NOW,
+      redaction_class: "internal",
+      event_type: "operation.confirmed",
+      payload: {
+        operation_id: researchPaper.operation_id,
+        operation_version: researchPaper.version,
+        operation_hash: researchPaper.content_hash ?? "b".repeat(64),
+        roster: [...researchPaper.roster],
+      },
+    } as Parameters<typeof createTaskRunFromTypedEvent>[0];
+    const result = service.startRun(confirmed);
+    if (!result.ok) throw new Error(`startRun failed: ${JSON.stringify(result)}`);
+    const created = db.journal
+      .readFrom(WS, `task:${result.task_id}`, 0, 10)
+      .map((row) => (typeof row.payload === "string" ? JSON.parse(row.payload) : row.payload))
+      .find((envelope) => envelope.event_type === "task.created");
+    if (!created) throw new Error("no task.created row");
+    const payload = created.payload as {
+      pack_snapshot?: { pack_version: string };
+      operation_snapshot?: { operation_id: string };
+      roster?: string[];
+      skill_snapshot?: string[];
+      connector_snapshot?: string[];
+      provider_snapshot?: { provider_id: string; model: string };
+    };
+    expect(payload.pack_snapshot?.pack_version).toBe("1.0.0");
+    expect(payload.operation_snapshot?.operation_id).toBe("operation_research_paper");
+    expect(payload.roster).toEqual([
+      "agent_general_assistant",
+      "agent_researcher",
+      "agent_citation_manager",
+    ]);
+    // The D29 fields ONLY the pack_content path can produce:
+    expect(payload.skill_snapshot).toEqual([...researchPaper.skills]);
+    expect(payload.connector_snapshot).toEqual([...researchPaper.connectors]);
+    // The coordinator's default provider (General Assistant, pack default).
+    expect(payload.provider_snapshot).toEqual({
+      provider_id: "provider_platform",
+      model: "platform-default",
+    });
   });
 });

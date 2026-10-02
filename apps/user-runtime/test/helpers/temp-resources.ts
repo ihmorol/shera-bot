@@ -100,7 +100,9 @@ export async function cleanupTempResources(): Promise<void> {
       if (removeOnce(dir)) {
         break;
       }
-      // ~10ms before the first retry, doubling: ~10s of total patience.
+      // ~10ms before the first retry, doubling over attempts 0-8: ~5s of total
+      // patience. Measured: with every handle closed, directories delete on the
+      // FIRST attempt; this budget only absorbs Windows' lock-release lag.
       if (attempt < 9) {
         await new Promise((resolve) => setTimeout(resolve, 10 * 2 ** attempt));
       }

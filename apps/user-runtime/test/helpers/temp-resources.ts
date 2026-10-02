@@ -45,15 +45,10 @@ export function makeTempDir(prefix: string): string {
   return dir;
 }
 
-/** Register a temp directory (created elsewhere) for cleanup. */
-export function trackTempDir(dir: string): string {
-  trackedDirs.push(dir);
-  return dir;
-}
-
 /**
  * Register an open resource so its handle is released before the temp
- * directories are deleted. Call this immediately after opening a database.
+ * directories are deleted. Call this immediately after opening a database — or
+ * after composing anything that owns one (`composeLocalApi`).
  */
 export function trackConnection<T extends Closeable>(connection: T): T {
   trackedCloseables.push(connection);
@@ -84,6 +79,12 @@ function removeOnce(dir: string): boolean {
  *
  * Retries a bounded number of times to absorb Windows' short-lived lock
  * release. Intended for `afterAll` / `afterEach`.
+ *
+ * A directory that survives the retry budget is reported on stderr rather than
+ * silently dropped: it means a resource is still open, which is a real defect
+ * in the suite. It is reported and NOT thrown, because a leaked temp directory
+ * must never turn a suite whose assertions all passed into a failure — but it
+ * is never invisible either (review finding F4).
  */
 export async function cleanupTempResources(): Promise<void> {
   for (const closeable of trackedCloseables.splice(0).reverse()) {
@@ -96,9 +97,20 @@ export async function cleanupTempResources(): Promise<void> {
 
   for (const dir of trackedDirs.splice(0).reverse()) {
     for (let attempt = 0; attempt < 10; attempt += 1) {
-      if (removeOnce(dir)) break;
-      // ~10ms before the first retry, doubling: ~1s of total patience.
-      await new Promise((resolve) => setTimeout(resolve, 10 * 2 ** attempt));
+      if (removeOnce(dir)) {
+        break;
+      }
+      // ~10ms before the first retry, doubling: ~10s of total patience.
+      if (attempt < 9) {
+        await new Promise((resolve) => setTimeout(resolve, 10 * 2 ** attempt));
+      }
+      if (attempt === 9) {
+        // Budget exhausted: a handle is still open. Visible, not thrown.
+        console.warn(
+          `[temp-resources] could not delete ${dir}: a resource is still open after 10 retries. ` +
+            `Track every connection with trackConnection() so cleanup can close it first.`,
+        );
+      }
     }
   }
 }

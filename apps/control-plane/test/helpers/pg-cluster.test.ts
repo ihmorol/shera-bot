@@ -32,6 +32,19 @@ describe("resolvePgBin", () => {
     ).toBe(override);
   });
 
+  it("accepts a Windows-style override that only has initdb.exe", () => {
+    // Regression for review finding F2: the override branch originally probed
+    // only "initdb", so SHERA_PG_BIN could never work on Windows — the exact
+    // platform this fix exists to support.
+    const override = "D:\\tools\\pgsql\\bin";
+    expect(
+      resolvePgBin(
+        { SHERA_PG_BIN: override } as NodeJS.ProcessEnv,
+        existsOnlyIn(join(override, "initdb.exe")),
+      ),
+    ).toBe(override);
+  });
+
   it("falls back to a conventional install directory when the override is stale", () => {
     const winDir = "C:\\Program Files\\PostgreSQL\\16\\bin";
     // The override points at a directory with no initdb; a real install wins.

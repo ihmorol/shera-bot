@@ -58,7 +58,11 @@ export function resolvePgBin(
   exists: (path: string) => boolean = existsSync,
 ): string {
   const override = env.SHERA_PG_BIN;
-  if (override && exists(join(override, "initdb"))) {
+  // `.exe` matters on Windows: `existsSync` is case- and extension-sensitive, so
+  // checking only "initdb" would miss a perfectly good Windows install (review
+  // finding F2 — the override branch originally had this gap, so SHERA_PG_BIN
+  // could not work at all on Windows, the platform this fix targets).
+  if (override && (exists(join(override, "initdb")) || exists(join(override, "initdb.exe")))) {
     return override;
   }
 
@@ -105,12 +109,22 @@ export interface TestCluster {
 async function tryFreePort(): Promise<number> {
   return await new Promise<number>((resolve, reject) => {
     const probe = createServer();
+    // The error handler is attached BEFORE listen(): a bind failure (EADDRNOTAVAIL,
+    // EACCES) can be emitted during listen, and an unhandled 'error' event would
+    // crash the worker instead of rejecting (review finding F12).
+    probe.on("error", reject);
     probe.listen(0, "127.0.0.1", () => {
       const address = probe.address();
       const port = typeof address === "object" && address ? address.port : 0;
-      probe.close(() => (port > 0 ? resolve(port) : reject(new Error("no free port"))));
+      probe.close((closeError) => {
+        if (closeError) {
+          reject(closeError);
+          return;
+        }
+        if (port > 0) resolve(port);
+        else reject(new Error("no free port"));
+      });
     });
-    probe.on("error", reject);
   });
 }
 

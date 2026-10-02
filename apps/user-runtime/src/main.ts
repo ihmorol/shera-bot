@@ -112,14 +112,17 @@ export function runtimeConfigFromEnv(
   const dbPath = overrides.dbPath ?? env["RUNTIME_DB_PATH"] ?? DEFAULT_DB_PATH;
   const defaultWorkspaceId =
     overrides.defaultWorkspaceId ?? env["RUNTIME_DEFAULT_WORKSPACE_ID"] ?? DEFAULT_WORKSPACE_ID;
-  const packsRoot = overrides.packsRoot ?? env["RUNTIME_PACKS_ROOT"] ?? defaultPacksRoot(import.meta.dirname);
+  const packsRoot =
+    overrides.packsRoot ?? env["RUNTIME_PACKS_ROOT"] ?? defaultPacksRoot(import.meta.dirname);
   return { host, port, dbPath, defaultWorkspaceId, packsRoot };
 }
 
 /** Start the runtime node: compose, bind, (optionally) wire shutdown signals. */
 export async function startRuntimeNode(config: RuntimeNodeConfig = {}): Promise<RuntimeNode> {
-  const { host, port, dbPath, defaultWorkspaceId, packsRoot } =
-    runtimeConfigFromEnv(process.env, config);
+  const { host, port, dbPath, defaultWorkspaceId, packsRoot } = runtimeConfigFromEnv(
+    process.env,
+    config,
+  );
   mkdirSync(dirname(dbPath), { recursive: true });
 
   const runtime: RuntimeHandle = composeRuntime({

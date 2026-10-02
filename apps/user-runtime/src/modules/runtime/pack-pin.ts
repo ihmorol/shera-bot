@@ -16,7 +16,10 @@ import {
   type PackRecord,
 } from "@shera-bot/agent-pack-sdk";
 
-import { WorkspacesRepository, type WorkspacePackPin } from "../../adapters/sqlite/workspaces-repository.ts";
+import {
+  WorkspacesRepository,
+  type WorkspacePackPin,
+} from "../../adapters/sqlite/workspaces-repository.ts";
 import { RUNTIME_VERSION } from "../../version.ts";
 
 export interface LoadWorkspacePackOptions {

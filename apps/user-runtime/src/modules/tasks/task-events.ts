@@ -112,9 +112,7 @@ export function buildTaskCreatedEvent(input: {
       ? { operation_snapshot: input.snapshots.operation_snapshot }
       : {}),
     ...(input.snapshots?.roster ? { roster: input.snapshots.roster } : {}),
-    ...(input.snapshots?.skill_snapshot
-      ? { skill_snapshot: input.snapshots.skill_snapshot }
-      : {}),
+    ...(input.snapshots?.skill_snapshot ? { skill_snapshot: input.snapshots.skill_snapshot } : {}),
     ...(input.snapshots?.connector_snapshot
       ? { connector_snapshot: input.snapshots.connector_snapshot }
       : {}),

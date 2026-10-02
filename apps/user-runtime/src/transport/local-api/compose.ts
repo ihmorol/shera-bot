@@ -44,10 +44,7 @@ import {
   type ScriptedReplyOptions,
 } from "../../modules/conversations/reply-streamer.ts";
 import { HarnessRunService } from "../../modules/runtime/harness-run-service.ts";
-import {
-  loadWorkspacePack,
-  type WorkspacePack,
-} from "../../modules/runtime/pack-pin.ts";
+import { loadWorkspacePack, type WorkspacePack } from "../../modules/runtime/pack-pin.ts";
 import { WorkspacesRepository } from "../../adapters/sqlite/workspaces-repository.ts";
 import { createLocalApi } from "./app.ts";
 import { consoleRedactedLogger, type RedactedLogger } from "../http/typed-errors.ts";

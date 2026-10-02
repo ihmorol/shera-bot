@@ -82,7 +82,11 @@ describe("workspace pack pinning (S10 migration v3)", () => {
 
       // An explicit upgrade re-pins to the new version; the row is replaced,
       // not duplicated (one pinned pack per workspace — D19).
-      const upgraded = { ...PIN, agent_pack_version: "2.0.0", installed_at: "2026-10-02T00:00:00.000Z" };
+      const upgraded = {
+        ...PIN,
+        agent_pack_version: "2.0.0",
+        installed_at: "2026-10-02T00:00:00.000Z",
+      };
       workspaces.pinPack("ws_default", upgraded);
       expect(workspaces.findPinnedPack("ws_default")).toEqual(upgraded);
 

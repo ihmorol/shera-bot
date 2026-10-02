@@ -189,7 +189,8 @@ function resolveProviderSnapshot(
     definition?.coordinator && definition.coordinator !== "none"
       ? definition.coordinator
       : packContent.default_coordinator_agent_id;
-  const agent = packContent.agents.find((candidate) => candidate.agent_id === coordinatorId) ??
+  const agent =
+    packContent.agents.find((candidate) => candidate.agent_id === coordinatorId) ??
     packContent.agents.find(
       (candidate) => candidate.agent_id === packContent.default_coordinator_agent_id,
     );

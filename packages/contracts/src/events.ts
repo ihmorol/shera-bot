@@ -27,11 +27,7 @@ import {
   SemVer,
 } from "./primitives.ts";
 import { RunState } from "./state-vocabulary.ts";
-import {
-  OperationSnapshot,
-  PackSnapshot,
-  ProviderSnapshot,
-} from "./snapshots.ts";
+import { OperationSnapshot, PackSnapshot, ProviderSnapshot } from "./snapshots.ts";
 
 /** D34 trigger categories that create task runs (G2). Closed set. */
 export const TASK_TRIGGER_EVENT_TYPES = [

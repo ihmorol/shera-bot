@@ -35,9 +35,7 @@ const NOW = "2026-09-28T12:00:00.000Z";
  * clean by construction, no credential-shaped values). `runtimeCompatibility`
  * defaults to THIS runtime's line so the happy-path tests load it.
  */
-function minimalManifest(
-  mutate?: (m: Record<string, unknown>) => void,
-): Record<string, unknown> {
+function minimalManifest(mutate?: (m: Record<string, unknown>) => void): Record<string, unknown> {
   const manifest: Record<string, unknown> = {
     pack_id: "student",
     version: "1.0.0",
@@ -108,7 +106,12 @@ function writePack(
   writeFileSync(join(dir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
 }
 
-function newDb(): { conn: SqliteConnection; tx: SqliteTransactions; journal: EventJournalRepository; workspaces: WorkspacesRepository } {
+function newDb(): {
+  conn: SqliteConnection;
+  tx: SqliteTransactions;
+  journal: EventJournalRepository;
+  workspaces: WorkspacesRepository;
+} {
   const conn = openDatabase(join(tempRoot(), "runtime.db"));
   applyMigrations(conn.db);
   const tx = new SqliteTransactions(conn.db);
@@ -237,7 +240,7 @@ describe("pack upgrade affects NEW tasks only (D19 — the journal proves it)", 
     const workspaces = new WorkspacesRepository(db.tx);
     void workspaces;
     /** Map the built envelope onto the journal's AppendEventInput shape. */
-    const appendCreated = (created: (typeof a.creation_event)) => {
+    const appendCreated = (created: typeof a.creation_event) => {
       const payload = created.payload as Record<string, unknown> & { correlation_id: string };
       return events.appendEvent({
         event_id: created.event_id,

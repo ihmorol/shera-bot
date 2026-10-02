@@ -61,12 +61,7 @@ export class WorkspacesRepository {
    */
   findPinnedPack(workspaceId: string, exec?: DatabaseSync): WorkspacePackPin | null {
     const row = this.findById(workspaceId, exec);
-    if (
-      row?.agent_pack_id &&
-      row.agent_pack_version &&
-      row.manifest_hash &&
-      row.installed_at
-    ) {
+    if (row?.agent_pack_id && row.agent_pack_version && row.manifest_hash && row.installed_at) {
       return {
         agent_pack_id: row.agent_pack_id,
         agent_pack_version: row.agent_pack_version,

@@ -101,27 +101,37 @@ describe("D7 typed collaboration messages", () => {
   });
 
   it("keeps typed fidelity: the type is never inferred from the summary", () => {
-    // G2: the label comes from the closed enum. A summary phrased as a question
-    // must not change how a "TaskDelegated" is labelled. Compared with the
-    // summary stripped out — the prose SHOULD differ, the typed framing must not.
-    const strip = (html: string) => html.replace(/<p class="text-\[13px\][\s\S]*?<\/p>/, "<p/>");
+    // G2/D7: the label comes from the closed enum, so prose can never change how
+    // a message is classified.
+    //
+    // The first version of this test compared two full renderings with different
+    // summaries and expected them EQUAL — which can only pass because the prose is
+    // ignored, i.e. it asserts the very thing it should forbid, and a real
+    // regression would still sail through. This version asserts the inverse
+    // precisely: the summaries render differently, the typed framing does not.
+    const headerOf = (html: string) => html.slice(0, html.indexOf("Delegated work"));
+    const questionSummary = message({ goal_or_summary: "Can you check this?" });
+    const statementSummary = message({ goal_or_summary: "Sources collected and indexed." });
+
+    // The prose IS rendered (so the two differ)...
     expect(
-      strip(
-        render(
-          createElement(renderCollaborationSummary, {
-            message: message({ goal_or_summary: "Can you check this?" }),
-          }),
-        ),
-      ),
+      render(createElement(renderCollaborationSummary, { message: questionSummary })),
+    ).not.toBe(render(createElement(renderCollaborationSummary, { message: statementSummary })));
+    // ...but everything before it — type, icon, sender, recipient, status — is
+    // identical, which is only true if classification ignores the prose.
+    expect(
+      headerOf(render(createElement(renderCollaborationSummary, { message: questionSummary }))),
     ).toBe(
-      strip(
-        render(
-          createElement(renderCollaborationSummary, {
-            message: message({ goal_or_summary: "Sources collected and indexed." }),
-          }),
-        ),
-      ),
+      headerOf(render(createElement(renderCollaborationSummary, { message: statementSummary }))),
     );
+    // And a summary that reads like a different protocol type does not relabel it.
+    expect(
+      render(
+        createElement(renderCollaborationSummary, {
+          message: message({ goal_or_summary: "I am blocked." }),
+        }),
+      ),
+    ).toContain("Delegated work");
   });
 
   it("renders every protocol message type without throwing", () => {

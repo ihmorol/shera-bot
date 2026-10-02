@@ -169,9 +169,11 @@ export function renderCollaborationSummary({
       {message.unresolved_questions.length > 0 ? (
         // An open question is what a user most needs to see: a subordinate run
         // must raise a question rather than invent an answer (G2).
+        // Keyed by position, not by text: the contract does not promise distinct
+        // questions, and a duplicate string would otherwise collide as a key.
         <ul className="list-inside list-disc text-[12px] text-approval">
-          {message.unresolved_questions.map((question) => (
-            <li key={question}>{question}</li>
+          {message.unresolved_questions.map((question, index) => (
+            <li key={`${message.idempotency_key}-q${index}`}>{question}</li>
           ))}
         </ul>
       ) : null}

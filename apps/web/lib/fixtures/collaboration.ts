@@ -14,7 +14,9 @@ import { CollaborationMessage } from "@shera-bot/contracts";
  */
 
 const BASE = {
-  workspace_id: "ws-11111111-1111-4111-8111-111111111111",
+  // Matches every other fixture's workspace (runs.ts, artifacts.ts,
+  // conversations.ts all use "workspace_demo").
+  workspace_id: "workspace_demo",
   parent_task_id: null,
   artifact_refs: [],
   required_capabilities: [],
@@ -22,12 +24,27 @@ const BASE = {
   unresolved_questions: [],
 } as const;
 
-/** Research Paper Operation: the coordinator delegates evidence-gathering. */
+/**
+ * Research Paper Operation traffic.
+ *
+ * Conversation and task ids are REAL seeded ids, joinable to the existing
+ * conversation/run fixtures. An earlier version of this file invented
+ * `conversation_research_paper` and `task_run_research_paper`, which match no
+ * seeded record — so `collaborationForConversation` filtered on an id nothing
+ * produced and the entire surface rendered nowhere while every test stayed green.
+ * `fixtures.test.ts` now asserts these ids resolve, so that cannot recur.
+ *
+ * Placement note: `conversation_agent_general_assistant` and
+ * `conversation_agent_researcher` are the Agent direct chats, which
+ * `app/app/agent/[agentId]/page.tsx` renders today. The Operation chat
+ * (`conversation_op_research_paper`) is still an `EmptyState` placeholder in
+ * this slice, so a message attached there is wired but not yet on screen.
+ */
 export const COLLABORATION_MESSAGES: CollaborationMessage[] = [
   CollaborationMessage.parse({
     ...BASE,
-    task_id: "task_run_research_paper",
-    conversation_id: "conversation_research_paper",
+    task_id: "task_run_rp_sources",
+    conversation_id: "conversation_agent_general_assistant",
     sender_agent: "agent_general_assistant",
     recipient_agent: "agent_researcher",
     message_type: "TaskDelegated",
@@ -35,13 +52,13 @@ export const COLLABORATION_MESSAGES: CollaborationMessage[] = [
       "Find five peer-reviewed sources from 2024 onward on spaced repetition, and extract the claim each one supports.",
     risk_class: "READ_ONLY",
     status: "proposed",
-    created_at: "2026-09-20T10:12:00Z",
+    created_at: "2026-09-19T10:02:00Z",
     idempotency_key: "collab_research_delegated_1",
   }),
   CollaborationMessage.parse({
     ...BASE,
-    task_id: "task_run_research_paper",
-    conversation_id: "conversation_research_paper",
+    task_id: "task_run_rp_bibliography",
+    conversation_id: "conversation_op_research_paper",
     sender_agent: "agent_researcher",
     recipient_agent: "agent_citation_manager",
     message_type: "TaskProposed",
@@ -54,8 +71,8 @@ export const COLLABORATION_MESSAGES: CollaborationMessage[] = [
   }),
   CollaborationMessage.parse({
     ...BASE,
-    task_id: "task_run_research_paper",
-    conversation_id: "conversation_research_paper",
+    task_id: "task_run_rp_sources",
+    conversation_id: "conversation_agent_researcher",
     sender_agent: "agent_researcher",
     recipient_agent: "agent_general_assistant",
     message_type: "QuestionRaised",

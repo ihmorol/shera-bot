@@ -36,6 +36,7 @@ export {
 } from "./events";
 export { FIXTURE_ARTIFACTS, artifactsForTask } from "./artifacts";
 export { MESSAGES, messagesForConversation, ChatMessage } from "./messages";
+export { COLLABORATION_MESSAGES, collaborationForConversation } from "./collaboration";
 export { buildThread, compareThreadItems, type ThreadItem } from "./threads";
 export { DEMO_STREAM, FixtureStream, splitStreamChunks } from "./streaming";
 

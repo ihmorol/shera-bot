@@ -43,6 +43,38 @@ describe("pack fixture (§9 #1)", () => {
     }
   });
 
+  it("matches the D46 roster mapping exactly (S10 alignment — the demo fixture IS the student pack)", () => {
+    expect(STUDENT_PACK.pack_id).toBe("student");
+    const byId = (operationId: string) =>
+      STUDENT_PACK.operations.find((operation) => operation.operation_id === operationId);
+    const rosterOf = (operationId: string) => byId(operationId)?.roster ?? [];
+    // D46 table, asserted verbatim.
+    expect(rosterOf("operation_research_paper")).toEqual([
+      "agent_general_assistant",
+      "agent_researcher",
+      "agent_citation_manager",
+    ]);
+    expect(rosterOf("operation_programming_assignment")).toEqual([
+      "agent_general_assistant",
+      "agent_developer",
+      "agent_programming_tutor",
+    ]);
+    expect(rosterOf("operation_exam_preparation")).toEqual(["agent_study_planner"]);
+    // Coordinators: pack default for the first two; the pack override for
+    // Exam Preparation (Study Planner coordinates its own home Operation).
+    expect(byId("operation_research_paper")?.coordinator).toBeUndefined();
+    expect(byId("operation_programming_assignment")?.coordinator).toBeUndefined();
+    expect(byId("operation_exam_preparation")?.coordinator).toBe("agent_study_planner");
+    // Single membership (D46): no Agent appears in two rosters — EXCEPT the
+    // pack default coordinator, whose cross-Operation presence is the
+    // coordinator role, not a roster assignment (the canonical schema's rule).
+    const rosterAgents = STUDENT_PACK.operations.flatMap((operation) => operation.roster);
+    const nonCoordinator = rosterAgents.filter(
+      (agentId) => agentId !== STUDENT_PACK.default_coordinator_agent_id,
+    );
+    expect(new Set(nonCoordinator).size).toBe(nonCoordinator.length);
+  });
+
   it("has the three pack Operation templates matching the navigation seed", () => {
     expect(STUDENT_PACK.operations).toHaveLength(3);
     expect(STUDENT_PACK.operations.map((operation) => operation.title)).toEqual(

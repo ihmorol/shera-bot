@@ -5,9 +5,16 @@
  */
 import { z } from "zod";
 
-import { Id, IsoDateTime, Sha256Hex, SemVer, WorkspaceId } from "./primitives.ts";
+import { Id, IsoDateTime, WorkspaceId } from "./primitives.ts";
 import { PauseReason, RunState } from "./state-vocabulary.ts";
 import { TASK_TRIGGER_EVENT_TYPES, type TaskTriggerEventType } from "./events.ts";
+import { OperationSnapshot, PackSnapshot, ProviderSnapshot } from "./snapshots.ts";
+
+// The creation-time snapshot schemas live in snapshots.ts so the D26 event
+// payloads (events.ts) can share them without an import cycle; re-exported
+// here so the task-run public surface is unchanged (D29 reproducibility).
+// Exporting the value bindings re-exports their types too.
+export { OperationSnapshot, PackSnapshot, ProviderSnapshot };
 
 /** Why the task run exists — always a typed protocol trigger (D34, G2). */
 export const TaskOrigin = z.strictObject({
@@ -15,29 +22,6 @@ export const TaskOrigin = z.strictObject({
   trigger_event_id: Id,
 });
 export type TaskOrigin = z.infer<typeof TaskOrigin>;
-
-/** Pack pinning per D28: a task keeps the pack version that created it. */
-export const PackSnapshot = z.strictObject({
-  pack_id: Id,
-  pack_version: SemVer,
-  pack_hash: Sha256Hex,
-});
-export type PackSnapshot = z.infer<typeof PackSnapshot>;
-
-/** Operation pinning per D29 (present when the run belongs to an Operation). */
-export const OperationSnapshot = z.strictObject({
-  operation_id: Id,
-  version: SemVer,
-  hash: Sha256Hex,
-});
-export type OperationSnapshot = z.infer<typeof OperationSnapshot>;
-
-/** Provider/model snapshot per D20/D22 (existing tasks keep their snapshot). */
-export const ProviderSnapshot = z.strictObject({
-  provider_id: Id,
-  model: z.string().min(1).max(256),
-});
-export type ProviderSnapshot = z.infer<typeof ProviderSnapshot>;
 
 /** Retry policy — PRD §8: bounded backoff, up to three times, then pause. */
 export const TaskPolicy = z.strictObject({

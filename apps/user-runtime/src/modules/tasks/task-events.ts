@@ -11,6 +11,9 @@
  */
 import {
   EVENT_ENVELOPES,
+  type OperationSnapshot,
+  type PackSnapshot,
+  type ProviderSnapshot,
   type TaskCreatedPayload,
   type TaskLifecyclePayload,
   type TaskRun,
@@ -84,11 +87,40 @@ export function buildTaskCreatedEvent(input: {
   trigger: { event_type: TaskCreatedPayload["trigger_event_type"]; event_id: string };
   actor: { type: string; id: string };
   clock: EnvelopeClock;
+  /**
+   * Creation-time snapshots (S10; D19/D29 reproducibility): the pack /
+   * Operation / provider pins plus roster, skill, and connector snapshots,
+   * embedded in the journal payload so the task.created row is the durable
+   * record a pack upgrade cannot retroactively change. Omitted fields are
+   * simply absent — nothing is invented (G4).
+   */
+  snapshots?: {
+    pack_snapshot?: PackSnapshot;
+    operation_snapshot?: OperationSnapshot;
+    roster?: string[];
+    skill_snapshot?: string[];
+    connector_snapshot?: string[];
+    provider_snapshot?: ProviderSnapshot;
+  };
 }): TypedExecutionEvent {
   const payload: TaskCreatedPayload = {
     trigger_event_type: input.trigger.event_type,
     trigger_event_id: input.trigger.event_id,
     correlation_id: input.trigger.event_id,
+    ...(input.snapshots?.pack_snapshot ? { pack_snapshot: input.snapshots.pack_snapshot } : {}),
+    ...(input.snapshots?.operation_snapshot
+      ? { operation_snapshot: input.snapshots.operation_snapshot }
+      : {}),
+    ...(input.snapshots?.roster ? { roster: input.snapshots.roster } : {}),
+    ...(input.snapshots?.skill_snapshot
+      ? { skill_snapshot: input.snapshots.skill_snapshot }
+      : {}),
+    ...(input.snapshots?.connector_snapshot
+      ? { connector_snapshot: input.snapshots.connector_snapshot }
+      : {}),
+    ...(input.snapshots?.provider_snapshot
+      ? { provider_snapshot: input.snapshots.provider_snapshot }
+      : {}),
   };
   return assembleEnvelope("task.created", {
     event_id: `evt_created_${input.run.task_id}`,

@@ -1,22 +1,117 @@
+import type { CSSProperties } from "react";
+import type { Agent } from "@shera-bot/contracts";
+
 import { cn } from "@/lib/utils";
 
 /**
- * Agent avatar (UI_DESIGN §5, §21 item 4): initial glyph on a distinct hue,
- * stable per `agent_id` so the same Agent carries one identity everywhere
- * (D39). The hue mixes the §2.1 token colors with `color-mix` — no raw color
- * values leave the token layer (final illustration art stays open for the
- * owner sketch per §8).
+ * Agent avatar — a small 3D-shaded identity token (UI_DESIGN §5, §21 item 4).
+ *
+ * Design notes:
+ *
+ * - **Pack data is authoritative (D18).** The pack authors `ui_identity`
+ *   (`avatar_hue`, `initial_glyph`) per Agent. This component previously hashed
+ *   `agent_id` into one of six fixed color mixes and ignored the authored values
+ *   entirely, silently discarding identity the pack had already declared — and
+ *   `mockup-divergence.test.ts` was pinning those hues for nothing. Authored
+ *   identity now wins; the `agent_id` hash is only a fallback for packs that
+ *   author no identity.
+ * - **Stable per Agent (D39).** The same Agent looks identical in the sidebar,
+ *   the chat header, and the streaming bubble. Appearance is a pure function of
+ *   the Agent's data, never of render order or call site.
+ * - **Distinct by more than hue.** Six Agents sit side by side in the sidebar,
+ *   so a deterministic shape variant (facet count) varies alongside the hue.
+ *   §2.1 requires color never be the only signal; here it is not the *only*
+ *   differentiator even visually.
+ * - **Tokens only (§2.1).** The component emits a bare hue NUMBER in a CSS
+ *   custom property; every actual color value is composed in `globals.css`, the
+ *   single file allowed to hold raw colors (enforced by `design-tokens.test.ts`).
+ * - **Decorative.** The name is always rendered adjacent to the avatar, so the
+ *   avatar is `aria-hidden` and never announced twice. Presence pairs its dot
+ *   with a text label, so state is never conveyed by color alone.
  */
-const HUE_MIXES = [100, 80, 60, 40, 20, 0] as const;
 
-export function avatarColorFor(agentId: string): string {
+/** Deterministic 32-bit string hash (stable across renders and processes). */
+function hashOf(value: string): number {
   let hash = 0;
-  for (let i = 0; i < agentId.length; i += 1) {
-    hash = (Math.imul(hash, 31) + agentId.charCodeAt(i)) >>> 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (Math.imul(hash, 31) + value.charCodeAt(index)) >>> 0;
   }
-  const index = hash % HUE_MIXES.length;
-  const share = HUE_MIXES[index] ?? HUE_MIXES[0];
-  return `color-mix(in oklab, var(--color-sky) ${share}%, var(--color-brand))`;
+  return hash;
+}
+
+/**
+ * The Agent's authored hue, or a stable derived hue when the pack authors none.
+ * Returned as a plain degree number so `globals.css` owns every color value.
+ *
+ * `Number.isFinite` guards the authored branch: a non-finite hue would emit
+ * `--agent-hue:NaN`, and because custom properties are substituted at
+ * computed-value time, every color consumer derived from that hue would then
+ * fail to parse and fall back to a transparent shell — an invisible avatar.
+ * Unreachable from parsed JSON, reachable from any programmatic caller (this is
+ * exported).
+ */
+export function avatarHueFor(agent: Pick<Agent, "agent_id" | "ui_identity">): number {
+  const authored = agent.ui_identity?.avatar_hue;
+  if (typeof authored === "number" && Number.isFinite(authored)) {
+    // 360 ≡ 0: the contract permits 360 as a hue and it is the same color as 0.
+    return ((authored % 360) + 360) % 360;
+  }
+  return hashOf(agent.agent_id) % 360;
+}
+
+/**
+ * Distinct silhouette variants, 0..SHAPE_VARIANT_COUNT-1.
+ *
+ * The variant count is deliberately larger than the six Agents in the student
+ * pack. An earlier version used 4 buckets, and the six shipped Agent ids
+ * collapsed into only 3 distinct silhouettes — so half the roster differed by
+ * hue alone, which is exactly what §2.1 forbids. A test now asserts that all six
+ * manifest Agents get DISTINCT variants, so widening the pack cannot silently
+ * reintroduce that.
+ */
+export const SHAPE_VARIANT_COUNT = 8;
+
+/**
+ * Deterministic shape variant index (D39). Varies the facet count so Agents
+ * differ in silhouette as well as hue.
+ */
+export function shapeVariantFor(agentId: string): number {
+  return hashOf(`shape:${agentId}`) % SHAPE_VARIANT_COUNT;
+}
+
+/**
+ * The glyph: the pack's authored one, else the display name's first character.
+ *
+ * Both fallbacks are code-POINT based (`[...text][0]`), matching the
+ * `UiIdentity` contract's "exactly one code point" rule — `charAt(0)` would
+ * split an astral character (an emoji-initial Agent name) into a lone surrogate
+ * and render U+FFFD. A blank or whitespace-only name yields "?" rather than an
+ * empty avatar: `charAt` returns "" rather than nullish, so a `??` chain never
+ * fires for that input.
+ */
+export function glyphFor(agent: Pick<Agent, "display_name" | "ui_identity">): string {
+  const authored = agent.ui_identity?.initial_glyph;
+  if (authored) return authored;
+  const name = agent.display_name.trim();
+  if (!name) return "?";
+  return [...name][0] ?? "?";
+}
+
+/** The CSS custom properties the avatar emits; typed so tests can read them. */
+export type AgentAvatarVars = {
+  "--agent-hue": string;
+  "--agent-facets": string;
+};
+
+/**
+ * The avatar's inline style: hue + facet count as CSS custom properties.
+ * Contains no color values — only numbers — so the token layer stays authoritative.
+ */
+export function avatarStyleFor(agent: Pick<Agent, "agent_id" | "ui_identity">): AgentAvatarVars {
+  return {
+    "--agent-hue": String(avatarHueFor(agent)),
+    "--agent-facets": String(shapeVariantFor(agent.agent_id) + 4),
+  };
 }
 
 const SIZES = {
@@ -26,36 +121,37 @@ const SIZES = {
 } as const;
 
 export function AgentAvatar({
-  agentId,
-  name,
+  agent,
   size = "md",
   presence = "hibernating",
   className,
 }: {
-  agentId: string;
-  name: string;
+  agent: Pick<Agent, "agent_id" | "display_name" | "ui_identity">;
   size?: keyof typeof SIZES;
   /** D32 on-demand sessions: a live dot only while work is executing. */
   presence?: "active" | "hibernating";
   className?: string;
 }) {
-  const initials = name
-    .split(" ")
-    .map((word) => word[0])
-    .slice(0, 2)
-    .join("");
   const dimensions = SIZES[size];
+  const glyph = glyphFor(agent);
   return (
     <span
+      // Decorative: the Agent's name is always rendered next to the avatar, so
+      // announcing the avatar too would duplicate it for screen reader users.
       aria-hidden="true"
+      data-agent-avatar=""
+      data-presence={presence}
       className={cn(
-        "relative inline-flex shrink-0 items-center justify-center rounded-full font-mono font-semibold text-canvas",
+        "agent-avatar relative inline-flex shrink-0 items-center justify-center rounded-full",
+        "font-mono font-semibold",
         dimensions.box,
         className,
       )}
-      style={{ backgroundColor: avatarColorFor(agentId) }}
+      style={avatarStyleFor(agent) as CSSProperties}
     >
-      {initials}
+      {/* The 3D form: a shaded shell driven entirely by --agent-hue from the pack. */}
+      <span className="agent-avatar__shell" />
+      <span className="agent-avatar__glyph relative text-canvas">{glyph}</span>
       {presence === "active" ? (
         <span
           className={cn("absolute rounded-full bg-live ring-2 ring-surface", dimensions.dot)}

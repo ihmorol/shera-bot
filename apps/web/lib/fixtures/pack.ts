@@ -24,6 +24,9 @@ export const STUDENT_PACK = Pack.parse({
   agents: [
     {
       agent_id: "agent_general_assistant",
+      // D18 authored identity, aligned with agent-packs/student/v1 (the hues
+      // mockup-divergence test pins).
+      ui_identity: { avatar_hue: 217, initial_glyph: "G" },
       display_name: "General Assistant",
       role_description:
         "Default coordinator of every Operation and the everyday direct chat: plans work, delegates inside an Operation, and answers general questions.",
@@ -39,6 +42,9 @@ export const STUDENT_PACK = Pack.parse({
     },
     {
       agent_id: "agent_researcher",
+      // D18 authored identity, aligned with agent-packs/student/v1 (the hues
+      // mockup-divergence test pins).
+      ui_identity: { avatar_hue: 192, initial_glyph: "R" },
       display_name: "Researcher",
       role_description:
         "Finds, reads, and synthesizes sources for academic work, and keeps a traceable trail from claim to source.",
@@ -54,6 +60,9 @@ export const STUDENT_PACK = Pack.parse({
     },
     {
       agent_id: "agent_developer",
+      // D18 authored identity, aligned with agent-packs/student/v1 (the hues
+      // mockup-divergence test pins).
+      ui_identity: { avatar_hue: 262, initial_glyph: "D" },
       display_name: "Developer",
       role_description:
         "Writes, reviews, and debugs code in the workspace, and runs builds and tests before proposing anything risky.",
@@ -69,6 +78,9 @@ export const STUDENT_PACK = Pack.parse({
     },
     {
       agent_id: "agent_citation_manager",
+      // D18 authored identity, aligned with agent-packs/student/v1 (the hues
+      // mockup-divergence test pins).
+      ui_identity: { avatar_hue: 32, initial_glyph: "C" },
       display_name: "Citation Manager",
       role_description:
         "Formats, checks, and organizes citations and bibliographies in the requested style.",
@@ -81,6 +93,9 @@ export const STUDENT_PACK = Pack.parse({
     },
     {
       agent_id: "agent_programming_tutor",
+      // D18 authored identity, aligned with agent-packs/student/v1 (the hues
+      // mockup-divergence test pins).
+      ui_identity: { avatar_hue: 161, initial_glyph: "P" },
       display_name: "Programming Tutor",
       role_description:
         "Explains programming concepts step by step and coaches through assignments without taking over the work.",
@@ -93,6 +108,9 @@ export const STUDENT_PACK = Pack.parse({
     },
     {
       agent_id: "agent_study_planner",
+      // D18 authored identity, aligned with agent-packs/student/v1 (the hues
+      // mockup-divergence test pins).
+      ui_identity: { avatar_hue: 333, initial_glyph: "S" },
       display_name: "Study Planner",
       role_description:
         "Builds study schedules, tracks progress against exam dates, and rebalances plans when deadlines move.",

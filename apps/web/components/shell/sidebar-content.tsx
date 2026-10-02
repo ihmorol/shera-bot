@@ -139,12 +139,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                     className={cn(ITEM_BASE, active ? ITEM_ACTIVE : ITEM_IDLE)}
                     {...linkProps}
                   >
-                    <AgentAvatar
-                      agentId={agent.agent_id}
-                      name={agent.display_name}
-                      size="sm"
-                      presence={presence}
-                    />
+                    <AgentAvatar agent={agent} size="sm" presence={presence} />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-text">{agent.display_name}</span>
                       <span className="block truncate text-xs text-muted">

@@ -133,8 +133,12 @@ function MessageRow({
           the 360px min breakpoint (§2.2). */}
       <div className="flex min-w-0 max-w-full items-center gap-2">
         <AgentAvatar
-          agentId={message.sender.agent_id}
-          name={agent?.display_name ?? "?"}
+          agent={
+            agent ?? {
+              agent_id: message.sender.agent_id,
+              display_name: message.sender.agent_id,
+            }
+          }
           size="sm"
         />
         <span className="text-sm font-medium text-text">

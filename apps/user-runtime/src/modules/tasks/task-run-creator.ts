@@ -10,7 +10,6 @@
  */
 import {
   type Actor,
-  type Pack,
   type PackSnapshot,
   type ProviderSnapshot,
   TASK_TRIGGER_EVENT_TYPES,
@@ -22,6 +21,29 @@ import {
 
 import { buildTaskCreatedEvent, type EnvelopeClock } from "./task-events.ts";
 
+/**
+ * The pack-definitions surface the creator reads for D29 snapshots. Minimal
+ * BY DESIGN: both the contracts `Pack` (control-plane shaped, carries
+ * manifest_hash/content_hash) and the agent-pack-sdk `PackManifest` (loader
+ * shaped) satisfy it structurally, so the composition can feed the loaded
+ * manifest without a conversion layer.
+ */
+export interface PackDefinitions {
+  default_coordinator_agent_id: string;
+  agents: ReadonlyArray<{
+    agent_id: string;
+    default_provider: { provider_id: string; model: string };
+  }>;
+  operations: ReadonlyArray<{
+    operation_id: string;
+    version: string;
+    /** D42: a named coordinator Agent or "none"; absent = the pack default. */
+    coordinator?: string | undefined;
+    skills: ReadonlyArray<string>;
+    connectors: ReadonlyArray<string>;
+  }>;
+}
+
 export interface CreateTaskRunDeps {
   /** The workspace's pinned pack (D19/D28) — recorded on the run. */
   pinned_pack: PackSnapshot;
@@ -31,7 +53,7 @@ export interface CreateTaskRunDeps {
    * direct creator callers (older tests); the runtime composition always
    * supplies it, and every runtime-created run stamps all resolvable fields.
    */
-  pack_content?: Pack;
+  pack_content?: PackDefinitions;
   /**
    * E12: every product-state record carries workspace_id. The D26 envelope is
    * task-scoped and carries no workspace field, so the gateway (which owns the
@@ -179,8 +201,8 @@ export function createTaskRunFromTypedEvent(
  * container-resident configuration, G3).
  */
 function resolveProviderSnapshot(
-  packContent: Pack | undefined,
-  definition: Pack["operations"][number] | undefined,
+  packContent: PackDefinitions | undefined,
+  definition: PackDefinitions["operations"][number] | undefined,
 ): ProviderSnapshot | undefined {
   if (!packContent) {
     return undefined;

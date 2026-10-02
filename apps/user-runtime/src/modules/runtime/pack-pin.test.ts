@@ -14,6 +14,7 @@ import { join } from "node:path";
 
 import { afterAll, describe, expect, it } from "vitest";
 import { PackCompatibilityError } from "@shera-bot/agent-pack-sdk";
+import type { PackSnapshot, TypedExecutionEvent } from "@shera-bot/contracts";
 
 import { readFileSync } from "node:fs";
 import { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
@@ -240,7 +241,7 @@ describe("pack upgrade affects NEW tasks only (D19 — the journal proves it)", 
 
     // Task A is created under the v1 pin; its task.created payload records it.
     /** Map the built envelope onto the journal's AppendEventInput shape. */
-    const appendCreated = (created: typeof a.creation_event) => {
+    const appendCreated = (created: TypedExecutionEvent) => {
       const payload = created.payload as Record<string, unknown> & { correlation_id: string };
       return events.appendEvent({
         event_id: created.event_id,
@@ -322,7 +323,9 @@ describe("the composition feeds the loaded pack to the harness (S10 D29 end-to-e
       pinned_pack: {
         pack_id: loaded.manifest.pack_id,
         pack_version: loaded.manifest.version,
-        pack_hash: loaded.manifest_hash,
+        // Both sides are 64-char lowercase hex; the SDK and contracts brand
+        // the same shape independently, so the boundary cast is honest.
+        pack_hash: loaded.manifest_hash as PackSnapshot["pack_hash"],
       },
       // THE PLUMB UNDER TEST: the composition supplies the loaded manifest.
       pack_content: loaded.manifest,
@@ -348,7 +351,10 @@ describe("the composition feeds the loaded pack to the harness (S10 D29 end-to-e
       payload: {
         operation_id: researchPaper.operation_id,
         operation_version: researchPaper.version,
-        operation_hash: researchPaper.content_hash ?? "b".repeat(64),
+        // The SDK manifest carries no per-operation content hash (the
+        // manifest-wide sidecar is the pack's integrity guarantee); in
+        // production the hash is event-supplied by operation.confirmed.
+        operation_hash: "b".repeat(64),
         roster: [...researchPaper.roster],
       },
     } as Parameters<typeof createTaskRunFromTypedEvent>[0];

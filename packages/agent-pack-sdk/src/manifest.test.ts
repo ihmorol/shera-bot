@@ -471,31 +471,31 @@ describe("manifest shape rules", () => {
   it("rejects duplicate catalog ids (agents, operations, skills, connectors, tool allow-list)", () => {
     expectRejection(
       manifest((m) => {
-        m.agents.push(structuredClone(m.agents[0]));
+        listOf(m, "agents").push(structuredClone(listOf(m, "agents")[0]!));
       }),
       "duplicate-id",
     );
     expectRejection(
       manifest((m) => {
-        m.operations.push(structuredClone(m.operations[0]));
+        listOf(m, "operations").push(structuredClone(listOf(m, "operations")[0]!));
       }),
       "duplicate-id",
     );
     expectRejection(
       manifest((m) => {
-        m.skills.push(structuredClone(m.skills[0]));
+        listOf(m, "skills").push(structuredClone(listOf(m, "skills")[0]!));
       }),
       "duplicate-id",
     );
     expectRejection(
       manifest((m) => {
-        m.connectors.push(structuredClone(m.connectors[0]));
+        listOf(m, "connectors").push(structuredClone(listOf(m, "connectors")[0]!));
       }),
       "duplicate-id",
     );
     expectRejection(
       manifest((m) => {
-        m.tool_allow_list.push(structuredClone(m.tool_allow_list[0]));
+        listOf(m, "tool_allow_list").push(structuredClone(listOf(m, "tool_allow_list")[0]!));
       }),
       "duplicate-id",
     );

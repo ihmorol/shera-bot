@@ -4,8 +4,6 @@
  * runtime level: a conversation turn produces transient deltas + ONE durable
  * agent reply and NEVER a task run.
  */
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -28,8 +26,12 @@ import {
   splitReplyChunks,
   type MessageDeltaFrame,
 } from "./reply-streamer.ts";
+import {
+  cleanupTempResources,
+  makeTempDir,
+  trackConnection,
+} from "../../../test/helpers/temp-resources.ts";
 
-const tempDirs: string[] = [];
 const WS_A = "ws-11111111-1111-4111-8111-111111111111";
 
 interface SteppedTimer {
@@ -48,9 +50,8 @@ interface Harness {
 }
 
 function newHarness(): Harness {
-  const dir = mkdtempSync(join(tmpdir(), "shera-runtime-reply-"));
-  tempDirs.push(dir);
-  const conn = openDatabase(join(dir, "runtime.db"));
+  const dir = makeTempDir("shera-runtime-reply-");
+  const conn = trackConnection(openDatabase(join(dir, "runtime.db")));
   applyMigrations(conn.db);
   const tx = new SqliteTransactions(conn.db);
   const conversations = new ConversationsRepository(tx);
@@ -143,9 +144,7 @@ function agentMessagesOf(h: Harness, conversationId: string) {
 }
 
 afterAll(async () => {
-  for (const dir of tempDirs) {
-    rmSync(dir, { recursive: true, force: true });
-  }
+  await cleanupTempResources();
 });
 
 describe("ScriptedReplyStreamer (stepped timers — fully deterministic)", () => {
@@ -262,8 +261,7 @@ describe("ScriptedReplyStreamer (stepped timers — fully deterministic)", () =>
 
 describe("compose-level scripted replies (full runtime, real HTTP + real timers)", () => {
   it("a turn over HTTP produces a durable reply and never a task event on the stream", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "shera-runtime-reply-compose-"));
-    tempDirs.push(dir);
+    const dir = makeTempDir("shera-runtime-reply-compose-");
     const { composeRuntime, DEFAULT_WORKSPACE_ID } =
       await import("../../transport/local-api/compose.ts");
     const composed = composeRuntime({

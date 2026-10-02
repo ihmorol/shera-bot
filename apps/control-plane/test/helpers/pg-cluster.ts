@@ -11,12 +11,85 @@
  * Every call creates an isolated cluster; tests stop it in afterAll.
  */
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 
-const PG_BIN = "/usr/lib/postgresql/16/bin";
+/**
+ * PostgreSQL server binary directory (cross-platform).
+ *
+ * The original S05 harness hardcoded the Debian path `/usr/lib/postgresql/16/bin`,
+ * which made every control-plane and integration suite fail to even load on
+ * Windows/macOS with `spawnSync ... ENOENT` (G4: a missing prerequisite must be a
+ * clear configuration state, never a fake pass or a raw spawn error).
+ *
+ * Resolution order, first existing directory wins:
+ *   1. `SHERA_PG_BIN` — explicit override (any platform).
+ *   2. The platform's conventional install locations.
+ *   3. `initdb` on PATH (covers Homebrew, chocolatey, and version-manager installs).
+ *
+ * When none resolve, `resolvePgBin` throws a typed, actionable message naming
+ * every path that was probed, so the failure explains itself instead of
+ * surfacing an opaque ENOENT from deep inside execFileSync.
+ */
+const PG_VERSION = "16";
+
+const PG_BIN_CANDIDATES: readonly string[] = [
+  // Debian/Ubuntu packaged installs.
+  `/usr/lib/postgresql/${PG_VERSION}/bin`,
+  `/usr/pgsql-${PG_VERSION}/bin`,
+  // Red Hat/Fedora packaged installs.
+  `/usr/pgsql/${PG_VERSION}/bin`,
+  // Homebrew (Apple Silicon and Intel).
+  `/opt/homebrew/opt/postgresql@${PG_VERSION}/bin`,
+  `/usr/local/opt/postgresql@${PG_VERSION}/bin`,
+  // Windows: the official EDB installer and the PostgreSQL zip/ chocolatey layout.
+  `C:\\Program Files\\PostgreSQL\\${PG_VERSION}\\bin`,
+  `C:\\Program Files (x86)\\PostgreSQL\\${PG_VERSION}\\bin`,
+];
+
+/**
+ * Locate the PostgreSQL server binaries, or throw an actionable configuration
+ * error. Exported so the resolution itself is unit-testable without a cluster.
+ */
+export function resolvePgBin(
+  env: NodeJS.ProcessEnv = process.env,
+  exists: (path: string) => boolean = existsSync,
+): string {
+  const override = env.SHERA_PG_BIN;
+  if (override && exists(join(override, "initdb"))) {
+    return override;
+  }
+
+  const probed: string[] = [];
+  for (const candidate of PG_BIN_CANDIDATES) {
+    probed.push(candidate);
+    if (exists(join(candidate, "initdb")) || exists(join(candidate, "initdb.exe"))) {
+      return candidate;
+    }
+  }
+
+  // PATH lookup: the directory containing a resolvable `initdb`. Uses the injected
+  // `exists` (not the real filesystem) so the resolution contract is testable on
+  // any host, exactly like the override and candidate branches above.
+  const pathEntries = (env.PATH ?? env.Path ?? "").split(delimiter).filter(Boolean);
+  for (const entry of pathEntries) {
+    if (exists(join(entry, "initdb")) || exists(join(entry, "initdb.exe"))) {
+      return entry;
+    }
+  }
+
+  throw new Error(
+    [
+      `PostgreSQL ${PG_VERSION} server binaries were not found (G4: no fake pass).`,
+      `Set SHERA_PG_BIN to the directory containing initdb, or put initdb on PATH.`,
+      `Probed SHERA_PG_BIN=${override ?? "(unset)"};`,
+      `directories: ${probed.join(", ")};`,
+      `PATH entries: ${pathEntries.length} checked.`,
+    ].join(" "),
+  );
+}
 
 export interface TestCluster {
   /** postgres:// connection string (superuser "shera", trust auth). */
@@ -42,6 +115,9 @@ async function tryFreePort(): Promise<number> {
 }
 
 export async function startTestCluster(label: string): Promise<TestCluster> {
+  // Resolved (and validated) before any temp directory is created, so a missing
+  // PostgreSQL leaves no orphaned temp dirs behind.
+  const pgBin = resolvePgBin();
   const root = mkdtempSync(join(tmpdir(), `shera-cp-${label}-`));
   const dataDir = join(root, "data");
   const socketDir = join(root, "socket");
@@ -53,7 +129,7 @@ export async function startTestCluster(label: string): Promise<TestCluster> {
   const superuser = "shera";
 
   execFileSync(
-    join(PG_BIN, "initdb"),
+    join(pgBin, "initdb"),
     [
       "-D",
       dataDir,
@@ -71,7 +147,7 @@ export async function startTestCluster(label: string): Promise<TestCluster> {
     const port = await tryFreePort();
     try {
       execFileSync(
-        join(PG_BIN, "pg_ctl"),
+        join(pgBin, "pg_ctl"),
         [
           "-D",
           dataDir,
@@ -93,7 +169,7 @@ export async function startTestCluster(label: string): Promise<TestCluster> {
         socketDir,
         async stop() {
           try {
-            execFileSync(join(PG_BIN, "pg_ctl"), ["-D", dataDir, "-m", "fast", "-w", "stop"], {
+            execFileSync(join(pgBin, "pg_ctl"), ["-D", dataDir, "-m", "fast", "-w", "stop"], {
               stdio: "pipe",
             });
           } finally {
@@ -105,7 +181,7 @@ export async function startTestCluster(label: string): Promise<TestCluster> {
       lastError = error;
       // Best-effort cleanup for the retry; must not mask the original error.
       try {
-        execFileSync(join(PG_BIN, "pg_ctl"), ["-D", dataDir, "-m", "immediate", "stop"], {
+        execFileSync(join(pgBin, "pg_ctl"), ["-D", dataDir, "-m", "immediate", "stop"], {
           stdio: "ignore",
         });
       } catch {

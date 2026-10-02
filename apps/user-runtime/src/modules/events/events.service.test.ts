@@ -6,8 +6,6 @@
  * sequences, idempotent duplicate event_id, typed validation failures, and
  * workspace-scoped stream allocation.
  */
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterAll, describe, expect, it } from "vitest";
@@ -18,8 +16,11 @@ import { applyMigrations } from "../../adapters/sqlite/migrations.ts";
 import { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import { EventsService, EventsServiceError } from "./events.service.ts";
 import type { AppendEventInput } from "./events.types.ts";
-
-const tempDirs: string[] = [];
+import {
+  cleanupTempResources,
+  makeTempDir,
+  trackConnection,
+} from "../../../test/helpers/temp-resources.ts";
 
 function newService(): {
   service: EventsService;
@@ -27,9 +28,12 @@ function newService(): {
   tx: SqliteTransactions;
   conn: SqliteConnection;
 } {
-  const dir = mkdtempSync(join(tmpdir(), "shera-runtime-events-"));
-  tempDirs.push(dir);
-  const conn = openDatabase(join(dir, "runtime.db"));
+  // The connection is tracked so its handle (and the WAL sidecars it owns) is
+  // released before cleanup deletes the directory — Windows locks open files,
+  // so an unclosed handle made rmSync throw EPERM and failed this suite on a
+  // platform where every assertion had actually passed.
+  const dir = makeTempDir("shera-runtime-events-");
+  const conn = trackConnection(openDatabase(join(dir, "runtime.db")));
   applyMigrations(conn.db);
   const tx = new SqliteTransactions(conn.db);
   const journal = new EventJournalRepository(tx);
@@ -56,10 +60,11 @@ function createdEvent(overrides: Partial<AppendEventInput<"conversation.created"
   };
 }
 
-afterAll(() => {
-  for (const dir of tempDirs) {
-    rmSync(dir, { recursive: true, force: true });
-  }
+// Releases every tracked handle, then deletes every tracked temp directory
+// (retrying Windows' short-lived locks). Individual tests still close their own
+// connection in `finally` so a failing test cannot leak into the next one.
+afterAll(async () => {
+  await cleanupTempResources();
 });
 
 describe("events journal service (AC3 — monotonic sequences, idempotent event_id)", () => {

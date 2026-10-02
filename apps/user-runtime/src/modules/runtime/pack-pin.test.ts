@@ -8,8 +8,7 @@
  * the workspace pin forward and changes NEW tasks only — an existing task's
  * task.created payload keeps the exact snapshot it was created with.
  */
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { afterAll, describe, expect, it } from "vitest";
@@ -28,8 +27,12 @@ import { createTaskRunFromTypedEvent } from "../tasks/task-run-creator.ts";
 import { RUNTIME_VERSION } from "../../version.ts";
 import { HarnessRunService } from "./harness-run-service.ts";
 import { loadWorkspacePack } from "./pack-pin.ts";
+import {
+  cleanupTempResources,
+  makeTempDir,
+  trackConnection,
+} from "../../../test/helpers/temp-resources.ts";
 
-const tempDirs: string[] = [];
 const WS = "ws-11111111-1111-4111-8111-111111111111";
 const NOW = "2026-09-28T12:00:00.000Z";
 
@@ -88,14 +91,12 @@ function minimalManifest(mutate?: (m: Record<string, unknown>) => void): Record<
   return manifest;
 }
 
-afterAll(() => {
-  for (const dir of tempDirs) rmSync(dir, { recursive: true, force: true });
+afterAll(async () => {
+  await cleanupTempResources();
 });
 
 function tempRoot(): string {
-  const root = mkdtempSync(join(tmpdir(), "shera-pack-pin-"));
-  tempDirs.push(root);
-  return root;
+  return makeTempDir("shera-pack-pin-");
 }
 
 function writePack(
@@ -115,7 +116,7 @@ function newDb(): {
   journal: EventJournalRepository;
   workspaces: WorkspacesRepository;
 } {
-  const conn = openDatabase(join(tempRoot(), "runtime.db"));
+  const conn = trackConnection(openDatabase(join(tempRoot(), "runtime.db")));
   applyMigrations(conn.db);
   const tx = new SqliteTransactions(conn.db);
   return {

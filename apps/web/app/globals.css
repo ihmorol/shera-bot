@@ -147,7 +147,87 @@ a {
   text-underline-offset: 3px;
 }
 
-/* §2.3: prefers-reduced-motion is respected everywhere. */
+/* Agent 3D identity (D18 `ui_identity`).
+ *
+ * The avatar component emits only a hue NUMBER (`--agent-hue`) and a facet count
+ * (`--agent-facets`); every color below is composed here, so `globals.css`
+ * remains the single owner of raw color values (§2.1, enforced by
+ * `design-tokens.test.ts`). A pack's authored hue therefore drives a full shaded
+ * 3D form without any color literal ever appearing in a component.
+ *
+ * The form is an isometric "core": a lit top facet, a mid body, and a darker
+ * base, each derived from the same hue so every Agent reads as one object in
+ * its own color rather than a flat circle.
+ */
+.agent-avatar {
+  /* Authored hue from the pack; the fallback keeps the shell valid if the
+     custom property is ever absent (e.g. rendered outside React styling). */
+  --agent-hue: 217;
+
+  --agent-lit: oklch(0.82 0.13 var(--agent-hue));
+  --agent-body: oklch(0.62 0.16 var(--agent-hue));
+  --agent-base: oklch(0.42 0.14 var(--agent-hue));
+  --agent-edge: oklch(0.9 0.08 var(--agent-hue));
+
+  background: transparent;
+}
+
+/* The 3D body: three stacked bands read as a lit top, a body, and a shaded
+   base. `inset` shadows give the dome its curvature without a gradient
+   raster, so it stays crisp at 24px. */
+.agent-avatar__shell {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: radial-gradient(
+    circle at 32% 26%,
+    var(--agent-edge) 0%,
+    var(--agent-lit) 26%,
+    var(--agent-body) 62%,
+    var(--agent-base) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 var(--agent-edge),
+    inset 0 -1px 1px oklch(0.28 0.1 var(--agent-hue));
+}
+
+/* Facet count varies per Agent (D39): a conic sheen whose facet boundaries are
+   driven by --agent-facets, so two Agents sharing a hue still differ in
+   surface texture. */
+.agent-avatar__shell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: conic-gradient(
+    from calc(var(--agent-facets) * 12deg),
+    oklch(1 0 0 / 0.14) 0deg,
+    oklch(0 0 0 / 0.1) calc(180deg / var(--agent-facets)),
+    oklch(1 0 0 / 0.06) calc(360deg / var(--agent-facets)),
+    oklch(0 0 0 / 0.12)
+  );
+  mix-blend-mode: overlay;
+}
+
+/* The glyph sits above the 3D shell, in the dark canvas color so it stays
+   legible on every hue including the lightest. */
+.agent-avatar__glyph {
+  color: var(--color-canvas);
+  text-shadow: 0 1px 0 oklch(1 0 0 / 0.28);
+  z-index: 1;
+}
+
+/* An active session (D32) lifts the form slightly, so presence is carried by
+   form as well as by the dot — never by color alone (§2.1). */
+.agent-avatar[data-presence="active"] .agent-avatar__shell {
+  transform: scale(1.04);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-avatar[data-presence="active"] .agent-avatar__shell {
+    transform: none;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

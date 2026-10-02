@@ -22,6 +22,25 @@ export const ProviderDefault = z.strictObject({
 });
 export type ProviderDefault = z.infer<typeof ProviderDefault>;
 
+/**
+ * D18 UI identity metadata. Presentation data only — NEVER a capability: it
+ * grants no skill, tool, connector, or permission, and the runtime ignores it
+ * for every authorization decision (D38, D28).
+ *
+ * Optional so a Pack written before identity authoring still validates; when
+ * absent the client derives a stable per-Agent appearance from `agent_id`, so
+ * one Agent always looks the same everywhere (D39).
+ */
+export const UiIdentity = z.strictObject({
+  /** Base hue in degrees; drives the Agent's whole color identity. */
+  avatar_hue: z.number().int().min(0).max(360),
+  /** Exactly one code point, rendered as the avatar's glyph. */
+  initial_glyph: z
+    .string()
+    .refine((glyph) => [...glyph].length === 1, "expected exactly one code point"),
+});
+export type UiIdentity = z.infer<typeof UiIdentity>;
+
 export const Agent = z.strictObject({
   agent_id: Id,
   display_name: z.string().min(1).max(200),
@@ -40,6 +59,12 @@ export const Agent = z.strictObject({
    * multi-Operation rostering, so the home Operation stays single.
    */
   home_operation_id: Id.nullable(),
+  /**
+   * D18 authored visual identity (hue + glyph). Presentation only. Omitted by
+   * packs that do not author identity; clients then derive a stable appearance
+   * from `agent_id` (D39).
+   */
+  ui_identity: UiIdentity.optional(),
   /** Reserved for profile provenance (pack version that declared the Agent). */
   declared_in_pack_version: SemVer.optional(),
   created_at: IsoDateTime.optional(),

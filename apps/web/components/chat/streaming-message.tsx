@@ -55,7 +55,7 @@ export function StreamingMessage({
       {/* min-w-0 max-w-full: constrain the row inside the items-start column
           so the nowrap role line cannot overflow at 360px (§2.2). */}
       <div className="flex min-w-0 max-w-full items-center gap-2">
-        <AgentAvatar agentId={agentId} name={name} size="sm" />
+        <AgentAvatar agent={agent ?? { agent_id: agentId, display_name: agentId }} size="sm" />
         <span className="text-sm font-medium text-text">{name}</span>
         {agent ? (
           <span className="min-w-0 truncate text-xs text-muted">{agent.role_description}</span>

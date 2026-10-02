@@ -100,6 +100,24 @@
             "minLength": 1,
             "maxLength": 256
           },
+          "ui_identity": {
+            "type": "object",
+            "properties": {
+              "avatar_hue": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 360
+              },
+              "initial_glyph": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "avatar_hue",
+              "initial_glyph"
+            ],
+            "additionalProperties": false
+          },
           "declared_in_pack_version": {
             "type": "string",
             "pattern": "^\\d+\\.\\d+\\.\\d+$"
@@ -5921,6 +5939,24 @@
                   ],
                   "minLength": 1,
                   "maxLength": 256
+                },
+                "ui_identity": {
+                  "type": "object",
+                  "properties": {
+                    "avatar_hue": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 360
+                    },
+                    "initial_glyph": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "avatar_hue",
+                    "initial_glyph"
+                  ],
+                  "additionalProperties": false
                 },
                 "declared_in_pack_version": {
                   "type": "string",

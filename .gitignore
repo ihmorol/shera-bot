@@ -23,3 +23,6 @@ pnpm-debug.log*
 
 # Generated CI output (dependency and license inventory).
 artifacts/
+
+# Local review-gate transcripts (gate evidence for a review round; never source).
+.review-logs/

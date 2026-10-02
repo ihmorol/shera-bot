@@ -223,6 +223,17 @@ a {
   transform: scale(1.04);
 }
 
+/* An engine without oklch() (pre-2023 WebViews) cannot parse the substituted
+ * gradient, so the shell would fall back to transparent and the glyph would sit
+   on the canvas with no form behind it. A token-derived solid keeps the avatar
+   legible there. `var(--color-brand)` is a token, not a raw value, so the §2.1
+   rule still holds. */
+@supports not (color: oklch(0 0 0)) {
+  .agent-avatar__shell {
+    background: var(--color-brand);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .agent-avatar[data-presence="active"] .agent-avatar__shell {
     transform: none;

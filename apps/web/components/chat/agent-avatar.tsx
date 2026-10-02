@@ -42,26 +42,59 @@ function hashOf(value: string): number {
 /**
  * The Agent's authored hue, or a stable derived hue when the pack authors none.
  * Returned as a plain degree number so `globals.css` owns every color value.
+ *
+ * `Number.isFinite` guards the authored branch: a non-finite hue would emit
+ * `--agent-hue:NaN`, and because custom properties are substituted at
+ * computed-value time, every color consumer derived from that hue would then
+ * fail to parse and fall back to a transparent shell — an invisible avatar.
+ * Unreachable from parsed JSON, reachable from any programmatic caller (this is
+ * exported).
  */
 export function avatarHueFor(agent: Pick<Agent, "agent_id" | "ui_identity">): number {
   const authored = agent.ui_identity?.avatar_hue;
-  if (typeof authored === "number") {
+  if (typeof authored === "number" && Number.isFinite(authored)) {
+    // 360 ≡ 0: the contract permits 360 as a hue and it is the same color as 0.
     return ((authored % 360) + 360) % 360;
   }
   return hashOf(agent.agent_id) % 360;
 }
 
 /**
+ * Distinct silhouette variants, 0..SHAPE_VARIANT_COUNT-1.
+ *
+ * The variant count is deliberately larger than the six Agents in the student
+ * pack. An earlier version used 4 buckets, and the six shipped Agent ids
+ * collapsed into only 3 distinct silhouettes — so half the roster differed by
+ * hue alone, which is exactly what §2.1 forbids. A test now asserts that all six
+ * manifest Agents get DISTINCT variants, so widening the pack cannot silently
+ * reintroduce that.
+ */
+export const SHAPE_VARIANT_COUNT = 8;
+
+/**
  * Deterministic shape variant index (D39). Varies the facet count so Agents
  * differ in silhouette as well as hue.
  */
 export function shapeVariantFor(agentId: string): number {
-  return hashOf(`shape:${agentId}`) % 4;
+  return hashOf(`shape:${agentId}`) % SHAPE_VARIANT_COUNT;
 }
 
-/** The glyph: the pack's authored one, else the display name's first letter. */
+/**
+ * The glyph: the pack's authored one, else the display name's first character.
+ *
+ * Both fallbacks are code-POINT based (`[...text][0]`), matching the
+ * `UiIdentity` contract's "exactly one code point" rule — `charAt(0)` would
+ * split an astral character (an emoji-initial Agent name) into a lone surrogate
+ * and render U+FFFD. A blank or whitespace-only name yields "?" rather than an
+ * empty avatar: `charAt` returns "" rather than nullish, so a `??` chain never
+ * fires for that input.
+ */
 export function glyphFor(agent: Pick<Agent, "display_name" | "ui_identity">): string {
-  return agent.ui_identity?.initial_glyph ?? agent.display_name.trim().charAt(0) ?? "?";
+  const authored = agent.ui_identity?.initial_glyph;
+  if (authored) return authored;
+  const name = agent.display_name.trim();
+  if (!name) return "?";
+  return [...name][0] ?? "?";
 }
 
 /** The CSS custom properties the avatar emits; typed so tests can read them. */
@@ -116,9 +149,9 @@ export function AgentAvatar({
       )}
       style={avatarStyleFor(agent) as CSSProperties}
     >
-      {/* The 3D form: an isometric cap shaded by the token layer from --agent-hue. */}
-      <span className="agent-avatar__shell" data-shape={shapeVariantFor(agent.agent_id)} />
-      <span className="agent-avatar__glyph relative">{glyph}</span>
+      {/* The 3D form: a shaded shell driven entirely by --agent-hue from the pack. */}
+      <span className="agent-avatar__shell" />
+      <span className="agent-avatar__glyph relative text-canvas">{glyph}</span>
       {presence === "active" ? (
         <span
           className={cn("absolute rounded-full bg-live ring-2 ring-surface", dimensions.dot)}

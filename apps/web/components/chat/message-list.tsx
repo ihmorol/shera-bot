@@ -5,6 +5,7 @@ import { Fragment, useRef, type ReactNode, type RefObject } from "react";
 
 import { AgentAvatar } from "@/components/chat/agent-avatar";
 import { ArtifactCard, ReplayBoundary, RunCard, ToolCallCard } from "@/components/chat/cards";
+import { renderCollaborationSummary } from "@/lib/collaboration";
 import { agentById } from "@/lib/fixtures";
 import type { TimelineItem } from "@/lib/thread-layout";
 import { timeLabel } from "@/lib/thread-layout";
@@ -179,6 +180,9 @@ function timelineKey(item: TimelineItem): string {
       return `artifact-${item.artifact.artifact_id}`;
     case "run":
       return `run-${item.run.task_id}`;
+    case "collaboration":
+      // D23 rule 6: the idempotency key is the identity, never the prose.
+      return `collaboration-${item.message.idempotency_key}`;
     case "system":
       return `system-${item.at}`;
     case "replay_boundary":
@@ -256,6 +260,15 @@ export function MessageList({
             return (
               <li key={key} className="flex justify-start">
                 <RunCard run={item.run} />
+              </li>
+            );
+          case "collaboration":
+            // D7 agent-to-agent traffic, in the same ordered thread. The row is a
+            // proposal/report, never a completed action (G2/G4), and it names
+            // both Agents so the handoff is legible at a glance (§21.5).
+            return (
+              <li key={key} className="flex justify-start">
+                {renderCollaborationSummary({ message: item.message })}
               </li>
             );
           case "system":

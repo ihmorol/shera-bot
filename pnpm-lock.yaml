@@ -257,6 +257,9 @@ importers:
 
   apps/user-runtime:
     dependencies:
+      '@shera-bot/agent-pack-sdk':
+        specifier: workspace:*
+        version: link:../../packages/agent-pack-sdk
       '@shera-bot/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts

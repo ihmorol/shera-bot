@@ -25,6 +25,7 @@ import {
   composeRuntime,
   type RuntimeHandle,
 } from "./transport/local-api/compose.ts";
+import { defaultPacksRoot } from "./modules/runtime/pack-pin.ts";
 
 export interface RuntimeNodeConfig {
   /** Bind address; default 127.0.0.1 (loopback only). */
@@ -43,6 +44,13 @@ export interface RuntimeNodeConfig {
    * ("ws-local-default" — a PROTOTYPE default the owner must confirm).
    */
   defaultWorkspaceId?: string;
+  /**
+   * S10 (D19/D28): directory of loadable agent packs. Default:
+   * RUNTIME_PACKS_ROOT, else the repository's own agent-packs tree. The pack
+   * is compatibility-checked against RUNTIME_VERSION at startup and pinned on
+   * the default workspace (typed failure on mismatch — G4).
+   */
+  packsRoot?: string;
   /** Install SIGINT/SIGTERM handlers that drain and stop the node. Default false. */
   signals?: boolean;
 }
@@ -60,6 +68,8 @@ export interface RuntimeNodeEnvConfig {
   port: number;
   dbPath: string;
   defaultWorkspaceId: string;
+  /** S10: the resolved agent-packs root (env, override, or the repo default). */
+  packsRoot: string;
 }
 
 const DEFAULT_HOST = "127.0.0.1";
@@ -102,15 +112,21 @@ export function runtimeConfigFromEnv(
   const dbPath = overrides.dbPath ?? env["RUNTIME_DB_PATH"] ?? DEFAULT_DB_PATH;
   const defaultWorkspaceId =
     overrides.defaultWorkspaceId ?? env["RUNTIME_DEFAULT_WORKSPACE_ID"] ?? DEFAULT_WORKSPACE_ID;
-  return { host, port, dbPath, defaultWorkspaceId };
+  const packsRoot = overrides.packsRoot ?? env["RUNTIME_PACKS_ROOT"] ?? defaultPacksRoot(import.meta.dirname);
+  return { host, port, dbPath, defaultWorkspaceId, packsRoot };
 }
 
 /** Start the runtime node: compose, bind, (optionally) wire shutdown signals. */
 export async function startRuntimeNode(config: RuntimeNodeConfig = {}): Promise<RuntimeNode> {
-  const { host, port, dbPath, defaultWorkspaceId } = runtimeConfigFromEnv(process.env, config);
+  const { host, port, dbPath, defaultWorkspaceId, packsRoot } =
+    runtimeConfigFromEnv(process.env, config);
   mkdirSync(dirname(dbPath), { recursive: true });
 
-  const runtime: RuntimeHandle = composeRuntime({ dbPath, workspaceId: defaultWorkspaceId });
+  const runtime: RuntimeHandle = composeRuntime({
+    dbPath,
+    workspaceId: defaultWorkspaceId,
+    packsRoot,
+  });
   await new Promise<void>((resolve, reject) => {
     const onError = (error: Error) => reject(error);
     runtime.httpServer.once("error", onError);

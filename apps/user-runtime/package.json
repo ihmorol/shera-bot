@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@shera-bot/agent-pack-sdk": "workspace:*",
     "@shera-bot/contracts": "workspace:*",
     "express": "5.2.1",
     "socket.io": "4.8.4",

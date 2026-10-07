@@ -1,10 +1,24 @@
 /**
- * Agents module service (S11 chunk 2; D32 layer 1, D39, D23 module shape).
+ * Agents module service (S11 chunks 2–3; D32 layer 1, D39, D16, D23 module
+ * shape).
  *
  * The Agent identities themselves are seeded by the startup composition
  * (compose.ts → seedAgentsFromPack); THIS service owns the agent-domain
  * operations that happen at request time: resolving an Agent together with
- * its direct chat, and updating the user-owned fields.
+ * its direct chat, updating the user-owned fields, and — chunk 3 — the typed
+ * D16 settings surface (getSettings + applySettingsCommand).
+ *
+ * D16 settings read model: getSettings composes every setting entry from
+ * three sources — the agents row (pack-owned fields, the user-owned columns),
+ * the validated overrides blob (tool defaults), and the pinned pack's agent
+ * seeds, which are the source of the provider/model RECOMMENDED default (D16:
+ * recommended defaults come from the pack where the pack carries the value;
+ * module-level documented defaults only where it does not). applySettingsCommand
+ * applies the contracts' command union — the SAME commands and schemas S30
+ * onboarding will use — and returns the read-after-write snapshot. Commands
+ * are naturally idempotent (last-write-wins of a validated value), so no
+ * receipt store is needed here; settings mutations are NOT journaled in this
+ * slice (the runtime has no agent-domain event stream yet).
  *
  * Direct chats (D39 — one identity everywhere): getOrCreateDirectChat binds
  * exactly one conversation per (workspace, agent), and the binding references
@@ -23,10 +37,21 @@
 import { randomUUID } from "node:crypto";
 
 import {
+  AgentCapabilities,
+  AgentSettingsSnapshot,
+  type AgentSettingEntry,
+  type AgentSettingsCommand,
+  type AgentSettingsOverrides,
+  type EditableAgentSettingKey,
+} from "@shera-bot/contracts";
+
+import {
   AgentNotFoundError,
+  AgentSettingsValidationError,
   isDirectChatConflict,
   type AgentRow,
   type AgentsRepository,
+  type PackAgentSeed,
 } from "../../adapters/sqlite/agents-repository.ts";
 import type {
   ConversationsRepository,
@@ -44,6 +69,24 @@ import {
  */
 export type AgentDirectChatPublisher = (event: ConversationCreatedEvent) => void;
 
+/**
+ * Reset-to-default needs the pack's recommended provider/model, and the pack
+ * is the ONLY honest source (D16 forbids inventing provider picks). When no
+ * seed carries it (composition without a pinned pack), the reset is the typed
+ * rejection below — not a silently hardcoded value.
+ */
+export class AgentSettingsResetUnavailableError extends Error {
+  readonly code = "AGENT_SETTINGS_RESET_UNAVAILABLE" as const;
+  readonly category = "state" as const;
+
+  constructor(workspaceId: string, agentId: string) {
+    super(
+      `no pack-supplied recommended default for agent ${agentId} in workspace ${workspaceId}`,
+    );
+    this.name = "AgentSettingsResetUnavailableError";
+  }
+}
+
 export interface AgentsServiceDeps {
   agents: AgentsRepository;
   conversations: ConversationsRepository;
@@ -51,6 +94,14 @@ export interface AgentsServiceDeps {
   tx: SqliteTransactions;
   /** Post-commit live fanout; optional in tests. */
   publish?: AgentDirectChatPublisher;
+  /**
+   * The pinned pack's agent seeds — the source of recommended defaults (D16).
+   * Optional: composeRuntime sets them once the pack has loaded (late-bound,
+   * like the publish hook); tests and packless compositions run without them,
+   * in which case provider recommendations are null and provider resets are
+   * the typed unavailable rejection.
+   */
+  packAgents?: readonly PackAgentSeed[];
 }
 
 export interface DirectChatResolution {
@@ -61,7 +112,23 @@ export interface DirectChatResolution {
 }
 
 export class AgentsService {
-  constructor(private readonly deps: AgentsServiceDeps) {}
+  private packSeeds: readonly PackAgentSeed[];
+
+  constructor(private readonly deps: AgentsServiceDeps) {
+    this.packSeeds = deps.packAgents ?? [];
+  }
+
+  /**
+   * Late-bind the pinned pack's seeds (composeRuntime calls this right after
+   * loadWorkspacePack — the same late-binding discipline as the publish hook).
+   */
+  setPackAgents(seeds: readonly PackAgentSeed[]): void {
+    this.packSeeds = seeds;
+  }
+
+  private packSeed(agentId: string): PackAgentSeed | undefined {
+    return this.packSeeds.find((seed) => seed.agent_id === agentId);
+  }
 
   /** The workspace's Agent identities, workspace-scoped (E12). */
   listAgents(workspaceId: string): AgentRow[] {
@@ -110,6 +177,205 @@ export class AgentsService {
   ): AgentRow {
     this.deps.agents.updateDefaultProvider(workspaceId, agentId, providerId, model);
     return this.getAgent(workspaceId, agentId);
+  }
+
+  /**
+   * The D16 settings read model (S11 chunk 3): every setting as a typed entry
+   * with the metadata the settings UI must surface — display label, current
+   * value, recommended default, why it matters, risk/cost impact, editability,
+   * and the reset-to-default command. Validated through the contracts'
+   * snapshot schema before it leaves the module.
+   */
+  getSettings(workspaceId: string, agentId: string): AgentSettingsSnapshot {
+    const agent = this.getAgent(workspaceId, agentId);
+    return this.buildSettingsSnapshot(
+      workspaceId,
+      agent,
+      this.deps.agents.getSettings(workspaceId, agentId),
+    );
+  }
+
+  /**
+   * Apply one D16 settings command (the contracts' AgentSettingsCommand union
+   * — the SAME commands S30 onboarding submits) and return the read-after-
+   * write snapshot. Unknown agents fail with the typed 404-class rejection
+   * before anything is written; provider resets fail typed when no pack seed
+   * carries the recommended default (never a hardcoded provider pick).
+   */
+  applySettingsCommand(command: AgentSettingsCommand): AgentSettingsSnapshot {
+    const { workspace_id: workspaceId, agent_id: agentId } = command;
+    switch (command.type) {
+      case "agent_settings.update_instructions":
+        this.deps.agents.updateUserInstructions(workspaceId, agentId, command.user_instructions);
+        break;
+      case "agent_settings.update_default_provider":
+        this.deps.agents.updateDefaultProvider(
+          workspaceId,
+          agentId,
+          command.default_provider.provider_id,
+          command.default_provider.model,
+        );
+        break;
+      case "agent_settings.update_tool_defaults":
+        this.deps.agents.updateSettings(workspaceId, agentId, {
+          tool_defaults: command.tool_defaults,
+        });
+        break;
+      case "agent_settings.reset_setting":
+        this.resetSetting(workspaceId, agentId, command.setting_key);
+        break;
+      case "agent_settings.reset_all":
+        this.deps.agents.updateUserInstructions(workspaceId, agentId, null);
+        this.resetProviderToRecommended(workspaceId, agentId);
+        this.deps.agents.updateSettings(workspaceId, agentId, {});
+        break;
+    }
+    return this.getSettings(workspaceId, agentId);
+  }
+
+  private resetSetting(
+    workspaceId: string,
+    agentId: string,
+    key: EditableAgentSettingKey,
+  ): void {
+    switch (key) {
+      case "user_instructions":
+        this.deps.agents.updateUserInstructions(workspaceId, agentId, null);
+        return;
+      case "default_provider":
+        this.resetProviderToRecommended(workspaceId, agentId);
+        return;
+      case "tool_defaults":
+        this.deps.agents.updateSettings(workspaceId, agentId, { tool_defaults: [] });
+        return;
+    }
+  }
+
+  private resetProviderToRecommended(workspaceId: string, agentId: string): void {
+    const seed = this.packSeed(agentId);
+    if (seed === undefined) {
+      throw new AgentSettingsResetUnavailableError(workspaceId, agentId);
+    }
+    this.deps.agents.updateDefaultProvider(
+      workspaceId,
+      agentId,
+      seed.default_provider.provider_id,
+      seed.default_provider.model,
+    );
+  }
+
+  private buildSettingsSnapshot(
+    workspaceId: string,
+    agent: AgentRow,
+    overrides: AgentSettingsOverrides,
+  ): AgentSettingsSnapshot {
+    const seed = this.packSeed(agent.agent_id);
+    const entries: AgentSettingEntry[] = [
+      {
+        key: "role",
+        display_label: "Role",
+        description:
+          "The fixed role the pack declared for this Agent; your instructions layer above it.",
+        risk_note: "",
+        editable: false,
+        resettable: false,
+        reset_command: null,
+        value: agent.role_description,
+        recommended_default: null,
+      },
+      {
+        key: "user_instructions",
+        display_label: "Your instructions",
+        description:
+          "Personal guidance layered above the pack role. Clearing it returns to pack-only behavior.",
+        risk_note: "",
+        editable: true,
+        resettable: true,
+        reset_command: "agent_settings.reset_setting",
+        value: agent.user_instructions,
+        recommended_default: null,
+      },
+      {
+        key: "memory_link",
+        display_label: "Memory",
+        description:
+          "This Agent's private memory folder. Publication rules arrive with the memory slice.",
+        risk_note: "",
+        editable: false,
+        resettable: false,
+        reset_command: null,
+        value: agent.private_folder_path,
+        recommended_default: null,
+      },
+      {
+        key: "default_provider",
+        display_label: "Default provider and model",
+        description: "Which provider and model answer by default for this Agent.",
+        risk_note:
+          "Providers differ in privacy and cost behavior; the pack's recommendation avoids surprises.",
+        editable: true,
+        resettable: true,
+        reset_command: "agent_settings.reset_setting",
+        value: {
+          provider_id: agent.default_provider_id,
+          model: agent.default_provider_model,
+        },
+        recommended_default: seed ? { ...seed.default_provider } : null,
+      },
+      {
+        key: "tool_defaults",
+        display_label: "Tool defaults",
+        description: "Per-tool default configuration used whenever this Agent runs a tool.",
+        risk_note: "Tool configuration changes what the Agent can do; defaults stay conservative.",
+        editable: true,
+        resettable: true,
+        reset_command: "agent_settings.reset_setting",
+        value: overrides.tool_defaults ?? [],
+        recommended_default: [],
+      },
+      {
+        key: "capabilities",
+        display_label: "Capabilities",
+        description: "The skills, tools, and connectors the pack gave this Agent.",
+        risk_note: "",
+        editable: false,
+        resettable: false,
+        reset_command: null,
+        value: this.parseCapabilities(agent),
+        recommended_default: null,
+      },
+      {
+        key: "ui_identity",
+        display_label: "Appearance",
+        description:
+          "Authored visual identity (hue and glyph); presentation only, never a capability.",
+        risk_note: "",
+        editable: false,
+        resettable: false,
+        reset_command: null,
+        value: { avatar_hue: agent.avatar_hue, initial_glyph: agent.initial_glyph },
+        recommended_default: null,
+      },
+    ];
+    return AgentSettingsSnapshot.parse({
+      workspace_id: workspaceId,
+      agent_id: agent.agent_id,
+      entries,
+    });
+  }
+
+  private parseCapabilities(agent: AgentRow): AgentCapabilities {
+    let raw: unknown;
+    try {
+      raw = JSON.parse(agent.capabilities_json);
+    } catch {
+      throw new AgentSettingsValidationError("stored agent capabilities JSON");
+    }
+    const parsed = AgentCapabilities.safeParse(raw);
+    if (!parsed.success) {
+      throw new AgentSettingsValidationError("stored agent capabilities JSON");
+    }
+    return parsed.data;
   }
 
   /**

@@ -35,6 +35,7 @@ const STUDENT_MANIFEST = JSON.parse(
   agents: Array<{
     agent_id: string;
     display_name: string;
+    role_description: string;
     default_provider: { provider_id: string; model: string };
   }>;
 };
@@ -77,6 +78,47 @@ async function patchJson(origin: string, path: string, body: Record<string, unkn
     body: JSON.stringify(body),
   });
   return { status: response.status, body: (await response.json()) as Record<string, unknown> };
+}
+
+async function postJson(origin: string, path: string, body: unknown) {
+  const response = await fetch(`${origin}${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return { status: response.status, body: (await response.json()) as Record<string, unknown> };
+}
+
+interface SettingsEntry {
+  key: string;
+  display_label: string;
+  description: string;
+  risk_note: string;
+  editable: boolean;
+  resettable: boolean;
+  reset_command: string | null;
+  value: unknown;
+  recommended_default: unknown;
+}
+
+function entryOf(snapshot: Record<string, unknown>, key: string): SettingsEntry {
+  const entries = snapshot["entries"] as SettingsEntry[];
+  const found = entries.find((candidate) => candidate.key === key);
+  expect(found, `entry ${key} must exist`).toBeDefined();
+  return found!;
+}
+
+/** A valid D16 command body against the composed default workspace. */
+function commandBody(extra: Record<string, unknown>, agentId: string = GENERAL) {
+  return {
+    command_id: "cmd_route_001",
+    idempotency_key: "idem_route_0001",
+    workspace_id: DEFAULT_WORKSPACE_ID,
+    agent_id: agentId,
+    actor: { type: "user", id: "user_emon" },
+    issued_at: "2026-10-07T10:00:00.000Z",
+    ...extra,
+  };
 }
 
 afterAll(async () => {
@@ -280,6 +322,209 @@ describe("S11 agent API (typed local API routes)", () => {
       });
     } finally {
       await second.close();
+    }
+  });
+});
+
+describe("S11 agent settings API (D16 read model + command surface)", () => {
+  it("serves the settings snapshot with the pack's recommended defaults", async () => {
+    const dir = makeTempDir("shera-runtime-s11-settings-read-");
+    const running = await composeOn(join(dir, "runtime.db"));
+    try {
+      const response = await getJson(
+        running.origin,
+        `/v1/agents/${GENERAL}/settings?workspace_id=${DEFAULT_WORKSPACE_ID}`,
+      );
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({
+        workspace_id: DEFAULT_WORKSPACE_ID,
+        agent_id: GENERAL,
+      });
+
+      const entries = response.body["entries"] as SettingsEntry[];
+      expect(entries.map((entry) => entry.key)).toEqual([
+        "role",
+        "user_instructions",
+        "memory_link",
+        "default_provider",
+        "tool_defaults",
+        "capabilities",
+        "ui_identity",
+      ]);
+
+      // Pack-owned entries are read-only and never resettable (D16: they are
+      // never command targets).
+      for (const key of ["role", "memory_link", "capabilities", "ui_identity"]) {
+        expect(entryOf(response.body, key)).toMatchObject({
+          editable: false,
+          resettable: false,
+          reset_command: null,
+        });
+      }
+      expect(entryOf(response.body, "role").value).toBe(generalManifest.role_description);
+      expect(entryOf(response.body, "memory_link").value).toBe(`agent://${GENERAL}/`);
+
+      // Editable entries carry the D16 metadata and the reset command.
+      expect(entryOf(response.body, "user_instructions")).toMatchObject({
+        editable: true,
+        resettable: true,
+        reset_command: "agent_settings.reset_setting",
+        value: null,
+      });
+      expect(entryOf(response.body, "tool_defaults")).toMatchObject({
+        editable: true,
+        value: [],
+        recommended_default: [],
+      });
+
+      // The recommended provider default comes from the pinned pack via the
+      // composition — not a hardcoded value (D16).
+      expect(entryOf(response.body, "default_provider")).toMatchObject({
+        editable: true,
+        value: generalManifest.default_provider,
+        recommended_default: generalManifest.default_provider,
+      });
+      expect(entryOf(response.body, "default_provider").risk_note).toMatch(/\S/);
+    } finally {
+      await running.close();
+    }
+  });
+
+  it("applies settings commands and resets to the pack defaults through the API", async () => {
+    const dir = makeTempDir("shera-runtime-s11-settings-commands-");
+    const running = await composeOn(join(dir, "runtime.db"));
+    try {
+      const commandPath = `/v1/agents/${GENERAL}/settings/commands`;
+
+      const instructions = await postJson(running.origin, commandPath, {
+        ...commandBody({ type: "agent_settings.update_instructions" }),
+        user_instructions: "Always answer in Bangla.",
+      });
+      expect(instructions.status).toBe(200);
+      expect(entryOf(instructions.body, "user_instructions").value).toBe(
+        "Always answer in Bangla.",
+      );
+
+      const provider = await postJson(running.origin, commandPath, {
+        ...commandBody({ type: "agent_settings.update_default_provider" }),
+        default_provider: { provider_id: "provider_local", model: "qwen3-8b" },
+      });
+      expect(provider.status).toBe(200);
+      // Current moves; the pack recommendation stays the reset anchor (D16).
+      expect(entryOf(provider.body, "default_provider").value).toEqual({
+        provider_id: "provider_local",
+        model: "qwen3-8b",
+      });
+      expect(entryOf(provider.body, "default_provider").recommended_default).toEqual(
+        generalManifest.default_provider,
+      );
+
+      const tools = await postJson(running.origin, commandPath, {
+        ...commandBody({ type: "agent_settings.update_tool_defaults" }),
+        tool_defaults: [{ tool_id: "tool_web_search", config: { depth: "deep" } }],
+      });
+      expect(tools.status).toBe(200);
+      expect(entryOf(tools.body, "tool_defaults").value).toEqual([
+        { tool_id: "tool_web_search", config: { depth: "deep" } },
+      ]);
+
+      // The read model persists across reads (round-trip through storage).
+      const reread = await getJson(
+        running.origin,
+        `/v1/agents/${GENERAL}/settings?workspace_id=${DEFAULT_WORKSPACE_ID}`,
+      );
+      expect(entryOf(reread.body, "user_instructions").value).toBe("Always answer in Bangla.");
+
+      // Reset one setting to the pack default...
+      const cleared = await postJson(running.origin, commandPath, {
+        ...commandBody({ type: "agent_settings.reset_setting" }),
+        setting_key: "user_instructions",
+      });
+      expect(cleared.status).toBe(200);
+      expect(entryOf(cleared.body, "user_instructions").value).toBeNull();
+
+      // ...and everything at once: the provider returns to the pack's pick.
+      const resetAll = await postJson(running.origin, commandPath, {
+        ...commandBody({ type: "agent_settings.reset_all" }),
+      });
+      expect(resetAll.status).toBe(200);
+      expect(entryOf(resetAll.body, "default_provider").value).toEqual(
+        generalManifest.default_provider,
+      );
+      expect(entryOf(resetAll.body, "tool_defaults").value).toEqual([]);
+      expect(entryOf(resetAll.body, "user_instructions").value).toBeNull();
+    } finally {
+      await running.close();
+    }
+  });
+
+  it("answers typed failures: unknown agent, malformed body, path mismatch, non-resettable key", async () => {
+    const dir = makeTempDir("shera-runtime-s11-settings-failures-");
+    const running = await composeOn(join(dir, "runtime.db"));
+    try {
+      const missingRead = await getJson(
+        running.origin,
+        `/v1/agents/agent_nobody/settings?workspace_id=${DEFAULT_WORKSPACE_ID}`,
+      );
+      expect(missingRead.status).toBe(404);
+      expect(missingRead.body).toMatchObject({ code: "AGENT_NOT_FOUND", category: "state" });
+
+      const missingCommand = await postJson(
+        running.origin,
+        "/v1/agents/agent_nobody/settings/commands",
+        commandBody({
+          type: "agent_settings.update_instructions",
+          user_instructions: "x",
+        }, "agent_nobody"),
+      );
+      expect(missingCommand.status).toBe(404);
+      expect(missingCommand.body).toMatchObject({ code: "AGENT_NOT_FOUND" });
+
+      // Not a settings command at all → the contract's typed 400.
+      const malformed = await postJson(
+        running.origin,
+        `/v1/agents/${GENERAL}/settings/commands`,
+        commandBody({ type: "agent_settings.set_temperature", temperature: 0.2 }),
+      );
+      expect(malformed.status).toBe(400);
+      expect(malformed.body).toMatchObject({ code: "CONTRACT_VALIDATION_FAILED" });
+
+      // Incomplete envelope (no idempotency key) → typed 400.
+      const noKey = commandBody({
+        type: "agent_settings.update_instructions",
+        user_instructions: "x",
+      });
+      delete (noKey as Record<string, unknown>)["idempotency_key"];
+      const missingKey = await postJson(
+        running.origin,
+        `/v1/agents/${GENERAL}/settings/commands`,
+        noKey,
+      );
+      expect(missingKey.status).toBe(400);
+
+      // The body's agent_id must agree with the path — never a silent
+      // retarget of one Agent's command onto another.
+      const mismatch = await postJson(
+        running.origin,
+        `/v1/agents/${GENERAL}/settings/commands`,
+        commandBody(
+          { type: "agent_settings.update_instructions", user_instructions: "x" },
+          "agent_researcher",
+        ),
+      );
+      expect(mismatch.status).toBe(400);
+      expect(mismatch.body).toMatchObject({ code: "CONTRACT_VALIDATION_FAILED" });
+
+      // Pack-owned fields are read-only entries, never reset targets.
+      const resetRole = await postJson(
+        running.origin,
+        `/v1/agents/${GENERAL}/settings/commands`,
+        commandBody({ type: "agent_settings.reset_setting", setting_key: "role" }),
+      );
+      expect(resetRole.status).toBe(400);
+      expect(resetRole.body).toMatchObject({ code: "CONTRACT_VALIDATION_FAILED" });
+    } finally {
+      await running.close();
     }
   });
 });

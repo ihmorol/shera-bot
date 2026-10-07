@@ -28,7 +28,8 @@ import type { ErrorRequestHandler, RequestHandler } from "express";
 
 import type { SheraError } from "@shera-bot/contracts";
 
-import { AgentNotFoundError } from "../../adapters/sqlite/agents-repository.ts";
+import { AgentNotFoundError, AgentSettingsValidationError } from "../../adapters/sqlite/agents-repository.ts";
+import { AgentSettingsResetUnavailableError } from "../../modules/agents/agents.service.ts";
 import { ConversationsServiceError } from "../../modules/conversations/conversations.types.ts";
 import { EventsServiceError } from "../../modules/events/events.service.ts";
 
@@ -172,6 +173,31 @@ export function toSheraErrorResponse(error: unknown, correlationId?: string): Ht
     };
   }
 
+  // S11 chunk 3: settings that do not conform to the contracts overrides
+  // schema answer with the contract's standard validation failure — the
+  // thrown message (which names internal shapes) is never echoed (G3).
+  if (error instanceof AgentSettingsValidationError) {
+    return contractValidationResponse("The agent settings payload is not valid.");
+  }
+
+  // Reset-to-default needs the pinned pack's recommendation (D16 forbids
+  // inventing provider picks); without it the reset is a typed conflict.
+  if (error instanceof AgentSettingsResetUnavailableError) {
+    return {
+      status: 409,
+      body: {
+        code: error.code,
+        category: error.category,
+        safe_message:
+          "Resetting this setting needs the pinned pack's recommended default, which is not loaded.",
+        retryable: false,
+        user_action: "Start the runtime with the pinned pack configured.",
+        internal_details: null,
+        correlation_id,
+      },
+    };
+  }
+
   // Body-parser failures (invalid JSON, oversized body) are client errors
   // with well-known types; answer with the contract's validation failure
   // instead of the generic 500 fallback.
@@ -235,6 +261,8 @@ function isUntypedFault(error: unknown): boolean {
     !(error instanceof ConversationsServiceError) &&
     !(error instanceof EventsServiceError) &&
     !(error instanceof AgentNotFoundError) &&
+    !(error instanceof AgentSettingsValidationError) &&
+    !(error instanceof AgentSettingsResetUnavailableError) &&
     bodyParserType(error) === null
   );
 }

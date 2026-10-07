@@ -16,7 +16,7 @@
 import express, { type Express } from "express";
 import { z } from "zod";
 
-import { Id, WorkspaceId } from "@shera-bot/contracts";
+import { AgentSettingsCommand, Id, WorkspaceId } from "@shera-bot/contracts";
 
 import type { AgentRow } from "../../adapters/sqlite/agents-repository.ts";
 import { conversationStreamFor } from "../../modules/conversations/conversations.events.ts";
@@ -37,6 +37,8 @@ export const LIST_AGENTS_PATH = "/v1/agents" as const;
 export const GET_AGENT_PATH = "/v1/agents/:agent_id" as const;
 export const PATCH_AGENT_INSTRUCTIONS_PATH = "/v1/agents/:agent_id/instructions" as const;
 export const PATCH_AGENT_PROVIDER_PATH = "/v1/agents/:agent_id/provider" as const;
+export const GET_AGENT_SETTINGS_PATH = "/v1/agents/:agent_id/settings" as const;
+export const SUBMIT_AGENT_SETTINGS_COMMAND_PATH = "/v1/agents/:agent_id/settings/commands" as const;
 
 /**
  * Replay query (D26): the client's last acknowledged sequence drives exactly
@@ -116,12 +118,18 @@ export interface LocalApiDeps {
   /** AC4 replay resolution — always the journal's ReplayService, never re-implemented here. */
   replay: Pick<ReplayService, "resolve">;
   /**
-   * S11: the agents seam. Identity reads and the user-owned field updates go
-   * through the agents module's service — the transport never touches SQL.
+   * S11: the agents seam. Identity reads, the user-owned field updates, and
+   * the D16 settings surface go through the agents module's service — the
+   * transport never touches SQL and never validates settings itself.
    */
   agents: Pick<
     AgentsService,
-    "listAgents" | "getAgentWithDirectChat" | "updateUserInstructions" | "updateDefaultProvider"
+    | "listAgents"
+    | "getAgentWithDirectChat"
+    | "updateUserInstructions"
+    | "updateDefaultProvider"
+    | "getSettings"
+    | "applySettingsCommand"
   >;
   /**
    * B-1: the redacted sink untyped HTTP faults are recorded to — the generic
@@ -265,6 +273,48 @@ export function createLocalApi(deps: LocalApiDeps): Express {
       body.data.default_provider.model,
     );
     res.status(200).json(agentSummary(agent));
+  });
+
+  /**
+   * S11 chunk 3: the D16 settings read model — every setting with its
+   * recommended default, current value, why it matters, risk/cost note,
+   * editability, and reset command (D16's settings-editor contract). Unknown
+   * Agent → the typed 404; the snapshot is validated through the contracts
+   * schema inside the service.
+   */
+  app.get(GET_AGENT_SETTINGS_PATH, (req, res) => {
+    const agentId = Id.safeParse(req.params.agent_id);
+    const query = AgentWorkspaceQuery.safeParse(req.query);
+    if (!agentId.success || !query.success) {
+      const { status, body } = contractValidationResponse(
+        "The settings request is not valid: a workspace_id is required.",
+      );
+      res.status(status).json(body);
+      return;
+    }
+    res.status(200).json(deps.agents.getSettings(query.data.workspace_id, agentId.data));
+  });
+
+  /**
+   * S11 chunk 3: submit one D16 settings command — the SAME contracts command
+   * union S30 onboarding will submit (D16: one configuration command surface).
+   * The body's agent_id must agree with the path (a mismatch is the typed 400,
+   * not a silent retarget). Commands are naturally idempotent (validated
+   * last-write-wins) and are NOT journaled in this slice — consistent with the
+   * existing agent field mutations, which predate any agent-domain event
+   * stream. Unknown Agent → typed 404; schema mismatch → typed 400.
+   */
+  app.post(SUBMIT_AGENT_SETTINGS_COMMAND_PATH, (req, res) => {
+    const agentId = Id.safeParse(req.params.agent_id);
+    const parsed = AgentSettingsCommand.safeParse(req.body);
+    if (!agentId.success || !parsed.success || parsed.data.agent_id !== agentId.data) {
+      const { status, body } = contractValidationResponse(
+        "The settings command is not valid: the command body must be an agent settings command whose agent_id matches the path.",
+      );
+      res.status(status).json(body);
+      return;
+    }
+    res.status(200).json(deps.agents.applySettingsCommand(parsed.data));
   });
 
   /**

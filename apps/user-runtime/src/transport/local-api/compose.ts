@@ -308,9 +308,12 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
   // address them. Idempotent on EVERY startup: new agents insert, pack-owned
   // fields refresh on change, and the user-owned fields (user_instructions,
   // default provider pair) are never clobbered by a re-seed. A seeding failure
-  // is a typed startup failure like the pack load above it (G4).
+  // is a typed startup failure like the pack load above it (G4). The loaded
+  // seeds are ALSO the D16 recommended-default source for the settings
+  // surface (S11 chunk 3) — late-bound onto the service like the publish hook.
   if (pack) {
     seedAgentsFromPack(wired.tx, workspaceId, pack.manifest);
+    wired.agents.setPackAgents(pack.manifest.agents);
   }
   // Every fanout route (conversation commands AND harness runs) flows through
   // the same containment (B4): a broadcast failure is recorded, never fatal.

@@ -632,10 +632,12 @@ export function AgentSettingsView(props: AgentSettingsViewProps) {
   }
   if (surfaceState === "error" || !snapshot) {
     return (
-      <ErrorState
-        safeMessage={safeErrorMessage ?? "The Agent settings could not be loaded."}
-        onRetry={onRetry}
-      />
+      <div className="flex h-full items-center justify-center">
+        <ErrorState
+          safeMessage={safeErrorMessage ?? "The Agent settings could not be loaded."}
+          onRetry={onRetry}
+        />
+      </div>
     );
   }
 

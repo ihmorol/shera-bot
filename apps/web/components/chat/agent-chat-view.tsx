@@ -424,7 +424,11 @@ export function AgentChatView({
       {surfaceState === "loading" ? (
         <ThreadSkeleton />
       ) : surfaceState === "error" ? (
-        <ErrorState safeMessage={safeErrorMessage} onRetry={() => undefined} />
+        // §2.4: the error panel centers in the thread area, like every other
+        // full-surface state — it never hugs the top edge.
+        <div className="flex min-h-0 flex-1 items-center justify-center px-4">
+          <ErrorState safeMessage={safeErrorMessage} onRetry={() => undefined} />
+        </div>
       ) : renderedTimeline.length === 0 ? (
         <EmptyThread agentName={agent.display_name} />
       ) : (

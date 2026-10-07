@@ -20,6 +20,7 @@ import { SqliteTransactions } from "./transactions.ts";
 import {
   AgentsRepository,
   AgentNotFoundError,
+  AgentSettingsValidationError,
   seedAgentsFromPack,
 } from "./agents-repository.ts";
 
@@ -267,25 +268,78 @@ describe("agent identities (S11 migration v4)", () => {
     ).toThrow(AgentNotFoundError);
   });
 
-  it("stores and returns raw per-agent settings JSON", () => {
+  it("stores and returns validated per-agent settings overrides (the typed writer)", () => {
     repo.upsertFromPack("ws-primary", studentManifest.agents);
 
     const agentId = "agent_general_assistant";
-    // No settings row yet: the raw blob defaults to an empty object (the
-    // typed D16 command surface arrives in S11 chunk 2).
+    // No settings row yet: the validated overrides default to an empty object.
     expect(repo.getSettings("ws-primary", agentId)).toEqual({});
 
-    const settings = { temperature: 0.2, tone: "warm" };
-    repo.updateSettings("ws-primary", agentId, settings);
-    expect(repo.getSettings("ws-primary", agentId)).toEqual(settings);
+    // Chunk 1 stored a raw JSON blob here; chunk 3's writer validates through
+    // the contracts' AgentSettingsOverrides schema, so only conforming
+    // payloads persist (the raw `{ temperature, tone }` payloads of the old
+    // test are now rejections — pinned below, not summarized away).
+    const overrides = {
+      tool_defaults: [{ tool_id: "tool_web_search", config: { depth: "standard" } }],
+    };
+    repo.updateSettings("ws-primary", agentId, overrides);
+    expect(repo.getSettings("ws-primary", agentId)).toEqual(overrides);
 
-    // The blob is replaced wholesale at this layer.
-    repo.updateSettings("ws-primary", agentId, { tone: "concise" });
-    expect(repo.getSettings("ws-primary", agentId)).toEqual({ tone: "concise" });
+    // The blob is replaced wholesale at this layer; `null` normalizes to {}.
+    repo.updateSettings("ws-primary", agentId, { tool_defaults: [] });
+    expect(repo.getSettings("ws-primary", agentId)).toEqual({ tool_defaults: [] });
+
+    // Non-conforming payloads are the typed rejection — never stored.
+    expect(() =>
+      repo.updateSettings("ws-primary", agentId, { temperature: 0.2 }),
+    ).toThrow(AgentSettingsValidationError);
+    expect(() =>
+      repo.updateSettings("ws-primary", agentId, { tone: "warm" }),
+    ).toThrow(AgentSettingsValidationError);
+    const thrown = (() => {
+      try {
+        repo.updateSettings("ws-primary", agentId, { temperature: 0.2 });
+      } catch (error) {
+        return error as AgentSettingsValidationError;
+      }
+      throw new Error("expected a throw");
+    })();
+    expect(thrown.code).toBe("CONTRACT_VALIDATION_FAILED");
+    expect(thrown.category).toBe("validation");
+    expect(repo.getSettings("ws-primary", agentId)).toEqual({ tool_defaults: [] });
 
     expect(() => repo.updateSettings("ws-primary", "agent_missing", {})).toThrow(
       AgentNotFoundError,
     );
+  });
+
+  it("rejects stored settings JSON that no longer conforms (read-side validation)", () => {
+    repo.upsertFromPack("ws-primary", studentManifest.agents);
+
+    const agentId = "agent_general_assistant";
+    // Simulate a legacy chunk-1 raw blob (or corruption) landing in the table
+    // outside the typed writer: reading it back is the typed rejection, not a
+    // silent fallback to {}.
+    repo.updateSettings("ws-primary", agentId, {});
+    conn.db
+      .prepare(
+        `UPDATE agent_settings SET settings_json = '{"tone":"warm"}'
+         WHERE workspace_id = ? AND agent_id = ?`,
+      )
+      .run("ws-primary", agentId);
+    expect(() => repo.getSettings("ws-primary", agentId)).toThrow(AgentSettingsValidationError);
+
+    // Invalid JSON never reaches the read path at all: the v4 table carries a
+    // json_valid CHECK constraint, so the repository's JSON.parse guard is a
+    // second line of defense, not the only one.
+    expect(() =>
+      conn.db
+        .prepare(
+          `UPDATE agent_settings SET settings_json = 'not-json-at-all'
+           WHERE workspace_id = ? AND agent_id = ?`,
+        )
+        .run("ws-primary", agentId),
+    ).toThrow(/json_valid/);
   });
 
   it("round-trips private memory entries per agent", () => {
@@ -323,7 +377,9 @@ describe("agent identities (S11 migration v4)", () => {
     repo.upsertFromPack("ws-beta", studentManifest.agents);
 
     repo.updateUserInstructions("ws-alpha", "agent_general_assistant", "alpha rules");
-    repo.updateSettings("ws-beta", "agent_general_assistant", { tone: "beta" });
+    repo.updateSettings("ws-beta", "agent_general_assistant", {
+      tool_defaults: [{ tool_id: "tool_web_search", config: {} }],
+    });
     repo.addMemoryEntry("ws-beta", "agent_general_assistant", "beta memory");
     repo.addTaskHistoryEntry("ws-beta", "agent_general_assistant", "task-beta");
 
@@ -342,7 +398,9 @@ describe("agent identities (S11 migration v4)", () => {
     expect(repo.getAgent("ws-beta", "agent_general_assistant")?.user_instructions).toBeNull();
 
     expect(repo.getSettings("ws-alpha", "agent_general_assistant")).toEqual({});
-    expect(repo.getSettings("ws-beta", "agent_general_assistant")).toEqual({ tone: "beta" });
+    expect(repo.getSettings("ws-beta", "agent_general_assistant")).toEqual({
+      tool_defaults: [{ tool_id: "tool_web_search", config: {} }],
+    });
 
     expect(repo.listMemoryEntries("ws-alpha", "agent_general_assistant")).toEqual([]);
     expect(repo.listMemoryEntries("ws-beta", "agent_general_assistant")).toHaveLength(1);

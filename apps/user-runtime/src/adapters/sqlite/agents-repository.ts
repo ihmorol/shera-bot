@@ -19,11 +19,13 @@
  * left in place (removal is a product decision, not a re-seed side effect)
  * and reported as orphaned in the upsert result.
  *
- * agent_settings stores a raw JSON blob at this layer; the typed D16 per-agent
- * command surface replaces it in S11 chunk 2. agent_memory_entries and
- * agent_task_history are private, per-agent ledger placeholders: publication
- * rules and cross-agent reads arrive with the memory slice, so nothing here
- * reads across agents.
+ * agent_settings stores ONLY the validated overrides blob: every write (and
+ * read) parses through the contracts' AgentSettingsOverrides schema, so a
+ * non-conforming payload is a typed CONTRACT_VALIDATION_FAILED rejection —
+ * never silently stored JSON (S11 chunk 3 replaces chunk 1's raw blob).
+ * agent_memory_entries and agent_task_history are private, per-agent ledger
+ * placeholders: publication rules and cross-agent reads arrive with the
+ * memory slice, so nothing here reads across agents.
  *
  * Direct chats (S11 chunk 2, D39): the agent_direct_chats mapping table is
  * agent-domain SQL, so its statements live HERE. The binding row is written
@@ -35,6 +37,8 @@
  * pattern; see isDirectChatConflict).
  */
 import type { DatabaseSync } from "node:sqlite";
+
+import { AgentSettingsOverrides } from "@shera-bot/contracts";
 
 import type { SqliteTransactions } from "./transactions.ts";
 
@@ -112,6 +116,23 @@ export class AgentNotFoundError extends Error {
   constructor(workspaceId: string, agentId: string) {
     super(`agent ${agentId} not found in workspace ${workspaceId}`);
     this.name = "AgentNotFoundError";
+  }
+}
+
+/**
+ * The typed rejection for settings that do not conform to the contracts'
+ * AgentSettingsOverrides schema (S11 chunk 3: the validated writer replaced
+ * chunk 1's raw blob). Carries the stable CONTRACT_VALIDATION_FAILED
+ * code/category pair so the transport's typed error middleware answers 400
+ * without special-casing — and its message is never echoed to a client (G3).
+ */
+export class AgentSettingsValidationError extends Error {
+  readonly code = "CONTRACT_VALIDATION_FAILED" as const;
+  readonly category = "validation" as const;
+
+  constructor(context: string) {
+    super(`${context} does not conform to AgentSettingsOverrides`);
+    this.name = "AgentSettingsValidationError";
   }
 }
 
@@ -334,8 +355,10 @@ export class AgentsRepository {
   }
 
   /**
-   * Replace the agent's raw settings blob. Chunk 1 stores plain JSON; the
-   * typed D16 command surface (chunk 2) becomes the validated writer.
+   * Replace the agent's settings overrides. THE validated writer (S11 chunk 3):
+   * the payload is parsed through the contracts' AgentSettingsOverrides schema
+   * BEFORE anything is stored — a non-conforming payload is the typed
+   * AgentSettingsValidationError, never silently persisted JSON.
    */
   updateSettings(
     workspaceId: string,
@@ -345,6 +368,10 @@ export class AgentsRepository {
   ): void {
     const db = exec ?? this.tx.connection();
     this.requireAgent(workspaceId, agentId, db);
+    const parsed = AgentSettingsOverrides.safeParse(settings ?? {});
+    if (!parsed.success) {
+      throw new AgentSettingsValidationError("agent settings payload");
+    }
     db.prepare(
       `INSERT INTO agent_settings (workspace_id, agent_id, settings_json, updated_at)
        VALUES (?, ?, ?, ?)
@@ -354,13 +381,17 @@ export class AgentsRepository {
     ).run(
       workspaceId,
       agentId,
-      JSON.stringify(settings ?? {}),
+      JSON.stringify(parsed.data),
       new Date().toISOString(),
     );
   }
 
-  /** The agent's settings blob, or an empty object when none was stored. */
-  getSettings(workspaceId: string, agentId: string, exec?: DatabaseSync): unknown {
+  /**
+   * The agent's validated settings overrides, or an empty object when none was
+   * stored. A stored blob that no longer conforms (invalid JSON, schema drift)
+   * is corruption: the typed rejection, not a silent fallback.
+   */
+  getSettings(workspaceId: string, agentId: string, exec?: DatabaseSync): AgentSettingsOverrides {
     const db = exec ?? this.tx.connection();
     const row = db
       .prepare(
@@ -372,7 +403,17 @@ export class AgentsRepository {
     if (row === undefined) {
       return {};
     }
-    return JSON.parse(row.settings_json) as unknown;
+    let raw: unknown;
+    try {
+      raw = JSON.parse(row.settings_json);
+    } catch {
+      throw new AgentSettingsValidationError("stored agent settings JSON");
+    }
+    const parsed = AgentSettingsOverrides.safeParse(raw);
+    if (!parsed.success) {
+      throw new AgentSettingsValidationError("stored agent settings JSON");
+    }
+    return parsed.data;
   }
 
   /** Append to the agent's private memory ledger (no cross-agent reads). */

@@ -45,6 +45,7 @@ import {
 } from "../../modules/conversations/reply-streamer.ts";
 import { HarnessRunService } from "../../modules/runtime/harness-run-service.ts";
 import { loadWorkspacePack, type WorkspacePack } from "../../modules/runtime/pack-pin.ts";
+import { seedAgentsFromPack } from "../../adapters/sqlite/agents-repository.ts";
 import { WorkspacesRepository } from "../../adapters/sqlite/workspaces-repository.ts";
 import { createLocalApi } from "./app.ts";
 import { consoleRedactedLogger, type RedactedLogger } from "../http/typed-errors.ts";
@@ -280,6 +281,15 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
         ...(options.now ? { now: options.now() } : {}),
       })
     : undefined;
+  // S11 (D32/D39): seed the workspace's Agents from the loaded pack's roster —
+  // the startup composition step, so the identities exist before anything can
+  // address them. Idempotent on EVERY startup: new agents insert, pack-owned
+  // fields refresh on change, and the user-owned fields (user_instructions,
+  // default provider pair) are never clobbered by a re-seed. A seeding failure
+  // is a typed startup failure like the pack load above it (G4).
+  if (pack) {
+    seedAgentsFromPack(wired.tx, workspaceId, pack.manifest);
+  }
   // Every fanout route (conversation commands AND harness runs) flows through
   // the same containment (B4): a broadcast failure is recorded, never fatal.
   const logFault = options.logUntypedFault ?? consoleRedactedLogger;

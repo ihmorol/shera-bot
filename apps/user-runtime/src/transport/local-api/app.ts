@@ -20,6 +20,7 @@ import { AgentSettingsCommand, Id, WorkspaceId } from "@shera-bot/contracts";
 
 import type { AgentRow } from "../../adapters/sqlite/agents-repository.ts";
 import { conversationStreamFor } from "../../modules/conversations/conversations.events.ts";
+import type { AgentFoldersService } from "../../modules/agents/agent-folders.service.ts";
 import type { AgentsService } from "../../modules/agents/agents.service.ts";
 import type { ConversationsService } from "../../modules/conversations/conversations.service.ts";
 import { ConversationCommand } from "../../modules/conversations/conversations.types.ts";
@@ -39,6 +40,7 @@ export const PATCH_AGENT_INSTRUCTIONS_PATH = "/v1/agents/:agent_id/instructions"
 export const PATCH_AGENT_PROVIDER_PATH = "/v1/agents/:agent_id/provider" as const;
 export const GET_AGENT_SETTINGS_PATH = "/v1/agents/:agent_id/settings" as const;
 export const SUBMIT_AGENT_SETTINGS_COMMAND_PATH = "/v1/agents/:agent_id/settings/commands" as const;
+export const GET_AGENT_FOLDER_ACCESS_PATH = "/v1/agents/:agent_id/folder" as const;
 
 /**
  * Replay query (D26): the client's last acknowledged sequence drives exactly
@@ -58,6 +60,17 @@ const ConversationEventsQuery = z.strictObject({
 
 /** S11: every agent route is workspace-scoped (E12) — by query on reads. */
 const AgentWorkspaceQuery = z.strictObject({ workspace_id: WorkspaceId });
+
+/**
+ * S11 private-folder access check: the target is an `agent://<agent_id>/<path>`
+ * URI (the shape the memory_link setting surfaces); the acting Agent is the
+ * path identity. Only agent:// URIs are governed here — shared workspace
+ * paths are S17's permission model, not this route's guess.
+ */
+const AgentFolderAccessQuery = z.strictObject({
+  workspace_id: WorkspaceId,
+  path: z.string().min(1).max(2048),
+});
 
 /**
  * S11 PATCH bodies. The user_instructions cap mirrors the message size class
@@ -131,6 +144,13 @@ export interface LocalApiDeps {
     | "getSettings"
     | "applySettingsCommand"
   >;
+  /**
+   * S11: the private-folder guard seam. The transport only relays the access
+   * decision — resolution, the isolation rule, and traversal safety live in
+   * the agents module; the future file/terminal slices call the SAME service
+   * (never a second guard).
+   */
+  folders: Pick<AgentFoldersService, "resolveAccess">;
   /**
    * B-1: the redacted sink untyped HTTP faults are recorded to — the generic
    * INTERNAL_ERROR's correlation_id is logged with it, so "The failure has
@@ -315,6 +335,32 @@ export function createLocalApi(deps: LocalApiDeps): Express {
       return;
     }
     res.status(200).json(deps.agents.applySettingsCommand(parsed.data));
+  });
+
+  /**
+   * S11: the private-folder access decision — the guard proven end-to-end.
+   * The path identity is the ACTING Agent; the query's `path` is the target
+   * `agent://<agent_id>/<path>` URI. An Agent's OWN subtree answers 200 with
+   * the resolved decision (both verbs granted); ANY other Agent's private
+   * subtree is the typed 403 (AGENT_FOLDER_ACCESS_DENIED); a traversal-shaped
+   * or non-agent:// URI is the typed 400 (AGENT_FOLDER_URI_INVALID); unknown
+   * actor/owner/workspace is the typed 404 (AGENT_NOT_FOUND). No storage is
+   * touched — the file/terminal slices (S17/S22) go through the same guard
+   * service with a real store behind the identical seam.
+   */
+  app.get(GET_AGENT_FOLDER_ACCESS_PATH, (req, res) => {
+    const agentId = Id.safeParse(req.params.agent_id);
+    const query = AgentFolderAccessQuery.safeParse(req.query);
+    if (!agentId.success || !query.success) {
+      const { status, body } = contractValidationResponse(
+        "The folder access request is not valid: a workspace_id and an agent:// path are required.",
+      );
+      res.status(status).json(body);
+      return;
+    }
+    res.status(200).json(
+      deps.folders.resolveAccess(query.data.workspace_id, agentId.data, query.data.path),
+    );
   });
 
   /**

@@ -417,6 +417,7 @@ describe("local API — typed error middleware integration", () => {
       conversations: { executeCommand: throwing } as unknown as ConversationsService,
       replay: { resolve: throwing } as unknown as ReplayService,
       agents: throwing as unknown as LocalApiDeps["agents"],
+      folders: throwing as unknown as LocalApiDeps["folders"],
     });
     const running = await listenHttp(app);
     try {

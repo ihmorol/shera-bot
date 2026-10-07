@@ -15,6 +15,10 @@ import { SheraError } from "@shera-bot/contracts";
 import { ConversationsServiceError } from "../../modules/conversations/conversations.types.ts";
 import { EventsServiceError } from "../../modules/events/events.service.ts";
 import {
+  AgentFolderAccessDeniedError,
+  AgentFolderUriInvalidError,
+} from "../../modules/agents/agent-folders.service.ts";
+import {
   consoleRedactedLogger,
   createTypedErrorRequestHandler,
   notFoundErrorResponse,
@@ -238,6 +242,41 @@ describe("createTypedErrorRequestHandler — untyped faults are recorded, not si
     );
 
     expect(res.statusCode).toBe(409);
+    expect(logged).toHaveLength(0);
+  });
+
+  it("does not log the typed folder rejections — the 403/400 isolation answers, never untyped_request_fault", () => {
+    const logged: Array<{ event: string; fields: Record<string, unknown> }> = [];
+    const handler = createTypedErrorRequestHandler((event, fields) =>
+      logged.push({ event, fields }),
+    );
+
+    // The guard's denial: typed 403, the stable code on the wire.
+    const deniedRes = stubResponse();
+    callHandler(
+      handler,
+      new AgentFolderAccessDeniedError("agent_intruder", "agent_owner"),
+      { method: "GET", path: "/v1/agents/agent_owner/folders" },
+      deniedRes,
+      () => {},
+    );
+    expect(deniedRes.statusCode).toBe(403);
+    expect((deniedRes.body as { code: string }).code).toBe("AGENT_FOLDER_ACCESS_DENIED");
+
+    // The malformed URI: typed 400.
+    const invalidRes = stubResponse();
+    callHandler(
+      handler,
+      new AgentFolderUriInvalidError(),
+      { method: "GET", path: "/v1/agents/agent_owner/folders?uri=workspace%3A%2F%2Fx" },
+      invalidRes,
+      () => {},
+    );
+    expect(invalidRes.statusCode).toBe(400);
+    expect((invalidRes.body as { code: string }).code).toBe("AGENT_FOLDER_URI_INVALID");
+
+    // Both are typed rejections: answered precisely and recorded as data —
+    // never logged as untyped_request_fault with message + stack.
     expect(logged).toHaveLength(0);
   });
 

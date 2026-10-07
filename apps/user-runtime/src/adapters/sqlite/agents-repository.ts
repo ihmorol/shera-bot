@@ -45,7 +45,10 @@ import type { SqliteTransactions } from "./transactions.ts";
 /**
  * The pack-side agent shape this repository seeds from — a structural subset
  * of the agent-pack-sdk AgentManifest. The adapter does not import the SDK;
- * the seed helper below accepts a loaded PackManifest as-is.
+ * the seed helper below accepts a loaded PackManifest as-is. Every agent_id
+ * must satisfy the AgentFolderUri host charset (AGENT_FOLDER_HOST_CHARSET):
+ * the seeding boundary rejects anything else, because the private folder URI
+ * `agent://<agent_id>/` is derived from the id and must stay valid forever.
  */
 export interface PackAgentSeed {
   agent_id: string;
@@ -137,6 +140,55 @@ export class AgentSettingsValidationError extends Error {
 }
 
 /**
+ * The typed rejection for a pack roster that names the same agent_id twice
+ * (S11 fix round): the manifest schema rejects duplicate ids upstream, and
+ * this defensive re-check keeps the roster unambiguous even for unvalidated
+ * callers — but as the TYPED error, not a raw Error, so a seeding failure at
+ * startup is a typed startup failure like the pack load above it (G4) and a
+ * test can pin the exact rejection instead of a message string.
+ */
+export class AgentSeedConflictError extends Error {
+  readonly code = "CONTRACT_VALIDATION_FAILED" as const;
+  readonly category = "validation" as const;
+
+  constructor(agentId: string) {
+    super(`duplicate agent_id in pack roster: ${agentId}`);
+    this.name = "AgentSeedConflictError";
+  }
+}
+
+/**
+ * The AgentFolderUri host charset (packages/contracts agent.ts) — the rule
+ * every seeded agent_id must satisfy so the private folder root written at
+ * seed time, `agent://<agent_id>/`, is a VALID AgentFolderUri forever. The
+ * folder guard (agent-folders.service.ts) enforces the same charset when
+ * parsing URIs; the contracts' AgentFolderUri schema is the shared authority.
+ */
+export const AGENT_FOLDER_HOST_CHARSET = /^[a-z0-9_-]+$/;
+
+/**
+ * The typed rejection for a pack roster whose agent_id cannot address its own
+ * private folder: seeding writes `agent://<agent_id>/`, and an id outside the
+ * AgentFolderUri host charset (uppercase, spaces, slashes, control characters)
+ * would violate the folder URI contracts FOREVER — unparsable by the folder
+ * guard, unusable by the memory slice. Rejected at the seeding boundary
+ * instead of stranding a broken identity in the agents table. Carries the
+ * stable CONTRACT_VALIDATION_FAILED code/category pair (validation-category:
+ * malformed pack INPUT, not a runtime state failure).
+ */
+export class AgentSeedCharsetError extends Error {
+  readonly code = "CONTRACT_VALIDATION_FAILED" as const;
+  readonly category = "validation" as const;
+
+  constructor(agentId: string) {
+    super(
+      `agent_id ${agentId} does not match the agent:// folder URI charset (lowercase letters, digits, '-', '_')`,
+    );
+    this.name = "AgentSeedCharsetError";
+  }
+}
+
+/**
  * True when a direct-chat binding insert lost the race against the winner's
  * committed (workspace_id, agent_id) primary key (B5): THIS unit rolled back
  * atomically and the winner's binding is durable, so the caller re-reads and
@@ -203,8 +255,16 @@ export class AgentsRepository {
     for (const agent of packAgents) {
       if (incoming.has(agent.agent_id)) {
         // The manifest schema rejects duplicates upstream; a re-check here
-        // keeps the roster unambiguous even for unvalidated callers.
-        throw new Error(`duplicate agent_id in pack roster: ${agent.agent_id}`);
+        // keeps the roster unambiguous even for unvalidated callers — typed,
+        // so the startup composition fails with a named rejection (G4).
+        throw new AgentSeedConflictError(agent.agent_id);
+      }
+      if (!AGENT_FOLDER_HOST_CHARSET.test(agent.agent_id)) {
+        // The seed writes `agent://<agent_id>/`; an id outside the folder
+        // charset would violate the AgentFolderUri contracts FOREVER. Every
+        // roster entry is checked (insert AND refresh) so the seeding boundary
+        // never blesses an identity its own folder URI cannot address.
+        throw new AgentSeedCharsetError(agent.agent_id);
       }
       incoming.add(agent.agent_id);
 

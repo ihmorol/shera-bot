@@ -301,6 +301,8 @@ function isUntypedFault(error: unknown): boolean {
     !(error instanceof AgentNotFoundError) &&
     !(error instanceof AgentSettingsValidationError) &&
     !(error instanceof AgentSettingsResetUnavailableError) &&
+    !(error instanceof AgentFolderAccessDeniedError) &&
+    !(error instanceof AgentFolderUriInvalidError) &&
     bodyParserType(error) === null
   );
 }

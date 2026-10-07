@@ -30,9 +30,14 @@ import { ConversationsRepository } from "../../adapters/sqlite/conversations-rep
 import { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
 import { openDatabase, type SqliteConnection } from "../../adapters/sqlite/connection.ts";
 import { applyMigrations } from "../../adapters/sqlite/migrations.ts";
-import { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
+import { SqliteTransactions, type SqliteExec } from "../../adapters/sqlite/transactions.ts";
 import { EventsService } from "../events/events.service.ts";
-import { AgentsService, AgentSettingsResetUnavailableError } from "./agents.service.ts";
+import { conversationStreamFor } from "../conversations/conversations.events.ts";
+import {
+  AgentsService,
+  AgentSettingsResetUnavailableError,
+  type AgentDirectChatPublisher,
+} from "./agents.service.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const studentManifestPath = resolve(
@@ -66,6 +71,8 @@ let conn: SqliteConnection;
 let tx: SqliteTransactions;
 let service: AgentsService;
 let repo: AgentsRepository;
+/** The current database file path — the publish-ordering pin opens a second reader on it. */
+let dbPath: string;
 
 function command(
   extra: Record<string, unknown> & { type: string },
@@ -85,7 +92,8 @@ function command(
 beforeEach(() => {
   const dir = mkdtempSync(join(tmpdir(), "shera-runtime-s11-agents-service-"));
   tempDirs.push(dir);
-  conn = openDatabase(join(dir, "runtime.db"));
+  dbPath = join(dir, "runtime.db");
+  conn = openDatabase(dbPath);
   applyMigrations(conn.db);
   tx = new SqliteTransactions(conn.db);
   repo = new AgentsRepository(tx);
@@ -357,6 +365,49 @@ describe("reset without a pack recommendation (documented module default boundar
     expect(entry(snapshot, "default_provider").recommended_default).toBeNull();
     expect(entry(snapshot, "default_provider").value).toEqual(generalManifest.default_provider);
   });
+
+  it("applies reset_all as ONE atomic unit — a mid-command failure leaves NOTHING applied", () => {
+    // Dirty every user-owned field first, through the real command path.
+    service.applySettingsCommand(
+      command({ type: "agent_settings.update_instructions", user_instructions: "Precious rule." }),
+    );
+    service.applySettingsCommand(
+      command({
+        type: "agent_settings.update_default_provider",
+        default_provider: { provider_id: "provider_local", model: "qwen3-8b" },
+      }),
+    );
+    service.applySettingsCommand(
+      command({
+        type: "agent_settings.update_tool_defaults",
+        tool_defaults: [{ tool_id: "tool_web_search", config: { depth: "deep" } }],
+      }),
+    );
+
+    // Packless composition: reset_all clears the instructions, then throws the
+    // typed AGENT_SETTINGS_RESET_UNAVAILABLE from the provider reset. The
+    // rejection must arrive with NOTHING applied — the cleared instructions
+    // (and everything else) rolled back with the failed unit.
+    const seedless = new AgentsService({
+      agents: repo,
+      conversations: new ConversationsRepository(tx),
+      journal: new EventsService(new EventJournalRepository(tx), tx),
+      tx,
+    });
+    expect(() =>
+      seedless.applySettingsCommand(command({ type: "agent_settings.reset_all" })),
+    ).toThrow(AgentSettingsResetUnavailableError);
+
+    const after = service.getSettings("ws-primary", GENERAL);
+    expect(entry(after, "user_instructions").value).toBe("Precious rule.");
+    expect(entry(after, "default_provider").value).toEqual({
+      provider_id: "provider_local",
+      model: "qwen3-8b",
+    });
+    expect(entry(after, "tool_defaults").value).toEqual([
+      { tool_id: "tool_web_search", config: { depth: "deep" } },
+    ]);
+  });
 });
 
 describe("read-model integrity against corrupted pack-owned data", () => {
@@ -380,5 +431,121 @@ describe("read-model integrity against corrupted pack-owned data", () => {
     expect(() => service.getSettings("ws-primary", GENERAL)).toThrow(
       AgentSettingsValidationError,
     );
+  });
+});
+
+/**
+ * Direct-chat race containment (B5) and post-commit publish ordering (B4/AC8)
+ * pins — the module header claims "rolls THIS unit back atomically … re-reads
+ * the winner's binding" and "publish fires only after COMMIT"; these tests pin
+ * both claims against the real SQLite driver so they cannot silently rot.
+ */
+describe("direct-chat race containment and post-commit publish ordering (B4/B5 pins)", () => {
+  it("publishes strictly after COMMIT — a throwing subscriber cannot undo the creation", () => {
+    let publishAttempts = 0;
+    const throwingPublisher: AgentDirectChatPublisher = (event) => {
+      publishAttempts += 1;
+      // Ordering proof from INSIDE the subscriber: the transactional unit has
+      // already returned — no transaction is open while publish runs.
+      expect(tx.inTransaction).toBe(false);
+      // And the unit is DURABLE at publish time: a second connection (a WAL
+      // reader only ever sees committed data) already resolves the binding and
+      // the conversation row. Had publish fired inside the transaction, this
+      // read would see nothing.
+      const reader = openDatabase(dbPath);
+      try {
+        const binding = reader.db
+          .prepare(
+            `SELECT conversation_id FROM agent_direct_chats
+             WHERE workspace_id = ? AND agent_id = ?`,
+          )
+          .get("ws-primary", GENERAL) as { conversation_id: string } | undefined;
+        expect(binding?.conversation_id).toBe(event.payload.conversation_id);
+        const conversationRow = reader.db
+          .prepare(`SELECT id FROM conversations WHERE workspace_id = ? AND id = ?`)
+          .get("ws-primary", event.payload.conversation_id);
+        expect(conversationRow).toBeDefined();
+      } finally {
+        reader.close();
+      }
+      throw new Error("subscriber exploded");
+    };
+    const publishing = new AgentsService({
+      agents: repo,
+      conversations: new ConversationsRepository(tx),
+      journal: new EventsService(new EventJournalRepository(tx), tx),
+      tx,
+      publish: throwingPublisher,
+    });
+
+    // The service-level hook may propagate the subscriber's failure (the
+    // composition's fanout wrapper contains it, B4) — but only AFTER commit.
+    expect(() => publishing.getOrCreateDirectChat("ws-primary", GENERAL)).toThrow(
+      "subscriber exploded",
+    );
+    expect(publishAttempts).toBe(1);
+
+    // The subscriber's fate never undid the committed creation (AC8): the
+    // binding, the conversation row, and the journal event are all durable.
+    const durable = repo.findDirectChat("ws-primary", GENERAL);
+    expect(durable).not.toBeNull();
+    expect(new ConversationsRepository(tx).findById("ws-primary", durable!)).not.toBeNull();
+    const streamRows = new EventJournalRepository(tx).listStream(
+      conversationStreamFor(durable!),
+      "ws-primary",
+    );
+    expect(streamRows.map((row) => row.event_type)).toEqual(["conversation.created"]);
+
+    // The committed binding is the exact contract of the non-race path: a
+    // later call resolves to the SAME conversation without creating another.
+    const again = service.getOrCreateDirectChat("ws-primary", GENERAL);
+    expect(again.created).toBe(false);
+    expect(again.conversation_id).toBe(durable);
+  });
+
+  it("the race loser rolls back atomically and re-reads the winner's binding", () => {
+    // The winner commits first through the real path.
+    const winner = service.getOrCreateDirectChat("ws-primary", GENERAL);
+    expect(winner.created).toBe(true);
+
+    // The loser's FIRST binding read misses (the concurrent race window); its
+    // insert then hits the winner's committed (workspace_id, agent_id) primary
+    // key inside the real transaction, and the catch path must re-read.
+    class MissedFirstRead extends AgentsRepository {
+      #reads = 0;
+      override findDirectChat(
+        workspaceId: string,
+        agentId: string,
+        exec?: SqliteExec,
+      ): string | null {
+        this.#reads += 1;
+        if (this.#reads === 1) {
+          return null; // the race-miss read
+        }
+        return super.findDirectChat(workspaceId, agentId, exec);
+      }
+    }
+    const loser = new AgentsService({
+      agents: new MissedFirstRead(tx),
+      conversations: new ConversationsRepository(tx),
+      journal: new EventsService(new EventJournalRepository(tx), tx),
+      tx,
+    });
+
+    const resolution = loser.getOrCreateDirectChat("ws-primary", GENERAL);
+    // No throw, and NOT the loser's own unit: it resolved to the winner's
+    // conversation with created=false — the exact non-race contract.
+    expect(resolution.created).toBe(false);
+    expect(resolution.conversation_id).toBe(winner.conversation_id);
+
+    // THIS unit rolled back atomically: no orphan conversation row, no journal
+    // row on a stream of its own — only the winner's unit exists.
+    const conversationRows = new ConversationsRepository(tx).list("ws-primary");
+    expect(conversationRows.map((row) => row.id)).toEqual([winner.conversation_id]);
+    const streams = new EventJournalRepository(tx).listWorkspaceStreams("ws-primary");
+    expect(streams).toEqual([conversationStreamFor(winner.conversation_id)]);
+
+    // And the winner's binding is untouched by the loser's failed attempt.
+    expect(repo.findDirectChat("ws-primary", GENERAL)).toBe(winner.conversation_id);
   });
 });

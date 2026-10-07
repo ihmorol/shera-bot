@@ -33,10 +33,11 @@
  * than guessing at permissions that do not exist yet. When a workspace
  * permission convention arrives, it extends this module behind the same seam.
  */
-import { AgentNotFoundError, type AgentsRepository } from "../../adapters/sqlite/agents-repository.ts";
-
-/** The AgentFolderUri host charset (packages/contracts agent.ts) — same rule. */
-const AGENT_ID_CHARSET = /^[a-z0-9_-]+$/;
+import {
+  AGENT_FOLDER_HOST_CHARSET,
+  AgentNotFoundError,
+  type AgentsRepository,
+} from "../../adapters/sqlite/agents-repository.ts";
 
 /** The parsed shape of an `agent://<agent_id>/<path>` URI. */
 export interface ParsedAgentFolderUri {
@@ -104,7 +105,10 @@ export function parseAgentFolderUri(uri: string): ParsedAgentFolderUri {
   // a slash, per the contracts' AgentFolderUri shape.
   if (hostEnd < 0) throw new AgentFolderUriInvalidError();
   const agentId = afterScheme.slice(0, hostEnd);
-  if (!AGENT_ID_CHARSET.test(agentId)) throw new AgentFolderUriInvalidError();
+  // The seeding boundary (agents-repository) rejects any agent_id outside this
+  // charset, so a seeded Agent's folder root always parses — the check here is
+  // the guard's own line of defense for hand-supplied URIs.
+  if (!AGENT_FOLDER_HOST_CHARSET.test(agentId)) throw new AgentFolderUriInvalidError();
 
   const rawPath = afterScheme.slice(hostEnd + 1);
   const segments = rawPath.split("/");

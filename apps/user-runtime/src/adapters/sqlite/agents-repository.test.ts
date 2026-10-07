@@ -18,9 +18,13 @@ import { openDatabase, type SqliteConnection } from "./connection.ts";
 import { applyMigrations, MIGRATIONS } from "./migrations.ts";
 import { SqliteTransactions } from "./transactions.ts";
 import {
+  AGENT_FOLDER_HOST_CHARSET,
   AgentsRepository,
   AgentNotFoundError,
+  AgentSeedCharsetError,
+  AgentSeedConflictError,
   AgentSettingsValidationError,
+  isDirectChatConflict,
   seedAgentsFromPack,
 } from "./agents-repository.ts";
 
@@ -138,6 +142,76 @@ describe("agent identities (S11 migration v4)", () => {
     const result = seedAgentsFromPack(tx, "ws-primary", studentManifest);
     expect(result.inserted_agent_ids).toHaveLength(6);
     expect(repo.listAgents("ws-primary")).toHaveLength(6);
+  });
+
+  it("rejects a duplicate agent_id roster with the typed seed conflict — and lands nothing", () => {
+    // The manifest schema rejects duplicate ids upstream; the repository's
+    // defensive re-check is the TYPED startup failure (G4), not a raw Error.
+    const duplicated = [
+      ...studentManifest.agents,
+      studentManifest.agents[0]!, // the SAME agent_id twice
+    ];
+    expect(() => repo.upsertFromPack("ws-prim-dup", duplicated)).toThrow(
+      AgentSeedConflictError,
+    );
+    try {
+      repo.upsertFromPack("ws-prim-dup", duplicated);
+    } catch (error) {
+      const seedConflict = error as AgentSeedConflictError;
+      expect(seedConflict.code).toBe("CONTRACT_VALIDATION_FAILED");
+      expect(seedConflict.category).toBe("validation");
+      expect(seedConflict.message).toBe(
+        `duplicate agent_id in pack roster: ${studentManifest.agents[0]!.agent_id}`,
+      );
+    }
+    // The rejection arrived mid-roster, but the upsert is one transaction:
+    // the agents inserted BEFORE the duplicate was detected rolled back too.
+    expect(repo.listAgents("ws-prim-dup")).toEqual([]);
+  });
+
+  it("rejects agent_ids whose charset breaks their agent:// folder URI", () => {
+    // The contracts' Id schema allows uppercase (and the repository accepts a
+    // structural seed, not just a validated SDK manifest), but the seed writes
+    // `agent://<agent_id>/` — an id like "Atlas" would violate the folder URI
+    // contracts FOREVER. The seeding boundary rejects it, typed.
+    const roster = (agentId: string): ManifestAgent => ({
+      agent_id: agentId,
+      display_name: "Broken Charsetter",
+      role_description: "An id the folder guard could never address",
+      default_provider: { provider_id: "provider_platform", model: "platform-default" },
+      skills: [],
+      tools: [],
+      connectors: [],
+      ui_identity: { avatar_hue: 10, initial_glyph: "B" },
+      home_operation_id: null,
+    });
+    for (const badId of ["Atlas", "agent general", "agent.v2"]) {
+      expect(() => repo.upsertFromPack("ws-charset", [roster(badId)])).toThrow(
+        AgentSeedCharsetError,
+      );
+      try {
+        repo.upsertFromPack("ws-charset", [roster(badId)]);
+      } catch (error) {
+        const rejected = error as AgentSeedCharsetError;
+        expect(rejected.code).toBe("CONTRACT_VALIDATION_FAILED");
+        expect(rejected.category).toBe("validation");
+        expect(rejected.message).toContain(badId);
+      }
+      // Nothing landed — a rejected roster seeds nothing.
+      expect(repo.listAgents("ws-charset")).toEqual([]);
+    }
+
+    // The charset rule the boundary enforces IS the folder guard's rule: the
+    // student pack's lowercase ids all seed folder roots that parse, and the
+    // rejected id provably would not.
+    const seeded = repo.upsertFromPack("ws-charset", studentManifest.agents);
+    expect(seeded.inserted_agent_ids).toHaveLength(6);
+    for (const agent of repo.listAgents("ws-charset")) {
+      expect(AGENT_FOLDER_HOST_CHARSET.test(agent.agent_id)).toBe(true);
+      expect(agent.private_folder_path).toBe(`agent://${agent.agent_id}/`);
+      expect(agent.private_folder_path).toMatch(/^agent:\/\/[a-z0-9_-]+\/$/);
+    }
+    expect(AGENT_FOLDER_HOST_CHARSET.test("Atlas")).toBe(false);
   });
 
   it("re-seeding an unchanged pack reports no inserts, updates, or orphans", () => {
@@ -410,5 +484,115 @@ describe("agent identities (S11 migration v4)", () => {
 
     expect(repo.getAgent("ws-alpha", "agent_does_not_exist")).toBeNull();
     expect(repo.listAgents("ws-unknown")).toEqual([]);
+  });
+});
+
+/**
+ * B5 race classification, pinned against the REAL driver (node:sqlite): the
+ * get-or-create loser's failure is the (workspace_id, agent_id) primary-key
+ * UNIQUE violation, and ONLY that. The service's catch path trusts this
+ * predicate to decide between "re-read the winner" and "rethrow" — a
+ * misclassification here either swallows real failures or turns the loser
+ * path into a 500, so the exact driver error shape is pinned, not simulated.
+ */
+describe("isDirectChatConflict (B5 race classification — real driver errors)", () => {
+  let conn: SqliteConnection;
+  let tx: SqliteTransactions;
+  let repo: AgentsRepository;
+
+  beforeEach(() => {
+    conn = openDatabase(newTempDbPath());
+    applyMigrations(conn.db);
+    tx = new SqliteTransactions(conn.db);
+    repo = new AgentsRepository(tx);
+  });
+
+  afterEach(() => {
+    conn.close();
+  });
+
+  function insertBinding(workspaceId: string, agentId: string, conversationId: string): void {
+    conn.db
+      .prepare(
+        `INSERT INTO agent_direct_chats (workspace_id, agent_id, conversation_id, created_at)
+         VALUES (?, ?, ?, ?)`,
+      )
+      .run(workspaceId, agentId, conversationId, "2026-10-07T00:00:00.000Z");
+  }
+
+  function caught(run: () => void): unknown {
+    try {
+      run();
+    } catch (error) {
+      return error;
+    }
+    throw new Error("expected the statement to throw");
+  }
+
+  it("classifies the real (workspace_id, agent_id) primary-key violation as the binding race", () => {
+    // The winner's committed binding: the racing loser's insert fails on the
+    // table's primary key — the exact error two concurrent first calls produce.
+    insertBinding("ws-primary", "agent_one", "conv_winner");
+    const loser = caught(() => insertBinding("ws-primary", "agent_one", "conv_loser"));
+
+    expect((loser as { code?: unknown }).code).toBe("ERR_SQLITE_ERROR");
+    expect((loser as Error).message).toBe(
+      "UNIQUE constraint failed: agent_direct_chats.workspace_id, agent_direct_chats.agent_id",
+    );
+    expect(isDirectChatConflict(loser)).toBe(true);
+  });
+
+  it("does NOT classify the conversation-id UNIQUE violations as the binding race", () => {
+    insertBinding("ws-primary", "agent_one", "conv_shared");
+    // UNIQUE (workspace_id, conversation_id): claiming the SAME conversation
+    // for a DIFFERENT agent is a different failure — never misread as the
+    // get-or-create loser (whose re-read would be a lie here).
+    const sameConversationOtherAgent = caught(() =>
+      insertBinding("ws-primary", "agent_two", "conv_shared"),
+    );
+    expect((sameConversationOtherAgent as Error).message).toContain(
+      "agent_direct_chats.conversation_id",
+    );
+    expect(isDirectChatConflict(sameConversationOtherAgent)).toBe(false);
+
+    // The conversations table's own id collision is not a binding race either.
+    const insertConversation = (id: string, title: string) =>
+      conn.db
+        .prepare(
+          `INSERT INTO conversations (id, workspace_id, title, revision, created_at, updated_at)
+           VALUES (?, ?, ?, 1, ?, ?)`,
+        )
+        .run(id, "ws-primary", title, "2026-10-07T00:00:00.000Z", "2026-10-07T00:00:00.000Z");
+    insertConversation("conv_dupe", "First");
+    const conversationIdClash = caught(() => insertConversation("conv_dupe", "Second"));
+    expect(isDirectChatConflict(conversationIdClash)).toBe(false);
+  });
+
+  it("does not classify non-driver failures or other UNIQUE violations", () => {
+    // A plain Error with a matching message is NOT enough — the predicate
+    // requires the driver's ERR_SQLITE_ERROR error code, so fabricated or
+    // wrapped failures are never mistaken for the race.
+    expect(
+      isDirectChatConflict(
+        new Error(
+          "UNIQUE constraint failed: agent_direct_chats.workspace_id, agent_direct_chats.agent_id",
+        ),
+      ),
+    ).toBe(false);
+    // A real-driver-code error on a DIFFERENT table is not the binding race.
+    expect(
+      isDirectChatConflict(
+        Object.assign(
+          new Error("UNIQUE constraint failed: agents.workspace_id, agents.agent_id"),
+          { code: "ERR_SQLITE_ERROR" },
+        ),
+      ),
+    ).toBe(false);
+    expect(isDirectChatConflict(undefined)).toBe(false);
+    expect(isDirectChatConflict("UNIQUE constraint failed: agent_direct_chats.agent_id")).toBe(
+      false,
+    );
+    // The instance still works after the failed statements above.
+    expect(repo.listAgents("ws-primary")).toEqual([]);
   });
 });

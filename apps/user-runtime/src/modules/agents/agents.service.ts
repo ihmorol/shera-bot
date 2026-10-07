@@ -18,7 +18,9 @@
  * onboarding will use — and returns the read-after-write snapshot. Commands
  * are naturally idempotent (last-write-wins of a validated value), so no
  * receipt store is needed here; settings mutations are NOT journaled in this
- * slice (the runtime has no agent-domain event stream yet).
+ * slice (the runtime has no agent-domain event stream yet). Every command
+ * application commits as ONE transaction unit: a mid-command failure (the
+ * packless reset_all's typed rejection, a vanished agent) applies NOTHING.
  *
  * Direct chats (D39 — one identity everywhere): getOrCreateDirectChat binds
  * exactly one conversation per (workspace, agent), and the binding references
@@ -198,38 +200,55 @@ export class AgentsService {
   /**
    * Apply one D16 settings command (the contracts' AgentSettingsCommand union
    * — the SAME commands S30 onboarding submits) and return the read-after-
-   * write snapshot. Unknown agents fail with the typed 404-class rejection
-   * before anything is written; provider resets fail typed when no pack seed
-   * carries the recommended default (never a hardcoded provider pick).
+   * write snapshot. The whole application commits as ONE transaction unit:
+   * reset_all writes three rows, and a mid-command failure (e.g. the packless
+   * provider reset's typed rejection arriving after the instructions were
+   * cleared) rolls everything back — a rejected command applies NOTHING.
+   * Unknown agents fail with the typed 404-class rejection before anything is
+   * written; provider resets fail typed when no pack seed carries the
+   * recommended default (never a hardcoded provider pick).
    */
   applySettingsCommand(command: AgentSettingsCommand): AgentSettingsSnapshot {
     const { workspace_id: workspaceId, agent_id: agentId } = command;
-    switch (command.type) {
-      case "agent_settings.update_instructions":
-        this.deps.agents.updateUserInstructions(workspaceId, agentId, command.user_instructions);
-        break;
-      case "agent_settings.update_default_provider":
-        this.deps.agents.updateDefaultProvider(
-          workspaceId,
-          agentId,
-          command.default_provider.provider_id,
-          command.default_provider.model,
-        );
-        break;
-      case "agent_settings.update_tool_defaults":
-        this.deps.agents.updateSettings(workspaceId, agentId, {
-          tool_defaults: command.tool_defaults,
-        });
-        break;
-      case "agent_settings.reset_setting":
-        this.resetSetting(workspaceId, agentId, command.setting_key);
-        break;
-      case "agent_settings.reset_all":
-        this.deps.agents.updateUserInstructions(workspaceId, agentId, null);
-        this.resetProviderToRecommended(workspaceId, agentId);
-        this.deps.agents.updateSettings(workspaceId, agentId, {});
-        break;
-    }
+    this.deps.tx.transaction((exec: SqliteExec) => {
+      switch (command.type) {
+        case "agent_settings.update_instructions":
+          this.deps.agents.updateUserInstructions(
+            workspaceId,
+            agentId,
+            command.user_instructions,
+            exec,
+          );
+          break;
+        case "agent_settings.update_default_provider":
+          this.deps.agents.updateDefaultProvider(
+            workspaceId,
+            agentId,
+            command.default_provider.provider_id,
+            command.default_provider.model,
+            exec,
+          );
+          break;
+        case "agent_settings.update_tool_defaults":
+          this.deps.agents.updateSettings(
+            workspaceId,
+            agentId,
+            {
+              tool_defaults: command.tool_defaults,
+            },
+            exec,
+          );
+          break;
+        case "agent_settings.reset_setting":
+          this.resetSetting(workspaceId, agentId, command.setting_key, exec);
+          break;
+        case "agent_settings.reset_all":
+          this.deps.agents.updateUserInstructions(workspaceId, agentId, null, exec);
+          this.resetProviderToRecommended(workspaceId, agentId, exec);
+          this.deps.agents.updateSettings(workspaceId, agentId, {}, exec);
+          break;
+      }
+    });
     return this.getSettings(workspaceId, agentId);
   }
 
@@ -237,21 +256,26 @@ export class AgentsService {
     workspaceId: string,
     agentId: string,
     key: EditableAgentSettingKey,
+    exec: SqliteExec,
   ): void {
     switch (key) {
       case "user_instructions":
-        this.deps.agents.updateUserInstructions(workspaceId, agentId, null);
+        this.deps.agents.updateUserInstructions(workspaceId, agentId, null, exec);
         return;
       case "default_provider":
-        this.resetProviderToRecommended(workspaceId, agentId);
+        this.resetProviderToRecommended(workspaceId, agentId, exec);
         return;
       case "tool_defaults":
-        this.deps.agents.updateSettings(workspaceId, agentId, { tool_defaults: [] });
+        this.deps.agents.updateSettings(workspaceId, agentId, { tool_defaults: [] }, exec);
         return;
     }
   }
 
-  private resetProviderToRecommended(workspaceId: string, agentId: string): void {
+  private resetProviderToRecommended(
+    workspaceId: string,
+    agentId: string,
+    exec: SqliteExec,
+  ): void {
     const seed = this.packSeed(agentId);
     if (seed === undefined) {
       throw new AgentSettingsResetUnavailableError(workspaceId, agentId);
@@ -261,6 +285,7 @@ export class AgentsService {
       agentId,
       seed.default_provider.provider_id,
       seed.default_provider.model,
+      exec,
     );
   }
 

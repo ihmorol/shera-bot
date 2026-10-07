@@ -246,8 +246,14 @@ describe("composer (§S3)", () => {
         disabledReason: "No provider is configured for this conversation yet.",
       }),
     );
+    // The hint line is the ONE place the reason renders — the textarea keeps
+    // its neutral placeholder, so the surface never says it twice.
     expect(html).toContain("No provider is configured for this conversation yet.");
+    expect(html).not.toMatch(/placeholder="No provider is configured[^"]*"/);
+    expect(html).toMatch(/placeholder="Message Researcher"/);
     expect(html).toContain("disabled");
+    // The field itself reads as unavailable (dimmed), not just the send button.
+    expect(html).toContain("disabled:opacity-60");
   });
 });
 

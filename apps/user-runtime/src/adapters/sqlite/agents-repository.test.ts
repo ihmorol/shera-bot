@@ -20,6 +20,7 @@ import { SqliteTransactions } from "./transactions.ts";
 import {
   AgentsRepository,
   AgentNotFoundError,
+  AgentSeedConflictError,
   AgentSettingsValidationError,
   isDirectChatConflict,
   seedAgentsFromPack,
@@ -139,6 +140,31 @@ describe("agent identities (S11 migration v4)", () => {
     const result = seedAgentsFromPack(tx, "ws-primary", studentManifest);
     expect(result.inserted_agent_ids).toHaveLength(6);
     expect(repo.listAgents("ws-primary")).toHaveLength(6);
+  });
+
+  it("rejects a duplicate agent_id roster with the typed seed conflict — and lands nothing", () => {
+    // The manifest schema rejects duplicate ids upstream; the repository's
+    // defensive re-check is the TYPED startup failure (G4), not a raw Error.
+    const duplicated = [
+      ...studentManifest.agents,
+      studentManifest.agents[0]!, // the SAME agent_id twice
+    ];
+    expect(() => repo.upsertFromPack("ws-prim-dup", duplicated)).toThrow(
+      AgentSeedConflictError,
+    );
+    try {
+      repo.upsertFromPack("ws-prim-dup", duplicated);
+    } catch (error) {
+      const seedConflict = error as AgentSeedConflictError;
+      expect(seedConflict.code).toBe("CONTRACT_VALIDATION_FAILED");
+      expect(seedConflict.category).toBe("validation");
+      expect(seedConflict.message).toBe(
+        `duplicate agent_id in pack roster: ${studentManifest.agents[0]!.agent_id}`,
+      );
+    }
+    // The rejection arrived mid-roster, but the upsert is one transaction:
+    // the agents inserted BEFORE the duplicate was detected rolled back too.
+    expect(repo.listAgents("ws-prim-dup")).toEqual([]);
   });
 
   it("re-seeding an unchanged pack reports no inserts, updates, or orphans", () => {

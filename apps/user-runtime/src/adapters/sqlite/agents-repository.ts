@@ -137,6 +137,24 @@ export class AgentSettingsValidationError extends Error {
 }
 
 /**
+ * The typed rejection for a pack roster that names the same agent_id twice
+ * (S11 fix round): the manifest schema rejects duplicate ids upstream, and
+ * this defensive re-check keeps the roster unambiguous even for unvalidated
+ * callers — but as the TYPED error, not a raw Error, so a seeding failure at
+ * startup is a typed startup failure like the pack load above it (G4) and a
+ * test can pin the exact rejection instead of a message string.
+ */
+export class AgentSeedConflictError extends Error {
+  readonly code = "CONTRACT_VALIDATION_FAILED" as const;
+  readonly category = "validation" as const;
+
+  constructor(agentId: string) {
+    super(`duplicate agent_id in pack roster: ${agentId}`);
+    this.name = "AgentSeedConflictError";
+  }
+}
+
+/**
  * True when a direct-chat binding insert lost the race against the winner's
  * committed (workspace_id, agent_id) primary key (B5): THIS unit rolled back
  * atomically and the winner's binding is durable, so the caller re-reads and
@@ -203,8 +221,9 @@ export class AgentsRepository {
     for (const agent of packAgents) {
       if (incoming.has(agent.agent_id)) {
         // The manifest schema rejects duplicates upstream; a re-check here
-        // keeps the roster unambiguous even for unvalidated callers.
-        throw new Error(`duplicate agent_id in pack roster: ${agent.agent_id}`);
+        // keeps the roster unambiguous even for unvalidated callers — typed,
+        // so the startup composition fails with a named rejection (G4).
+        throw new AgentSeedConflictError(agent.agent_id);
       }
       incoming.add(agent.agent_id);
 

@@ -28,6 +28,7 @@ import type { ErrorRequestHandler, RequestHandler } from "express";
 
 import type { SheraError } from "@shera-bot/contracts";
 
+import { AgentNotFoundError } from "../../adapters/sqlite/agents-repository.ts";
 import { ConversationsServiceError } from "../../modules/conversations/conversations.types.ts";
 import { EventsServiceError } from "../../modules/events/events.service.ts";
 
@@ -97,6 +98,18 @@ const JOURNAL_REJECTIONS: Record<
   },
 };
 
+/** S11: the agents boundary rejections (the repository's typed error class). */
+const AGENTS_REJECTIONS: Record<
+  AgentNotFoundError["code"],
+  { status: number; safe_message: string; user_action: string | null }
+> = {
+  AGENT_NOT_FOUND: {
+    status: 404,
+    safe_message: "The agent does not exist in this workspace.",
+    user_action: null,
+  },
+};
+
 function bodyParserType(error: unknown): string | null {
   if (typeof error === "object" && error !== null && "type" in error) {
     const type = (error as { type?: unknown }).type;
@@ -137,6 +150,22 @@ export function toSheraErrorResponse(error: unknown, correlationId?: string): Ht
         safe_message: mapping.safe_message,
         retryable: false,
         user_action: null,
+        internal_details: null,
+        correlation_id,
+      },
+    };
+  }
+
+  if (error instanceof AgentNotFoundError) {
+    const mapping = AGENTS_REJECTIONS[error.code];
+    return {
+      status: mapping.status,
+      body: {
+        code: error.code,
+        category: error.category,
+        safe_message: mapping.safe_message,
+        retryable: false,
+        user_action: mapping.user_action,
         internal_details: null,
         correlation_id,
       },
@@ -205,6 +234,7 @@ function isUntypedFault(error: unknown): boolean {
   return (
     !(error instanceof ConversationsServiceError) &&
     !(error instanceof EventsServiceError) &&
+    !(error instanceof AgentNotFoundError) &&
     bodyParserType(error) === null
   );
 }

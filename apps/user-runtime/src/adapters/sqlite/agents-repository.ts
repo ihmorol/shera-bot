@@ -99,7 +99,16 @@ export interface UpsertFromPackResult {
   orphaned_agent_ids: string[];
 }
 
+/**
+ * The typed "no such Agent in THIS workspace" rejection. Carries the same
+ * stable code/category pair as the module service errors so the transport's
+ * typed error middleware maps it onto the SheraError taxonomy (404) without
+ * special-casing — and its message is never echoed to a client (G3).
+ */
 export class AgentNotFoundError extends Error {
+  readonly code = "AGENT_NOT_FOUND" as const;
+  readonly category = "state" as const;
+
   constructor(workspaceId: string, agentId: string) {
     super(`agent ${agentId} not found in workspace ${workspaceId}`);
     this.name = "AgentNotFoundError";

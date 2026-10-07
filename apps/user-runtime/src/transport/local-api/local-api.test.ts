@@ -24,7 +24,7 @@ import type { Express } from "express";
 import { ConversationsService } from "../../modules/conversations/conversations.service.ts";
 import { ReplayService } from "../../modules/events/replay.service.ts";
 import { composeLocalApi } from "./compose.ts";
-import { createLocalApi } from "./app.ts";
+import { createLocalApi, type LocalApiDeps } from "./app.ts";
 
 const tempDirs: string[] = [];
 const WS_A = "ws-11111111-1111-4111-8111-111111111111";
@@ -416,6 +416,7 @@ describe("local API — typed error middleware integration", () => {
     const app = createLocalApi({
       conversations: { executeCommand: throwing } as unknown as ConversationsService,
       replay: { resolve: throwing } as unknown as ReplayService,
+      agents: throwing as unknown as LocalApiDeps["agents"],
     });
     const running = await listenHttp(app);
     try {

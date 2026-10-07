@@ -249,6 +249,7 @@ function wire(options: ComposeLocalApiOptions): Wired {
   const app = createLocalApi({
     conversations,
     replay,
+    agents,
     ...(options.logUntypedFault ? { logUntypedFault: options.logUntypedFault } : {}),
   });
   return {

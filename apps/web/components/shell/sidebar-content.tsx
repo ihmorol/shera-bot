@@ -267,9 +267,11 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         </section>
       </nav>
 
-      {/* Footer: pinned pack shown once as a label, not a control (D40) */}
+      {/* Footer: pinned pack shown once as a label, not a control (D40).
+          pb-4 keeps the label inside the shell's 16px edge rhythm — it never
+          rides the viewport's bottom edge. */}
       <Separator />
-      <div className="px-4 py-3">
+      <div className="px-4 pb-4 pt-3">
         <p className="font-mono text-xs uppercase tracking-[0.16em] text-muted">student pack v1</p>
       </div>
     </div>

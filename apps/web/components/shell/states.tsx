@@ -55,7 +55,7 @@ export function SidebarSkeleton() {
         ))}
       </div>
       <div className="h-px bg-line" />
-      <div className="px-4 py-3">
+      <div className="px-4 pb-4 pt-3">
         <SkeletonBlock className="h-3 w-24" />
       </div>
     </div>

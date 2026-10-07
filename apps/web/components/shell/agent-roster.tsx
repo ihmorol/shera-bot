@@ -142,12 +142,14 @@ export function AgentRosterSection({
                     </span>
                   </Link>
                   {/* §3.2: the Agents section is fixed — the gear opens the
-                      Agent's settings (D16 commands), it never creates. */}
+                      Agent's settings (D16 commands), it never creates. The
+                      p-1.5 padding keeps the pointer/keyboard target at the
+                      24px+ a11y baseline (§2.3). */}
                   <Link
                     href={routes.settings(`agents/${slug}`)}
                     aria-label={`Open ${agent.display_name} settings`}
                     title={`Open ${agent.display_name} settings`}
-                    className="shrink-0 rounded-md p-1 text-muted transition-colors hover:bg-surface-elevated hover:text-text"
+                    className="shrink-0 rounded-md p-1.5 text-muted transition-colors hover:bg-surface-elevated hover:text-text"
                     {...linkProps}
                   >
                     <Settings2 className="size-3.5" aria-hidden="true" />

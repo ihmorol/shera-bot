@@ -1,0 +1,10 @@
+{
+  "type": "agent_settings.update_instructions",
+  "command_id": "cmd_101",
+  "idempotency_key": "idem_cmd_101",
+  "workspace_id": "ws_default_01",
+  "agent_id": "agent_general_assistant",
+  "actor": { "type": "user", "id": "user_emon" },
+  "issued_at": "2026-10-07T09:50:00.000Z",
+  "user_instructions": "Always answer in Bangla."
+}

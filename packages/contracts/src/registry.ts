@@ -12,7 +12,7 @@
  */
 import type { z } from "zod";
 
-import { Agent } from "./agent.ts";
+import { Agent, AgentSettingsCommand, AgentSettingsOverrides, AgentSettingsSnapshot } from "./agent.ts";
 import { ArtifactRef } from "./artifact.ts";
 import { EventPage, ListTaskEventsQuery } from "./api.ts";
 import { ApprovalGrant, ApprovalRequest } from "./approval.ts";
@@ -86,6 +86,10 @@ export const CONTRACT_REGISTRY = {
   RuntimeCredentialRotationResponse,
   RuntimeCredentialCommitRequest,
   RuntimeCredentialCommitResponse,
+  // S11 (D16 agent settings command surface; reused verbatim by S30 onboarding).
+  AgentSettingsCommand,
+  AgentSettingsSnapshot,
+  AgentSettingsOverrides,
 } as const;
 
 export type ContractName = keyof typeof CONTRACT_REGISTRY;

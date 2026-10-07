@@ -143,6 +143,1032 @@
         ],
         "additionalProperties": false
       },
+      "AgentSettingsCommand": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "command_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "idempotency_key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "workspace_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "agent_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "actor": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "user",
+                      "agent",
+                      "runtime",
+                      "admin",
+                      "system"
+                    ]
+                  },
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                },
+                "required": [
+                  "type",
+                  "id"
+                ],
+                "additionalProperties": false
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "agent_settings.update_instructions"
+                ]
+              },
+              "user_instructions": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1,
+                "maxLength": 8000
+              }
+            },
+            "required": [
+              "command_id",
+              "idempotency_key",
+              "workspace_id",
+              "agent_id",
+              "actor",
+              "issued_at",
+              "type",
+              "user_instructions"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "command_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "idempotency_key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "workspace_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "agent_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "actor": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "user",
+                      "agent",
+                      "runtime",
+                      "admin",
+                      "system"
+                    ]
+                  },
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                },
+                "required": [
+                  "type",
+                  "id"
+                ],
+                "additionalProperties": false
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "agent_settings.update_default_provider"
+                ]
+              },
+              "default_provider": {
+                "type": "object",
+                "properties": {
+                  "provider_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "model": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                },
+                "required": [
+                  "provider_id",
+                  "model"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "command_id",
+              "idempotency_key",
+              "workspace_id",
+              "agent_id",
+              "actor",
+              "issued_at",
+              "type",
+              "default_provider"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "command_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "idempotency_key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "workspace_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "agent_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "actor": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "user",
+                      "agent",
+                      "runtime",
+                      "admin",
+                      "system"
+                    ]
+                  },
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                },
+                "required": [
+                  "type",
+                  "id"
+                ],
+                "additionalProperties": false
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "agent_settings.update_tool_defaults"
+                ]
+              },
+              "tool_defaults": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "tool_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "config": {
+                      "type": "object",
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "tool_id",
+                    "config"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 500
+              }
+            },
+            "required": [
+              "command_id",
+              "idempotency_key",
+              "workspace_id",
+              "agent_id",
+              "actor",
+              "issued_at",
+              "type",
+              "tool_defaults"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "command_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "idempotency_key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "workspace_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "agent_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "actor": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "user",
+                      "agent",
+                      "runtime",
+                      "admin",
+                      "system"
+                    ]
+                  },
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                },
+                "required": [
+                  "type",
+                  "id"
+                ],
+                "additionalProperties": false
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "agent_settings.reset_setting"
+                ]
+              },
+              "setting_key": {
+                "type": "string",
+                "enum": [
+                  "user_instructions",
+                  "default_provider",
+                  "tool_defaults"
+                ]
+              }
+            },
+            "required": [
+              "command_id",
+              "idempotency_key",
+              "workspace_id",
+              "agent_id",
+              "actor",
+              "issued_at",
+              "type",
+              "setting_key"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "command_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "idempotency_key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "workspace_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "agent_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "actor": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "user",
+                      "agent",
+                      "runtime",
+                      "admin",
+                      "system"
+                    ]
+                  },
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                },
+                "required": [
+                  "type",
+                  "id"
+                ],
+                "additionalProperties": false
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "agent_settings.reset_all"
+                ]
+              }
+            },
+            "required": [
+              "command_id",
+              "idempotency_key",
+              "workspace_id",
+              "agent_id",
+              "actor",
+              "issued_at",
+              "type"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "AgentSettingsOverrides": {
+        "type": "object",
+        "properties": {
+          "tool_defaults": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "tool_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "config": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              },
+              "required": [
+                "tool_id",
+                "config"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 500
+          }
+        },
+        "additionalProperties": false
+      },
+      "AgentSettingsSnapshot": {
+        "type": "object",
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "agent_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "display_label": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "description": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 2000
+                    },
+                    "risk_note": {
+                      "type": "string",
+                      "maxLength": 2000
+                    },
+                    "editable": {
+                      "type": "boolean"
+                    },
+                    "resettable": {
+                      "type": "boolean"
+                    },
+                    "reset_command": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "enum": [
+                        "agent_settings.reset_setting"
+                      ]
+                    },
+                    "key": {
+                      "type": "string",
+                      "enum": [
+                        "role"
+                      ]
+                    },
+                    "value": {
+                      "type": "string"
+                    },
+                    "recommended_default": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "display_label",
+                    "description",
+                    "risk_note",
+                    "editable",
+                    "resettable",
+                    "reset_command",
+                    "key",
+                    "value",
+                    "recommended_default"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "display_label": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "description": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 2000
+                    },
+                    "risk_note": {
+                      "type": "string",
+                      "maxLength": 2000
+                    },
+                    "editable": {
+                      "type": "boolean"
+                    },
+                    "resettable": {
+                      "type": "boolean"
+                    },
+                    "reset_command": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "enum": [
+                        "agent_settings.reset_setting"
+                      ]
+                    },
+                    "key": {
+                      "type": "string",
+                      "enum": [
+                        "user_instructions"
+                      ]
+                    },
+                    "value": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 8000
+                    },
+                    "recommended_default": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "display_label",
+                    "description",
+                    "risk_note",
+                    "editable",
+                    "resettable",
+                    "reset_command",
+                    "key",
+                    "value",
+                    "recommended_default"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "display_label": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "description": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 2000
+                    },
+                    "risk_note": {
+                      "type": "string",
+                      "maxLength": 2000
+                    },
+                    "editable": {
+                      "type": "boolean"
+                    },
+                    "resettable": {
+                      "type": "boolean"
+                    },
+                    "reset_command": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "enum": [
+                        "agent_settings.reset_setting"
+                      ]
+                    },
+                    "key": {
+                      "type": "string",
+                      "enum": [
+                        "memory_link"
+                      ]
+                    },
+                    "value": {
+                      "type": "string",
+                      "pattern": "^agent:\\/\\/[a-z0-9_-]+\\/$"
+                    },
+                    "recommended_default": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "display_label",
+                    "description",
+                    "risk_note",
+                    "editable",
+                    "resettable",
+                    "reset_command",
+                    "key",
+                    "value",
+                    "recommended_default"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "display_label": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "description": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 2000
+                    },
+                    "risk_note": {
+                      "type": "string",
+                      "maxLength": 2000
+                    },
+                    "editable": {
+                      "type": "boolean"
+                    },
+                    "resettable": {
+                      "type": "boolean"
+                    },
+                    "reset_command": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "enum": [
+                        "agent_settings.reset_setting"
+                      ]
+                    },
+                    "key": {
+                      "type": "string",
+                      "enum": [
+                        "default_provider"
+                      ]
+                    },
+                    "value": {
+                      "type": "object",
+                      "properties": {
+                        "provider_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "model": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        }
+                      },
+                      "required": [
+                        "provider_id",
+                        "model"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "recommended_default": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "provider_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "model": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        }
+                      },
+                      "required": [
+                        "provider_id",
+                        "model"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "display_label",
+                    "description",
+                    "risk_note",
+                    "editable",
+                    "resettable",
+                    "reset_command",
+                    "key",
+                    "value",
+                    "recommended_default"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "display_label": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "description": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 2000
+                    },
+                    "risk_note": {
+                      "type": "string",
+                      "maxLength": 2000
+                    },
+                    "editable": {
+                      "type": "boolean"
+                    },
+                    "resettable": {
+                      "type": "boolean"
+                    },
+                    "reset_command": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "enum": [
+                        "agent_settings.reset_setting"
+                      ]
+                    },
+                    "key": {
+                      "type": "string",
+                      "enum": [
+                        "tool_defaults"
+                      ]
+                    },
+                    "value": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "tool_id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "config": {
+                            "type": "object",
+                            "additionalProperties": {}
+                          }
+                        },
+                        "required": [
+                          "tool_id",
+                          "config"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "maxItems": 500
+                    },
+                    "recommended_default": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "tool_id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "config": {
+                            "type": "object",
+                            "additionalProperties": {}
+                          }
+                        },
+                        "required": [
+                          "tool_id",
+                          "config"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "maxItems": 500
+                    }
+                  },
+                  "required": [
+                    "display_label",
+                    "description",
+                    "risk_note",
+                    "editable",
+                    "resettable",
+                    "reset_command",
+                    "key",
+                    "value",
+                    "recommended_default"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "display_label": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "description": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 2000
+                    },
+                    "risk_note": {
+                      "type": "string",
+                      "maxLength": 2000
+                    },
+                    "editable": {
+                      "type": "boolean"
+                    },
+                    "resettable": {
+                      "type": "boolean"
+                    },
+                    "reset_command": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "enum": [
+                        "agent_settings.reset_setting"
+                      ]
+                    },
+                    "key": {
+                      "type": "string",
+                      "enum": [
+                        "capabilities"
+                      ]
+                    },
+                    "value": {
+                      "type": "object",
+                      "properties": {
+                        "skills": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "maxItems": 200
+                        },
+                        "tools": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "tool_id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 256
+                              },
+                              "version": {
+                                "type": "string",
+                                "pattern": "^\\d+\\.\\d+\\.\\d+$"
+                              }
+                            },
+                            "required": [
+                              "tool_id",
+                              "version"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "maxItems": 500
+                        },
+                        "connectors": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "maxItems": 100
+                        }
+                      },
+                      "required": [
+                        "skills",
+                        "tools",
+                        "connectors"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "recommended_default": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "display_label",
+                    "description",
+                    "risk_note",
+                    "editable",
+                    "resettable",
+                    "reset_command",
+                    "key",
+                    "value",
+                    "recommended_default"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "display_label": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "description": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 2000
+                    },
+                    "risk_note": {
+                      "type": "string",
+                      "maxLength": 2000
+                    },
+                    "editable": {
+                      "type": "boolean"
+                    },
+                    "resettable": {
+                      "type": "boolean"
+                    },
+                    "reset_command": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "enum": [
+                        "agent_settings.reset_setting"
+                      ]
+                    },
+                    "key": {
+                      "type": "string",
+                      "enum": [
+                        "ui_identity"
+                      ]
+                    },
+                    "value": {
+                      "type": "object",
+                      "properties": {
+                        "avatar_hue": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 360
+                        },
+                        "initial_glyph": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "avatar_hue",
+                        "initial_glyph"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "recommended_default": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "display_label",
+                    "description",
+                    "risk_note",
+                    "editable",
+                    "resettable",
+                    "reset_command",
+                    "key",
+                    "value",
+                    "recommended_default"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          }
+        },
+        "required": [
+          "workspace_id",
+          "agent_id",
+          "entries"
+        ],
+        "additionalProperties": false
+      },
       "ApprovalGrant": {
         "type": "object",
         "properties": {

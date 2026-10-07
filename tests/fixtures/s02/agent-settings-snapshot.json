@@ -1,0 +1,87 @@
+{
+  "workspace_id": "ws_default_01",
+  "agent_id": "agent_general_assistant",
+  "entries": [
+    {
+      "key": "role",
+      "display_label": "Role",
+      "description": "The fixed role the pack declared for this Agent; user instructions layer above it.",
+      "risk_note": "",
+      "editable": false,
+      "resettable": false,
+      "reset_command": null,
+      "value": "The General Assistant handles general questions, planning, coordination, and Operation coordination.",
+      "recommended_default": null
+    },
+    {
+      "key": "user_instructions",
+      "display_label": "Your instructions",
+      "description": "Personal guidance layered above the pack role; clearing it returns to pack-only behavior.",
+      "risk_note": "",
+      "editable": true,
+      "resettable": true,
+      "reset_command": "agent_settings.reset_setting",
+      "value": "Always answer in Bangla.",
+      "recommended_default": null
+    },
+    {
+      "key": "memory_link",
+      "display_label": "Memory",
+      "description": "The Agent's private memory folder; publication rules arrive with the memory slice.",
+      "risk_note": "",
+      "editable": false,
+      "resettable": false,
+      "reset_command": null,
+      "value": "agent://agent_general_assistant/",
+      "recommended_default": null
+    },
+    {
+      "key": "default_provider",
+      "display_label": "Default provider and model",
+      "description": "Which provider and model answer by default for this Agent.",
+      "risk_note": "Providers differ in privacy and cost behavior; the pack's recommendation avoids surprises.",
+      "editable": true,
+      "resettable": true,
+      "reset_command": "agent_settings.reset_setting",
+      "value": { "provider_id": "provider_local", "model": "qwen3-8b" },
+      "recommended_default": { "provider_id": "provider_platform", "model": "platform-default" }
+    },
+    {
+      "key": "tool_defaults",
+      "display_label": "Tool defaults",
+      "description": "Per-tool default configuration applied whenever this Agent runs a tool.",
+      "risk_note": "Tool behavior changes what the Agent can do; defaults stay conservative.",
+      "editable": true,
+      "resettable": true,
+      "reset_command": "agent_settings.reset_setting",
+      "value": [{ "tool_id": "tool_web_search", "config": { "depth": "standard" } }],
+      "recommended_default": []
+    },
+    {
+      "key": "capabilities",
+      "display_label": "Capabilities",
+      "description": "The skills, tools, and connectors the pack gave this Agent.",
+      "risk_note": "",
+      "editable": false,
+      "resettable": false,
+      "reset_command": null,
+      "value": {
+        "skills": ["skill_planning_core"],
+        "tools": [{ "tool_id": "tool_web_search", "version": "1.4.0" }],
+        "connectors": []
+      },
+      "recommended_default": null
+    },
+    {
+      "key": "ui_identity",
+      "display_label": "Appearance",
+      "description": "The authored visual identity (hue and glyph); presentation only, never a capability.",
+      "risk_note": "",
+      "editable": false,
+      "resettable": false,
+      "reset_command": null,
+      "value": { "avatar_hue": 217, "initial_glyph": "G" },
+      "recommended_default": null
+    }
+  ]
+}

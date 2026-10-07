@@ -1,0 +1,10 @@
+{
+  "type": "agent_settings.update_tool_defaults",
+  "command_id": "cmd_103",
+  "idempotency_key": "idem_cmd_103",
+  "workspace_id": "ws_default_01",
+  "agent_id": "agent_general_assistant",
+  "actor": { "type": "user", "id": "user_emon" },
+  "issued_at": "2026-10-07T09:50:00.000Z",
+  "tool_defaults": [{ "tool_id": "tool_web_search", "config": { "depth": "standard" } }]
+}

@@ -11,7 +11,10 @@ import {
 
 import { AgentChatView } from "../components/chat/agent-chat-view";
 import { AgentRosterSection, type AgentRosterEntry } from "../components/shell/agent-roster";
-import { AgentSettingsView } from "../components/settings/agent-settings";
+import {
+  AgentSettingsView,
+  settingsEditorKey,
+} from "../components/settings/agent-settings";
 import {
   buildAgentSettingsCommand,
   fetchAgentRoster,
@@ -360,6 +363,33 @@ describe("agent settings view (§S9 + D16)", () => {
   it("shows the command-in-flight state while a mutation is pending", () => {
     const html = renderSettings({ commandPending: true });
     expect(html).toContain("Saving");
+  });
+
+  it("confirms a settled command inline on the cards it affected (§6.3)", () => {
+    const saved = renderSettings({ savedKeys: ["user_instructions"] });
+    expect(saved).toContain('role="status"');
+    expect(saved).toContain("Saved");
+    // Scoped to the command's target: an untouched card shows nothing.
+    const providerCard = cardFor(saved, "default_provider");
+    expect(providerCard).not.toContain("Saved");
+
+    const idle = renderSettings();
+    expect(idle).not.toMatch(/>\s*Saved\s*</);
+  });
+
+  it("editor mounts key off the authoritative value so drafts never go stale", () => {
+    // The reset finding: after a reset the value line updated ("Not set…") but
+    // the textarea kept the pre-reset text. The fix remounts each editor from
+    // the refetched snapshot — the key is derived from the entry VALUE, so it
+    // changes exactly when the server value changes.
+    const before = SNAPSHOT.entries.find((entry) => entry.key === "user_instructions")!;
+    const keyWith = (value: unknown) =>
+      settingsEditorKey({ ...before, value } as typeof before);
+
+    expect(keyWith(before.value)).toBe(keyWith(before.value)); // stable across refetches
+    expect(keyWith(before.value)).not.toBe(keyWith(null)); // reset → remount
+    expect(keyWith("a")).not.toBe(keyWith("b")); // save → remount
+    expect(keyWith(before.value)).toContain("user_instructions:");
   });
 });
 

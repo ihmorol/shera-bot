@@ -1,7 +1,7 @@
 "use client";
 
-import { AlertTriangle, RotateCcw, Settings2 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { AlertTriangle, Check, RotateCcw, Settings2 } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import type {
   AgentSettingEntry,
@@ -16,6 +16,7 @@ import { EDITABLE_AGENT_SETTING_KEYS } from "@shera-bot/contracts";
 import { AgentAvatar } from "@/components/chat/agent-avatar";
 import { ErrorState } from "@/components/shell/states";
 import { Button } from "@/components/ui/button";
+import type { AgentSettingsAction } from "@/lib/agent-api";
 import { safeRuntimeMessage, useAgentSettings } from "@/lib/agent-data";
 import { useContainerResolution } from "@/lib/container-connection";
 import { cn } from "@/lib/utils";
@@ -36,13 +37,29 @@ import { cn } from "@/lib/utils";
  * the hook completes the contracts envelope (fresh command_id +
  * idempotency_key per submit) and refetches the snapshot after each accepted
  * command — the runtime's read-after-write result is the truthful update,
- * never an optimistic guess. Resets arm a confirm first: no destructive
+ * never an optimistic guess. Settled commands confirm inline: the edited card
+ * shows a brief "Saved" status (§6.3 visible command feedback), cleared
+ * automatically after a moment. Because the refetched snapshot is the truth,
+ * every editor REMOUNTS from its entry's value (`settingsEditorKey`) — after
+ * a reset or a save the draft field always reflects the server value, never
+ * a pre-command local leftover. Resets arm a confirm first: no destructive
  * command fires from a single click.
  */
 
 export type AgentSettingsSurfaceState = "ready" | "loading" | "error";
 
 export type PendingResetKey = EditableAgentSettingKey | "all" | null;
+
+/**
+ * Stable identity for an editor mount, derived from the AUTHORITATIVE entry
+ * value: when the runtime snapshot changes (save, reset, refetch), the key
+ * changes and React replaces the editor — the draft re-syncs to the server
+ * value. Unchanged entries keep their key, so unrelated commands never wipe
+ * an in-progress draft.
+ */
+export function settingsEditorKey(entry: AgentSettingEntry): string {
+  return `${entry.key}:${JSON.stringify(entry.value)}`;
+}
 
 export interface AgentSettingsViewProps {
   agentName: string;
@@ -57,6 +74,12 @@ export interface AgentSettingsViewProps {
   commandError?: string | undefined;
   /** Test/first-render override for the advanced disclosure (D16). */
   defaultAdvancedOpen?: boolean | undefined;
+  /**
+   * Setting keys the last SETTLED command affected — the edited cards show a
+   * brief inline "Saved" confirmation (§6.3). Empty/undefined = nothing to
+   * confirm (idle, pending, or the confirmation already cleared).
+   */
+  savedKeys?: readonly string[] | undefined;
   onUpdateInstructions: (value: string | null) => void;
   onUpdateDefaultProvider: (provider: ProviderDefault) => void;
   onUpdateToolDefaults: (defaults: AgentToolDefault[]) => void;
@@ -244,12 +267,15 @@ function CapabilitiesValue({ value }: { value: AgentCapabilities }) {
 function EntryValue({
   entry,
   agentName,
+  saved,
   onUpdateInstructions,
   onUpdateDefaultProvider,
   onUpdateToolDefaults,
 }: {
   entry: AgentSettingEntry;
   agentName: string;
+  /** True when the last settled command targeted THIS entry (inline "Saved"). */
+  saved: boolean;
   onUpdateInstructions: AgentSettingsViewProps["onUpdateInstructions"];
   onUpdateDefaultProvider: AgentSettingsViewProps["onUpdateDefaultProvider"];
   onUpdateToolDefaults: AgentSettingsViewProps["onUpdateToolDefaults"];
@@ -282,29 +308,58 @@ function EntryValue({
         </p>
       );
     case "user_instructions": {
+      // The key is the authoritative value: a save/reset remounts this editor
+      // from the refetched snapshot, so the draft never goes stale.
       return (
-        <UserInstructionsEditor entry={entry} onUpdateInstructions={onUpdateInstructions} />
+        <UserInstructionsEditor
+          key={settingsEditorKey(entry)}
+          entry={entry}
+          saved={saved}
+          onUpdateInstructions={onUpdateInstructions}
+        />
       );
     }
     case "default_provider": {
       return (
         <DefaultProviderEditor
+          key={settingsEditorKey(entry)}
           entry={entry}
+          saved={saved}
           onUpdateDefaultProvider={onUpdateDefaultProvider}
         />
       );
     }
     case "tool_defaults": {
-      return <ToolDefaultsEditor entry={entry} onUpdateToolDefaults={onUpdateToolDefaults} />;
+      return (
+        <ToolDefaultsEditor
+          key={settingsEditorKey(entry)}
+          entry={entry}
+          saved={saved}
+          onUpdateToolDefaults={onUpdateToolDefaults}
+        />
+      );
     }
   }
 }
 
+/** The brief inline confirmation a settled command leaves on its card (§6.3). */
+function SavedBadge({ visible }: { visible: boolean }) {
+  if (!visible) return null;
+  return (
+    <span role="status" className="flex items-center gap-1 text-xs text-live">
+      <Check className="size-3.5" aria-hidden="true" />
+      Saved
+    </span>
+  );
+}
+
 function UserInstructionsEditor({
   entry,
+  saved,
   onUpdateInstructions,
 }: {
   entry: Extract<AgentSettingEntry, { key: "user_instructions" }>;
+  saved: boolean;
   onUpdateInstructions: AgentSettingsViewProps["onUpdateInstructions"];
 }) {
   const [draft, setDraft] = useState(entry.value ?? "");
@@ -338,6 +393,7 @@ function UserInstructionsEditor({
         >
           Clear
         </Button>
+        <SavedBadge visible={saved} />
       </div>
     </div>
   );
@@ -345,9 +401,11 @@ function UserInstructionsEditor({
 
 function DefaultProviderEditor({
   entry,
+  saved,
   onUpdateDefaultProvider,
 }: {
   entry: Extract<AgentSettingEntry, { key: "default_provider" }>;
+  saved: boolean;
   onUpdateDefaultProvider: AgentSettingsViewProps["onUpdateDefaultProvider"];
 }) {
   const [providerId, setProviderId] = useState(entry.value.provider_id);
@@ -388,6 +446,7 @@ function DefaultProviderEditor({
         >
           Save
         </Button>
+        <SavedBadge visible={saved} />
       </div>
     </div>
   );
@@ -395,9 +454,11 @@ function DefaultProviderEditor({
 
 function ToolDefaultsEditor({
   entry,
+  saved,
   onUpdateToolDefaults,
 }: {
   entry: Extract<AgentSettingEntry, { key: "tool_defaults" }>;
+  saved: boolean;
   onUpdateToolDefaults: AgentSettingsViewProps["onUpdateToolDefaults"];
 }) {
   const [draft, setDraft] = useState(() => JSON.stringify(entry.value, null, 2));
@@ -438,6 +499,7 @@ function ToolDefaultsEditor({
         <Button size="sm" onClick={apply}>
           Save
         </Button>
+        <SavedBadge visible={saved} />
       </div>
     </div>
   );
@@ -449,6 +511,7 @@ function AgentSettingsEditor({
   snapshot,
   pendingResetKey,
   defaultAdvancedOpen,
+  savedKeys,
   onUpdateInstructions,
   onUpdateDefaultProvider,
   onUpdateToolDefaults,
@@ -460,6 +523,7 @@ function AgentSettingsEditor({
   snapshot: AgentSettingsSnapshot;
   pendingResetKey: PendingResetKey;
   defaultAdvancedOpen: boolean;
+  savedKeys: readonly string[];
   onUpdateInstructions: AgentSettingsViewProps["onUpdateInstructions"];
   onUpdateDefaultProvider: AgentSettingsViewProps["onUpdateDefaultProvider"];
   onUpdateToolDefaults: AgentSettingsViewProps["onUpdateToolDefaults"];
@@ -480,6 +544,7 @@ function AgentSettingsEditor({
       visible.push(entry);
     }
   }
+  const saved = (entry: AgentSettingEntry) => savedKeys.includes(entry.key);
 
   return (
     <div className="space-y-4">
@@ -495,6 +560,7 @@ function AgentSettingsEditor({
           <EntryValue
             entry={entry}
             agentName={agentName}
+            saved={saved(entry)}
             onUpdateInstructions={onUpdateInstructions}
             onUpdateDefaultProvider={onUpdateDefaultProvider}
             onUpdateToolDefaults={onUpdateToolDefaults}
@@ -530,6 +596,7 @@ function AgentSettingsEditor({
                   <EntryValue
                     entry={entry}
                     agentName={agentName}
+                    saved={saved(entry)}
                     onUpdateInstructions={onUpdateInstructions}
                     onUpdateDefaultProvider={onUpdateDefaultProvider}
                     onUpdateToolDefaults={onUpdateToolDefaults}
@@ -554,6 +621,7 @@ export function AgentSettingsView(props: AgentSettingsViewProps) {
     commandPending,
     commandError,
     defaultAdvancedOpen = false,
+    savedKeys = [],
     onResetClick,
     onResetConfirm,
     onResetCancel,
@@ -630,6 +698,7 @@ export function AgentSettingsView(props: AgentSettingsViewProps) {
           snapshot={snapshot}
           pendingResetKey={pendingResetKey}
           defaultAdvancedOpen={defaultAdvancedOpen}
+          savedKeys={savedKeys}
           onUpdateInstructions={props.onUpdateInstructions}
           onUpdateDefaultProvider={props.onUpdateDefaultProvider}
           onUpdateToolDefaults={props.onUpdateToolDefaults}
@@ -668,9 +737,46 @@ export function AgentSettingsSurface({ agentId }: { agentId: string }) {
   );
 }
 
+/** The setting keys a settled command affected — the inline "Saved" targets. */
+function commandTargetKeys(action: AgentSettingsAction): readonly string[] {
+  switch (action.type) {
+    case "agent_settings.update_instructions":
+      return ["user_instructions"];
+    case "agent_settings.update_default_provider":
+      return ["default_provider"];
+    case "agent_settings.update_tool_defaults":
+      return ["tool_defaults"];
+    case "agent_settings.reset_setting":
+      return [action.setting_key];
+    case "agent_settings.reset_all":
+      return [...EDITABLE_AGENT_SETTING_KEYS];
+  }
+}
+
 function RuntimeAgentSettings({ workspaceId, agentId }: { workspaceId: string; agentId: string }) {
   const { detailQuery, settingsQuery, commandMutation } = useAgentSettings(workspaceId, agentId);
   const [pendingResetKey, setPendingResetKey] = useState<PendingResetKey>(null);
+  // §6.3 visible command feedback: the cards a settled command affected show a
+  // brief "Saved" confirmation, cleared after a moment (and immediately when a
+  // new command starts).
+  const [savedKeys, setSavedKeys] = useState<readonly string[]>([]);
+
+  useEffect(() => {
+    if (commandMutation.isPending) {
+      setSavedKeys([]);
+      return;
+    }
+    if (!commandMutation.isSuccess) {
+      return;
+    }
+    const action = commandMutation.variables;
+    if (!action) {
+      return;
+    }
+    setSavedKeys(commandTargetKeys(action));
+    const timer = window.setTimeout(() => setSavedKeys([]), 2500);
+    return () => window.clearTimeout(timer);
+  }, [commandMutation.isSuccess, commandMutation.isPending, commandMutation.variables]);
 
   const pending = detailQuery.isPending || settingsQuery.isPending;
   const failed = detailQuery.isError || settingsQuery.isError;
@@ -704,6 +810,7 @@ function RuntimeAgentSettings({ workspaceId, agentId }: { workspaceId: string; a
       onRetry={retry}
       pendingResetKey={pendingResetKey}
       commandPending={commandMutation.isPending}
+      savedKeys={savedKeys}
       commandError={
         commandMutation.isError
           ? safeRuntimeMessage(commandMutation.error, "The settings command was not accepted.")

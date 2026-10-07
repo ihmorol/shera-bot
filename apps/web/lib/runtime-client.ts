@@ -114,7 +114,14 @@ const ReplaySnapshotResult = z.strictObject({
 
 const ReplayResult = z.discriminatedUnion("kind", [ReplayEventsResult, ReplaySnapshotResult]);
 
-async function requestRuntime<T>(
+/**
+ * The single transport idiom for the container's local API through the
+ * same-origin proxy: typed parse, typed failures (SheraError bodies through
+ * the shared typed-error parser), and a server drift on a 2xx that breaks its
+ * contract. Shared with the S11 agent client (lib/agent-api.ts) so every
+ * surface fails the same honest way.
+ */
+export async function requestRuntime<T>(
   path: string,
   parse: (payload: unknown) => T,
   init: RequestInit = {},

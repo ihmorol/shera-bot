@@ -167,10 +167,7 @@ describe("runtime proxy — S11 agent surfaces (allowlist additions)", () => {
     const request = new Request(
       "http://web.test/api/runtime/v1/agents/agent_general_assistant?workspace_id=ws_1",
     );
-    const response = await proxyToLocalApi(
-      request,
-      "/v1/agents/agent_general_assistant?workspace_id=ws_1",
-    );
+    const response = await proxyToLocalApi(request, "/v1/agents/agent_general_assistant");
 
     expect(response.status).toBe(200);
     expect(calls[0]?.input).toBe(
@@ -187,7 +184,7 @@ describe("runtime proxy — S11 agent surfaces (allowlist additions)", () => {
     );
     const response = await proxyToLocalApi(
       request,
-      "/v1/agents/agent_general_assistant/settings?workspace_id=ws_1",
+      "/v1/agents/agent_general_assistant/settings",
     );
 
     expect(response.status).toBe(200);

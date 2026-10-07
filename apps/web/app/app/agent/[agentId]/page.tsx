@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { AgentChatView } from "@/components/chat/agent-chat-view";
+import { AgentDirectChatSurface } from "@/components/chat/agent-direct-chat-surface";
 import { GeneralAssistantChatSurface } from "@/components/chat/general-assistant-surface";
 import { agentById, buildThread, conversationForAgent } from "@/lib/fixtures";
 import { findAgent } from "@/lib/navigation";
@@ -50,5 +50,8 @@ export default async function AgentChatPage({ params }: AgentChatPageProps) {
     );
   }
 
-  return <AgentChatView agent={agent} conversation={conversation} thread={thread} />;
+  // S11: the rest of the roster opens the REAL direct chat through the
+  // get-or-create binding (direct_chat_id from the detail read) when the
+  // container is ready; the fixture demo otherwise.
+  return <AgentDirectChatSurface agent={agent} conversation={conversation} thread={thread} />;
 }

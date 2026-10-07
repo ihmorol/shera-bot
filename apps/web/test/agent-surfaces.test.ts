@@ -79,8 +79,10 @@ function cardFor(html: string, key: string): string {
   const marker = `data-setting-key="${key}"`;
   const start = html.indexOf(marker);
   expect(start, `no rendered card for setting key "${key}"`).toBeGreaterThanOrEqual(0);
-  const next = html.indexOf('data-setting-key="', start + marker.length);
-  return html.slice(start, next === -1 ? html.length : next);
+  // Each card is its own <section>; bound the slice there so the LAST card's
+  // slice cannot leak the (interactive) disclosure controls after it.
+  const end = html.indexOf("</section>", start);
+  return html.slice(start, end === -1 ? html.length : end);
 }
 
 // ---------------------------------------------------------------------------
@@ -315,8 +317,9 @@ describe("agent settings view (§S9 + D16)", () => {
     expect(card).toContain("provider_platform");
     expect(card).toContain("platform-default");
     expect(card).toContain(
-      "Providers differ in privacy and cost behavior; the pack's recommendation avoids surprises.",
+      "Providers differ in privacy and cost behavior", // risk note (D16), fixture-verbatim
     );
+    expect(card).toContain("recommendation avoids surprises");
   });
 
   it("resettable entries arm a confirm before any reset fires (D16)", () => {

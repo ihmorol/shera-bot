@@ -10,9 +10,10 @@ import { randomUUID } from "node:crypto";
  *    CONTROL_PLANE_URL (session resolution, provisioning status, the explicit
  *    provision trigger). Auth.js session cookies flow through on both legs.
  * 2. runtime proxy → the container-local S07 local API at
- *    RUNTIME_LOCAL_API_URL, with a STRICT path allowlist (only the two
- *    conversation surfaces the client uses — never /internal/*). The local
- *    API stays loopback-only; the proxy is the prototype's deployment seam
+ *    RUNTIME_LOCAL_API_URL, with a STRICT path allowlist (only the surfaces
+ *    the client uses: the two conversation surfaces and the four S11 agent
+ *    surfaces — never /internal/*, never the chunk-2 agent PATCH routes). The
+ *    local API stays loopback-only; the proxy is the prototype's deployment seam
  *    and carries NO authentication in this slice — the principal-to-workspace
  *    binding arrives with the authenticated transport wiring (recorded S07
  *    posture). Documented honestly here rather than hidden (G4).
@@ -64,15 +65,29 @@ export async function proxyToControlPlane(
 }
 
 /**
- * Forward a browser call to the container's local API. Only the conversation
- * command + replay surfaces are reachable — any other path (notably the
- * internal channel under /internal/*) is refused here, typed 404.
+ * Forward a browser call to the container's local API. The reachable surfaces
+ * are exactly the ones the client uses — the two conversation surfaces (S07)
+ * and the four S11 agent surfaces (roster, detail, settings snapshot, settings
+ * commands). Any other path — notably the chunk-2 agent PATCH routes the UI
+ * must not use (D16: commands are the one mutation surface) and the internal
+ * channel under /internal/* — is refused here, typed 404.
  */
 export async function proxyToLocalApi(request: Request, upstreamPath: string): Promise<Response> {
   const allowed =
     request.method === "POST" && upstreamPath === "/v1/conversations/commands"
       ? true
-      : request.method === "GET" && /^\/v1\/conversations\/[^/]+\/events$/.test(upstreamPath);
+      : request.method === "GET" && /^\/v1\/conversations\/[^/]+\/events$/.test(upstreamPath)
+        ? true
+        : request.method === "GET" && upstreamPath === "/v1/agents"
+          ? true
+          : request.method === "GET" && /^\/v1\/agents\/[^/]+$/.test(upstreamPath)
+            ? true
+            : request.method === "GET" && /^\/v1\/agents\/[^/]+\/settings$/.test(upstreamPath)
+              ? true
+              : request.method === "POST" &&
+                  /^\/v1\/agents\/[^/]+\/settings\/commands$/.test(upstreamPath)
+                ? true
+                : false;
   if (!allowed) {
     return Response.json(
       {

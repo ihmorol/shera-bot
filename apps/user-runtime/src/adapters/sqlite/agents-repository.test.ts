@@ -18,8 +18,10 @@ import { openDatabase, type SqliteConnection } from "./connection.ts";
 import { applyMigrations, MIGRATIONS } from "./migrations.ts";
 import { SqliteTransactions } from "./transactions.ts";
 import {
+  AGENT_FOLDER_HOST_CHARSET,
   AgentsRepository,
   AgentNotFoundError,
+  AgentSeedCharsetError,
   AgentSeedConflictError,
   AgentSettingsValidationError,
   isDirectChatConflict,
@@ -165,6 +167,51 @@ describe("agent identities (S11 migration v4)", () => {
     // The rejection arrived mid-roster, but the upsert is one transaction:
     // the agents inserted BEFORE the duplicate was detected rolled back too.
     expect(repo.listAgents("ws-prim-dup")).toEqual([]);
+  });
+
+  it("rejects agent_ids whose charset breaks their agent:// folder URI", () => {
+    // The contracts' Id schema allows uppercase (and the repository accepts a
+    // structural seed, not just a validated SDK manifest), but the seed writes
+    // `agent://<agent_id>/` — an id like "Atlas" would violate the folder URI
+    // contracts FOREVER. The seeding boundary rejects it, typed.
+    const roster = (agentId: string): ManifestAgent => ({
+      agent_id: agentId,
+      display_name: "Broken Charsetter",
+      role_description: "An id the folder guard could never address",
+      default_provider: { provider_id: "provider_platform", model: "platform-default" },
+      skills: [],
+      tools: [],
+      connectors: [],
+      ui_identity: { avatar_hue: 10, initial_glyph: "B" },
+      home_operation_id: null,
+    });
+    for (const badId of ["Atlas", "agent general", "agent.v2"]) {
+      expect(() => repo.upsertFromPack("ws-charset", [roster(badId)])).toThrow(
+        AgentSeedCharsetError,
+      );
+      try {
+        repo.upsertFromPack("ws-charset", [roster(badId)]);
+      } catch (error) {
+        const rejected = error as AgentSeedCharsetError;
+        expect(rejected.code).toBe("CONTRACT_VALIDATION_FAILED");
+        expect(rejected.category).toBe("validation");
+        expect(rejected.message).toContain(badId);
+      }
+      // Nothing landed — a rejected roster seeds nothing.
+      expect(repo.listAgents("ws-charset")).toEqual([]);
+    }
+
+    // The charset rule the boundary enforces IS the folder guard's rule: the
+    // student pack's lowercase ids all seed folder roots that parse, and the
+    // rejected id provably would not.
+    const seeded = repo.upsertFromPack("ws-charset", studentManifest.agents);
+    expect(seeded.inserted_agent_ids).toHaveLength(6);
+    for (const agent of repo.listAgents("ws-charset")) {
+      expect(AGENT_FOLDER_HOST_CHARSET.test(agent.agent_id)).toBe(true);
+      expect(agent.private_folder_path).toBe(`agent://${agent.agent_id}/`);
+      expect(agent.private_folder_path).toMatch(/^agent:\/\/[a-z0-9_-]+\/$/);
+    }
+    expect(AGENT_FOLDER_HOST_CHARSET.test("Atlas")).toBe(false);
   });
 
   it("re-seeding an unchanged pack reports no inserts, updates, or orphans", () => {

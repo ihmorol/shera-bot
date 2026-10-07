@@ -37,6 +37,7 @@ import { EventsService } from "../../modules/events/events.service.ts";
 import { ReplayService } from "../../modules/events/replay.service.ts";
 import type { EventEnvelope } from "../../modules/events/events.types.ts";
 import { AgentsService } from "../../modules/agents/agents.service.ts";
+import { AgentFoldersService } from "../../modules/agents/agent-folders.service.ts";
 import {
   ConversationsService,
   type ConversationPublisher,
@@ -143,6 +144,8 @@ export interface RuntimeHandle {
    * the pinned pack; the agent API routes sit on top of this service.
    */
   agents: AgentsService;
+  /** S11: the private-folder guard seam (same Agent records, one in-memory store). */
+  folders: AgentFoldersService;
   /** The scripted reply producer when enabled; undefined otherwise (G4). */
   replyStreamer: ScriptedReplyStreamer | undefined;
   /** Closes the gateway (and with it the HTTP server), then SQLite. */
@@ -158,6 +161,7 @@ interface Wired {
   events: EventsService;
   conversations: ConversationsService;
   agents: AgentsService;
+  folders: AgentFoldersService;
   setPublisher(publisher: ConversationPublisher): void;
 }
 
@@ -215,13 +219,20 @@ function wire(options: ComposeLocalApiOptions): Wired {
   // S11: the agents seam shares the SAME late-bound post-commit fanout — a
   // newly created direct chat publishes its conversation.created event through
   // the identical containment (B4) as every other conversation creation.
+  const agentsRepository = new AgentsRepository(tx);
   const agents = new AgentsService({
-    agents: new AgentsRepository(tx),
+    agents: agentsRepository,
     conversations: conversationsRepository,
     journal: events,
     tx,
     publish: containFanout((event) => publisher(event), logFault),
   });
+
+  // S11: the private-folder guard shares the SAME workspace-scoped Agent
+  // records — resolution, isolation, and traversal safety live in the agents
+  // module; the store is the module's in-memory placeholder until the file
+  // slice swaps the implementation behind the identical seam.
+  const folders = new AgentFoldersService({ agents: agentsRepository });
 
   const replay = new ReplayService({
     journal,
@@ -250,6 +261,7 @@ function wire(options: ComposeLocalApiOptions): Wired {
     conversations,
     replay,
     agents,
+    folders,
     ...(options.logUntypedFault ? { logUntypedFault: options.logUntypedFault } : {}),
   });
   return {
@@ -261,6 +273,7 @@ function wire(options: ComposeLocalApiOptions): Wired {
     events,
     conversations,
     agents,
+    folders,
     setPublisher(next) {
       publisher = next;
     },
@@ -372,6 +385,7 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     harness,
     pack,
     agents: wired.agents,
+    folders: wired.folders,
     replyStreamer,
     close: async () => {
       replyStreamer?.stopAll();

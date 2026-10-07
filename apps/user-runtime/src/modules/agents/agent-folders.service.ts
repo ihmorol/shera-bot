@@ -95,19 +95,16 @@ export class AgentFolderAccessDeniedError extends Error {
  * there is no normalization step that could widen it into an escape.
  */
 export function parseAgentFolderUri(uri: string): ParsedAgentFolderUri {
-  const fail = (): never => {
-    throw new AgentFolderUriInvalidError();
-  };
-  if (!uri.startsWith("agent://")) fail();
-  if (/[\u0000-\u001f\u007f]/.test(uri)) fail();
+  if (!uri.startsWith("agent://")) throw new AgentFolderUriInvalidError();
+  if (/[\u0000-\u001f\u007f]/.test(uri)) throw new AgentFolderUriInvalidError();
 
   const afterScheme = uri.slice("agent://".length);
   const hostEnd = afterScheme.indexOf("/");
   // The folder ROOT itself is `agent://<id>/` — the host must be followed by
   // a slash, per the contracts' AgentFolderUri shape.
-  if (hostEnd < 0) fail();
+  if (hostEnd < 0) throw new AgentFolderUriInvalidError();
   const agentId = afterScheme.slice(0, hostEnd);
-  if (!AGENT_ID_CHARSET.test(agentId)) fail();
+  if (!AGENT_ID_CHARSET.test(agentId)) throw new AgentFolderUriInvalidError();
 
   const rawPath = afterScheme.slice(hostEnd + 1);
   const segments = rawPath.split("/");
@@ -120,11 +117,16 @@ export function parseAgentFolderUri(uri: string): ParsedAgentFolderUri {
     try {
       value = decodeURIComponent(segment);
     } catch {
-      fail(); // malformed escape (%zz), not a decodable path
+      // Malformed escape (%zz) — not a decodable path.
+      throw new AgentFolderUriInvalidError();
     }
-    if (value === "" || value === "." || value === "..") fail();
-    if (value.includes("/") || value.includes("\\")) fail();
-    if (/[\u0000-\u001f\u007f]/.test(value)) fail();
+    if (value === "" || value === "." || value === "..") {
+      throw new AgentFolderUriInvalidError();
+    }
+    if (value.includes("/") || value.includes("\\")) {
+      throw new AgentFolderUriInvalidError();
+    }
+    if (/[\u0000-\u001f\u007f]/.test(value)) throw new AgentFolderUriInvalidError();
     decoded.push(value);
   }
   return { agent_id: agentId, path: decoded.join("/") };
@@ -223,7 +225,7 @@ export class AgentFoldersService {
     actorAgentId: string,
     uri: string,
   ): AgentFolderAccessResolution {
-    const target = this.resolveWithinWorkspace(workspaceId, actorAgentId, uri);
+    const target = this.guard(workspaceId, actorAgentId, uri);
     return {
       workspace_id: workspaceId,
       actor_agent_id: actorAgentId,

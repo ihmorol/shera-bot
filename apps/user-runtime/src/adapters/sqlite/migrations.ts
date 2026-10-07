@@ -32,6 +32,20 @@
  * a half-pinned row is unrepresentable. This is the first table keyed by
  * workspace_id ALONE — a workspace is the tenant root, not a child record;
  * every other product-state table keeps the (workspace_id, id) scoping (E12).
+ *
+ * v4 — agent identities (S11 chunk 1; D32 layer 1, D39): Agents become
+ * durable, workspace-scoped rows seeded from the workspace's pinned pack.
+ * The agents primary key is (workspace_id, agent_id) — the same agent_id in
+ * two workspaces are independent rows (E12), so every workspace can seed the
+ * same pinned pack. Pack-owned fields (display_name, role_description,
+ * ui_identity, capabilities_json, home_operation_id) are refreshed by
+ * re-seeding; user_instructions and the default provider pair are user-owned
+ * and a re-seed never clobbers them. private_folder_path records the agent's
+ * private folder URI (agent://<agent_id>/). agent_settings holds the raw
+ * per-agent settings blob — the typed D16 command surface arrives with S11
+ * chunk 2. agent_memory_entries and agent_task_history are workspace-scoped
+ * ledger placeholders: publication rules and cross-agent reads arrive with
+ * the memory slice, so nothing at this layer reads across agents.
  */
 import type { DatabaseSync } from "node:sqlite";
 
@@ -113,6 +127,54 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
             AND installed_at IS NOT NULL
           )
         )
+      ) STRICT;
+    `,
+  },
+  {
+    version: 4,
+    name: "agent-identities",
+    sql: `
+      CREATE TABLE IF NOT EXISTS agents (
+        agent_id               TEXT    NOT NULL,
+        workspace_id           TEXT    NOT NULL,
+        display_name           TEXT    NOT NULL,
+        role_description       TEXT    NOT NULL,
+        avatar_hue             INTEGER NOT NULL CHECK (avatar_hue >= 0 AND avatar_hue <= 360),
+        initial_glyph          TEXT    NOT NULL,
+        default_provider_id    TEXT    NOT NULL,
+        default_provider_model TEXT    NOT NULL,
+        user_instructions      TEXT,
+        capabilities_json      TEXT    NOT NULL CHECK (json_valid(capabilities_json)),
+        private_folder_path    TEXT    NOT NULL,
+        home_operation_id      TEXT,
+        is_seeded_from_pack    INTEGER NOT NULL CHECK (is_seeded_from_pack IN (0, 1)),
+        created_at             TEXT    NOT NULL,
+        updated_at             TEXT    NOT NULL,
+        PRIMARY KEY (workspace_id, agent_id)
+      ) STRICT;
+
+      CREATE TABLE IF NOT EXISTS agent_settings (
+        workspace_id  TEXT NOT NULL,
+        agent_id      TEXT NOT NULL,
+        settings_json TEXT NOT NULL CHECK (json_valid(settings_json)),
+        updated_at    TEXT NOT NULL,
+        PRIMARY KEY (workspace_id, agent_id)
+      ) STRICT;
+
+      CREATE TABLE IF NOT EXISTS agent_memory_entries (
+        id           INTEGER PRIMARY KEY,
+        workspace_id TEXT NOT NULL,
+        agent_id     TEXT NOT NULL,
+        content      TEXT NOT NULL,
+        created_at   TEXT NOT NULL
+      ) STRICT;
+
+      CREATE TABLE IF NOT EXISTS agent_task_history (
+        id           INTEGER PRIMARY KEY,
+        workspace_id TEXT NOT NULL,
+        agent_id     TEXT NOT NULL,
+        task_id      TEXT NOT NULL,
+        created_at   TEXT NOT NULL
       ) STRICT;
     `,
   },

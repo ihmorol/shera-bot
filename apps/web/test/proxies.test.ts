@@ -139,3 +139,131 @@ describe("runtime proxy — allowlist + passthrough", () => {
     expect(calls).toHaveLength(0);
   });
 });
+
+describe("runtime proxy — S11 agent surfaces (allowlist additions)", () => {
+  /** The stubbed fetch answer for a forwarded agent call. */
+  function agentResponse(): Response {
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }
+
+  it("forwards the workspace roster read", async () => {
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const { calls } = stubFetch(agentResponse);
+
+    const request = new Request("http://web.test/api/runtime/v1/agents?workspace_id=ws_1");
+    const response = await proxyToLocalApi(request, "/v1/agents");
+
+    expect(response.status).toBe(200);
+    expect(calls[0]?.input).toBe(`${RUNTIME_BASE}/v1/agents?workspace_id=ws_1`);
+  });
+
+  it("forwards the agent detail read (the get-or-create direct chat binding)", async () => {
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const { calls } = stubFetch(agentResponse);
+
+    const request = new Request(
+      "http://web.test/api/runtime/v1/agents/agent_general_assistant?workspace_id=ws_1",
+    );
+    const response = await proxyToLocalApi(
+      request,
+      "/v1/agents/agent_general_assistant?workspace_id=ws_1",
+    );
+
+    expect(response.status).toBe(200);
+    expect(calls[0]?.input).toBe(
+      `${RUNTIME_BASE}/v1/agents/agent_general_assistant?workspace_id=ws_1`,
+    );
+  });
+
+  it("forwards the settings snapshot read", async () => {
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const { calls } = stubFetch(agentResponse);
+
+    const request = new Request(
+      "http://web.test/api/runtime/v1/agents/agent_general_assistant/settings?workspace_id=ws_1",
+    );
+    const response = await proxyToLocalApi(
+      request,
+      "/v1/agents/agent_general_assistant/settings?workspace_id=ws_1",
+    );
+
+    expect(response.status).toBe(200);
+    expect(calls[0]?.input).toBe(
+      `${RUNTIME_BASE}/v1/agents/agent_general_assistant/settings?workspace_id=ws_1`,
+    );
+  });
+
+  it("forwards the D16 settings command POST with its body (the one mutation surface)", async () => {
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const { calls } = stubFetch(agentResponse);
+
+    const request = new Request(
+      "http://web.test/api/runtime/v1/agents/agent_general_assistant/settings/commands",
+      {
+        method: "POST",
+        body: JSON.stringify({ type: "agent_settings.reset_all" }),
+        headers: { "content-type": "application/json" },
+      },
+    );
+    const response = await proxyToLocalApi(
+      request,
+      "/v1/agents/agent_general_assistant/settings/commands",
+    );
+
+    expect(response.status).toBe(200);
+    const call = calls[0]!;
+    expect(String(call.input)).toBe(
+      `${RUNTIME_BASE}/v1/agents/agent_general_assistant/settings/commands`,
+    );
+    expect(call.init?.body).toBe(JSON.stringify({ type: "agent_settings.reset_all" }));
+  });
+
+  it("still refuses the chunk-2 PATCH routes — the commands endpoint is the only agent mutation", async () => {
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const calls: FetchCall[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({ input, init });
+        return Promise.resolve(new Response(null, { status: 500 }));
+      }),
+    );
+
+    for (const path of [
+      "/v1/agents/agent_general_assistant/instructions",
+      "/v1/agents/agent_general_assistant/provider",
+    ]) {
+      const request = new Request(`http://web.test/api/runtime${path}`, {
+        method: "PATCH",
+        body: JSON.stringify({ workspace_id: "ws_1" }),
+        headers: { "content-type": "application/json" },
+      });
+      const response = await proxyToLocalApi(request, path);
+      expect(response.status, path).toBe(404);
+    }
+    expect(calls).toHaveLength(0);
+  });
+
+  it("still refuses agent sub-paths outside the four surfaces (detail must not swallow settings)", async () => {
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const calls: FetchCall[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({ input, init });
+        return Promise.resolve(new Response(null, { status: 500 }));
+      }),
+    );
+
+    const request = new Request(
+      "http://web.test/api/runtime/v1/agents/agent_general_assistant/memory",
+    );
+    const response = await proxyToLocalApi(request, "/v1/agents/agent_general_assistant/memory");
+
+    expect(response.status).toBe(404);
+    expect(calls).toHaveLength(0);
+  });
+});

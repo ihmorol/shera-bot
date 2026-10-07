@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 /**
@@ -7,6 +8,19 @@ import { defineConfig } from "vitest/config";
  * and never part of the default run (G7).
  */
 export default defineConfig({
+  // apps/web source uses the Next-style "@/..." alias for its own modules.
+  resolve: {
+    alias: {
+      "@": fileURLToPath(new URL("./apps/web/", import.meta.url)),
+    },
+  },
+  // S08: component tests render apps/web .tsx components in the node
+  // environment. apps/web's tsconfig keeps Next's `jsx: "preserve"` (which
+  // the transform would copy verbatim, leaving unparseable JSX), so the
+  // transform pins the automatic JSX runtime here — .ts suites are unaffected.
+  oxc: {
+    jsx: { runtime: "automatic", importSource: "react" },
+  },
   test: {
     include: [
       "tests/**/*.test.ts",

@@ -1,12 +1,14 @@
 import type { NextConfig } from "next";
 
 /**
- * S01 placeholder configuration. Workspace packages are consumed as TypeScript
- * source (each package exports ./src/index.ts), so the client that imports them
- * in S08 adds `transpilePackages` here — not before.
+ * Workspace packages are consumed as TypeScript source (each package exports
+ * ./src/index.ts), so every workspace package the client imports must be
+ * listed in `transpilePackages`. S08 chunk 2 imports @shera-bot/contracts for
+ * the typed mock fixtures (UI_DESIGN §9).
  */
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  transpilePackages: ["@shera-bot/contracts"],
 };
 
 export default nextConfig;

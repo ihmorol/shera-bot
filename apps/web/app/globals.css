@@ -1,38 +1,159 @@
+@import "tailwindcss";
+
 /*
- * Dark-only v1 (PRODUCT.md: dark theme in v1). The three tokens below are copied
- * from docs/UI_DESIGN.md §2.1 so the placeholder is not an invented palette; S08
- * owns the real token set and every surface built from it.
+ * Token layer — UI_DESIGN §2.1. This file is the ONLY place raw color values
+ * may appear in apps/web (enforced by test/design-tokens.test.ts). Everything
+ * else consumes Tailwind utilities generated from these theme tokens, so a
+ * future light theme (PRD §21.19 register item) stays a token change.
+ *
+ * Dark-only v1: the approved landing-site identity, per PRODUCT.md.
  */
+@theme {
+  /* Surfaces */
+  --color-canvas: #050a14;
+  --color-surface: #08111f;
+  --color-surface-elevated: #101d31;
+
+  /* Brand + accents */
+  --color-brand: #3b82f6;
+  --color-brand-deep: #2563eb;
+  --color-sky: #7dd3fc;
+  --color-cool-highlight: #dcebff;
+
+  /* Text */
+  --color-text: #ffffff;
+  --color-muted: #91a4bd;
+
+  /* Status (§2.1 live dot + status palette; color is never the only signal) */
+  --color-live: #16f456;
+  --color-approval: #fbbf24;
+  --color-failed: #f87171;
+
+  /* Lines (borders/dividers) and the focused/active border variant */
+  --color-line: rgba(148, 163, 184, 0.2);
+  --color-line-accent: rgba(191, 219, 254, 0.34);
+
+  /* Hero/preview emphasis only — restrained glow per PRODUCT.md */
+  --shadow-glow: 0 0 80px rgba(59, 130, 246, 0.22);
+
+  /* Typography — resolved from next/font variables in app/layout.tsx.
+     Scale per §2.1: 12 / 13 / 14 (chat default) / 16 / 20 / 28 / 36 px. */
+  --font-display: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+
+  --text-xs: 0.75rem; /* 12 */
+  --text-xs--line-height: 1.5;
+  --text-sm: 0.8125rem; /* 13 */
+  --text-sm--line-height: 1.5;
+  --text-base: 0.875rem; /* 14 — chat default */
+  --text-base--line-height: 1.6;
+  --text-lg: 1rem; /* 16 */
+  --text-lg--line-height: 1.55;
+  --text-xl: 1.25rem; /* 20 */
+  --text-xl--line-height: 1.35;
+  --text-2xl: 1.75rem; /* 28 */
+  --text-2xl--line-height: 1.25;
+  --text-3xl: 2.25rem; /* 36 */
+  --text-3xl--line-height: 1.15;
+
+  /* Layout — §2.2 breakpoints: 360 (min supported) / 768 / 1024 / 1440.
+     Spacing uses the default 4px grid. */
+  --breakpoint-sm: 360px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1440px;
+
+  /* Motion — one authored entrance grammar, no scattered effects. */
+  --animate-overlay-in: overlay-in 180ms ease-out;
+  --animate-sheet-in: sheet-in 240ms cubic-bezier(0.32, 0.72, 0, 1);
+
+  @keyframes overlay-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes sheet-in {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+}
+
 :root {
   color-scheme: dark;
-  --canvas: #050a14;
-  --text: #ffffff;
-  --muted: #91a4bd;
 }
 
 html,
 body {
   margin: 0;
   padding: 0;
+  height: 100%;
 }
 
 body {
-  background: var(--canvas);
-  color: var(--text);
-  font-family:
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    sans-serif;
-  line-height: 1.5;
+  background: var(--color-canvas);
+  color: var(--color-text);
 }
 
-main {
-  margin: 0 auto;
-  max-width: 42rem;
-  padding: 4rem 1.5rem;
+/* §2.3 visible focus: 2px sky outline, 2px offset, on every interactive element. */
+:focus-visible {
+  outline: 2px solid var(--color-sky);
+  outline-offset: 2px;
 }
 
-code {
-  color: var(--muted);
+/*
+ * Browser surfaces carry the design too (craft floor): selection, caret,
+ * scrollbars, and link underline offset are themed from the palette instead
+ * of shipping vendor defaults.
+ */
+::selection {
+  background: color-mix(in oklab, var(--color-brand) 45%, transparent);
+  color: var(--color-text);
+}
+
+input,
+textarea {
+  caret-color: var(--color-sky);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--color-muted) 35%, transparent) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--color-muted) 35%, transparent);
+  border-radius: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+a {
+  text-underline-offset: 3px;
+}
+
+/* §2.3: prefers-reduced-motion is respected everywhere. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

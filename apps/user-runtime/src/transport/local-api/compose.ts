@@ -26,6 +26,7 @@ import type { PackSnapshot } from "@shera-bot/contracts";
 
 import { openDatabase, type SqliteConnection } from "../../adapters/sqlite/connection.ts";
 import { applyMigrations } from "../../adapters/sqlite/migrations.ts";
+import { AgentsRepository } from "../../adapters/sqlite/agents-repository.ts";
 import { CommandReceiptsRepository } from "../../adapters/sqlite/command-receipts-repository.ts";
 import { ConversationsRepository } from "../../adapters/sqlite/conversations-repository.ts";
 import { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
@@ -35,6 +36,7 @@ import { FakeHarnessAdapter } from "../../adapters/process/fake-harness-adapter.
 import { EventsService } from "../../modules/events/events.service.ts";
 import { ReplayService } from "../../modules/events/replay.service.ts";
 import type { EventEnvelope } from "../../modules/events/events.types.ts";
+import { AgentsService } from "../../modules/agents/agents.service.ts";
 import {
   ConversationsService,
   type ConversationPublisher,
@@ -135,6 +137,12 @@ export interface RuntimeHandle {
   harness: HarnessRunService;
   /** S10: the loaded workspace pack when `packsRoot` was given; undefined otherwise. */
   pack: WorkspacePack | undefined;
+  /**
+   * S11: the agents seam — direct-chat resolution and the user-owned field
+   * updates. The identities themselves are seeded at composition time from
+   * the pinned pack; the agent API routes sit on top of this service.
+   */
+  agents: AgentsService;
   /** The scripted reply producer when enabled; undefined otherwise (G4). */
   replyStreamer: ScriptedReplyStreamer | undefined;
   /** Closes the gateway (and with it the HTTP server), then SQLite. */
@@ -149,6 +157,7 @@ interface Wired {
   journal: EventJournalRepository;
   events: EventsService;
   conversations: ConversationsService;
+  agents: AgentsService;
   setPublisher(publisher: ConversationPublisher): void;
 }
 
@@ -203,6 +212,17 @@ function wire(options: ComposeLocalApiOptions): Wired {
     publish: containFanout((event) => publisher(event), logFault),
   });
 
+  // S11: the agents seam shares the SAME late-bound post-commit fanout — a
+  // newly created direct chat publishes its conversation.created event through
+  // the identical containment (B4) as every other conversation creation.
+  const agents = new AgentsService({
+    agents: new AgentsRepository(tx),
+    conversations: conversationsRepository,
+    journal: events,
+    tx,
+    publish: containFanout((event) => publisher(event), logFault),
+  });
+
   const replay = new ReplayService({
     journal,
     loadSnapshot: (workspaceId, streamId) => {
@@ -239,6 +259,7 @@ function wire(options: ComposeLocalApiOptions): Wired {
     journal,
     events,
     conversations,
+    agents,
     setPublisher(next) {
       publisher = next;
     },
@@ -346,6 +367,7 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     gateway,
     harness,
     pack,
+    agents: wired.agents,
     replyStreamer,
     close: async () => {
       replyStreamer?.stopAll();

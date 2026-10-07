@@ -74,9 +74,13 @@ describe("agent identities (S11 migration v4)", () => {
     conn.close();
   });
 
-  it("appends v4 to the committed migration chain", () => {
-    expect(MIGRATIONS.at(-1)?.version).toBe(4);
-    expect(MIGRATIONS.at(-1)?.name).toBe("agent-identities");
+  it("appends the agent migrations to the committed migration chain", () => {
+    // The chain is append-only (D24): v4 introduced the agent identities, and
+    // chunk 2's v5 (direct-chat binding) extends it — v4 is no longer last.
+    const v4 = MIGRATIONS.find((migration) => migration.version === 4);
+    expect(v4?.name).toBe("agent-identities");
+    expect(MIGRATIONS.at(-1)?.version).toBe(5);
+    expect(MIGRATIONS.at(-1)?.name).toBe("agent-direct-chat-binding");
   });
 
   it("seeds the six student-pack agents with pack-owned fields", () => {

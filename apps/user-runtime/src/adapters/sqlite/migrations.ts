@@ -46,6 +46,20 @@
  * chunk 2. agent_memory_entries and agent_task_history are workspace-scoped
  * ledger placeholders: publication rules and cross-agent reads arrive with
  * the memory slice, so nothing at this layer reads across agents.
+ *
+ * v5 — agent direct-chat binding (S11 chunk 2; D39, one identity everywhere):
+ * a conversation can BE a direct Agent chat, and the binding is a dedicated
+ * mapping table rather than a nullable column on conversations — conversations
+ * stay agent-agnostic (a direct chat is a binding to an identity, not a
+ * conversation subtype), and the binding carries its own guarantees at the
+ * storage layer: PRIMARY KEY (workspace_id, agent_id) makes "exactly one
+ * direct chat per (workspace, agent)" unrepresentable to violate, and
+ * UNIQUE (workspace_id, conversation_id) keeps the mapping one-to-one (a
+ * conversation is the direct chat of at most one Agent in its workspace).
+ * conversation_id is validated by the writer (the conversations row is
+ * created in the SAME transaction as the binding), so no FOREIGN KEY is
+ * declared — matching the v4 agent tables. The same agent_id in two
+ * workspaces binds two independent chats (E12).
  */
 import type { DatabaseSync } from "node:sqlite";
 
@@ -175,6 +189,20 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
         agent_id     TEXT NOT NULL,
         task_id      TEXT NOT NULL,
         created_at   TEXT NOT NULL
+      ) STRICT;
+    `,
+  },
+  {
+    version: 5,
+    name: "agent-direct-chat-binding",
+    sql: `
+      CREATE TABLE IF NOT EXISTS agent_direct_chats (
+        workspace_id    TEXT NOT NULL,
+        agent_id        TEXT NOT NULL,
+        conversation_id TEXT NOT NULL,
+        created_at      TEXT NOT NULL,
+        PRIMARY KEY (workspace_id, agent_id),
+        UNIQUE (workspace_id, conversation_id)
       ) STRICT;
     `,
   },

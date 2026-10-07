@@ -24,6 +24,15 @@
  * agent_task_history are private, per-agent ledger placeholders: publication
  * rules and cross-agent reads arrive with the memory slice, so nothing here
  * reads across agents.
+ *
+ * Direct chats (S11 chunk 2, D39): the agent_direct_chats mapping table is
+ * agent-domain SQL, so its statements live HERE. The binding row is written
+ * in the SAME transaction as the conversation row and its journal event (the
+ * conversations service composes that unit); this repository only owns the
+ * lookup and the insert. "Exactly one direct chat per (workspace, agent)" is
+ * enforced by the table's primary key — a racing loser's insert fails the
+ * UNIQUE constraint and re-reads the winner's binding (the B5 receipt
+ * pattern; see isDirectChatConflict).
  */
 import type { DatabaseSync } from "node:sqlite";
 
@@ -95,6 +104,22 @@ export class AgentNotFoundError extends Error {
     super(`agent ${agentId} not found in workspace ${workspaceId}`);
     this.name = "AgentNotFoundError";
   }
+}
+
+/**
+ * True when a direct-chat binding insert lost the race against the winner's
+ * committed (workspace_id, agent_id) primary key (B5): THIS unit rolled back
+ * atomically and the winner's binding is durable, so the caller re-reads and
+ * resolves to it — the exact contract of the non-race path.
+ */
+export function isDirectChatConflict(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error as { code?: unknown }).code === "ERR_SQLITE_ERROR" &&
+    error.message.includes("UNIQUE constraint failed") &&
+    error.message.includes("agent_direct_chats.workspace_id") &&
+    error.message.includes("agent_direct_chats.agent_id")
+  );
 }
 
 const AGENT_COLUMNS = `
@@ -421,6 +446,43 @@ export class AgentsRepository {
          ORDER BY id`,
       )
       .all(workspaceId, agentId) as unknown as AgentTaskHistoryRow[];
+  }
+
+  /**
+   * The conversation id bound as this Agent's direct chat in THIS workspace,
+   * or null when no direct chat exists yet (S11 chunk 2; D39). The binding
+   * references the SAME agent_id as the agents row — one identity everywhere.
+   */
+  findDirectChat(workspaceId: string, agentId: string, exec?: DatabaseSync): string | null {
+    const db = exec ?? this.tx.connection();
+    const row = db
+      .prepare(
+        `SELECT conversation_id
+         FROM agent_direct_chats
+         WHERE workspace_id = ? AND agent_id = ?`,
+      )
+      .get(workspaceId, agentId) as { conversation_id: string } | undefined;
+    return row?.conversation_id ?? null;
+  }
+
+  /**
+   * Bind a conversation as the Agent's direct chat. Must run in the SAME
+   * transaction that created the conversation row and its journal event (the
+   * caller composes that unit). A racing duplicate fails on the primary key —
+   * the caller detects it via isDirectChatConflict and re-reads the winner.
+   */
+  bindDirectChat(
+    workspaceId: string,
+    agentId: string,
+    conversationId: string,
+    createdAt: string,
+    exec?: DatabaseSync,
+  ): void {
+    const db = exec ?? this.tx.connection();
+    db.prepare(
+      `INSERT INTO agent_direct_chats (workspace_id, agent_id, conversation_id, created_at)
+       VALUES (?, ?, ?, ?)`,
+    ).run(workspaceId, agentId, conversationId, createdAt);
   }
 
   private requireAgent(workspaceId: string, agentId: string, db: DatabaseSync): void {

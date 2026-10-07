@@ -1,5 +1,6 @@
 import js from "@eslint/js";
 import globals from "globals";
+import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
@@ -28,6 +29,10 @@ export default tseslint.config(
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  // S08 review P2-5: hook correctness (rules-of-hooks, exhaustive-deps and
+  // the compiler-family rules) enforced over the React client code — the
+  // flat variant, since `configs['recommended-latest']` is still eslintrc-style.
+  reactHooks.configs.flat["recommended-latest"],
   {
     files: ["**/*.{js,mjs,cjs}"],
     languageOptions: {
@@ -40,6 +45,9 @@ export default tseslint.config(
       // TypeScript resolves identifiers itself; no-undef only produces false positives
       // on typed globals.
       "no-undef": "off",
+      // The plugin ships exhaustive-deps as a warning, which `pnpm lint`
+      // would not fail on — hook correctness is a merge gate, not a hint.
+      "react-hooks/exhaustive-deps": "error",
     },
   },
   {

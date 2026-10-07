@@ -58,15 +58,23 @@ describe("runtime node bootstrap", () => {
 
 describe("runtime node config from environment (no secrets cross this path, G3)", () => {
   it("applies loopback-safe defaults and honours explicit overrides", () => {
-    expect(runtimeConfigFromEnv({})).toEqual({
+    const defaults = runtimeConfigFromEnv({});
+    expect(defaults).toEqual({
       host: "127.0.0.1",
       port: 8080,
       dbPath: join("data", "runtime.db"),
       defaultWorkspaceId: "ws-local-default",
+      // S10: the default packs root is the repository's own agent-packs tree.
+      packsRoot: join(import.meta.dirname, "../../../agent-packs"),
     });
     expect(
       runtimeConfigFromEnv(
-        { RUNTIME_HOST: "127.0.0.1", RUNTIME_PORT: "5099", RUNTIME_DB_PATH: "/tmp/runtime.db" },
+        {
+          RUNTIME_HOST: "127.0.0.1",
+          RUNTIME_PORT: "5099",
+          RUNTIME_DB_PATH: "/tmp/runtime.db",
+          RUNTIME_PACKS_ROOT: "/tmp/packs",
+        },
         { port: 0 },
       ),
     ).toEqual({
@@ -74,6 +82,7 @@ describe("runtime node config from environment (no secrets cross this path, G3)"
       port: 0,
       dbPath: "/tmp/runtime.db",
       defaultWorkspaceId: "ws-local-default",
+      packsRoot: "/tmp/packs",
     });
   });
 

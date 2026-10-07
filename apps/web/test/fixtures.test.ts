@@ -3,6 +3,7 @@ import type { TypedExecutionEvent } from "@shera-bot/contracts";
 
 import {
   ChatMessage,
+  COLLABORATION_MESSAGES,
   CONVERSATIONS,
   ConversationState,
   FIXTURE_ARTIFACTS,
@@ -41,6 +42,38 @@ describe("pack fixture (§9 #1)", () => {
       expect(agent.role_description.length).toBeGreaterThan(0);
       expect(agent.default_provider.model.length).toBeGreaterThan(0);
     }
+  });
+
+  it("matches the D46 roster mapping exactly (S10 alignment — the demo fixture IS the student pack)", () => {
+    expect(STUDENT_PACK.pack_id).toBe("student");
+    const byId = (operationId: string) =>
+      STUDENT_PACK.operations.find((operation) => operation.operation_id === operationId);
+    const rosterOf = (operationId: string) => byId(operationId)?.roster ?? [];
+    // D46 table, asserted verbatim.
+    expect(rosterOf("operation_research_paper")).toEqual([
+      "agent_general_assistant",
+      "agent_researcher",
+      "agent_citation_manager",
+    ]);
+    expect(rosterOf("operation_programming_assignment")).toEqual([
+      "agent_general_assistant",
+      "agent_developer",
+      "agent_programming_tutor",
+    ]);
+    expect(rosterOf("operation_exam_preparation")).toEqual(["agent_study_planner"]);
+    // Coordinators: pack default for the first two; the pack override for
+    // Exam Preparation (Study Planner coordinates its own home Operation).
+    expect(byId("operation_research_paper")?.coordinator).toBeUndefined();
+    expect(byId("operation_programming_assignment")?.coordinator).toBeUndefined();
+    expect(byId("operation_exam_preparation")?.coordinator).toBe("agent_study_planner");
+    // Single membership (D46): no Agent appears in two rosters — EXCEPT the
+    // pack default coordinator, whose cross-Operation presence is the
+    // coordinator role, not a roster assignment (the canonical schema's rule).
+    const rosterAgents = STUDENT_PACK.operations.flatMap((operation) => operation.roster);
+    const nonCoordinator = rosterAgents.filter(
+      (agentId) => agentId !== STUDENT_PACK.default_coordinator_agent_id,
+    );
+    expect(new Set(nonCoordinator).size).toBe(nonCoordinator.length);
   });
 
   it("has the three pack Operation templates matching the navigation seed", () => {
@@ -273,6 +306,81 @@ describe("thread assembly (§6.2 replay honesty)", () => {
       true,
     );
     expect(general.some((item) => item.kind === "run")).toBe(true);
+  });
+});
+
+/**
+ * D7 fixture integrity — the invariant that was MISSING when the collaboration
+ * surface was first added.
+ *
+ * That change shipped collaboration fixtures pointing at
+ * `conversation_research_paper` and `task_run_research_paper`, neither of which
+ * exists in any seeded fixture. `collaborationForConversation` filtered on an id
+ * nothing produced, so the whole feature rendered nowhere — and every test stayed
+ * green, because nothing asserted these ids join up. This is the guard that
+ * prevents that class of "wired but invisible" defect.
+ */
+describe("D7 collaboration fixtures resolve to real seeded records", () => {
+  const conversationIds = new Set(
+    CONVERSATIONS.map((conversation) => conversation.conversation_id),
+  );
+  const taskIds = new Set(RUNS.map((run) => run.task_id));
+  const agentIds = new Set(STUDENT_PACK.agents.map((agent) => agent.agent_id));
+
+  it("keeps every collaboration message inside a seeded conversation", () => {
+    for (const message of COLLABORATION_MESSAGES) {
+      expect(
+        conversationIds.has(message.conversation_id),
+        `${message.idempotency_key} targets unknown conversation ${message.conversation_id}`,
+      ).toBe(true);
+    }
+  });
+
+  it("keeps every collaboration task_id joinable to a real task run", () => {
+    for (const message of COLLABORATION_MESSAGES) {
+      expect(taskIds.has(message.task_id), `${message.idempotency_key} → ${message.task_id}`).toBe(
+        true,
+      );
+    }
+  });
+
+  it("uses the same workspace as the task-run fixtures", () => {
+    // An ad-hoc workspace id here is what made the original collaboration file
+    // inconsistent with runs/artifacts/conversations. TaskRun is the record that
+    // actually carries workspace_id across the corpus.
+    const workspaces = new Set(RUNS.map((run) => run.workspace_id));
+    for (const message of COLLABORATION_MESSAGES) {
+      expect(workspaces.has(message.workspace_id), message.workspace_id).toBe(true);
+    }
+  });
+
+  it("resolves both Agents from the pack, with a null recipient allowed (broadcast)", () => {
+    for (const message of COLLABORATION_MESSAGES) {
+      expect(agentIds.has(message.sender_agent), message.sender_agent).toBe(true);
+      if (message.recipient_agent !== null) {
+        expect(agentIds.has(message.recipient_agent), message.recipient_agent).toBe(true);
+      }
+    }
+  });
+
+  it("keeps idempotency keys unique (D23 rule 6 — identity is data)", () => {
+    // timelineKey() builds the React key from this field, so a duplicate would
+    // collapse two rows into one.
+    const keys = COLLABORATION_MESSAGES.map((message) => message.idempotency_key);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it("actually reaches a rendered thread — the assertion the first version lacked", () => {
+    // The P0 this guards: fixtures that parse cleanly but match no conversation,
+    // so buildThread never emits them. At least one seeded conversation must
+    // produce collaboration rows.
+    const withCollab = CONVERSATIONS.map((conversation) => conversation.conversation_id).filter(
+      (id) => buildThread(id).some((item) => item.kind === "collaboration"),
+    );
+    expect(
+      withCollab.length,
+      "no seeded conversation renders a collaboration message — the surface is dead code",
+    ).toBeGreaterThan(0);
   });
 });
 

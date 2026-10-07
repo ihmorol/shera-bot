@@ -8,8 +8,6 @@
  * task.* events, no task streams, anywhere in the journal (G2/D34 — Agents
  * propose, the runtime executes; a user chat message is neither).
  */
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterAll, describe, expect, it } from "vitest";
@@ -25,8 +23,12 @@ import { conversationStreamFor, type ConversationEvent } from "./conversations.e
 import { ConversationsService } from "./conversations.service.ts";
 import { rebuildConversationProjections } from "./conversations.projection.ts";
 import type { ConversationCommand } from "./conversations.types.ts";
+import {
+  cleanupTempResources,
+  makeTempDir,
+  trackConnection,
+} from "../../../test/helpers/temp-resources.ts";
 
-const tempDirs: string[] = [];
 const WS_A = "ws-11111111-1111-4111-8111-111111111111";
 const KEY = "idem-msg-send-1";
 
@@ -39,9 +41,12 @@ interface Harness {
 }
 
 function newHarness(): Harness {
-  const dir = mkdtempSync(join(tmpdir(), "shera-runtime-messages-"));
-  tempDirs.push(dir);
-  const conn = openDatabase(join(dir, "runtime.db"));
+  // Tracked so the connection handle is closed before cleanup deletes the
+  // directory: on Windows an open DatabaseSync (plus its WAL sidecars) locks the
+  // tree and rmSync throws EPERM — which failed this suite on Windows even
+  // though every assertion passed.
+  const dir = makeTempDir("shera-runtime-messages-");
+  const conn = trackConnection(openDatabase(join(dir, "runtime.db")));
   applyMigrations(conn.db);
   const tx = new SqliteTransactions(conn.db);
   const conversations = new ConversationsRepository(tx);
@@ -83,10 +88,9 @@ function sendCommand(conversationId: string, overrides: Record<string, unknown> 
   } as const;
 }
 
+// Closes every tracked handle, then removes every tracked temp directory.
 afterAll(async () => {
-  for (const dir of tempDirs) {
-    rmSync(dir, { recursive: true, force: true });
-  }
+  await cleanupTempResources();
 });
 
 describe("message.send (D26: one idempotent command per turn)", () => {

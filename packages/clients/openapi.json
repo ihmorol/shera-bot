@@ -100,6 +100,24 @@
             "minLength": 1,
             "maxLength": 256
           },
+          "ui_identity": {
+            "type": "object",
+            "properties": {
+              "avatar_hue": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 360
+              },
+              "initial_glyph": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "avatar_hue",
+              "initial_glyph"
+            ],
+            "additionalProperties": false
+          },
           "declared_in_pack_version": {
             "type": "string",
             "pattern": "^\\d+\\.\\d+\\.\\d+$"
@@ -1699,6 +1717,101 @@
                           "type": "string",
                           "minLength": 1,
                           "maxLength": 256
+                        },
+                        "pack_snapshot": {
+                          "type": "object",
+                          "properties": {
+                            "pack_id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            },
+                            "pack_version": {
+                              "type": "string",
+                              "pattern": "^\\d+\\.\\d+\\.\\d+$"
+                            },
+                            "pack_hash": {
+                              "type": "string",
+                              "pattern": "^[a-f0-9]{64}$"
+                            }
+                          },
+                          "required": [
+                            "pack_id",
+                            "pack_version",
+                            "pack_hash"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "operation_snapshot": {
+                          "type": "object",
+                          "properties": {
+                            "operation_id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            },
+                            "version": {
+                              "type": "string",
+                              "pattern": "^\\d+\\.\\d+\\.\\d+$"
+                            },
+                            "hash": {
+                              "type": "string",
+                              "pattern": "^[a-f0-9]{64}$"
+                            }
+                          },
+                          "required": [
+                            "operation_id",
+                            "version",
+                            "hash"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "roster": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "maxItems": 50
+                        },
+                        "skill_snapshot": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "maxItems": 200
+                        },
+                        "connector_snapshot": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "maxItems": 100
+                        },
+                        "provider_snapshot": {
+                          "type": "object",
+                          "properties": {
+                            "provider_id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            },
+                            "model": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256
+                            }
+                          },
+                          "required": [
+                            "provider_id",
+                            "model"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "required": [
@@ -5827,6 +5940,24 @@
                   "minLength": 1,
                   "maxLength": 256
                 },
+                "ui_identity": {
+                  "type": "object",
+                  "properties": {
+                    "avatar_hue": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 360
+                    },
+                    "initial_glyph": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "avatar_hue",
+                    "initial_glyph"
+                  ],
+                  "additionalProperties": false
+                },
                 "declared_in_pack_version": {
                   "type": "string",
                   "pattern": "^\\d+\\.\\d+\\.\\d+$"
@@ -9768,6 +9899,101 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 256
+                  },
+                  "pack_snapshot": {
+                    "type": "object",
+                    "properties": {
+                      "pack_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                      },
+                      "pack_version": {
+                        "type": "string",
+                        "pattern": "^\\d+\\.\\d+\\.\\d+$"
+                      },
+                      "pack_hash": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      }
+                    },
+                    "required": [
+                      "pack_id",
+                      "pack_version",
+                      "pack_hash"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "operation_snapshot": {
+                    "type": "object",
+                    "properties": {
+                      "operation_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                      },
+                      "version": {
+                        "type": "string",
+                        "pattern": "^\\d+\\.\\d+\\.\\d+$"
+                      },
+                      "hash": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      }
+                    },
+                    "required": [
+                      "operation_id",
+                      "version",
+                      "hash"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "roster": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "maxItems": 50
+                  },
+                  "skill_snapshot": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "maxItems": 200
+                  },
+                  "connector_snapshot": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "maxItems": 100
+                  },
+                  "provider_snapshot": {
+                    "type": "object",
+                    "properties": {
+                      "provider_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                      },
+                      "model": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                      }
+                    },
+                    "required": [
+                      "provider_id",
+                      "model"
+                    ],
+                    "additionalProperties": false
                   }
                 },
                 "required": [
@@ -15053,6 +15279,101 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 256
+              },
+              "pack_snapshot": {
+                "type": "object",
+                "properties": {
+                  "pack_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "pack_version": {
+                    "type": "string",
+                    "pattern": "^\\d+\\.\\d+\\.\\d+$"
+                  },
+                  "pack_hash": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  }
+                },
+                "required": [
+                  "pack_id",
+                  "pack_version",
+                  "pack_hash"
+                ],
+                "additionalProperties": false
+              },
+              "operation_snapshot": {
+                "type": "object",
+                "properties": {
+                  "operation_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "version": {
+                    "type": "string",
+                    "pattern": "^\\d+\\.\\d+\\.\\d+$"
+                  },
+                  "hash": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  }
+                },
+                "required": [
+                  "operation_id",
+                  "version",
+                  "hash"
+                ],
+                "additionalProperties": false
+              },
+              "roster": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "maxItems": 50
+              },
+              "skill_snapshot": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "maxItems": 200
+              },
+              "connector_snapshot": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "maxItems": 100
+              },
+              "provider_snapshot": {
+                "type": "object",
+                "properties": {
+                  "provider_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "model": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                },
+                "required": [
+                  "provider_id",
+                  "model"
+                ],
+                "additionalProperties": false
               }
             },
             "required": [
@@ -26970,6 +27291,101 @@
                                     "type": "string",
                                     "minLength": 1,
                                     "maxLength": 256
+                                  },
+                                  "pack_snapshot": {
+                                    "type": "object",
+                                    "properties": {
+                                      "pack_id": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 256
+                                      },
+                                      "pack_version": {
+                                        "type": "string",
+                                        "pattern": "^\\d+\\.\\d+\\.\\d+$"
+                                      },
+                                      "pack_hash": {
+                                        "type": "string",
+                                        "pattern": "^[a-f0-9]{64}$"
+                                      }
+                                    },
+                                    "required": [
+                                      "pack_id",
+                                      "pack_version",
+                                      "pack_hash"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  "operation_snapshot": {
+                                    "type": "object",
+                                    "properties": {
+                                      "operation_id": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 256
+                                      },
+                                      "version": {
+                                        "type": "string",
+                                        "pattern": "^\\d+\\.\\d+\\.\\d+$"
+                                      },
+                                      "hash": {
+                                        "type": "string",
+                                        "pattern": "^[a-f0-9]{64}$"
+                                      }
+                                    },
+                                    "required": [
+                                      "operation_id",
+                                      "version",
+                                      "hash"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  "roster": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 256
+                                    },
+                                    "maxItems": 50
+                                  },
+                                  "skill_snapshot": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 256
+                                    },
+                                    "maxItems": 200
+                                  },
+                                  "connector_snapshot": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 256
+                                    },
+                                    "maxItems": 100
+                                  },
+                                  "provider_snapshot": {
+                                    "type": "object",
+                                    "properties": {
+                                      "provider_id": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 256
+                                      },
+                                      "model": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 256
+                                      }
+                                    },
+                                    "required": [
+                                      "provider_id",
+                                      "model"
+                                    ],
+                                    "additionalProperties": false
                                   }
                                 },
                                 "required": [

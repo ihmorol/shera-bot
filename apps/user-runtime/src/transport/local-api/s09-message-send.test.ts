@@ -6,8 +6,6 @@
  * failure) replays the receipt and produces exactly ONE durable message,
  * visible in the journal replay the thread reads back.
  */
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -15,8 +13,12 @@ import type { AddressInfo } from "node:net";
 import { afterAll, describe, expect, it } from "vitest";
 
 import { composeLocalApi } from "./compose.ts";
+import {
+  cleanupTempResources,
+  makeTempDir,
+  trackConnection,
+} from "../../../test/helpers/temp-resources.ts";
 
-const tempDirs: string[] = [];
 const WORKSPACE = "ws_account-1";
 const SEND_KEY = "s09-ga-msg-send-1";
 
@@ -26,9 +28,13 @@ interface RunningApi {
 }
 
 async function composeAndListen(): Promise<RunningApi> {
-  const dir = mkdtempSync(join(tmpdir(), "shera-runtime-s09-send-"));
-  tempDirs.push(dir);
+  const dir = makeTempDir("shera-runtime-s09-send-");
   const composed = composeLocalApi({ dbPath: join(dir, "runtime.db") });
+  // The composed runtime OWNS the SQLite connection (`close()` delegates to it);
+  // the returned `close()` only shuts down the HTTP server. Registering the
+  // composed handle is what releases the database, so the temp directory can
+  // actually be deleted on Windows. Review finding F1.
+  trackConnection(composed);
   const server: Server = createServer(composed.app);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address() as AddressInfo;
@@ -58,9 +64,7 @@ async function getEvents(origin: string, conversationId: string, cursor: number)
 }
 
 afterAll(async () => {
-  for (const dir of tempDirs) {
-    rmSync(dir, { recursive: true, force: true });
-  }
+  await cleanupTempResources();
 });
 
 describe("S09 message send over HTTP (composer path)", () => {

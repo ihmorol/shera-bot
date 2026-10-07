@@ -10,8 +10,6 @@
  * /api/runtime proxy (POST /v1/conversations/commands,
  * GET /v1/conversations/:id/events).
  */
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -19,8 +17,12 @@ import type { AddressInfo } from "node:net";
 import { afterAll, describe, expect, it } from "vitest";
 
 import { composeLocalApi } from "./compose.ts";
+import {
+  cleanupTempResources,
+  makeTempDir,
+  trackConnection,
+} from "../../../test/helpers/temp-resources.ts";
 
-const tempDirs: string[] = [];
 const WORKSPACE = "ws_account-1";
 /** The client's fixed seed key (apps/web/lib/runtime-client.ts) — any fixed key proves the same receipt contract. */
 const GA_SEED_KEY = "s09-ga-direct-chat-seed-v1";
@@ -31,9 +33,16 @@ interface RunningApi {
 }
 
 async function composeAndListen(): Promise<RunningApi & { dbDir: string }> {
-  const dir = mkdtempSync(join(tmpdir(), "shera-runtime-s09-"));
-  tempDirs.push(dir);
+  const dir = makeTempDir("shera-runtime-s09-");
   const composed = composeLocalApi({ dbPath: join(dir, "runtime.db") });
+  // The composed runtime OWNS the SQLite connection (`close()` delegates to it),
+  // and the caller's `close()` below only closes the HTTP server. Registering the
+  // composed handle is what actually releases the database — without it the WAL
+  // sidecars stay locked and the temp directory cannot be deleted on Windows.
+  // Review finding F1: the earlier version of this suite never closed either
+  // handle, so the EPERM defect survived the fix and was merely hidden by the
+  // cleanup retry loop.
+  trackConnection(composed);
   const server: Server = createServer(composed.app);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address() as AddressInfo;
@@ -64,9 +73,7 @@ async function getEvents(origin: string, conversationId: string, cursor: number)
 }
 
 afterAll(async () => {
-  for (const dir of tempDirs) {
-    rmSync(dir, { recursive: true, force: true });
-  }
+  await cleanupTempResources();
 });
 
 describe("S09 real-rows round trip (web backing path over the local API)", () => {

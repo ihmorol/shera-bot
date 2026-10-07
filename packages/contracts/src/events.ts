@@ -27,6 +27,7 @@ import {
   SemVer,
 } from "./primitives.ts";
 import { RunState } from "./state-vocabulary.ts";
+import { OperationSnapshot, PackSnapshot, ProviderSnapshot } from "./snapshots.ts";
 
 /** D34 trigger categories that create task runs (G2). Closed set. */
 export const TASK_TRIGGER_EVENT_TYPES = [
@@ -160,6 +161,21 @@ export const TaskCreatedPayload = z.strictObject({
   trigger_event_id: Id,
   /** Correlation with the creating trigger event. */
   correlation_id: Id,
+  /**
+   * Creation-time snapshots (S10; D19, D28, D29 reproducibility): the pack /
+   * Operation / provider versions plus roster, skill, and connector snapshots
+   * recorded when the run was created. The journal row is the durable record,
+   * so a pack upgrade affects NEW tasks only — these fields are read back
+   * verbatim for tasks created before an upgrade. Optional because envelopes
+   * journalled before S10 carry none of them; the runtime stamps every field
+   * it can resolve on every event it emits now (D26 backward compatibility).
+   */
+  pack_snapshot: PackSnapshot.optional(),
+  operation_snapshot: OperationSnapshot.optional(),
+  roster: z.array(Id).max(50).optional(),
+  skill_snapshot: z.array(Id).max(200).optional(),
+  connector_snapshot: z.array(Id).max(100).optional(),
+  provider_snapshot: ProviderSnapshot.optional(),
 });
 export type TaskCreatedPayload = z.infer<typeof TaskCreatedPayload>;
 

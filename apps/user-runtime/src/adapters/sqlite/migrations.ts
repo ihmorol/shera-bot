@@ -21,6 +21,17 @@
  * (workspace_id, idempotency_key), recorded in the SAME transaction as the
  * command's effects, so a repeated key replays the recorded result instead of
  * duplicating effects.
+ *
+ * v3 — workspace pack pinning (S10; D19, D28): the workspace record gains the
+ * pin columns D28 names for the prototype — agent_pack_id, agent_pack_version,
+ * manifest_hash, installed_at. One pinned pack version per workspace (D19):
+ * a task is permanently associated with the version pinned at its creation
+ * (the task.created journal payload carries the creation-time snapshot), so a
+ * pack upgrade affects NEW tasks only. The four pin columns are either all
+ * set (pinned) or all NULL (a workspace exists but no pack is installed yet);
+ * a half-pinned row is unrepresentable. This is the first table keyed by
+ * workspace_id ALONE — a workspace is the tenant root, not a child record;
+ * every other product-state table keeps the (workspace_id, id) scoping (E12).
  */
 import type { DatabaseSync } from "node:sqlite";
 
@@ -74,6 +85,34 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
         result_json     TEXT NOT NULL,
         created_at      TEXT NOT NULL,
         PRIMARY KEY (workspace_id, idempotency_key)
+      ) STRICT;
+    `,
+  },
+  {
+    version: 3,
+    name: "workspace-pack-pinning",
+    sql: `
+      CREATE TABLE IF NOT EXISTS workspaces (
+        workspace_id       TEXT NOT NULL PRIMARY KEY,
+        agent_pack_id      TEXT,
+        agent_pack_version TEXT,
+        manifest_hash      TEXT,
+        installed_at       TEXT,
+        CHECK (
+          (
+            agent_pack_id IS NULL
+            AND agent_pack_version IS NULL
+            AND manifest_hash IS NULL
+            AND installed_at IS NULL
+          )
+          OR
+          (
+            agent_pack_id IS NOT NULL
+            AND agent_pack_version IS NOT NULL
+            AND manifest_hash IS NOT NULL
+            AND installed_at IS NOT NULL
+          )
+        )
       ) STRICT;
     `,
   },

@@ -44,6 +44,8 @@ import {
   type ScriptedReplyOptions,
 } from "../../modules/conversations/reply-streamer.ts";
 import { HarnessRunService } from "../../modules/runtime/harness-run-service.ts";
+import { loadWorkspacePack, type WorkspacePack } from "../../modules/runtime/pack-pin.ts";
+import { WorkspacesRepository } from "../../adapters/sqlite/workspaces-repository.ts";
 import { createLocalApi } from "./app.ts";
 import { consoleRedactedLogger, type RedactedLogger } from "../http/typed-errors.ts";
 import { attachWebSocketGateway, type WebSocketGatewayHandle } from "../websocket/gateway.ts";
@@ -94,6 +96,21 @@ export interface ComposeRuntimeOptions extends ComposeLocalApiOptions {
   /** D28: the pinned pack recorded on harness-created runs. Default: DEFAULT_PACK. */
   pinnedPack?: PackSnapshot;
   /**
+   * S10 (D19/D28): when set, the runtime loads the REAL pack from this
+   * directory through the agent-pack-sdk at composition time — verifies its
+   * `runtime_compatibility` against RUNTIME_VERSION (typed startup failure on
+   * mismatch, G4), pins it on the workspace (first install or upgrade; the
+   * pin upgrade affects NEW tasks only, D19), and the loaded manifest becomes
+   * the harness's pinned pack (overriding `pinnedPack`). Default: unset —
+   * the fixed DEFAULT_PACK snapshot, so existing compositions and tests do
+   * no filesystem pack loads.
+   */
+  packsRoot?: string;
+  /** S10: the pack id to load from `packsRoot`. Default: "student". */
+  packId?: string;
+  /** S10: the pack version to load from `packsRoot`. Default: latest in the tree. */
+  packVersion?: string;
+  /**
    * Deterministic clock for harness-run journal envelopes. Default: wall
    * clock; the E8 mock mode pins it so runs are byte-comparable.
    */
@@ -115,6 +132,8 @@ export interface RuntimeHandle {
   gateway: WebSocketGatewayHandle;
   /** The harness seam: later slices (and tests) start runs; the fake is default. */
   harness: HarnessRunService;
+  /** S10: the loaded workspace pack when `packsRoot` was given; undefined otherwise. */
+  pack: WorkspacePack | undefined;
   /** The scripted reply producer when enabled; undefined otherwise (G4). */
   replyStreamer: ScriptedReplyStreamer | undefined;
   /** Closes the gateway (and with it the HTTP server), then SQLite. */
@@ -244,6 +263,23 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     ...(options.pingIntervalMs ? { pingIntervalMs: options.pingIntervalMs } : {}),
     ...(options.pingTimeoutMs ? { pingTimeoutMs: options.pingTimeoutMs } : {}),
   });
+
+  // S10 (D19/D28): load the REAL pack when a packsRoot is configured —
+  // compatibility-checked against RUNTIME_VERSION (typed failure before any
+  // task can use it) and pinned on the workspace (first install or upgrade;
+  // the pin upgrade affects NEW tasks only, D19 — existing task snapshots
+  // live in their task.created journal payloads).
+  const workspaceId = options.workspaceId ?? DEFAULT_WORKSPACE_ID;
+  const pack: WorkspacePack | undefined = options.packsRoot
+    ? loadWorkspacePack({
+        packsRoot: options.packsRoot,
+        packId: options.packId ?? "student",
+        ...(options.packVersion ? { packVersion: options.packVersion } : {}),
+        workspaceId,
+        workspaces: new WorkspacesRepository(wired.tx),
+        ...(options.now ? { now: options.now() } : {}),
+      })
+    : undefined;
   // Every fanout route (conversation commands AND harness runs) flows through
   // the same containment (B4): a broadcast failure is recorded, never fatal.
   const logFault = options.logUntypedFault ?? consoleRedactedLogger;
@@ -277,8 +313,18 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     tx: wired.tx,
     journal: wired.journal,
     events: wired.events,
-    pinned_pack: options.pinnedPack ?? DEFAULT_PACK,
-    workspace_id: options.workspaceId ?? DEFAULT_WORKSPACE_ID,
+    pinned_pack: pack
+      ? {
+          pack_id: pack.manifest.pack_id,
+          pack_version: pack.manifest.version,
+          pack_hash: pack.manifest_hash,
+        }
+      : (options.pinnedPack ?? DEFAULT_PACK),
+    // S10 (D29): the loaded manifest feeds the creation-time snapshots —
+    // every runtime-created run stamps the skill/connector/provider snapshots
+    // it can resolve from the pinned pack's definitions.
+    ...(pack ? { pack_content: pack.manifest } : {}),
+    workspace_id: workspaceId,
     policy: { max_retries: 3 },
     publish: broadcast,
     ...(options.now ? { now: options.now } : {}),
@@ -289,6 +335,7 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     httpServer,
     gateway,
     harness,
+    pack,
     replyStreamer,
     close: async () => {
       replyStreamer?.stopAll();

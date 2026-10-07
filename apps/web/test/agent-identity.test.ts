@@ -1,0 +1,295 @@
+/**
+ * Agent visual identity (D18 `ui_identity` + the 3D avatar renderer).
+ *
+ * Three properties are pinned here, each of which the avatar gets wrong in a
+ * way that is invisible in a screenshot but very visible in use:
+ *
+ *  1. **Pack data is authoritative.** The pack manifest already authors a hue and
+ *     glyph per Agent, and `mockup-divergence.test.ts` pins those values. The
+ *     avatar previously hashed `agent_id` and ignored them entirely, so the
+ *     authored identity was silently discarded. Appearance must come from
+ *     `ui_identity` when present.
+ *  2. **Stable per Agent (D39).** The same Agent must render identically in the
+ *     sidebar, the chat header, and the streaming bubble. Appearance may never
+ *     depend on render order, call site, or how many times it was rendered.
+ *  3. **Distinct where it matters.** Six Agents in one sidebar must be told
+ *     apart by more than hue alone — hence a deterministic shape variant too.
+ *
+ * `ui_identity` is presentation data only (D38): the tests here also assert that
+ * identity is optional, so a pack without it still renders.
+ */
+import { createElement } from "react";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it } from "vitest";
+import { Agent, Pack } from "@shera-bot/contracts";
+
+import {
+  AgentAvatar,
+  SHAPE_VARIANT_COUNT,
+  avatarStyleFor,
+  glyphFor,
+  shapeVariantFor,
+} from "../components/chat/agent-avatar";
+
+const render = (element: ReturnType<typeof createElement>) => renderToStaticMarkup(element);
+
+/**
+ * The REAL shipped pack manifest, read straight from disk. Asserting against this
+ * file (rather than values retyped into this test) is the point: the headline
+ * claim is "the pack authors identity and the pack wins", and retyped copies
+ * could drift green while the real pack broke.
+ *
+ * Read as JSON rather than through @shera-bot/agent-pack-sdk: apps/web does not
+ * depend on the SDK, and adding that dependency for a UI test would be worse
+ * than reading the shipped artifact. `mockup-divergence.test.ts` independently
+ * proves the manifest matches the pack the SDK actually loads.
+ */
+const STUDENT_MANIFEST = JSON.parse(
+  readFileSync(
+    join(import.meta.dirname, "..", "..", "..", "agent-packs", "student", "v1", "manifest.json"),
+    "utf8",
+  ),
+) as {
+  agents: Array<{
+    agent_id: string;
+    display_name: string;
+    ui_identity: { avatar_hue: number; initial_glyph: string };
+  }>;
+};
+
+/** Minimal valid Agent; overrides are merged over the required fields. */
+function agent(overrides: Record<string, unknown> = {}) {
+  return Agent.parse({
+    agent_id: "agent_test",
+    display_name: "Test Agent",
+    role_description: "A test Agent used by the identity tests.",
+    default_provider: { provider_id: "provider_platform", model: "platform-default" },
+    skills: [],
+    tools: [],
+    connectors: [],
+    home_operation_id: null,
+    ...overrides,
+  });
+}
+
+describe("D18 authored identity is authoritative", () => {
+  it("emits the pack's authored hue verbatim, not a hash of the id", () => {
+    const a = agent({ ui_identity: { avatar_hue: 217, initial_glyph: "G" } });
+    // Pins the actual value, not merely equality: an `authored % 7` or an
+    // offset regression would sail past an equality-only assertion.
+    expect(avatarStyleFor(a)["--agent-hue"]).toBe("217");
+    // A different Agent id with the SAME authored hue renders identically, which
+    // is what discriminates against the old id-hash implementation.
+    const other = agent({
+      agent_id: "agent_completely_different",
+      ui_identity: { avatar_hue: 217, initial_glyph: "G" },
+    });
+    expect(avatarStyleFor(a)["--agent-hue"]).toBe(avatarStyleFor(other)["--agent-hue"]);
+  });
+
+  it("reads every Agent's identity from the real student pack manifest", () => {
+    // The headline claim is "the pack authors identity and the pack wins", so it
+    // is asserted against the manifest itself. Hardcoded copies of these values
+    // in this file could drift green while the real pack broke.
+    for (const packAgent of STUDENT_MANIFEST.agents) {
+      const rendered = avatarStyleFor({
+        agent_id: packAgent.agent_id,
+        ui_identity: packAgent.ui_identity,
+      });
+      expect(rendered["--agent-hue"], `${packAgent.agent_id} hue`).toBe(
+        String(packAgent.ui_identity.avatar_hue),
+      );
+      expect(
+        glyphFor({ display_name: packAgent.display_name, ui_identity: packAgent.ui_identity }),
+      ).toBe(packAgent.ui_identity.initial_glyph);
+    }
+  });
+
+  it("keeps the six pack Agents' authored hues all distinct", () => {
+    const hues = STUDENT_MANIFEST.agents.map((packAgent) => packAgent.ui_identity.avatar_hue);
+    expect(new Set(hues).size).toBe(hues.length);
+  });
+
+  it("falls back to a stable, in-range derived hue when a pack authors none", () => {
+    const a = agent({ agent_id: "agent_legacy" });
+    const hue = Number(avatarStyleFor(a)["--agent-hue"]);
+    expect(Number.isInteger(hue)).toBe(true);
+    expect(hue).toBeGreaterThanOrEqual(0);
+    expect(hue).toBeLessThan(360);
+    // Stable across separately-constructed instances (D39)...
+    expect(avatarStyleFor(a)["--agent-hue"]).toBe(
+      avatarStyleFor(agent({ agent_id: "agent_legacy" }))["--agent-hue"],
+    );
+    // ...and not a constant: two ids must not both collapse to one hue.
+    expect(Number(avatarStyleFor(agent({ agent_id: "agent_legacy_two" }))["--agent-hue"])).not.toBe(
+      hue,
+    );
+  });
+
+  it("rejects a non-finite authored hue instead of emitting NaN into CSS", () => {
+    // A NaN hue propagates into every oklch() consumer, whose computed value
+    // then fails and drops the avatar's background. Unreachable via JSON,
+    // reachable from any programmatic caller of this exported function.
+    const hue = Number(
+      avatarStyleFor({
+        agent_id: "agent_x",
+        ui_identity: { avatar_hue: Number.NaN as unknown as number, initial_glyph: "X" },
+      })["--agent-hue"],
+    );
+    expect(Number.isInteger(hue)).toBe(true);
+    expect(hue).toBeGreaterThanOrEqual(0);
+    expect(hue).toBeLessThan(360);
+  });
+
+  it("renders the authored glyph, and a code-point-safe fallback otherwise", () => {
+    const authored = render(
+      createElement(AgentAvatar, {
+        agent: agent({
+          display_name: "Researcher",
+          ui_identity: { avatar_hue: 192, initial_glyph: "R" },
+        }),
+      }),
+    );
+    expect(authored).toContain(">R<");
+
+    // No authored glyph: derive from the display name so it is never blank.
+    const derived = render(
+      createElement(AgentAvatar, { agent: agent({ display_name: "Study Planner" }) }),
+    );
+    expect(derived).toMatch(/>S</);
+  });
+
+  it("never renders an empty glyph for a whitespace-only name", () => {
+    // `charAt` returns "" rather than nullish, so a `??` chain cannot catch this;
+    // it produced an empty 3D shell in an earlier version.
+    expect(glyphFor({ display_name: "   ", ui_identity: undefined })).toBe("?");
+    const html = render(createElement(AgentAvatar, { agent: agent({ display_name: "  " }) }));
+    expect(html).toContain(">?<");
+  });
+
+  it("takes the first CODE POINT of an emoji-initial name, not a lone surrogate", () => {
+    // `charAt(0)` would split the astral character and render U+FFFD.
+    const glyph = glyphFor({ display_name: "🔬 Researcher", ui_identity: undefined });
+    expect(glyph).toBe("🔬");
+    expect(glyph).not.toBe("\uFFFD");
+  });
+});
+
+describe("D39 identity is stable per Agent across render sites", () => {
+  it("renders byte-identical markup on every render", () => {
+    // The earlier version compared two calls to `avatarStyleFor`, which never
+    // exercised the component. D39 is a claim about what renders, so it is
+    // asserted on rendered markup.
+    const a = agent({
+      agent_id: "agent_stable",
+      ui_identity: { avatar_hue: 262, initial_glyph: "D" },
+    });
+    const first = render(createElement(AgentAvatar, { agent: a }));
+    expect(render(createElement(AgentAvatar, { agent: a }))).toBe(first);
+    expect(render(createElement(AgentAvatar, { agent: a }))).toBe(first);
+  });
+
+  it("gives every shipped pack Agent a DISTINCT silhouette, deterministically", () => {
+    // The real requirement from §2.1: color is never the only signal. An earlier
+    // version used 4 buckets and the six shipped ids collapsed into 3 distinct
+    // silhouettes — so half the roster was hue-only and this test (which asserted
+    // merely `size > 1`) passed anyway.
+    const ids = STUDENT_MANIFEST.agents.map((packAgent) => packAgent.agent_id);
+    const variants = ids.map((agent_id) => shapeVariantFor(agent_id));
+    expect(new Set(variants).size, `variants for ${ids.join(", ")}`).toBe(ids.length);
+    // Deterministic across calls.
+    for (const id of ids) {
+      expect(shapeVariantFor(id)).toBe(shapeVariantFor(id));
+    }
+  });
+
+  it("keeps every variant inside the documented bucket range", () => {
+    for (const packAgent of STUDENT_MANIFEST.agents) {
+      const variant = shapeVariantFor(packAgent.agent_id);
+      expect(variant).toBeGreaterThanOrEqual(0);
+      expect(variant).toBeLessThan(SHAPE_VARIANT_COUNT);
+      // --agent-facets is what the CSS actually consumes.
+      expect(Number(avatarStyleFor({ agent_id: packAgent.agent_id })["--agent-facets"])).toBe(
+        variant + 4,
+      );
+    }
+  });
+});
+
+describe("3D avatar accessibility (§2.3)", () => {
+  const a = agent({
+    display_name: "Developer",
+    ui_identity: { avatar_hue: 262, initial_glyph: "D" },
+  });
+
+  it("is decorative: hidden from assistive tech, with the name carried elsewhere", () => {
+    // The avatar repeats information the adjacent label already carries, so it
+    // must not be announced twice.
+    expect(render(createElement(AgentAvatar, { agent: a }))).toContain('aria-hidden="true"');
+  });
+
+  it("never signals state by color alone — presence pairs with a text label", () => {
+    const hibernating = render(createElement(AgentAvatar, { agent: a, presence: "hibernating" }));
+    const active = render(createElement(AgentAvatar, { agent: a, presence: "active" }));
+    // An active session must be announced, not merely colored.
+    expect(active).toContain("Session active");
+    expect(active).not.toBe(hibernating);
+  });
+
+  it("carries the hue in a CSS custom property, never a raw color literal", () => {
+    // design-tokens.test.ts forbids raw colors in components; the hue must reach
+    // CSS as a number so globals.css owns every actual color value.
+    const html = render(createElement(AgentAvatar, { agent: a }));
+    expect(html).toContain("--agent-hue:");
+    expect(html).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+    expect(html).not.toMatch(/\brgba?\(/);
+    expect(html).not.toMatch(/\bhsl[a]?\(/);
+  });
+
+  it("exposes no raw color in the style object either", () => {
+    for (const value of Object.values(avatarStyleFor(a))) {
+      expect(String(value)).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/);
+    }
+  });
+});
+
+describe("ui_identity is presentation-only and optional (D18, D38)", () => {
+  it("is optional on the Agent contract", () => {
+    expect(() => agent({ ui_identity: undefined })).not.toThrow();
+  });
+
+  it("carries no skill, tool, connector, or permission field", () => {
+    const authored = agent({ ui_identity: { avatar_hue: 217, initial_glyph: "G" } });
+    // Identity must not smuggle capability: the tool set is unchanged by it.
+    const plain = agent();
+    expect(authored.tools).toEqual(plain.tools);
+    expect(authored.skills).toEqual(plain.skills);
+    expect(authored.connectors).toEqual(plain.connectors);
+  });
+
+  it("rejects an out-of-range hue and a multi-code-point glyph", () => {
+    expect(() => agent({ ui_identity: { avatar_hue: 361, initial_glyph: "G" } })).toThrow();
+    expect(() => agent({ ui_identity: { avatar_hue: 10, initial_glyph: "AB" } })).toThrow();
+  });
+
+  it("does not break Pack validation when present", () => {
+    expect(() =>
+      Pack.parse({
+        pack_id: "student",
+        version: "1.0.0",
+        manifest_hash: "a".repeat(64),
+        default_coordinator_agent_id: "agent_general_assistant",
+        agents: [
+          agent({
+            agent_id: "agent_general_assistant",
+            ui_identity: { avatar_hue: 217, initial_glyph: "G" },
+          }),
+        ],
+        operations: [],
+        runtime_compatibility: "^0.0.0",
+      }),
+    ).not.toThrow();
+  });
+});

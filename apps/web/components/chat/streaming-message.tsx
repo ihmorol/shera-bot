@@ -22,6 +22,7 @@ export function StreamingMessage({
   done,
   stopped,
   onStop,
+  variant = "demo",
 }: {
   agentId: string;
   /** Text visible so far (throttled frame from lib/streaming). */
@@ -31,6 +32,13 @@ export function StreamingMessage({
   done: boolean;
   stopped: boolean;
   onStop: () => void;
+  /**
+   * S09 chunk 2: "demo" is the scripted fixture stream (labeled as demo, with
+   * the local Stop control); "live" is the real runtime's transient delta
+   * bubble — never demo copy, and no Stop (a real stop is a runtime command
+   * that arrives with a later slice).
+   */
+  variant?: "demo" | "live";
 }) {
   const agent = agentById(agentId);
   const name = agent?.display_name ?? agentId;
@@ -66,7 +74,7 @@ export function StreamingMessage({
           ) : null}
         </p>
         <p className="mt-1 flex items-center gap-2 font-mono text-[11px] text-muted">
-          {streaming ? (
+          {streaming && variant === "demo" ? (
             <>
               <span aria-hidden="true">demo stream · typing</span>
               <button
@@ -80,7 +88,8 @@ export function StreamingMessage({
               </button>
             </>
           ) : null}
-          {stopped ? (
+          {streaming && variant === "live" ? <span aria-hidden="true">replying…</span> : null}
+          {stopped && variant === "demo" ? (
             <span aria-hidden="true">
               demo stream · stopped locally (D32: a real stop is a runtime command)
             </span>

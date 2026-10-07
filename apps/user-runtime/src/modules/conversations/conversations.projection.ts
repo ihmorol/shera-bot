@@ -50,7 +50,7 @@ export function rebuildConversationProjections(
       }
       let payload: {
         conversation_id: string;
-        title: string;
+        title?: string;
         previous_revision?: number;
         new_revision?: number;
       };
@@ -81,9 +81,23 @@ export function rebuildConversationProjections(
         projections.set(payload.conversation_id, {
           id: payload.conversation_id,
           workspace_id: workspaceId,
-          title: payload.title,
+          // Registry-validated above: the created payload always carries title.
+          title: payload.title!,
           revision: 1,
         });
+        continue;
+      }
+
+      if (row.event_type === "message.appended") {
+        // Messages are stream content, not aggregate transitions (S09 chunk
+        // 2): the fold requires the conversation to exist and otherwise
+        // leaves title/revision untouched — the message text lives in the
+        // journal and replays through the transport, not the projection.
+        if (!existing) {
+          throw new Error(
+            `conversation projection: message before creation for conversation ${payload.conversation_id}`,
+          );
+        }
         continue;
       }
 
@@ -103,7 +117,8 @@ export function rebuildConversationProjections(
         }
         projections.set(payload.conversation_id, {
           ...existing,
-          title: payload.title,
+          // Registry-validated above: the renamed payload always carries title.
+          title: payload.title!,
           revision: payload.new_revision ?? existing.revision + 1,
         });
         continue;

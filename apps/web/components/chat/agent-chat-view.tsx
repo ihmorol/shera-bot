@@ -4,7 +4,7 @@ import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { Agent } from "@shera-bot/contracts";
 
 import { AgentAvatar } from "@/components/chat/agent-avatar";
-import { Composer } from "@/components/chat/composer";
+import { Composer, NO_PROVIDER_COMPOSER_COPY } from "@/components/chat/composer";
 import { EmptyThread, ThreadSkeleton } from "@/components/chat/thread-states";
 import { MessageList } from "@/components/chat/message-list";
 import { StreamingMessage } from "@/components/chat/streaming-message";
@@ -34,6 +34,7 @@ import {
   flushReplayed,
   insertDaySeparators,
   withSentMessages,
+  type TimelineItem,
 } from "@/lib/thread-layout";
 import { cn } from "@/lib/utils";
 
@@ -46,6 +47,7 @@ import { cn } from "@/lib/utils";
  * call and no fabricated reply (G2: an absent runtime is never rendered as
  * an Agent action).
  */
+/** Fixture/demo user: local demo sends are attributed to the fixture user. */
 const LOCAL_USER_NAME = "Emon";
 /** §6.3 ack target ≈500 ms — the demo settles a local send after this. */
 const LOCAL_ACK_MS = 500;
@@ -139,6 +141,11 @@ export function AgentChatView({
   connectionState,
   replay,
   pendingReplay,
+  mode = "demo",
+  timelineOverride,
+  liveStream,
+  onRuntimeSend,
+  onRuntimeRetry,
 }: {
   agent: Agent;
   conversation: ConversationSummary;
@@ -146,7 +153,7 @@ export function AgentChatView({
   /** §2.4 surface state; the demo runs "ready", the others are wired + tested. */
   surfaceState?: ChatSurfaceState;
   /** Redacted message for the error surface (D23 rule 4). */
-  safeErrorMessage?: string;
+  safeErrorMessage?: string | undefined;
   /**
    * §6.4 connection lifecycle. Explicit override for tests / the later real
    * socket; when omitted, the scripted demo drives the state in its own
@@ -160,6 +167,38 @@ export function AgentChatView({
   replay?: { done: number; total: number } | undefined;
   /** Missed messages queued for the cursor replay (§6.2 handoff). */
   pendingReplay?: ChatMessage[] | undefined;
+  /**
+   * S09 chunk 1: "runtime" is the REAL conversation backing — the thread is
+   * real journal data, the fixture demo stream never runs (G4: no fabricated
+   * assistant message), the composer is disabled while no provider is
+   * configured, and no local demo sends are appended. "demo" (default) keeps
+   * the S08 fixture behavior for the not-ready container state.
+   */
+  mode?: "demo" | "runtime";
+  /**
+   * S09 chunk 2 (runtime live): a fully assembled timeline (ordered,
+   * day-separated, replay boundary marked by the live reducer) that replaces
+   * the demo merge pipeline's output. The live surface's durable items are
+   * journal truth — they must not run through the fixture handoff again.
+   */
+  timelineOverride?: TimelineItem[] | undefined;
+  /** The real reply's transient delta bubble (§6.1), if one is streaming. */
+  liveStream?:
+    | {
+        agentId: string;
+        text: string;
+        announcementText: string;
+      }
+    | null
+    | undefined;
+  /**
+   * S09 chunk 2: the real composer's path — the idempotent `message.send`
+   * command through the live conversation (§6.3). Providing it ENABLES the
+   * composer in runtime mode; without it the no-provider state stays (G4).
+   */
+  onRuntimeSend?: ((text: string) => void) | undefined;
+  /** Retry a failed real send with the SAME idempotency key (receipt replay). */
+  onRuntimeRetry?: ((messageId: string) => void) | undefined;
 }) {
   const [localMessages, setLocalMessages] = useState<ChatMessage[]>([]);
   const timersRef = useRef<number[]>([]);
@@ -173,12 +212,22 @@ export function AgentChatView({
     [],
   );
 
-  const presence = sessionPresenceFor(conversation.conversation_id);
+  const runtimeMode = mode === "runtime";
+  /** The runtime surface with the live send path wired (chunk 2). */
+  const runtimeLive = runtimeMode && onRuntimeSend !== undefined;
+
+  // D32 session presence is not reported by the runtime in this slice — the
+  // demo derives it from run fixtures, which would fabricate presence on real
+  // data. Runtime mode therefore shows no presence pill (G4).
+  const presence = runtimeMode ? undefined : sessionPresenceFor(conversation.conversation_id);
 
   // §6.1 demo streaming: the scripted stream runs only in its own conversation
-  // (the General Assistant chat) and is labeled as demo streaming in the UI.
+  // (the General Assistant chat) and only in demo mode — on real rows nothing
+  // fabricated ever streams (G4).
   const demoStream =
-    DEMO_STREAM.conversation_id === conversation.conversation_id ? DEMO_STREAM : null;
+    !runtimeMode && DEMO_STREAM.conversation_id === conversation.conversation_id
+      ? DEMO_STREAM
+      : null;
   const {
     frame: streamFrame,
     stopped: streamStopped,
@@ -240,6 +289,9 @@ export function AgentChatView({
     () => insertDaySeparators(flushReplayed(withSentMessages(thread, localAll), replayed)),
     [thread, localAll, replayed],
   );
+  // Runtime live: the reducer-assembled timeline (journal truth + optimistic
+  // sends + the §6.2 marker) replaces the demo merge pipeline's output.
+  const renderedTimeline = timelineOverride ?? timeline;
   const jumpTargetId = useMemo(
     () => firstUnreadMessageId(thread, conversation.unread_count),
     [thread, conversation.unread_count],
@@ -257,6 +309,13 @@ export function AgentChatView({
   };
 
   const handleSend = (text: string) => {
+    // Runtime mode: the real send path — the idempotent command through the
+    // live conversation (§6.3). Without the live send prop the composer stays
+    // disabled and this guard keeps demo-only appends out of real data (G4).
+    if (runtimeMode) {
+      onRuntimeSend?.(text);
+      return;
+    }
     const messageId = `msg_local_${Date.now()}_${localMessages.length}`;
     const message = ChatMessage.parse({
       message_id: messageId,
@@ -271,6 +330,12 @@ export function AgentChatView({
   };
 
   const handleRetry = (messageId: string) => {
+    // Runtime live: retry re-dispatches the SAME idempotency key — the
+    // receipt replay makes it safe even if the first attempt committed (D26).
+    if (runtimeLive) {
+      onRuntimeRetry?.(messageId);
+      return;
+    }
     setLocalMessages((prev) =>
       prev.map((message) =>
         message.message_id === messageId ? { ...message, delivery: "sending" } : message,
@@ -283,25 +348,33 @@ export function AgentChatView({
     <div className="flex h-full min-h-0 flex-col">
       {/* Header: identity + role + presence + provider/model placeholder (§S3) */}
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-surface px-4 lg:px-6">
-        <AgentAvatar
-          agentId={agent.agent_id}
-          name={agent.display_name}
-          size="lg"
-          presence={presence}
-        />
+        {presence ? (
+          <AgentAvatar
+            agentId={agent.agent_id}
+            name={agent.display_name}
+            size="lg"
+            presence={presence}
+          />
+        ) : (
+          <AgentAvatar agentId={agent.agent_id} name={agent.display_name} size="lg" />
+        )}
         <div className="min-w-0 flex-1">
           <h1 className="truncate font-display text-lg font-semibold tracking-tight text-text">
             {agent.display_name}
           </h1>
           <p className="truncate text-xs text-muted">{agent.role_description}</p>
         </div>
-        <PresencePill presence={presence} />
+        {presence ? <PresencePill presence={presence} /> : null}
         {/* Model placeholder collapses away below md — the identity (name +
             role) keeps width priority at the 360px min breakpoint (§2.2). */}
         <button
           type="button"
           disabled
-          title="Provider and model overrides arrive with the settings pass (demo)"
+          title={
+            runtimeMode
+              ? "Provider and model overrides arrive with the settings pass"
+              : "Provider and model overrides arrive with the settings pass (demo)"
+          }
           className="hidden shrink-0 rounded-lg border border-line px-3 py-1.5 text-xs text-muted opacity-70 md:block"
         >
           Platform default
@@ -318,12 +391,12 @@ export function AgentChatView({
         <ThreadSkeleton />
       ) : surfaceState === "error" ? (
         <ErrorState safeMessage={safeErrorMessage} onRetry={() => undefined} />
-      ) : timeline.length === 0 ? (
+      ) : renderedTimeline.length === 0 ? (
         <EmptyThread agentName={agent.display_name} />
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto">
           <MessageList
-            items={timeline}
+            items={renderedTimeline}
             jumpTargetId={jumpTargetId}
             unreadCount={conversation.unread_count}
             onRetry={handleRetry}
@@ -337,13 +410,40 @@ export function AgentChatView({
                   stopped={streamStopped}
                   onStop={stopStream}
                 />
+              ) : liveStream ? (
+                <StreamingMessage
+                  agentId={liveStream.agentId}
+                  visibleText={liveStream.text}
+                  announcementText={liveStream.announcementText}
+                  done={false}
+                  stopped={false}
+                  onStop={() => undefined}
+                  variant="live"
+                />
               ) : undefined
             }
           />
         </div>
       )}
 
-      <Composer agentName={agent.display_name} onSend={handleSend} />
+      {runtimeLive ? (
+        // S09 chunk 2: the real composer — every send is the idempotent
+        // message.send command (§6.3); replies are journal events, never a
+        // local fabrication (G4).
+        <Composer agentName={agent.display_name} onSend={handleSend} />
+      ) : runtimeMode ? (
+        // G4 / D17: with no provider configured for the container the composer
+        // is a clear configuration state — never a fake send, never a
+        // fabricated reply. Provider reporting lands with the settings slice.
+        <Composer
+          agentName={agent.display_name}
+          onSend={handleSend}
+          disabled
+          disabledReason={NO_PROVIDER_COMPOSER_COPY}
+        />
+      ) : (
+        <Composer agentName={agent.display_name} onSend={handleSend} />
+      )}
     </div>
   );
 }

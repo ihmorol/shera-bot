@@ -1,0 +1,729 @@
+import { useEffect, useMemo, useReducer, useRef } from "react";
+
+import { compareThreadItems, ChatMessage, type ThreadItem } from "@/lib/fixtures";
+import type { RuntimeEvent } from "@/lib/runtime-client";
+import { sendConversationMessage } from "@/lib/runtime-client";
+import { systemTextForEvent } from "@/lib/runtime-thread";
+import { SNAPSHOT_REQUIRED_MESSAGE } from "@/lib/runtime-data";
+import { STREAM_ANNOUNCE_MS, STREAM_THROTTLE_MS } from "@/lib/streaming";
+import { insertDaySeparators, type TimelineItem } from "@/lib/thread-layout";
+import { RuntimeSocket } from "@/lib/ws-socket";
+
+/**
+ * The live thread state machine (S09 chunk 2) — pure reducer at the heart of
+ * the real-mode conversation surface.
+ *
+ * SEND (D26/D23 rule 6): every send carries a generated idempotency key. The
+ * optimistic copy uses that key as its message id; the runtime stamps the
+ * durable journal event's correlation_id with the same key. Reconciliation
+ * therefore NEVER produces two visible messages: when the authoritative event
+ * arrives (live or replayed), the optimistic copy with the matching key is
+ * removed and the journal copy takes over. A failed send stays visibly failed
+ * (§2.4 ticks) and retry re-sends the SAME key — safe even when the first
+ * attempt committed, because the receipt replays.
+ *
+ * STREAMING (§6.1): reply deltas are TRANSIENT frames — they render through
+ * the streaming bubble (throttled by the hook) and never create durable
+ * content. The durable agent message arriving clears the bubble, so the
+ * reply is visible exactly once.
+ *
+ * REPLAY (§6.2/§6.4): reconnect replays missed durable events from the last
+ * acknowledged sequence; they enter the thread as a replayed batch closed by
+ * the "N missed events replayed" marker — never silently as live. Two cursors
+ * keep that honest (E10/D26): `cursor` advances as events are APPLIED;
+ * `acknowledged` — the value replay.request carries — advances only through
+ * the post-render `cursor_acknowledged` dispatch, so a hard refresh mid-stream
+ * replays anything applied but not yet rendered instead of skipping it.
+ *
+ * REFRESH (chunk 3): nothing in this state survives a hard reload — optimistic
+ * copies and the transient bubble are gone by construction. The reload's
+ * initial replay renders exactly the durable journal prefix; unpersisted
+ * deltas are never rendered as history (E10 honesty).
+ *
+ * Deltas are the ONLY state-less content here: without a durable event,
+ * nothing in this reducer fabricates an assistant message (G4).
+ */
+
+export type LivePhase = "connecting" | "live" | "reconnecting" | "offline";
+
+export interface LiveStreamState {
+  /** The reply identity — the durable reply's idempotency key. */
+  key: string;
+  agentId: string;
+  /** Full visible text so far (hook-throttled to the §6.1 30fps budget). */
+  text: string;
+  /**
+   * Throttled §2.3 polite-announcement snapshot — advances on its own
+   * STREAM_ANNOUNCE_MS cadence (the dedicated sr-only live region reads this),
+   * lagging the visible text exactly like the demo stream's frame.
+   */
+  announcementText: string;
+}
+
+export interface LiveThreadState {
+  phase: LivePhase;
+  /**
+   * The highest APPLIED sequence (the exactly-once dedupe boundary). Events
+   * advance it the moment they enter the reducer state — the next render is
+   * what makes them visible.
+   */
+  cursor: number;
+  /**
+   * The highest ACKNOWLEDGED sequence — the value `replay.request` carries on
+   * reconnect (E10/D26). It trails `cursor` on purpose: acknowledging an
+   * event before it has RENDERED would let a hard refresh silently skip
+   * applied-but-unseen history. The hook acknowledges only after the render
+   * that includes the event commits.
+   */
+  acknowledged: number;
+  /** Durable thread items derived ONLY from journal events. */
+  journalItems: ThreadItem[];
+  /** Sends that have not been reconciled with the journal yet. */
+  optimistic: ChatMessage[];
+  /**
+   * Correlation keys of APPLIED journal events. send_started refuses them: a
+   * retry after an ambiguous failure (the POST died after the runtime had
+   * already committed) must not re-add an optimistic copy beside the durable
+   * message — that would duplicate the visible turn.
+   */
+  reconciledKeys: ReadonlySet<string>;
+  /** The active streaming reply bubble (transient deltas), if any. */
+  stream: LiveStreamState | null;
+  /** Replay progress while reconnecting (§6.4). */
+  replay: { done: number; total: number } | null;
+  /** A typed transport-level failure worth a §2.4 error surface (redacted). */
+  error: string | null;
+}
+
+export const INITIAL_LIVE_STATE: LiveThreadState = {
+  phase: "connecting",
+  cursor: 0,
+  acknowledged: 0,
+  journalItems: [],
+  optimistic: [],
+  reconciledKeys: new Set<string>(),
+  stream: null,
+  replay: null,
+  error: null,
+};
+
+export type LiveThreadEvent =
+  | { type: "connecting" }
+  | { type: "subscribed" }
+  | { type: "disconnected" }
+  | { type: "reconnecting" }
+  | { type: "replay_started"; total: number }
+  | { type: "replay_event"; event: RuntimeEvent; mode: "initial" | "reconnect" }
+  | { type: "replay_complete" }
+  | { type: "live_event"; event: RuntimeEvent }
+  | {
+      type: "stream_text";
+      streamKey: string;
+      agentId: string;
+      text: string;
+      announcementText: string;
+    }
+  | { type: "send_started"; message: ChatMessage }
+  | { type: "send_acked"; key: string }
+  | { type: "send_failed"; key: string }
+  /**
+   * Post-render cursor acknowledgement (E10/D26): the hook dispatches this
+   * after the render that includes the events up to `sequence` has committed,
+   * so the reconnect replay.request never skips applied-but-unseen history.
+   */
+  | { type: "cursor_acknowledged"; sequence: number }
+  | { type: "transport_error"; message: string };
+
+function messageFromEvent(event: RuntimeEvent, deliveryClass: "live" | "replayed"): ChatMessage {
+  const payload = event.payload as {
+    conversation_id: string;
+    message_id: string;
+    sender: { kind: string; display_name?: string; agent_id?: string };
+    text: string;
+  };
+  const sender =
+    payload.sender.kind === "agent"
+      ? { kind: "agent" as const, agent_id: payload.sender.agent_id ?? "agent_unknown" }
+      : { kind: "user" as const, display_name: payload.sender.display_name ?? "You" };
+  return ChatMessage.parse({
+    message_id: payload.message_id,
+    conversation_id: payload.conversation_id,
+    sender,
+    text: payload.text,
+    sent_at: event.occurred_at,
+    delivery: "sent",
+    delivery_class: deliveryClass,
+  });
+}
+
+/**
+ * Record an applied event's correlation key, bounded: keys are one-shot
+ * idempotency ids, so once full the oldest half is evicted — a duplicate
+ * delivery is a same-session retry window, never an arbitrarily old event.
+ */
+function withReconciledKey(keys: ReadonlySet<string>, key: string): ReadonlySet<string> {
+  const next = new Set(keys);
+  next.add(key);
+  if (next.size > 256) {
+    for (const oldest of next) {
+      next.delete(oldest);
+      if (next.size <= 128) {
+        break;
+      }
+    }
+  }
+  return next;
+}
+
+/** Apply one durable journal event to the thread; returns the next state. */
+function applyJournalEvent(
+  state: LiveThreadState,
+  event: RuntimeEvent,
+  deliveryClass: "live" | "replayed",
+): LiveThreadState {
+  // Exactly-once application: a repeated delivery below the cursor is noise.
+  if (event.sequence <= state.cursor) {
+    return state;
+  }
+
+  const optimistic = event.correlation_id
+    ? state.optimistic.filter((message) => message.message_id !== event.correlation_id)
+    : state.optimistic;
+  const reconciledKeys = event.correlation_id
+    ? withReconciledKey(state.reconciledKeys, event.correlation_id)
+    : state.reconciledKeys;
+
+  // The durable reply reconciles the transient bubble: the reply is now
+  // visible exactly once — as the journal message.
+  const stream = state.stream && state.stream.key === event.correlation_id ? null : state.stream;
+
+  let journalItems = state.journalItems;
+  if (event.type === "message.appended") {
+    const message = messageFromEvent(event, deliveryClass);
+    journalItems = [...journalItems, { kind: "message", at: message.sent_at, message }];
+  } else {
+    journalItems = [
+      ...journalItems,
+      { kind: "system", at: event.occurred_at, text: systemTextForEvent(event) },
+    ];
+  }
+
+  return { ...state, cursor: event.sequence, journalItems, optimistic, reconciledKeys, stream };
+}
+
+export function advanceLiveThread(state: LiveThreadState, event: LiveThreadEvent): LiveThreadState {
+  switch (event.type) {
+    case "connecting":
+      return { ...state, phase: "connecting" };
+    case "subscribed":
+      return { ...state, phase: "live", replay: null, error: null };
+    case "disconnected":
+      return { ...state, phase: "offline" };
+    case "reconnecting":
+      return { ...state, phase: "reconnecting", replay: null };
+    case "replay_started":
+      return { ...state, replay: { done: 0, total: event.total } };
+    case "replay_event":
+      // Initial history (cursor 0 on first connect) is live-class and carries
+      // NO batch marker; only a RECONNECT replay renders as the §6.2 batch.
+      return applyJournalEvent(
+        state,
+        event.event,
+        event.mode === "reconnect" ? "replayed" : "live",
+      );
+    case "replay_complete":
+      return { ...state, phase: "live", replay: null };
+    case "live_event":
+      return applyJournalEvent(state, event.event, "live");
+    case "stream_text":
+      // The hook flushes buffered deltas on the §6.1 throttle budget; the
+      // reducer only mirrors the visible text and the §2.3 announcement
+      // snapshot — both hook-computed presentation state, never durable.
+      return {
+        ...state,
+        stream: {
+          key: event.streamKey,
+          agentId: event.agentId,
+          text: event.text,
+          announcementText: event.announcementText,
+        },
+      };
+    case "send_started":
+      // A retry re-dispatches the same key: replace the existing optimistic
+      // copy so a retried send never appears twice. But a key whose durable
+      // event ALREADY applied (ambiguous failure: the POST died after the
+      // runtime committed) is reconciled — re-adding an optimistic copy
+      // beside the durable message would duplicate the visible turn, so the
+      // durable copy stands and the dispatch is a no-op.
+      if (state.reconciledKeys.has(event.message.message_id)) {
+        return state;
+      }
+      return {
+        ...state,
+        optimistic: [
+          ...state.optimistic.filter((message) => message.message_id !== event.message.message_id),
+          event.message,
+        ],
+      };
+    case "send_acked":
+      return {
+        ...state,
+        optimistic: state.optimistic.map((message) =>
+          message.message_id === event.key ? { ...message, delivery: "sent" as const } : message,
+        ),
+      };
+    case "send_failed":
+      return {
+        ...state,
+        optimistic: state.optimistic.map((message) =>
+          message.message_id === event.key ? { ...message, delivery: "failed" as const } : message,
+        ),
+      };
+    case "cursor_acknowledged":
+      // The acknowledgement can never run ahead of what is applied: it is
+      // clamped to the applied cursor, so a late ack from a superseded render
+      // is harmless and the acknowledged cursor stays a safe replay resume.
+      return {
+        ...state,
+        acknowledged: Math.max(state.acknowledged, Math.min(event.sequence, state.cursor)),
+      };
+    case "transport_error":
+      // Redacted safe copy only (D23 rule 4) — the thread stays readable.
+      return { ...state, error: event.message };
+  }
+}
+
+/** How many of the applied replay events were messages (marker semantics §6.2). */
+export interface LiveTimeline {
+  timeline: TimelineItem[];
+  /** The §6.2 reconnect batch boundary marker ("N missed events replayed"). */
+  replayBoundary: { at: string; count: number } | null;
+}
+
+/**
+ * Assemble the rendered timeline: durable items + the optimistic sends
+ * (always live, this browser), sorted by the single ordering, then day
+ * separators. The replay boundary marker is computed here from the durable
+ * items so the marker sits exactly at the seam of the reconnect batch.
+ */
+export function assembleLiveTimeline(state: LiveThreadState): LiveTimeline {
+  const items: ThreadItem[] = [
+    ...state.journalItems,
+    ...state.optimistic.map<ThreadItem>((message) => ({
+      kind: "message",
+      at: message.sent_at,
+      message,
+    })),
+  ].sort(compareThreadItems);
+
+  // The last contiguous replayed batch closes with the boundary marker.
+  let boundary: LiveTimeline["replayBoundary"] = null;
+  let markerIndex = -1;
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index]!;
+    if (item.kind === "message" && item.message.delivery_class === "replayed") {
+      markerIndex = index;
+      break;
+    }
+  }
+  if (markerIndex >= 0) {
+    let count = 0;
+    for (let index = markerIndex; index >= 0; index -= 1) {
+      const item = items[index]!;
+      if (item.kind === "message" && item.message.delivery_class === "replayed") {
+        count += 1;
+        continue;
+      }
+      break;
+    }
+    // The marker anchors at the LAST replayed row — it closes the batch.
+    boundary = { at: items[markerIndex]!.at, count };
+  }
+  const withBoundary: ThreadItem[] = boundary
+    ? [
+        ...items.slice(0, markerIndex + 1),
+        { kind: "replay_boundary", at: boundary.at, count: boundary.count },
+        ...items.slice(markerIndex + 1),
+      ]
+    : items;
+  return { timeline: insertDaySeparators(withBoundary), replayBoundary: boundary };
+}
+
+// ---------------------------------------------------------------------------
+
+/**
+ * The transient delta buffer (§6.1): `message.delta` frames accumulate OUTSIDE
+ * React state and flush on the 33ms budget, so DOM updates stay within ~30fps
+ * no matter how fast the runtime streams. GHOST-BUBBLE GUARD (S09 fix round):
+ * a flush tick can land after `applyJournalEvent` already cleared the stream
+ * (the durable reply reconciled it) — re-dispatching the buffered tail then
+ * would re-mount a stale bubble BELOW the durable reply. `reconcile` closes a
+ * key the moment its durable journal event is dispatched for application: the
+ * buffered tail is dropped, and any trailing delta frames for the closed key
+ * are refused by `flush` — the reply stays visible exactly once.
+ */
+export class DeltaBuffer {
+  private buffered: { key: string; text: string } | null = null;
+  /** Stream keys whose durable journal event has been applied. */
+  private readonly reconciled = new Set<string>();
+  /** The §2.3 announcement snapshot: key-scoped text + when it advanced. */
+  private announce: { key: string; text: string; at: number } | null = null;
+
+  /** Buffer one `message.delta` frame (concatenating per stream key). */
+  push(key: string, delta: string): void {
+    const previous = this.buffered;
+    const text = previous && previous.key === key ? previous.text + (delta ?? "") : (delta ?? "");
+    this.buffered = { key, text };
+  }
+
+  /**
+   * Close a stream key: its durable journal event was applied, so the
+   * transient bubble is gone and any tail for that key is stale by definition.
+   */
+  reconcile(key: string): void {
+    this.reconciled.add(key);
+    if (this.buffered?.key === key) {
+      this.buffered = null;
+    }
+    if (this.announce?.key === key) {
+      this.announce = null;
+    }
+    // Bounded memory: keys are one-shot reply ids, so an evicted oldest entry
+    // can never be re-buffered by an honest runtime.
+    if (this.reconciled.size > 256) {
+      for (const oldest of this.reconciled) {
+        this.reconciled.delete(oldest);
+        if (this.reconciled.size <= 128) {
+          break;
+        }
+      }
+    }
+  }
+
+  /**
+   * Flush on the §6.1 budget: returns the frame to render (with the throttled
+   * §2.3 announcement snapshot), or null when there is nothing to render —
+   * including a buffered tail whose key was already reconciled (the
+   * ghost-bubble guard): DROPPED, never dispatched as stream_text.
+   */
+  flush(now: number): { key: string; text: string; announcementText: string } | null {
+    const buffered = this.buffered;
+    if (!buffered) {
+      return null;
+    }
+    this.buffered = null;
+    if (this.reconciled.has(buffered.key)) {
+      return null;
+    }
+    // §2.3 announcement throttle (mirrors the demo's streamFrameAt): the
+    // polite snapshot advances on its own slower STREAM_ANNOUNCE_MS cadence,
+    // so the dedicated sr-only live region never rides the ~30fps
+    // visible-text mutations.
+    const announce = this.announce;
+    let announcementText = buffered.text;
+    if (announce && announce.key === buffered.key && now - announce.at < STREAM_ANNOUNCE_MS) {
+      announcementText = announce.text;
+    } else {
+      this.announce = { key: buffered.key, text: buffered.text, at: now };
+    }
+    return { key: buffered.key, text: buffered.text, announcementText };
+  }
+
+  /** Drop transient content — the conversation identity changed (cleanup). */
+  reset(): void {
+    this.buffered = null;
+    this.announce = null;
+  }
+}
+
+/** The conversation stream id for the WS gateway rooms and replay requests. */
+export function conversationStreamId(conversationId: string): string {
+  return `conversation:${conversationId}`;
+}
+
+/** Map the live phase onto the §6.4 banner states (connecting shows no banner). */
+export function connectionStateOf(phase: LivePhase): "connected" | "disconnected" | "reconnecting" {
+  switch (phase) {
+    case "offline":
+      return "disconnected";
+    case "reconnecting":
+      return "reconnecting";
+    default:
+      return "connected";
+  }
+}
+
+export interface UseLiveConversationArgs {
+  /** The runtime WS base URL (NEXT_PUBLIC_RUNTIME_WS_URL); null disables live. */
+  wsUrl: string | null;
+  workspaceId: string;
+  conversationId: string;
+  /** Sender attribution for the user's own turns (from the S02 session). */
+  displayName: string;
+  /** Attribution for the streaming reply bubble (the conversation's Agent). */
+  agentId: string;
+  enabled: boolean;
+}
+
+export interface LiveConversation {
+  /** §6.4 banner state driven by the REAL socket lifecycle. */
+  connectionState: "connected" | "disconnected" | "reconnecting";
+  replay: { done: number; total: number } | undefined;
+  timeline: TimelineItem[];
+  stream: LiveStreamState | null;
+  loading: boolean;
+  error: string | null;
+  /** Send one turn: optimistic render + idempotent typed command (§6.3). */
+  sendMessage(text: string): void;
+  /** Retry a failed send with the SAME idempotency key (receipt replay). */
+  retry(key: string): void;
+}
+
+const RECONNECT_BASE_MS = 500;
+const RECONNECT_MAX_MS = 3000;
+
+/**
+ * The live conversation hook (S09 chunk 2): RuntimeSocket + the live-thread
+ * reducer, wired to REAL socket lifecycle. Subscribes to the conversation's
+ * stream, loads history via replay.request from the applied cursor, applies
+ * live events, reconciles sends, and drives the §6.4 banner machine from the
+ * real connection state — never the demo script. Deltas buffer in a
+ * DeltaBuffer and flush on the §6.1 33ms budget, so DOM updates stay within
+ * ~30fps and a flush tick can never resurrect a reconciled stream.
+ */
+export function useLiveConversation(args: UseLiveConversationArgs): LiveConversation {
+  const [state, dispatch] = useReducer(advanceLiveThread, INITIAL_LIVE_STATE);
+  // Latest-committed-state ref for the async closures (the replay.request
+  // cursor, retry): synced in an effect — refs must not be written during
+  // render (react-hooks/refs).
+  const stateRef = useRef(state);
+  useEffect(() => {
+    stateRef.current = state;
+  });
+
+  // E10/D26 cursor acknowledgement: APPLIED is not RENDERED. This effect runs
+  // only after a committed render, so `acknowledged` — the value
+  // replay.request carries on reconnect — never covers history the user has
+  // not seen yet. A hard refresh mid-stream therefore replays any applied but
+  // unrendered events instead of silently skipping them. It reads THIS
+  // render's committed state, so the ack never trails a render.
+  useEffect(() => {
+    if (state.acknowledged < state.cursor) {
+      dispatch({ type: "cursor_acknowledged", sequence: state.cursor });
+    }
+  });
+
+  // One delta buffer per hook lifetime; the conversation effect's cleanup
+  // resets it, so a stale conversation's unflushed tail can never flush into
+  // the next conversation's reducer.
+  const deltas = useMemo(() => new DeltaBuffer(), []);
+
+  const { wsUrl, workspaceId, conversationId, agentId, enabled } = args;
+  const streamId = conversationStreamId(conversationId);
+
+  useEffect(() => {
+    if (!enabled || !wsUrl) {
+      return;
+    }
+    let cancelled = false;
+    let socket: RuntimeSocket | null = null;
+    let reconnectTimer: number | null = null;
+    let reconnectAttempt = 0;
+
+    const flushDeltas = () => {
+      const flushed = deltas.flush(Date.now());
+      if (flushed) {
+        dispatch({
+          type: "stream_text",
+          streamKey: flushed.key,
+          agentId,
+          text: flushed.text,
+          announcementText: flushed.announcementText,
+        });
+      }
+    };
+    // Every durable journal event closes its stream key BEFORE it is applied:
+    // a flush tick landing after applyJournalEvent cleared the bubble must
+    // never re-create it from the stale buffered tail (ghost-bubble guard).
+    const dispatchJournalEvent = (event: RuntimeEvent, mode: "initial" | "reconnect" | "live") => {
+      if (event.correlation_id) {
+        deltas.reconcile(event.correlation_id);
+      }
+      dispatch(
+        mode === "live" ? { type: "live_event", event } : { type: "replay_event", event, mode },
+      );
+    };
+    const flushInterval = window.setInterval(flushDeltas, STREAM_THROTTLE_MS);
+
+    // ONE reconnect scheduler per lifecycle: both the socket-close path and
+    // the attempt-failure path land here. The pending-timer guard keeps a
+    // failure episode (the close AND a subscribe/replay timeout firing for
+    // the same socket) to exactly ONE retry — and the backoff counter to one
+    // step per episode.
+    const scheduleReconnect = () => {
+      if (cancelled || reconnectTimer !== null) {
+        return;
+      }
+      const delay = Math.min(RECONNECT_BASE_MS * 2 ** reconnectAttempt, RECONNECT_MAX_MS);
+      reconnectAttempt += 1;
+      reconnectTimer = window.setTimeout(() => {
+        reconnectTimer = null;
+        connect();
+      }, delay);
+    };
+
+    const connect = () => {
+      const isReconnect = reconnectAttempt > 0;
+      if (isReconnect) {
+        dispatch({ type: "reconnecting" });
+      }
+      void (async () => {
+        try {
+          const opened = await RuntimeSocket.open(wsUrl);
+          if (cancelled) {
+            opened.close();
+            return;
+          }
+          socket = opened;
+
+          // Live fanout handlers are registered BEFORE the subscribe/replay
+          // round-trips: events fanned out while those awaits are in flight
+          // are dispatched too, and the `sequence <= cursor` exactly-once
+          // dedupe absorbs the overlap with the replay. Registering after the
+          // replay awaited would DROP that window instead (events the runtime
+          // committed while the client was still loading history).
+          socket.onEvent((name, payload) => {
+            if (name === "stream.event" && payload && typeof payload === "object") {
+              dispatchJournalEvent(payload as RuntimeEvent, "live");
+              return;
+            }
+            if (name === "stream.frame" && payload && typeof payload === "object") {
+              const frame = payload as { frame?: string; stream_key?: string; text_delta?: string };
+              if (frame.frame === "message.delta" && typeof frame.stream_key === "string") {
+                deltas.push(frame.stream_key, frame.text_delta ?? "");
+              }
+            }
+          });
+          socket.onClose(() => {
+            if (cancelled) {
+              return;
+            }
+            flushDeltas();
+            dispatch({ type: "disconnected" });
+            scheduleReconnect();
+          });
+
+          await socket.request("stream.subscribe", {
+            workspace_id: workspaceId,
+            stream_id: streamId,
+          });
+          if (cancelled) {
+            return;
+          }
+
+          // Durable history from the ACKNOWLEDGED cursor — the last sequence
+          // this client has actually rendered (never ahead of the visible
+          // thread). Initial load (0) renders live-class; a RECONNECT replay
+          // renders the §6.2 batch.
+          const replay = await socket.request("replay.request", {
+            workspace_id: workspaceId,
+            stream_id: streamId,
+            last_acknowledged_sequence: stateRef.current.acknowledged,
+          });
+          if (cancelled) {
+            return;
+          }
+          const replayResult = replay as { kind?: string; events?: unknown[] } | null;
+          if (
+            replayResult &&
+            replayResult.kind === "events" &&
+            Array.isArray(replayResult.events)
+          ) {
+            dispatch({ type: "replay_started", total: replayResult.events.length });
+            for (const event of replayResult.events) {
+              if (cancelled) {
+                return;
+              }
+              dispatchJournalEvent(event as RuntimeEvent, isReconnect ? "reconnect" : "initial");
+            }
+          } else {
+            // E10 snapshot fallback / unknown stream: honest typed surface.
+            dispatch({ type: "transport_error", message: SNAPSHOT_REQUIRED_MESSAGE });
+          }
+          dispatch({ type: "replay_complete" });
+          reconnectAttempt = 0;
+        } catch {
+          // The attempt died (open/subscribe/replay): close the socket this
+          // attempt opened — no zombie connection may linger alongside the
+          // retry loop. Its close notification (if any) folds into the same
+          // scheduleReconnect guard below.
+          socket?.close();
+          socket = null;
+          if (cancelled) {
+            return;
+          }
+          flushDeltas();
+          dispatch({ type: "disconnected" });
+          scheduleReconnect();
+        }
+      })();
+    };
+
+    connect();
+    return () => {
+      cancelled = true;
+      window.clearInterval(flushInterval);
+      if (reconnectTimer !== null) {
+        window.clearTimeout(reconnectTimer);
+      }
+      deltas.reset();
+      socket?.close();
+    };
+    // The conversation identity + connection configuration own the lifecycle;
+    // attribution strings are stable per surface, and the delta buffer is a
+    // mount-stable useMemo — all listed as dependencies.
+  }, [enabled, wsUrl, workspaceId, conversationId, streamId, agentId, deltas]);
+
+  const send = (key: string, text: string) => {
+    const message = ChatMessage.parse({
+      message_id: key,
+      conversation_id: conversationId,
+      sender: { kind: "user", display_name: args.displayName },
+      text,
+      sent_at: new Date().toISOString(),
+      delivery: "sending",
+    });
+    dispatch({ type: "send_started", message });
+    void sendConversationMessage({
+      workspaceId,
+      conversationId,
+      text,
+      displayName: args.displayName,
+      idempotencyKey: key,
+    })
+      .then(() => dispatch({ type: "send_acked", key }))
+      .catch(() => dispatch({ type: "send_failed", key }));
+  };
+
+  return {
+    connectionState: connectionStateOf(state.phase),
+    replay: state.replay ?? undefined,
+    timeline: assembleLiveTimeline(state).timeline,
+    stream: state.stream,
+    loading: state.phase === "connecting" && state.journalItems.length === 0,
+    error: state.error,
+    sendMessage: (text: string) => {
+      const trimmed = text.trim();
+      if (trimmed.length === 0) {
+        return;
+      }
+      send(`msg-${crypto.randomUUID()}`, trimmed);
+    },
+    retry: (key: string) => {
+      const original = stateRef.current.optimistic.find((message) => message.message_id === key);
+      if (original) {
+        send(key, original.text);
+      }
+    },
+  };
+}

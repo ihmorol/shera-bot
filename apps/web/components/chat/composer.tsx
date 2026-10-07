@@ -13,6 +13,8 @@ import { Button } from "@/components/ui/button";
  * runtime. `disabled` + `disabledReason` covers the no-provider case (D17:
  * a clear configuration state, never fake completion).
  */
+export const NO_PROVIDER_COMPOSER_COPY = "No provider is configured for this conversation yet.";
+
 export function Composer({
   agentName,
   onSend,

@@ -46,6 +46,14 @@ export const STREAM_EVENT = "stream.event" as const;
 export const STREAM_SUBSCRIBE = "stream.subscribe" as const;
 /** Client → server: replay missed durable events from a cursor (read-only, acked). */
 export const REPLAY_REQUEST = "replay.request" as const;
+/**
+ * Server → client: one TRANSIENT stream frame (S09 chunk 2 — the reply
+ * streamer's `message.delta` text deltas). Frames are presentation-side
+ * fanout on this single channel: never journaled, never replayed, and losing
+ * them is safe — the durable journal event that lands at stream end is the
+ * source of truth. The payload carries `{ frame: <kind>, ... }`.
+ */
+export const STREAM_FRAME = "stream.frame" as const;
 
 /** engine.io defaults; transport heartbeats only, not business events. */
 export const DEFAULT_PING_INTERVAL_MS = 25_000;
@@ -99,6 +107,13 @@ export interface WebSocketGatewayHandle {
    * workspace-scoped room (E12).
    */
   broadcastStreamEvent(event: EventEnvelope): void;
+  /**
+   * Transient frame fanout to a stream's room (S09 chunk 2): reply-streaming
+   * text deltas ride the single STREAM_FRAME channel. Frames carry NO durable
+   * state — they are never journaled and never replayed; the WS layer stays
+   * read-only (D26).
+   */
+  broadcastStreamFrame(workspaceId: string, streamId: string, payload: unknown): void;
   /** Closes the gateway AND the HTTP server it is mounted on. */
   close(): Promise<void>;
 }
@@ -206,6 +221,9 @@ export function attachWebSocketGateway(
     io,
     broadcastStreamEvent(event) {
       io.to(streamRoom(event.workspace_id, event.stream_id)).emit(STREAM_EVENT, event);
+    },
+    broadcastStreamFrame(workspaceId, streamId, payload) {
+      io.to(streamRoom(workspaceId, streamId)).emit(STREAM_FRAME, payload);
     },
     close: () => io.close(),
   };

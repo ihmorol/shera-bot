@@ -10,7 +10,9 @@ import type { EventEnvelope } from "../events/events.types.ts";
 
 export type ConversationCreatedEvent = EventEnvelope<"conversation.created">;
 export type ConversationRenamedEvent = EventEnvelope<"conversation.renamed">;
-export type ConversationEvent = ConversationCreatedEvent | ConversationRenamedEvent;
+export type MessageAppendedEvent = EventEnvelope<"message.appended">;
+export type ConversationEvent =
+  ConversationCreatedEvent | ConversationRenamedEvent | MessageAppendedEvent;
 
 /** The journal stream that carries one conversation's history. */
 export function conversationStreamFor(conversationId: string): string {

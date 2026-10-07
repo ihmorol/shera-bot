@@ -20,6 +20,7 @@ import { openDatabase } from "../../adapters/sqlite/connection.ts";
 import { AgentsRepository } from "../../adapters/sqlite/agents-repository.ts";
 import { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import { DEFAULT_WORKSPACE_ID, composeRuntime, type RuntimeHandle } from "./compose.ts";
+import { SUBMIT_CONVERSATION_COMMAND_PATH } from "./app.ts";
 import {
   cleanupTempResources,
   makeTempDir,
@@ -37,6 +38,7 @@ const STUDENT_MANIFEST = JSON.parse(
     display_name: string;
     role_description: string;
     default_provider: { provider_id: string; model: string };
+    ui_identity: { avatar_hue: number; initial_glyph: string };
   }>;
 };
 
@@ -525,6 +527,148 @@ describe("S11 agent settings API (D16 read model + command surface)", () => {
       expect(resetRole.body).toMatchObject({ code: "CONTRACT_VALIDATION_FAILED" });
     } finally {
       await running.close();
+    }
+  });
+});
+
+describe("S11 restart persistence (issue #12 AC: history and identity survive a restart)", () => {
+  /**
+   * The AC3 persistence leg end-to-end: everything the user produced in the
+   * first session — the direct-chat binding, the conversation history, the
+   * settings edit, and the seeded Agent identities themselves (hue and role
+   * are PACK-owned fields, so a re-seed must restore them unchanged) — must
+   * resolve identically after closing the runtime and re-composing on the
+   * SAME data directory. No test seeding: the second boot is the composition,
+   * exactly like production startup.
+   */
+  it("preserves agents, chat binding, history, and settings across a full close and re-open", async () => {
+    const dir = makeTempDir("shera-runtime-s11-restart-persist-");
+    const dbPath = join(dir, "runtime.db");
+
+    // --- First session: seed, open the chat, talk, edit settings. ---
+    const first = await composeOn(dbPath);
+    let chatId: string;
+    let hue: number;
+    let glyph: string;
+    try {
+      const detail = await getJson(
+        first.origin,
+        `/v1/agents/${GENERAL}?workspace_id=${DEFAULT_WORKSPACE_ID}`,
+      );
+      expect(detail.status).toBe(200);
+      chatId = detail.body["direct_chat_id"] as string;
+      hue = detail.body["avatar_hue"] as number;
+      glyph = detail.body["initial_glyph"] as string;
+      expect(hue).toBe(generalManifest.ui_identity.avatar_hue);
+      expect(glyph).toBe(generalManifest.ui_identity.initial_glyph);
+
+      // Real conversation history: two durable user messages through the
+      // command path (the only mutation path, D26).
+      const turns = ["First turn before the restart.", "Second turn before the restart."];
+      for (const [index, text] of turns.entries()) {
+        const sent = await postJson(first.origin, SUBMIT_CONVERSATION_COMMAND_PATH, {
+          type: "message.send",
+          workspace_id: DEFAULT_WORKSPACE_ID,
+          idempotency_key: `idem-restart-${index + 1}`,
+          payload: {
+            conversation_id: chatId,
+            text,
+            sender: { kind: "user", display_name: "Emon" },
+          },
+        });
+        expect(sent.status).toBe(200);
+        expect(sent.body).toMatchObject({ kind: "message_sent", conversation_id: chatId });
+      }
+
+      // One settings edit through the D16 command surface.
+      const edited = await postJson(
+        first.origin,
+        `/v1/agents/${GENERAL}/settings/commands`,
+        commandBody({
+          type: "agent_settings.update_instructions",
+          user_instructions: "Survive the restart verbatim.",
+        }),
+      );
+      expect(edited.status).toBe(200);
+      expect(entryOf(edited.body, "user_instructions").value).toBe(
+        "Survive the restart verbatim.",
+      );
+    } finally {
+      await first.close(); // EVERYTHING closes — server, gateway, SQLite.
+    }
+
+    // --- Second session: a FRESH compose on the same data directory. ---
+    const second = await composeOn(dbPath);
+    try {
+      // The six Agents re-seed idempotently, with pack-owned identity intact.
+      const list = await getJson(second.origin, `/v1/agents?workspace_id=${DEFAULT_WORKSPACE_ID}`);
+      expect(list.status).toBe(200);
+      const agents = list.body["agents"] as Array<Record<string, unknown>>;
+      expect(agents.map((agent) => agent["agent_id"]).sort()).toEqual(
+        STUDENT_MANIFEST.agents.map((agent) => agent.agent_id).sort(),
+      );
+      const general = agents.find((agent) => agent["agent_id"] === GENERAL)!;
+      expect(general).toMatchObject({
+        display_name: generalManifest.display_name,
+        role_description: generalManifest.role_description,
+        avatar_hue: hue,
+        initial_glyph: glyph,
+      });
+
+      // The user_instructions edit survived the restart.
+      const detail = await getJson(
+        second.origin,
+        `/v1/agents/${GENERAL}?workspace_id=${DEFAULT_WORKSPACE_ID}`,
+      );
+      expect(detail.body).toMatchObject({
+        user_instructions: "Survive the restart verbatim.",
+        has_user_instructions: true,
+      });
+
+      // The direct-chat binding resolves to the SAME conversation (D39:
+      // one identity everywhere — never a new chat per boot).
+      expect(detail.body["direct_chat_id"]).toBe(chatId);
+
+      // The history is intact: the journal replays the creation AND both
+      // messages, in order, from sequence 0.
+      const events = await getJson(
+        second.origin,
+        `/v1/conversations/${chatId}/events?workspace_id=${DEFAULT_WORKSPACE_ID}&last_acknowledged_sequence=0`,
+      );
+      expect(events.status).toBe(200);
+      const replayed = events.body["events"] as Array<{
+        type: string;
+        payload: Record<string, unknown>;
+      }>;
+      expect(replayed.filter((event) => event.type === "conversation.created")).toHaveLength(1);
+      const appended = replayed.filter((event) => event.type === "message.appended");
+      expect(appended.map((event) => event.payload["text"])).toEqual([
+        "First turn before the restart.",
+        "Second turn before the restart.",
+      ]);
+      for (const event of appended) {
+        expect(event.payload).toMatchObject({
+          conversation_id: chatId,
+          workspace_id: DEFAULT_WORKSPACE_ID,
+          sender: { kind: "user", display_name: "Emon" },
+        });
+      }
+
+      // The settings snapshot reads back from storage, not from memory.
+      const settings = await getJson(
+        second.origin,
+        `/v1/agents/${GENERAL}/settings?workspace_id=${DEFAULT_WORKSPACE_ID}`,
+      );
+      expect(settings.status).toBe(200);
+      expect(entryOf(settings.body, "user_instructions").value).toBe(
+        "Survive the restart verbatim.",
+      );
+      // And the pack recommendation for the provider is still anchored (D16).
+      expect(entryOf(settings.body, "default_provider").recommended_default).toEqual(
+        generalManifest.default_provider,
+      );
+    } finally {
+      await second.close();
     }
   });
 });

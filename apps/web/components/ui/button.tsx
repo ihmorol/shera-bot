@@ -6,10 +6,13 @@ import { cn } from "@/lib/utils";
 
 /**
  * shadcn/ui button (copy-in, on @radix-ui/react-slot), adapted to the §2.1
- * token vocabulary. Focus styling comes from the global :focus-visible rule.
+ * token vocabulary. Focus styling comes from the global :focus-visible rule
+ * (§2.3: 2px sky, 2px offset) — and the transition deliberately EXCLUDES
+ * outline-color, so the focus ring appears at full strength the moment it
+ * lands instead of fading in from the resting currentcolor over 150 ms.
  */
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-[color,background-color,border-color,text-decoration-color,fill,stroke] duration-150 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {

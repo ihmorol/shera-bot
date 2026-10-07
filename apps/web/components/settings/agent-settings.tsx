@@ -319,7 +319,7 @@ function UserInstructionsEditor({
         rows={3}
         aria-label="Your instructions"
         placeholder="Personal guidance layered above the pack role"
-        className="w-full resize-y rounded-lg border border-line bg-surface-elevated px-3 py-2 text-sm text-text placeholder:text-muted focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-line-accent"
+        className="w-full resize-y rounded-lg border border-line bg-surface-elevated px-3 py-2 text-sm text-text placeholder:text-muted"
       />
       <div className="flex items-center gap-2">
         <Button
@@ -363,14 +363,14 @@ function DefaultProviderEditor({
           onChange={(event) => setProviderId(event.target.value)}
           aria-label="Default provider id"
           placeholder="provider id"
-          className="w-full rounded-lg border border-line bg-surface-elevated px-3 py-2 font-mono text-xs text-text placeholder:text-muted focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-line-accent"
+          className="w-full rounded-lg border border-line bg-surface-elevated px-3 py-2 font-mono text-xs text-text placeholder:text-muted"
         />
         <input
           value={model}
           onChange={(event) => setModel(event.target.value)}
           aria-label="Default model"
           placeholder="model id"
-          className="w-full rounded-lg border border-line bg-surface-elevated px-3 py-2 font-mono text-xs text-text placeholder:text-muted focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-line-accent"
+          className="w-full rounded-lg border border-line bg-surface-elevated px-3 py-2 font-mono text-xs text-text placeholder:text-muted"
         />
       </div>
       {entry.recommended_default ? (
@@ -428,7 +428,7 @@ function ToolDefaultsEditor({
         rows={4}
         aria-label="Tool defaults JSON"
         spellCheck={false}
-        className="w-full resize-y rounded-lg border border-line bg-surface-elevated px-3 py-2 font-mono text-xs text-text focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-line-accent"
+        className="w-full resize-y rounded-lg border border-line bg-surface-elevated px-3 py-2 font-mono text-xs text-text"
       />
       {parseError ? <p className="text-xs text-failed">{parseError}</p> : null}
       {entry.recommended_default && entry.recommended_default.length === 0 ? (

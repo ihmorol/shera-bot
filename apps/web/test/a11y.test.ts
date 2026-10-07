@@ -80,6 +80,25 @@ describe("focus visibility (§2.3)", () => {
     }
   });
 
+  it("keeps the global :focus-visible rule the SINGLE focus treatment", () => {
+    // The per-field focus utilities once shadowed the token rule (and the
+    // utilities layer always loses to the unlayered global rule, so they were
+    // dead code); components must never redeclare the ring.
+    for (const dir of SCAN_DIRS) {
+      for (const file of listSourceFiles(dir)) {
+        expect(readFileSync(file, "utf8"), `${file} redeclares the focus ring`).not.toMatch(
+          /focus-visible:outline|focus:outline-none/,
+        );
+      }
+    }
+    // The button transition must not animate outline-color — the ring has to
+    // land at full strength (no fade-in from the resting currentcolor).
+    const button = readFileSync(join(APP_DIR, "components", "ui", "button.tsx"), "utf8");
+    expect(button).not.toMatch(/\btransition-colors\b/);
+    expect(button).toMatch(/transition-\[[^\]]*border-color[^\]]*\]/);
+    expect(button).not.toMatch(/transition-\[[^\]]*outline-color/);
+  });
+
   it("uses no positive tabindex anywhere (native tab order only)", () => {
     const violations: string[] = [];
     for (const dir of SCAN_DIRS) {

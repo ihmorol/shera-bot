@@ -365,6 +365,49 @@ describe("reset without a pack recommendation (documented module default boundar
     expect(entry(snapshot, "default_provider").recommended_default).toBeNull();
     expect(entry(snapshot, "default_provider").value).toEqual(generalManifest.default_provider);
   });
+
+  it("applies reset_all as ONE atomic unit — a mid-command failure leaves NOTHING applied", () => {
+    // Dirty every user-owned field first, through the real command path.
+    service.applySettingsCommand(
+      command({ type: "agent_settings.update_instructions", user_instructions: "Precious rule." }),
+    );
+    service.applySettingsCommand(
+      command({
+        type: "agent_settings.update_default_provider",
+        default_provider: { provider_id: "provider_local", model: "qwen3-8b" },
+      }),
+    );
+    service.applySettingsCommand(
+      command({
+        type: "agent_settings.update_tool_defaults",
+        tool_defaults: [{ tool_id: "tool_web_search", config: { depth: "deep" } }],
+      }),
+    );
+
+    // Packless composition: reset_all clears the instructions, then throws the
+    // typed AGENT_SETTINGS_RESET_UNAVAILABLE from the provider reset. The
+    // rejection must arrive with NOTHING applied — the cleared instructions
+    // (and everything else) rolled back with the failed unit.
+    const seedless = new AgentsService({
+      agents: repo,
+      conversations: new ConversationsRepository(tx),
+      journal: new EventsService(new EventJournalRepository(tx), tx),
+      tx,
+    });
+    expect(() =>
+      seedless.applySettingsCommand(command({ type: "agent_settings.reset_all" })),
+    ).toThrow(AgentSettingsResetUnavailableError);
+
+    const after = service.getSettings("ws-primary", GENERAL);
+    expect(entry(after, "user_instructions").value).toBe("Precious rule.");
+    expect(entry(after, "default_provider").value).toEqual({
+      provider_id: "provider_local",
+      model: "qwen3-8b",
+    });
+    expect(entry(after, "tool_defaults").value).toEqual([
+      { tool_id: "tool_web_search", config: { depth: "deep" } },
+    ]);
+  });
 });
 
 describe("read-model integrity against corrupted pack-owned data", () => {

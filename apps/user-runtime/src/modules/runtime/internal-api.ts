@@ -34,6 +34,10 @@ import {
   type InternalSecurityEventRecorder,
 } from "./channel-security-events.ts";
 import { RuntimeRegistrationRegistry } from "./runtime-registration.ts";
+import {
+  notFoundRequestHandler,
+  typedErrorRequestHandler,
+} from "../../transport/http/typed-errors.ts";
 
 export { ChannelCredentialStore, InMemorySecurityEventRecorder };
 export type { RuntimeRegistration } from "./runtime-registration.ts";
@@ -213,6 +217,12 @@ export function createInternalApi(deps: InternalApiDeps): InternalApi {
   app.get("/internal/v1/health", requireChannelCredential, (_req, res) => {
     res.status(200).json({ status: "ok" });
   });
+
+  // Typed error middleware (closes the S06 review NOTE): every thrown failure
+  // and every unknown route answers with the SheraError taxonomy — never an
+  // Express default page, a stack trace, or raw internals (D23 rule 4, G3).
+  app.use(notFoundRequestHandler);
+  app.use(typedErrorRequestHandler);
 
   return { app, registrations };
 }

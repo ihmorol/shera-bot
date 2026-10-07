@@ -378,7 +378,13 @@ function rejection(
 }
 
 export interface TaskTransitionInput {
-  /** The persisted current-state projection of the run (D5). */
+  /**
+   * The run's current-state projection (D5). TRUTHFUL SCOPE (S07): task-run
+   * projections are held IN MEMORY by the caller — there is no durable task
+   * table yet, and journal-driven rebuild of task runs is deferred to the
+   * recovery slice (S31). Conversation projections ARE journal-rebuildable
+   * today (see modules/conversations/conversations.projection.ts).
+   */
   run: TaskRun;
   /** A contract-valid command (parse raw input with parseTaskCommand first). */
   command: TaskCommand;

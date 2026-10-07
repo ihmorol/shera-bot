@@ -19,6 +19,7 @@
     "test:watch": "vitest",
     "build": "turbo run build",
     "license:inventory": "node scripts/license-inventory.ts",
+    "boundary-guards": "node scripts/boundary-guards.ts",
     "gen:clients": "node scripts/generate-clients.ts",
     "mockup:test": "node --test mockup/dock-layout.test.cjs"
   },

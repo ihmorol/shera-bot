@@ -361,10 +361,22 @@ describe("reset without a pack recommendation (documented module default boundar
 
 describe("read-model integrity against corrupted pack-owned data", () => {
   it("answers non-conforming stored capabilities with the typed validation failure", () => {
-    repo.upsertFromPack("ws-primary", studentManifest.agents);
-    conn.db
-      .prepare(`UPDATE agents SET capabilities_json = '{"skills": 42}' WHERE workspace_id = ? AND agent_id = ?`)
-      .run("ws-primary", GENERAL);
+    // Corrupt the pack input itself (no SQL here — the boundary test forbids
+    // it outside adapters/sqlite): upsertFromPack serializes whatever the
+    // manifest carries into capabilities_json, and getSettings must validate
+    // that stored blob through the contracts schema instead of trusting it.
+    const corruptManifest = structuredClone(studentManifest) as unknown as {
+      agents: Array<{ agent_id: string; skills: unknown } & Record<string, unknown>>;
+    };
+    const corruptGeneral = corruptManifest.agents.find(
+      (agent) => agent.agent_id === GENERAL,
+    );
+    expect(corruptGeneral).toBeDefined();
+    corruptGeneral!.skills = 42;
+    repo.upsertFromPack(
+      "ws-primary",
+      corruptManifest.agents as unknown as Parameters<typeof repo.upsertFromPack>[1],
+    );
     expect(() => service.getSettings("ws-primary", GENERAL)).toThrow(
       AgentSettingsValidationError,
     );

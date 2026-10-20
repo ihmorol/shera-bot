@@ -167,3 +167,7 @@ Each remaining item needs an owner, evidence target, and decision record before 
 ## Related-but-out-of-scope artifacts
 
 - **`business-landing-portfolio/`** — the marketing/waitlist site (Next.js). Its copy was synchronized to the final decisions on 2026-09-11 (six Agents, Pack → Operations → Agents vocabulary, Operation-based demo). It is a marketing surface that intentionally simplifies the product model and sells the long-term vision; it is out of scope for the prototype's acceptance criteria (PRD §19) and its waitlist is UI-only until a backend provider is connected. Its README records these boundaries.
+
+## PostgreSQL verification follow-up, 2026-10-20
+
+The earlier E20/E22 local PostgreSQL verification gap is resolved: the executor and parent independently passed 834 tests in 84 files using real PostgreSQL 16.15. See the dated follow-ups in E20 and E22 and `output/sequential-coding-2026-10-20/task-3/parent-full-suite.log`. Acceptance statuses are unchanged; Docker, real OAuth/provider integration and browser acceptance still need their recorded checks.

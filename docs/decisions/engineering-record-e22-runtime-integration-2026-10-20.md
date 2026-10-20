@@ -37,3 +37,11 @@ Unverified: full PostgreSQL authentication/provisioning/concurrency suites, Dock
 ## Sequential integration follow-up, 2026-10-20
 
 Under the owner's one-agent-at-a-time instruction, the parent independently verified and committed the formatting-only correction as 2aebcc3b2d44453b284d62f22d33e710e42503ee. The earlier 15-file formatting failure is resolved. A second executor reproduced and fixed malformed-payload attribution crashes and local-bind cleanup leaks; parent review corrected the array regression fixture and required typed 400 passthrough. Parent validation now passes 772 tests in 72 suites, source lint/format, all package/root type checks and production build. Evidence: output/sequential-coding-2026-10-20/. PostgreSQL, Docker and browser acceptance remain open.
+
+## Real PostgreSQL follow-up, 2026-10-20
+
+Evidence source: owner instruction in the current Codex chat to complete coding one delegated task at a time, followed by parent review and local integration. Task 3 used workspace-local PostgreSQL 16.15 Windows binaries obtained through PostgreSQL.org and EDB; provenance and checks are in `output/sequential-coding-2026-10-20/task-3/EVIDENCE.md`. No global installation or service was created.
+
+The first cluster started successfully but its server inherited captured `pg_ctl` pipes, preventing the synchronous launcher from returning on Windows. The test helper now ignores launcher stdio; PostgreSQL diagnostics continue to use the existing log file. Retaining captured pipes was rejected because the live server holds them open after launcher exit. Implementation boundary and owner: control-plane test harness, coding agent. Product behavior, PRD text, supersession and acceptance statuses do not change.
+
+Both executor and parent independently passed all 834 tests in 84 files against real PostgreSQL, with no skipped tests. Parent evidence: `output/sequential-coding-2026-10-20/task-3/parent-full-suite.log`. This resolves the earlier local PostgreSQL verification gap, including authentication, migrations, provisioning and recovery cases. Actual Docker recreation, Google OAuth, live providers, Pi/Hermes integration and browser acceptance remain unverified.

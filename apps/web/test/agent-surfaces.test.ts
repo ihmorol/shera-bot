@@ -4,10 +4,7 @@ import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  AgentSettingsCommand,
-  AgentSettingsSnapshot,
-} from "@shera-bot/contracts";
+import { AgentSettingsCommand, AgentSettingsSnapshot } from "@shera-bot/contracts";
 
 import { AgentChatView } from "../components/chat/agent-chat-view";
 import { AgentRosterSection, type AgentRosterEntry } from "../components/shell/agent-roster";
@@ -295,7 +292,9 @@ describe("agent settings view (§S9 + D16)", () => {
     for (const key of ["role", "memory_link", "capabilities", "ui_identity"]) {
       const card = cardFor(html, key);
       expect(card, `${key} read-only badge`).toContain("Read-only");
-      expect(card, `${key} must have no editable control`).not.toMatch(/<(textarea|input|button)\b/);
+      expect(card, `${key} must have no editable control`).not.toMatch(
+        /<(textarea|input|button)\b/,
+      );
     }
   });
 

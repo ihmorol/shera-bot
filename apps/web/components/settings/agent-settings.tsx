@@ -177,7 +177,8 @@ function EntryCard({
         {/* Only the editable keys are command targets (D16) — the runtime
             guard mirrors EDITABLE_AGENT_SETTING_KEYS so TS and the contract
             agree that a pack-owned key never reaches a reset control. */}
-        {entry.editable && (EDITABLE_AGENT_SETTING_KEYS as readonly string[]).includes(entry.key) ? (
+        {entry.editable &&
+        (EDITABLE_AGENT_SETTING_KEYS as readonly string[]).includes(entry.key) ? (
           <ResetControls
             entryKey={entry.key as EditableAgentSettingKey}
             resettable={entry.resettable}
@@ -259,7 +260,10 @@ function EntryValue({
       return <p className="text-sm text-text">{entry.value}</p>;
     case "memory_link":
       return (
-        <p className="break-all font-mono text-xs text-text" title="The Agent's private folder root">
+        <p
+          className="break-all font-mono text-xs text-text"
+          title="The Agent's private folder root"
+        >
           {entry.value}
         </p>
       );
@@ -282,16 +286,11 @@ function EntryValue({
         </p>
       );
     case "user_instructions": {
-      return (
-        <UserInstructionsEditor entry={entry} onUpdateInstructions={onUpdateInstructions} />
-      );
+      return <UserInstructionsEditor entry={entry} onUpdateInstructions={onUpdateInstructions} />;
     }
     case "default_provider": {
       return (
-        <DefaultProviderEditor
-          entry={entry}
-          onUpdateDefaultProvider={onUpdateDefaultProvider}
-        />
+        <DefaultProviderEditor entry={entry} onUpdateDefaultProvider={onUpdateDefaultProvider} />
       );
     }
     case "tool_defaults": {
@@ -322,10 +321,7 @@ function UserInstructionsEditor({
         className="w-full resize-y rounded-lg border border-line bg-surface-elevated px-3 py-2 text-sm text-text placeholder:text-muted focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-line-accent"
       />
       <div className="flex items-center gap-2">
-        <Button
-          size="sm"
-          onClick={() => onUpdateInstructions(draft.trim() ? draft.trim() : null)}
-        >
+        <Button size="sm" onClick={() => onUpdateInstructions(draft.trim() ? draft.trim() : null)}>
           Save
         </Button>
         <Button
@@ -410,9 +406,7 @@ function ToolDefaultsEditor({
         return;
       }
       setParseError(null);
-      onUpdateToolDefaults(
-        parsed as AgentToolDefault[],
-      );
+      onUpdateToolDefaults(parsed as AgentToolDefault[]);
     } catch {
       setParseError("That is not valid JSON — nothing was sent.");
     }
@@ -605,7 +599,12 @@ export function AgentSettingsView(props: AgentSettingsViewProps) {
             </Button>
           </span>
         ) : (
-          <Button variant="outline" size="sm" className="shrink-0" onClick={() => onResetClick("all")}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            onClick={() => onResetClick("all")}
+          >
             <RotateCcw aria-hidden="true" />
             Reset all settings
           </Button>
@@ -649,7 +648,10 @@ export function AgentSettingsView(props: AgentSettingsViewProps) {
 /** Honest configuration state: the D16 surface reads REAL rows, so it needs the container. */
 function ContainerUnavailableState() {
   return (
-    <div role="status" className="mx-auto my-8 flex max-w-md flex-col items-center gap-3 rounded-xl border border-line bg-surface p-6 text-center">
+    <div
+      role="status"
+      className="mx-auto my-8 flex max-w-md flex-col items-center gap-3 rounded-xl border border-line bg-surface p-6 text-center"
+    >
       <p className="text-sm text-text">
         Agent settings read your workspace's real Agent rows, so the workspace container must be
         running. Start your workspace and come back.
@@ -663,9 +665,7 @@ export function AgentSettingsSurface({ agentId }: { agentId: string }) {
   if (resolution.data?.kind !== "ready") {
     return <ContainerUnavailableState />;
   }
-  return (
-    <RuntimeAgentSettings workspaceId={resolution.data.workspace_id} agentId={agentId} />
-  );
+  return <RuntimeAgentSettings workspaceId={resolution.data.workspace_id} agentId={agentId} />;
 }
 
 function RuntimeAgentSettings({ workspaceId, agentId }: { workspaceId: string; agentId: string }) {
@@ -674,11 +674,7 @@ function RuntimeAgentSettings({ workspaceId, agentId }: { workspaceId: string; a
 
   const pending = detailQuery.isPending || settingsQuery.isPending;
   const failed = detailQuery.isError || settingsQuery.isError;
-  const surfaceState: AgentSettingsSurfaceState = pending
-    ? "loading"
-    : failed
-      ? "error"
-      : "ready";
+  const surfaceState: AgentSettingsSurfaceState = pending ? "loading" : failed ? "error" : "ready";
   const safeErrorMessage = failed
     ? safeRuntimeMessage(
         detailQuery.error ?? settingsQuery.error,

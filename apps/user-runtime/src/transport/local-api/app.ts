@@ -358,9 +358,9 @@ export function createLocalApi(deps: LocalApiDeps): Express {
       res.status(status).json(body);
       return;
     }
-    res.status(200).json(
-      deps.folders.resolveAccess(query.data.workspace_id, agentId.data, query.data.path),
-    );
+    res
+      .status(200)
+      .json(deps.folders.resolveAccess(query.data.workspace_id, agentId.data, query.data.path));
   });
 
   /**

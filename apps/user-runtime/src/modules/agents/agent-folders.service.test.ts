@@ -34,10 +34,7 @@ import {
 } from "./agent-folders.service.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const studentManifestPath = resolve(
-  here,
-  "../../../../../agent-packs/student/v1/manifest.json",
-);
+const studentManifestPath = resolve(here, "../../../../../agent-packs/student/v1/manifest.json");
 const studentManifest = JSON.parse(readFileSync(studentManifestPath, "utf8")) as {
   agents: Array<{
     agent_id: string;
@@ -167,9 +164,9 @@ describe("AgentFoldersService (guard + in-memory store seam)", () => {
     );
     // Folder-root write too.
     service.writeFolder("ws-primary", GENERAL, `agent://${GENERAL}/`, "root note");
-    expect(
-      service.readFolder("ws-primary", GENERAL, `agent://${GENERAL}/notes/ideas.txt`),
-    ).toBe("Persist me nowhere but memory.");
+    expect(service.readFolder("ws-primary", GENERAL, `agent://${GENERAL}/notes/ideas.txt`)).toBe(
+      "Persist me nowhere but memory.",
+    );
     expect(service.readFolder("ws-primary", GENERAL, `agent://${GENERAL}/`)).toBe("root note");
     // An unwritten path reads as null — not an error, not fabricated content.
     expect(
@@ -187,9 +184,9 @@ describe("AgentFoldersService (guard + in-memory store seam)", () => {
     expect(() => service.readFolder("ws-primary", GENERAL, foreignNested)).toThrow(
       AgentFolderAccessDeniedError,
     );
-    expect(() =>
-      service.writeFolder("ws-primary", GENERAL, foreignNested, "smuggled"),
-    ).toThrow(AgentFolderAccessDeniedError);
+    expect(() => service.writeFolder("ws-primary", GENERAL, foreignNested, "smuggled")).toThrow(
+      AgentFolderAccessDeniedError,
+    );
     expect(() => service.writeFolder("ws-primary", GENERAL, foreignRoot, "smuggled")).toThrow(
       AgentFolderAccessDeniedError,
     );
@@ -225,9 +222,9 @@ describe("AgentFoldersService (guard + in-memory store seam)", () => {
     ).toThrow(AgentNotFoundError);
     // Unknown (or foreign) workspace: the agent records live per workspace, so
     // nothing resolves there — the E12 scoping is the workspace boundary.
-    expect(() =>
-      service.readFolder("ws-other", GENERAL, `agent://${GENERAL}/notes.txt`),
-    ).toThrow(AgentNotFoundError);
+    expect(() => service.readFolder("ws-other", GENERAL, `agent://${GENERAL}/notes.txt`)).toThrow(
+      AgentNotFoundError,
+    );
   });
 });
 

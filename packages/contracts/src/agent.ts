@@ -183,9 +183,7 @@ export const AgentUserInstructionsSettingEntry = z.strictObject({
   value: z.string().max(8000).nullable(),
   recommended_default: z.null(),
 });
-export type AgentUserInstructionsSettingEntry = z.infer<
-  typeof AgentUserInstructionsSettingEntry
->;
+export type AgentUserInstructionsSettingEntry = z.infer<typeof AgentUserInstructionsSettingEntry>;
 
 export const AgentMemoryLinkSettingEntry = z.strictObject({
   ...AgentSettingMeta,
@@ -203,9 +201,7 @@ export const AgentDefaultProviderSettingEntry = z.strictObject({
   /** Null when no pack-supplied recommendation is loaded (placeholder until S23). */
   recommended_default: ProviderDefault.nullable(),
 });
-export type AgentDefaultProviderSettingEntry = z.infer<
-  typeof AgentDefaultProviderSettingEntry
->;
+export type AgentDefaultProviderSettingEntry = z.infer<typeof AgentDefaultProviderSettingEntry>;
 
 export const AgentToolDefaultsSettingEntry = z.strictObject({
   ...AgentSettingMeta,
@@ -292,10 +288,9 @@ export const AGENT_SETTINGS_UPDATE_TOOL_DEFAULTS = agentSettingsCommand(
   "agent_settings.update_tool_defaults",
   { tool_defaults: z.array(AgentToolDefault).max(500) },
 );
-export const AGENT_SETTINGS_RESET_SETTING = agentSettingsCommand(
-  "agent_settings.reset_setting",
-  { setting_key: EditableAgentSettingKey },
-);
+export const AGENT_SETTINGS_RESET_SETTING = agentSettingsCommand("agent_settings.reset_setting", {
+  setting_key: EditableAgentSettingKey,
+});
 export const AGENT_SETTINGS_RESET_ALL = agentSettingsCommand("agent_settings.reset_all", {});
 
 export const AGENT_SETTINGS_COMMAND_TYPES = [

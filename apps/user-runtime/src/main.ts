@@ -25,9 +25,15 @@ import {
   composeRuntime,
   type RuntimeHandle,
 } from "./transport/local-api/compose.ts";
+import {
+  createManagementServer,
+  managementConfigFromEnv,
+  type ManagementConfig,
+} from "./modules/runtime/management-server.ts";
 import { defaultPacksRoot } from "./modules/runtime/pack-pin.ts";
 
 export interface RuntimeNodeConfig {
+  management?: ManagementConfig;
   /** Bind address; default 127.0.0.1 (loopback only). */
   host?: string;
   /** Listen port; 0 picks an ephemeral port. Default 8080. */
@@ -56,6 +62,8 @@ export interface RuntimeNodeConfig {
 }
 
 export interface RuntimeNode {
+  /** Authenticated management listener; null in standalone local mode. */
+  managementPort: number | null;
   host: string;
   /** The bound port (resolved after listen — useful with ephemeral port 0). */
   port: number;
@@ -119,10 +127,24 @@ export function runtimeConfigFromEnv(
 
 /** Start the runtime node: compose, bind, (optionally) wire shutdown signals. */
 export async function startRuntimeNode(config: RuntimeNodeConfig = {}): Promise<RuntimeNode> {
-  const { host, port, dbPath, defaultWorkspaceId, packsRoot } = runtimeConfigFromEnv(
-    process.env,
-    config,
-  );
+  const management = config.management ?? managementConfigFromEnv(process.env);
+  const {
+    host,
+    port,
+    dbPath,
+    defaultWorkspaceId: configuredWorkspace,
+    packsRoot,
+  } = runtimeConfigFromEnv(process.env, config);
+  const defaultWorkspaceId = management ? `ws_${management.accountId}` : configuredWorkspace;
+  if (management && !isLoopbackHost(host))
+    throw new Error("managed runtime local API must bind loopback");
+  if (
+    management &&
+    (config.defaultWorkspaceId || process.env.RUNTIME_DEFAULT_WORKSPACE_ID) &&
+    configuredWorkspace !== defaultWorkspaceId
+  ) {
+    throw new Error("runtime workspace does not match the provisioned account");
+  }
   mkdirSync(dirname(dbPath), { recursive: true });
 
   const runtime: RuntimeHandle = composeRuntime({
@@ -130,16 +152,39 @@ export async function startRuntimeNode(config: RuntimeNodeConfig = {}): Promise<
     workspaceId: defaultWorkspaceId,
     packsRoot,
   });
-  await new Promise<void>((resolve, reject) => {
-    const onError = (error: Error) => reject(error);
-    runtime.httpServer.once("error", onError);
-    runtime.httpServer.listen(port, host, () => {
-      runtime.httpServer.off("error", onError);
-      resolve();
+  let managementServer: ReturnType<typeof createManagementServer> | undefined;
+  let managementPort: number | null = null;
+  let boundPort: number;
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const onError = (error: Error) => reject(error);
+      runtime.httpServer.once("error", onError);
+      runtime.httpServer.listen(port, host, () => {
+        runtime.httpServer.off("error", onError);
+        resolve();
+      });
     });
-  });
-  const address = runtime.httpServer.address();
-  const boundPort = typeof address === "object" && address ? address.port : port;
+    const address = runtime.httpServer.address();
+    boundPort = typeof address === "object" && address ? address.port : port;
+
+    if (management) {
+      managementServer = createManagementServer(management, runtime.app, dbPath);
+      const server = managementServer;
+      await new Promise<void>((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(management.port, management.host, () => {
+          server.off("error", reject);
+          resolve();
+        });
+      });
+      const address = server.address();
+      managementPort = typeof address === "object" && address ? address.port : null;
+    }
+  } catch (error) {
+    managementServer?.close();
+    await runtime.close();
+    throw error;
+  }
 
   const signalHandlers = new Map<NodeJS.Signals, () => void>();
   let stopped = false;
@@ -155,6 +200,11 @@ export async function startRuntimeNode(config: RuntimeNodeConfig = {}): Promise<
     // gateway.close() closes the WebSocket engine AND the HTTP server it is
     // mounted on; composeRuntime then closes SQLite. Draining in-flight work
     // beyond Socket.IO's own shutdown is later-slice supervision.
+    if (managementServer) {
+      await new Promise<void>((resolve, reject) =>
+        managementServer!.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
     await runtime.close();
   };
 
@@ -171,5 +221,5 @@ export async function startRuntimeNode(config: RuntimeNodeConfig = {}): Promise<
     }
   }
 
-  return { host, port: boundPort, stop };
+  return { host, port: boundPort, managementPort, stop };
 }

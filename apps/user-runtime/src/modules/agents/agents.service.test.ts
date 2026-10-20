@@ -16,10 +16,7 @@ import { fileURLToPath } from "node:url";
 
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import {
-  AgentSettingsCommand,
-  type AgentSettingsSnapshot,
-} from "@shera-bot/contracts";
+import { AgentSettingsCommand, type AgentSettingsSnapshot } from "@shera-bot/contracts";
 
 import {
   AgentsRepository,
@@ -35,10 +32,7 @@ import { EventsService } from "../events/events.service.ts";
 import { AgentsService, AgentSettingsResetUnavailableError } from "./agents.service.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const studentManifestPath = resolve(
-  here,
-  "../../../../../agent-packs/student/v1/manifest.json",
-);
+const studentManifestPath = resolve(here, "../../../../../agent-packs/student/v1/manifest.json");
 const studentManifest = JSON.parse(readFileSync(studentManifestPath, "utf8")) as {
   agents: Array<{
     agent_id: string;
@@ -56,9 +50,6 @@ const studentManifest = JSON.parse(readFileSync(studentManifestPath, "utf8")) as
 const GENERAL = "agent_general_assistant";
 const generalManifest = studentManifest.agents.find((agent) => agent.agent_id === GENERAL)!;
 const RESEARCHER = "agent_researcher";
-const researcherManifest = studentManifest.agents.find(
-  (agent) => agent.agent_id === RESEARCHER,
-)!;
 
 const tempDirs: string[] = [];
 
@@ -221,7 +212,10 @@ describe("AgentsService.getSettings (D16 read model)", () => {
 describe("AgentsService.applySettingsCommand (D16 write path)", () => {
   it("applies update commands and returns the read-after-write snapshot", () => {
     const applied = service.applySettingsCommand(
-      command({ type: "agent_settings.update_instructions", user_instructions: "Cite every source." }),
+      command({
+        type: "agent_settings.update_instructions",
+        user_instructions: "Cite every source.",
+      }),
     );
     expect(entry(applied, "user_instructions").value).toBe("Cite every source.");
     expect(repo.getAgent("ws-primary", GENERAL)?.user_instructions).toBe("Cite every source.");
@@ -298,9 +292,9 @@ describe("AgentsService.applySettingsCommand (D16 write path)", () => {
     expect(entry(applied, "default_provider").value).toEqual(generalManifest.default_provider);
     expect(entry(applied, "tool_defaults").value).toEqual([]);
     // The researcher's instructions survive — reset_all targets ONE agent.
-    expect(
-      entry(service.getSettings("ws-primary", RESEARCHER), "user_instructions").value,
-    ).toBe("General-only rule.");
+    expect(entry(service.getSettings("ws-primary", RESEARCHER), "user_instructions").value).toBe(
+      "General-only rule.",
+    );
   });
 
   it("keeps commands workspace-scoped (E12)", () => {
@@ -315,7 +309,10 @@ describe("AgentsService.applySettingsCommand (D16 write path)", () => {
   it("answers unknown agents with the typed 404-class rejection", () => {
     expect(() =>
       service.applySettingsCommand(
-        command({ type: "agent_settings.update_instructions", user_instructions: "x" }, "agent_nobody"),
+        command(
+          { type: "agent_settings.update_instructions", user_instructions: "x" },
+          "agent_nobody",
+        ),
       ),
     ).toThrow(AgentNotFoundError);
   });
@@ -368,17 +365,13 @@ describe("read-model integrity against corrupted pack-owned data", () => {
     const corruptManifest = structuredClone(studentManifest) as unknown as {
       agents: Array<{ agent_id: string; skills: unknown } & Record<string, unknown>>;
     };
-    const corruptGeneral = corruptManifest.agents.find(
-      (agent) => agent.agent_id === GENERAL,
-    );
+    const corruptGeneral = corruptManifest.agents.find((agent) => agent.agent_id === GENERAL);
     expect(corruptGeneral).toBeDefined();
     corruptGeneral!.skills = 42;
     repo.upsertFromPack(
       "ws-primary",
       corruptManifest.agents as unknown as Parameters<typeof repo.upsertFromPack>[1],
     );
-    expect(() => service.getSettings("ws-primary", GENERAL)).toThrow(
-      AgentSettingsValidationError,
-    );
+    expect(() => service.getSettings("ws-primary", GENERAL)).toThrow(AgentSettingsValidationError);
   });
 });

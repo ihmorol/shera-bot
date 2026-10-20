@@ -19,6 +19,7 @@ import type { SecretRegistry } from "./redaction.ts";
 import { loadSessionProjection, touchLastActive } from "./modules/session-projection.ts";
 import type { SecurityEventService } from "./modules/security-events.ts";
 import type { SignupCapService } from "./modules/signup-cap.ts";
+import { createRuntimeApiProxy } from "./runtime/api-proxy.ts";
 import { requireSession } from "./auth/session-middleware.ts";
 
 export interface RouteDependencies {
@@ -142,6 +143,14 @@ export function createRoutes(deps: RouteDependencies): Router {
     "/api/runtime/stop",
     requireSessionMiddleware,
     runtimeHandler((accountId, correlationId) => deps.provisioning.stop(accountId, correlationId)),
+  );
+
+  router.use(
+    "/api/runtime/local",
+    requireSessionMiddleware,
+    createRuntimeApiProxy({
+      targetForAccount: (accountId) => deps.provisioning.getChannelTarget(accountId),
+    }),
   );
 
   return router;

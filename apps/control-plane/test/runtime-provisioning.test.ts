@@ -214,6 +214,16 @@ describe("failure is surfaced, never faked (G4)", () => {
     expect(result.provisioning_status).toBe("running");
   });
 
+  it("recovers a provisioning row left by a dead owner", async () => {
+    await controlPlane.db
+      .update(controlContainerMappings)
+      .set({ provisioningStatus: "provisioning" })
+      .where(eq(controlContainerMappings.accountId, B));
+    const result = await controlPlane.provisioning.ensureProvisioned(B);
+    expect(result.provisioning_status).toBe("running");
+    expect((await mapping(B))?.provisioningStatus).toBe("running");
+  });
+
   it("a failed restart throws a typed error and records the operation failure", async () => {
     const D = "d1b2c3d4-0000-4000-8000-000000000004";
     await controlPlane.db
@@ -325,7 +335,7 @@ describe("re-provisioning keeps the channel true (adoption invariants I1/I2)", (
     await createAccount(H);
     const first = await controlPlane.provisioning.ensureProvisioned(H);
     const rowBefore = await mapping(H);
-    await controlPlane.provisioning.stop(H);
+    // Keep the old runtime running: credential loss must recover this case too.
 
     // A fresh service instance models the control-plane restart: it holds no
     // in-memory token, so re-provisioning must recreate the container and

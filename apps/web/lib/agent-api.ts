@@ -9,7 +9,6 @@ import {
   type AgentSettingsCommand as AgentSettingsCommandType,
 } from "@shera-bot/contracts";
 
-import { RuntimeApiError } from "@/lib/runtime-client";
 import { requestRuntime } from "@/lib/runtime-client";
 
 /**

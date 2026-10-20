@@ -78,6 +78,18 @@ describe("local container spec builder (PRD §3.3 tiers as real limits)", () => 
     expect(JSON.stringify(spec).toLowerCase()).not.toContain("/var/run");
   });
 
+  it("preserves product state across replacement with a stable per-account volume", () => {
+    const first = specFor("balanced");
+    const replacement = specFor("balanced");
+    expect(first.HostConfig.Mounts).toEqual([
+      { Type: "volume", Source: `shera-rt-data-${ACCOUNT}`, Target: "/app/data" },
+    ]);
+    expect(replacement.HostConfig.Mounts).toEqual(first.HostConfig.Mounts);
+    expect(first.Env).toContain("RUNTIME_DB_PATH=/app/data/runtime.db");
+    expect(first.Env).toContain(`RUNTIME_DEFAULT_WORKSPACE_ID=ws_${ACCOUNT}`);
+    expect(first.Env).toContain("RUNTIME_PORT=0");
+  });
+
   it("restarts the container automatically unless explicitly stopped", () => {
     const spec = specFor("balanced");
     expect(spec.HostConfig.RestartPolicy).toEqual({ Name: "unless-stopped" });

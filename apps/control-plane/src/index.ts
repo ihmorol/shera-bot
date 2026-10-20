@@ -196,21 +196,7 @@ export async function createControlPlaneApp(
 
   // Typed error boundary: full details go to the redacted log only; the
   // response body carries safe_message + correlation_id (never internals).
-  app.use((err: unknown, req: Request, res: Response) => {
-    const correlationId = crypto.randomUUID();
-    logger.error("request_failed", {
-      correlation_id: correlationId,
-      method: req.method,
-      path: req.path,
-      reason: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
-      stack: err instanceof Error ? (err.stack ?? null) : null,
-    });
-    if (res.headersSent) {
-      res.end();
-      return;
-    }
-    res.status(500).json(internalErrorPayload(correlationId));
-  });
+  app.use(createErrorHandler(logger));
 
   return {
     app,
@@ -225,5 +211,23 @@ export async function createControlPlaneApp(
     async close() {
       await pool.end();
     },
+  };
+}
+
+export function createErrorHandler(logger: Pick<ControlPlaneLogger, "error">) {
+  return (err: unknown, req: Request, res: Response, next: NextFunction) => {
+    const correlationId = crypto.randomUUID();
+    logger.error("request_failed", {
+      correlation_id: correlationId,
+      method: req.method,
+      path: req.path,
+      reason: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+      stack: err instanceof Error ? (err.stack ?? null) : null,
+    });
+    if (res.headersSent) {
+      next(err);
+      return;
+    }
+    res.status(500).json(internalErrorPayload(correlationId));
   };
 }

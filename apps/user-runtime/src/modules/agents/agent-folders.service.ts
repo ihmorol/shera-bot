@@ -4,12 +4,8 @@
  *
  * Every Agent owns one private folder subtree, addressed by the URI the
  * memory_link setting already surfaces (`agent://<agent_id>/`, the value the
- * seeding writes into `agents.private_folder_path`). There is NO filesystem
- * layer yet: this module is the seam the future file/terminal slices (S17
- * workspace panel, S22 terminal/file tools) MUST route every private-folder
- * access through BEFORE any byte moves. The store behind the seam is a
- * minimal in-memory placeholder for tests — never real disk writes; a later
- * slice swaps the store implementation without touching the guard.
+ * seeding writes into `agents.private_folder_path`). Production composition
+ * supplies disk-backed storage; direct unit tests may use the in-memory store.
  *
  * Three layers, each independently testable:
  *
@@ -33,10 +29,16 @@
  * than guessing at permissions that do not exist yet. When a workspace
  * permission convention arrives, it extends this module behind the same seam.
  */
-import { AgentNotFoundError, type AgentsRepository } from "../../adapters/sqlite/agents-repository.ts";
+import {
+  AgentNotFoundError,
+  type AgentsRepository,
+} from "../../adapters/sqlite/agents-repository.ts";
 
 /** The AgentFolderUri host charset (packages/contracts agent.ts) — same rule. */
 const AGENT_ID_CHARSET = /^[a-z0-9_-]+$/;
+function hasControlCharacter(value: string): boolean {
+  return Array.from(value).some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127);
+}
 
 /** The parsed shape of an `agent://<agent_id>/<path>` URI. */
 export interface ParsedAgentFolderUri {
@@ -96,7 +98,7 @@ export class AgentFolderAccessDeniedError extends Error {
  */
 export function parseAgentFolderUri(uri: string): ParsedAgentFolderUri {
   if (!uri.startsWith("agent://")) throw new AgentFolderUriInvalidError();
-  if (/[\u0000-\u001f\u007f]/.test(uri)) throw new AgentFolderUriInvalidError();
+  if (hasControlCharacter(uri)) throw new AgentFolderUriInvalidError();
 
   const afterScheme = uri.slice("agent://".length);
   const hostEnd = afterScheme.indexOf("/");
@@ -126,7 +128,7 @@ export function parseAgentFolderUri(uri: string): ParsedAgentFolderUri {
     if (value.includes("/") || value.includes("\\")) {
       throw new AgentFolderUriInvalidError();
     }
-    if (/[\u0000-\u001f\u007f]/.test(value)) throw new AgentFolderUriInvalidError();
+    if (hasControlCharacter(value)) throw new AgentFolderUriInvalidError();
     decoded.push(value);
   }
   return { agent_id: agentId, path: decoded.join("/") };
@@ -163,9 +165,7 @@ export function decideAgentFolderAccess(
 }
 
 /**
- * The storage seam. The prototype ships `InMemoryAgentFolderStore` (tests and
- * wiring prove the guard end-to-end without touching a disk); the file slice
- * replaces the implementation — the guard and its callers do not change.
+ * Guarded storage seam: production uses disk-backed files; tests may use maps.
  */
 export interface AgentFolderStore {
   /** The content at `path` inside this agent's subtree, or null when absent. */
@@ -246,12 +246,7 @@ export class AgentFoldersService {
   }
 
   /** Guarded write: same rules as readFolder — own subtree only. */
-  writeFolder(
-    workspaceId: string,
-    actorAgentId: string,
-    uri: string,
-    content: string,
-  ): void {
+  writeFolder(workspaceId: string, actorAgentId: string, uri: string, content: string): void {
     const target = this.guard(workspaceId, actorAgentId, uri);
     this.#store.write(workspaceId, target.agent_id, target.path, content);
   }
@@ -282,11 +277,7 @@ export class AgentFoldersService {
     return target;
   }
 
-  private guard(
-    workspaceId: string,
-    actorAgentId: string,
-    uri: string,
-  ): ParsedAgentFolderUri {
+  private guard(workspaceId: string, actorAgentId: string, uri: string): ParsedAgentFolderUri {
     const target = this.resolveWithinWorkspace(workspaceId, actorAgentId, uri);
     const decision = decideAgentFolderAccess(actorAgentId, target);
     if (!decision.allowed) {

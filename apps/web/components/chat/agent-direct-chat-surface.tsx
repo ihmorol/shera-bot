@@ -4,7 +4,7 @@ import { AgentChatView } from "@/components/chat/agent-chat-view";
 import type { Agent } from "@shera-bot/contracts";
 
 import type { ConversationSummary, ThreadItem } from "@/lib/fixtures";
-import { useContainerResolution } from "@/lib/container-connection";
+import { useContainerResolution, useSessionIdentity } from "@/lib/container-connection";
 import type { ContainerResolutionState } from "@/lib/container-resolution";
 import { useAgentDirectChat } from "@/lib/agent-data";
 import { useLiveConversation } from "@/lib/runtime-live";
@@ -30,13 +30,6 @@ export function agentChatSurfaceMode(
 ): "demo" | "runtime" {
   return state?.kind === "ready" ? "runtime" : "demo";
 }
-
-/**
- * Fixture/demo user attribution (S01 fixture session) — the same constant the
- * GA surface and the settings commands use; the real signed-in identity is
- * later-slice work and is deliberately not faked (G4).
- */
-const LOCAL_USER_NAME = "Emon";
 
 export function AgentDirectChatSurface({
   agent,
@@ -77,17 +70,21 @@ function RuntimeAgentDirectChat({
   agent: Agent;
   conversation: ConversationSummary;
 }) {
+  const session = useSessionIdentity();
   const real = useAgentDirectChat(workspaceId, agent.agent_id);
 
   // S09 chunk 2's live pipeline, reused against the direct chat id (§6.3).
   const wsUrl = process.env.NEXT_PUBLIC_RUNTIME_WS_URL ?? null;
   const liveEnabled =
-    wsUrl !== null && real.directChatId !== null && real.surfaceState === "ready";
+    session.data !== undefined &&
+    wsUrl !== null &&
+    real.directChatId !== null &&
+    real.surfaceState === "ready";
   const live = useLiveConversation({
     wsUrl,
     workspaceId,
     conversationId: real.directChatId ?? "",
-    displayName: LOCAL_USER_NAME,
+    displayName: session.data?.display_name ?? "User",
     agentId: agent.agent_id,
     enabled: liveEnabled,
   });

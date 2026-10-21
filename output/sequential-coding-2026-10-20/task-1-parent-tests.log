@@ -1,0 +1,15 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.1 [39m[90mE:/PROJECTS/shera-bot[39m
+
+ [32m✓[39m tests/contract/agent-settings-contract.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 24[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/modules/agents/agent-folders.service.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 303[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/adapters/sqlite/agents-repository.test.ts [2m([22m[2m14 tests[22m[2m)[22m[33m 372[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/modules/agents/agents.service.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 312[2mms[22m[39m
+ [32m✓[39m apps/web/test/agent-surfaces.test.ts [2m([22m[2m30 tests[22m[2m)[22m[32m 168[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/transport/local-api/s11-agents-api.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 614[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m6 passed[39m[22m[90m (6)[39m
+[2m      Tests [22m [1m[32m84 passed[39m[22m[90m (84)[39m
+[2m   Start at [22m 16:33:20
+[2m   Duration [22m 2.14s[2m (import 52%, tests 25%, transform 23%, worker 1%)[22m
+

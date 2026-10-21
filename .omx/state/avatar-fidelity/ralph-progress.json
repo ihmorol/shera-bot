@@ -1,0 +1,22 @@
+{
+  "score": "improved approximation; high fidelity not achieved",
+  "verdict": "partial",
+  "category_match": true,
+  "differences": [
+    "Primitive sculpt remains visible in hands, torso and back",
+    "Realtime fur lacks reference soft dense fibers",
+    "Reference translucency, bloom and glass response are not reproduced"
+  ],
+  "suggestions": [
+    "Further sculpted geometry and authored fur/materials are needed for a close replica"
+  ],
+  "reasoning": "Independent final reviewer confirms meaningful improvement and coherent reusable GLB, but does not approve a close match.",
+  "reference": "output/avatars/reference.png",
+  "screenshots": [
+    "output/avatars/preview-v2.png",
+    "output/avatars/front-v2.png",
+    "output/avatars/side-v2.png",
+    "output/avatars/back-v2.png"
+  ],
+  "validation": "output/avatars/validation-v2.json"
+}

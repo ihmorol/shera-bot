@@ -1,0 +1,13 @@
+{
+  "boundary": "direct actual control-plane app, real seeded Auth.js DB session; no browser Origin header",
+  "status": 403,
+  "body": {
+    "code": "RUNTIME_TENANT_MISMATCH",
+    "category": "policy",
+    "safe_message": "This runtime belongs to another account.",
+    "retryable": false,
+    "user_action": null,
+    "internal_details": null,
+    "correlation_id": "7c11e9be-5f56-447c-b00c-b59542d2b39c"
+  }
+}

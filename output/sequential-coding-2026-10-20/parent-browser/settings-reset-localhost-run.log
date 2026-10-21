@@ -1,0 +1,48 @@
+(node:32356) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:27.645Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:27.650Z","message":"adapter_updateSession"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:27.678Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:30.464Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:30.673Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:30.750Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:30.769Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:30.773Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:30.777Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:30.783Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:30.793Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:30.808Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:30.837Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:30.996Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:31.021Z","message":"adapter_getSessionAndUser"}
+Draft before save: Parent browser reset regression
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:31.090Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:31.104Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:31.129Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:31.138Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:31.148Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:31.155Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:31.156Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:31.165Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:31.188Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:31.202Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:31.273Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:31.279Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:31.287Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:31.298Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:31.312Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:31.322Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:31.325Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:31.341Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:31.375Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:28:31.388Z","message":"adapter_getSessionAndUser"}
+{
+  "browser": "Chrome/155.0.8059.80",
+  "label": "Real seeded session and runtime; browser settings reset probe",
+  "original": null,
+  "saved": "Parent browser reset regression",
+  "persistedAfterReset": null,
+  "editorAfterReset": "Parent browser reset regression",
+  "resetEditorMatchesAuthoritative": false,
+  "reducedMotion": true
+}

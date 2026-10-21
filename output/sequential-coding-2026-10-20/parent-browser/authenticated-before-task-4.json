@@ -1,0 +1,68 @@
+{
+  "browser": "Chrome/155.0.8059.80",
+  "label": "Real CP/PostgreSQL/SQLite/runtime; seeded disposable session; fake container engine; no live provider",
+  "widths": [
+    {
+      "width": 360,
+      "heading": "Researcher",
+      "overflow": false,
+      "composer": {
+        "disabled": true,
+        "label": "Message Researcher",
+        "placeholder": "No provider is configured for this conversation yet."
+      },
+      "body": "Skip to conversation\nS\nShera Bot\nR\nResearcher\n\nFinds, reads, and synthesizes sources for academic work, and keeps a traceable trail from claim to source.\n\nPresence arrives in S12\n\nNo provider is configured for this conversation yet.",
+      "links": []
+    },
+    {
+      "width": 768,
+      "heading": "Researcher",
+      "overflow": false,
+      "composer": {
+        "disabled": true,
+        "label": "Message Researcher",
+        "placeholder": "No provider is configured for this conversation yet."
+      },
+      "body": "Skip to conversation\nS\nShera Bot\nR\nResearcher\n\nThe Researcher investigates questions and produces evidence-backed outputs. It searches and reads public web sources, compares authority and recency, extracts claims and quotations, reads uploaded PDFs/documents/spreadsheets/images, creates literature reviews and reports, manages citations and source indexes, monitors configured sources, and delegates coding/data work to Developer or synthesis work to General Assistant.\n\nPresence arrives in S12\nPlatform default\nOCTOBER 20, 2026\n\nThis conversation started in your workspace as “Researcher”.\n\nNo provider is configured for this conversation yet.",
+      "links": [
+        {
+          "href": "/app/agent/citation-manager",
+          "text": "CCitation ManagerThe Citation Manager maintains source indexes, reference metadata, and citation formats across research work. It checks citations for consistency, preserves provenance for every source, and supports the Research Paper Operation; where Exam Preparation needs syllabus source indexing, it is triggered there as a subagent."
+        },
+        {
+          "href": "/app/agent/developer",
+          "text": "DDeveloperThe Developer inspects repositories, creates and modifies code, runs tests/linters/type checks/builds, diagnoses regressions, creates scripts and integrations, runs technical experiments, operates browsers and terminals, manages branches/worktrees/commits/patches, generates documentation, monitors repositories/files/builds/webhooks, and creates reusable tools."
+        },
+        {
+          "href": "/app/agent/general-assistant",
+          "text": "GGeneral AssistantThe General Assistant handles general questions, planning, coordination, user-facing synthesis, memory, task creation, and Operation coordination. It clarifies goals, chooses whether one or multiple Agents are needed, delegates to Researcher and Developer, combines results, writes and formats content, manages notes/checklists/documents, tracks approvals, and produces final answers/artifacts. It is the default coordinator of every Operation and is removable; pack definitions may name a different coordinator Agent or none."
+        },
+        {
+          "href": "/app/agent/programming-tutor",
+          "text": "PProgramming TutorThe Programming Tutor helps students understand code and assignments: it explains concepts, reviews solutions, guides practice, and produces study-oriented explanations and exercises for the Programming Assignment Operation; Exam Preparation past-paper drills run as its subagent work."
+        },
+        {
+          "href": "/app/agent/researcher",
+          "text": "RResearcherThe Researcher investigates questions and produces evidence-backed outputs. It searches and reads public web sources, compares authority and recency, extracts claims and quotations, reads uploaded PDFs/documents/spreadsheets/images, creates literature reviews and reports, manages citations and source indexes, monitors configured sources, and delegates coding/data work to Developer or synthesis work to General Assistant."
+        },
+        {
+          "href": "/app/agent/study-planner",
+          "text": "SStudy PlannerThe Study Planner turns courses, deadlines, and exam dates into study schedules, tracks progress against them, and adjusts plans as work completes, supporting the Exam Preparation Operation."
+        }
+      ]
+    },
+    {
+      "width": 1440,
+      "heading": "Researcher",
+      "overflow": false,
+      "composer": {
+        "disabled": true,
+        "label": "Message Researcher",
+        "placeholder": "No provider is configured for this conversation yet."
+      },
+      "body": "Skip to conversation\nS\nShera Bot\n\nAGENTS\n\nOPERATIONS\n\n+ New\nResearch Paper\nProgramming Assignment\nExam Preparation\n\nACTIVE CHATS\n\nResearch Paper\nPack-defined · 2 Agents\nwork in progress\nAd-hoc\nAd-hoc · 2 Agents\nfailed\n\nSTUDENT PACK V1\n\nR\nResearcher\n\nFinds, reads, and synthesizes sources for academic work, and keeps a traceable trail from claim to source.\n\nPresence arrives in S12\nPlatform default\n\nNo provider is configured for this conversation yet.",
+      "links": []
+    }
+  ],
+  "reducedMotion": true
+}

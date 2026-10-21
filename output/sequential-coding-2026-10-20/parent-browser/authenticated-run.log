@@ -1,0 +1,29 @@
+(node:29920) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:11:10.462Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:11:10.467Z","message":"adapter_updateSession"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:11:10.501Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:11:18.307Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:11:19.054Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:11:19.157Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:11:19.167Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:11:19.168Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:11:19.176Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:11:19.212Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:11:19.386Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:11:19.437Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:11:19.468Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:11:20.079Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:11:20.737Z","message":"adapter_getSessionAndUser"}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+[Error: EBUSY: resource busy or locked, unlink 'E:\PROJECTS\shera-bot\output\sequential-coding-2026-10-20\parent-browser\chrome-auth-profile\CrashpadMetrics-active.pma'] {
+  errno: -4082,
+  code: 'EBUSY',
+  syscall: 'unlink',
+  path: 'E:\\PROJECTS\\shera-bot\\output\\sequential-coding-2026-10-20\\parent-browser\\chrome-auth-profile\\CrashpadMetrics-active.pma'
+}
+
+Node.js v24.19.0

@@ -1,0 +1,348 @@
+(node:31060) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:44.123Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:44.126Z","message":"adapter_updateSession"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:44.145Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:46.512Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:46.543Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:46.611Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:46.611Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:46.612Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:46.628Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:46.634Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:46.671Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:46.686Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:46.734Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:46.749Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:46.784Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.015Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.043Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.064Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.065Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.065Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.076Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.079Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.084Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.096Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.102Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.120Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.148Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.394Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.412Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.441Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.442Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.445Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.451Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.460Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.461Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.505Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.507Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.529Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.551Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.679Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.697Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.889Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.916Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.944Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.944Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.950Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.953Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.953Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.969Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.981Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:47.992Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:48.000Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:48.014Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:48.581Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:48.742Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:37:48.748Z","message":"adapter_deleteSession"}
+{"level":"info","service":"control-plane","time":"2026-10-20T15:37:48.774Z","message":"session_gate_rejected","details":{"correlation_id":"71b6c7ed-6cb5-44fc-b863-362c47f81761","had_cookie":"[REDACTED]"}}
+{
+  "browser": "Chrome/155.0.8059.80",
+  "label": "Real CP/PostgreSQL/SQLite/runtime; seeded disposable session; fake container engine; no live provider",
+  "widths": [
+    {
+      "width": 360,
+      "heading": "Researcher",
+      "overflow": false,
+      "composer": {
+        "disabled": false,
+        "label": "Message Researcher",
+        "placeholder": "Message Researcher"
+      },
+      "body": "Skip to conversation\nS\nShera Bot\nR\nResearcher\n\nThe Researcher investigates questions and produces evidence-backed outputs. It searches and reads public web sources, compares authority and recency, extracts claims and quotations, reads uploaded PDFs/documents/spreadsheets/images, creates literature reviews and reports, manages citations and source indexes, monitors configured sources, and delegates coding/data work to Developer or synthesis work to General Assistant.\n\nPresence arrives in S12\nOCTOBER 20, 2026\n\nThis conversation started in your workspace as “Researcher”.\n\nEnter to send · Shift+Enter for a new line",
+      "links": [
+        {
+          "href": "/app/agent/citation-manager",
+          "text": "CCitation ManagerThe Citation Manager maintains source indexes, reference metadata, and citation formats across research work. It checks citations for consistency, preserves provenance for every source, and supports the Research Paper Operation; where Exam Preparation needs syllabus source indexing, it is triggered there as a subagent."
+        },
+        {
+          "href": "/app/agent/developer",
+          "text": "DDeveloperThe Developer inspects repositories, creates and modifies code, runs tests/linters/type checks/builds, diagnoses regressions, creates scripts and integrations, runs technical experiments, operates browsers and terminals, manages branches/worktrees/commits/patches, generates documentation, monitors repositories/files/builds/webhooks, and creates reusable tools."
+        },
+        {
+          "href": "/app/agent/general-assistant",
+          "text": "GGeneral AssistantThe General Assistant handles general questions, planning, coordination, user-facing synthesis, memory, task creation, and Operation coordination. It clarifies goals, chooses whether one or multiple Agents are needed, delegates to Researcher and Developer, combines results, writes and formats content, manages notes/checklists/documents, tracks approvals, and produces final answers/artifacts. It is the default coordinator of every Operation and is removable; pack definitions may name a different coordinator Agent or none."
+        },
+        {
+          "href": "/app/agent/programming-tutor",
+          "text": "PProgramming TutorThe Programming Tutor helps students understand code and assignments: it explains concepts, reviews solutions, guides practice, and produces study-oriented explanations and exercises for the Programming Assignment Operation; Exam Preparation past-paper drills run as its subagent work."
+        },
+        {
+          "href": "/app/agent/researcher",
+          "text": "RResearcherThe Researcher investigates questions and produces evidence-backed outputs. It searches and reads public web sources, compares authority and recency, extracts claims and quotations, reads uploaded PDFs/documents/spreadsheets/images, creates literature reviews and reports, manages citations and source indexes, monitors configured sources, and delegates coding/data work to Developer or synthesis work to General Assistant."
+        },
+        {
+          "href": "/app/agent/study-planner",
+          "text": "SStudy PlannerThe Study Planner turns courses, deadlines, and exam dates into study schedules, tracks progress against them, and adjusts plans as work completes, supporting the Exam Preparation Operation."
+        }
+      ]
+    },
+    {
+      "width": 768,
+      "heading": "Researcher",
+      "overflow": false,
+      "composer": {
+        "disabled": false,
+        "label": "Message Researcher",
+        "placeholder": "Message Researcher"
+      },
+      "body": "Skip to conversation\nS\nShera Bot\nR\nResearcher\n\nThe Researcher investigates questions and produces evidence-backed outputs. It searches and reads public web sources, compares authority and recency, extracts claims and quotations, reads uploaded PDFs/documents/spreadsheets/images, creates literature reviews and reports, manages citations and source indexes, monitors configured sources, and delegates coding/data work to Developer or synthesis work to General Assistant.\n\nPresence arrives in S12\nPlatform default\nOCTOBER 20, 2026\n\nThis conversation started in your workspace as “Researcher”.\n\nEnter to send · Shift+Enter for a new line",
+      "links": [
+        {
+          "href": "/app/agent/citation-manager",
+          "text": "CCitation ManagerThe Citation Manager maintains source indexes, reference metadata, and citation formats across research work. It checks citations for consistency, preserves provenance for every source, and supports the Research Paper Operation; where Exam Preparation needs syllabus source indexing, it is triggered there as a subagent."
+        },
+        {
+          "href": "/app/agent/developer",
+          "text": "DDeveloperThe Developer inspects repositories, creates and modifies code, runs tests/linters/type checks/builds, diagnoses regressions, creates scripts and integrations, runs technical experiments, operates browsers and terminals, manages branches/worktrees/commits/patches, generates documentation, monitors repositories/files/builds/webhooks, and creates reusable tools."
+        },
+        {
+          "href": "/app/agent/general-assistant",
+          "text": "GGeneral AssistantThe General Assistant handles general questions, planning, coordination, user-facing synthesis, memory, task creation, and Operation coordination. It clarifies goals, chooses whether one or multiple Agents are needed, delegates to Researcher and Developer, combines results, writes and formats content, manages notes/checklists/documents, tracks approvals, and produces final answers/artifacts. It is the default coordinator of every Operation and is removable; pack definitions may name a different coordinator Agent or none."
+        },
+        {
+          "href": "/app/agent/programming-tutor",
+          "text": "PProgramming TutorThe Programming Tutor helps students understand code and assignments: it explains concepts, reviews solutions, guides practice, and produces study-oriented explanations and exercises for the Programming Assignment Operation; Exam Preparation past-paper drills run as its subagent work."
+        },
+        {
+          "href": "/app/agent/researcher",
+          "text": "RResearcherThe Researcher investigates questions and produces evidence-backed outputs. It searches and reads public web sources, compares authority and recency, extracts claims and quotations, reads uploaded PDFs/documents/spreadsheets/images, creates literature reviews and reports, manages citations and source indexes, monitors configured sources, and delegates coding/data work to Developer or synthesis work to General Assistant."
+        },
+        {
+          "href": "/app/agent/study-planner",
+          "text": "SStudy PlannerThe Study Planner turns courses, deadlines, and exam dates into study schedules, tracks progress against them, and adjusts plans as work completes, supporting the Exam Preparation Operation."
+        }
+      ]
+    },
+    {
+      "width": 1440,
+      "heading": "Researcher",
+      "overflow": false,
+      "composer": {
+        "disabled": false,
+        "label": "Message Researcher",
+        "placeholder": "Message Researcher"
+      },
+      "body": "Skip to conversation\nS\nShera Bot\n\nAGENTS\n\nC\nCitation Manager\nThe Citation Manager maintains source indexes, reference metadata, and citation formats across research work. It checks citations for consistency, preserves provenance for every source, and supports the Research Paper Operation; where Exam Preparation needs syllabus source indexing, it is triggered there as a subagent.\nD\nDeveloper\nThe Developer inspects repositories, creates and modifies code, runs tests/linters/type checks/builds, diagnoses regressions, creates scripts and integrations, runs technical experiments, operates browsers and terminals, manages branches/worktrees/commits/patches, generates documentation, monitors repositories/files/builds/webhooks, and creates reusable tools.\nG\nGeneral Assistant\nThe General Assistant handles general questions, planning, coordination, user-facing synthesis, memory, task creation, and Operation coordination. It clarifies goals, chooses whether one or multiple Agents are needed, delegates to Researcher and Developer, combines results, writes and formats content, manages notes/checklists/documents, tracks approvals, and produces final answers/artifacts. It is the default coordinator of every Operation and is removable; pack definitions may name a different coordinator Agent or none.\nP\nProgramming Tutor\nThe Programming Tutor helps students understand code and assignments: it explains concepts, reviews solutions, guides practice, and produces study-oriented explanations and exercises for the Programming Assignment Operation; Exam Preparation past-paper drills run as its subagent work.\nR\nResearcher\nThe Researcher investigates questions and produces evidence-backed outputs. It searches and reads public web sources, compares authority and recency, extracts claims and quotations, reads uploaded PDFs/documents/spreadsheets/images, creates literature reviews and reports, manages citations and source indexes, monitors configured sources, and delegates coding/data work to Developer or synthesis work to General Assistant.\nS\nStudy Planner\nThe Study Planner turns courses, deadlines, and exam dates into study schedules, tracks progress against them, and adjusts plans as work completes, supporting the Exam Preparation Operation.\n\nOPERATIONS\n\n+ New\nResearch Paper\nProgramming Assignment\nExam Preparation\n\nACTIVE CHATS\n\nResearch Paper\nPack-defined · 2 Agents\nwork in progress\nAd-hoc\nAd-hoc · 2 Agents\nfailed\n\nSTUDENT PACK V1\n\nR\nResearcher\n\nThe Researcher investigates questions and produces evidence-backed outputs. It searches and reads public web sources, compares authority and recency, extracts claims and quotations, reads uploaded PDFs/documents/spreadsheets/images, creates literature reviews and reports, manages citations and source indexes, monitors configured sources, and delegates coding/data work to Developer or synthesis work to General Assistant.\n\nPresence arrives in S12\nPlatform default\nOCTOBER 20, 2026\n\nThis conversation started in your workspace as “Researcher”.\n\nEnter to send · Shift+Enter for a new line",
+      "links": [
+        {
+          "href": "/app/agent/citation-manager",
+          "text": "C\nCitation Manager\nThe Citation Manager maintains source indexes, reference metadata, and citation formats across research work. It checks citations for consistency, preserves provenance for every source, and supports the Research Paper Operation; where Exam Preparation needs syllabus source indexing, it is triggered there as a subagent."
+        },
+        {
+          "href": "/app/agent/developer",
+          "text": "D\nDeveloper\nThe Developer inspects repositories, creates and modifies code, runs tests/linters/type checks/builds, diagnoses regressions, creates scripts and integrations, runs technical experiments, operates browsers and terminals, manages branches/worktrees/commits/patches, generates documentation, monitors repositories/files/builds/webhooks, and creates reusable tools."
+        },
+        {
+          "href": "/app/agent/general-assistant",
+          "text": "G\nGeneral Assistant\nThe General Assistant handles general questions, planning, coordination, user-facing synthesis, memory, task creation, and Operation coordination. It clarifies goals, chooses whether one or multiple Agents are needed, delegates to Researcher and Developer, combines results, writes and formats content, manages notes/checklists/documents, tracks approvals, and produces final answers/artifacts. It is the default coordinator of every Operation and is removable; pack definitions may name a different coordinator Agent or none."
+        },
+        {
+          "href": "/app/agent/programming-tutor",
+          "text": "P\nProgramming Tutor\nThe Programming Tutor helps students understand code and assignments: it explains concepts, reviews solutions, guides practice, and produces study-oriented explanations and exercises for the Programming Assignment Operation; Exam Preparation past-paper drills run as its subagent work."
+        },
+        {
+          "href": "/app/agent/researcher",
+          "text": "R\nResearcher\nThe Researcher investigates questions and produces evidence-backed outputs. It searches and reads public web sources, compares authority and recency, extracts claims and quotations, reads uploaded PDFs/documents/spreadsheets/images, creates literature reviews and reports, manages citations and source indexes, monitors configured sources, and delegates coding/data work to Developer or synthesis work to General Assistant."
+        },
+        {
+          "href": "/app/agent/study-planner",
+          "text": "S\nStudy Planner\nThe Study Planner turns courses, deadlines, and exam dates into study schedules, tracks progress against them, and adjusts plans as work completes, supporting the Exam Preparation Operation."
+        }
+      ]
+    }
+  ],
+  "persistedMessageCount": 1,
+  "reconnected": true,
+  "messageCountAfterReconnect": 1,
+  "liveUrls": [
+    "ws://127.0.0.1:3177/api/runtime/live?EIO=4&transport=websocket",
+    "ws://127.0.0.1:3177/api/runtime/live?EIO=4&transport=websocket",
+    "ws://127.0.0.1:3177/api/runtime/live?EIO=4&transport=websocket",
+    "ws://127.0.0.1:3177/api/runtime/live?EIO=4&transport=websocket",
+    "ws://127.0.0.1:3177/api/runtime/live?EIO=4&transport=websocket"
+  ],
+  "streamFrames": [
+    [
+      {
+        "kind": "events",
+        "stream_id": "conversation:6fc13437-a87d-4255-99a1-42ebd0930f19",
+        "workspace_id": "ws_3061e600-af95-4b18-96f0-c70c4dee228c",
+        "events": [
+          {
+            "event_id": "68bc1892-3f80-4b70-8c9e-0d3ccc07d5f5",
+            "stream_id": "conversation:6fc13437-a87d-4255-99a1-42ebd0930f19",
+            "sequence": 1,
+            "type": "conversation.created",
+            "schema_version": 1,
+            "payload": {
+              "conversation_id": "6fc13437-a87d-4255-99a1-42ebd0930f19",
+              "workspace_id": "ws_3061e600-af95-4b18-96f0-c70c4dee228c",
+              "title": "Researcher"
+            },
+            "workspace_id": "ws_3061e600-af95-4b18-96f0-c70c4dee228c",
+            "occurred_at": "2026-10-20T15:37:46.704Z",
+            "correlation_id": "agent-direct-chat:ws_3061e600-af95-4b18-96f0-c70c4dee228c:agent_researcher"
+          }
+        ],
+        "next_cursor": 1,
+        "replayed": true
+      }
+    ],
+    [
+      {
+        "kind": "events",
+        "stream_id": "conversation:6fc13437-a87d-4255-99a1-42ebd0930f19",
+        "workspace_id": "ws_3061e600-af95-4b18-96f0-c70c4dee228c",
+        "events": [
+          {
+            "event_id": "68bc1892-3f80-4b70-8c9e-0d3ccc07d5f5",
+            "stream_id": "conversation:6fc13437-a87d-4255-99a1-42ebd0930f19",
+            "sequence": 1,
+            "type": "conversation.created",
+            "schema_version": 1,
+            "payload": {
+              "conversation_id": "6fc13437-a87d-4255-99a1-42ebd0930f19",
+              "workspace_id": "ws_3061e600-af95-4b18-96f0-c70c4dee228c",
+              "title": "Researcher"
+            },
+            "workspace_id": "ws_3061e600-af95-4b18-96f0-c70c4dee228c",
+            "occurred_at": "2026-10-20T15:37:46.704Z",
+            "correlation_id": "agent-direct-chat:ws_3061e600-af95-4b18-96f0-c70c4dee228c:agent_researcher"
+          }
+        ],
+        "next_cursor": 1,
+        "replayed": true
+      }
+    ],
+    [
+      {
+        "kind": "events",
+        "stream_id": "conversation:6fc13437-a87d-4255-99a1-42ebd0930f19",
+        "workspace_id": "ws_3061e600-af95-4b18-96f0-c70c4dee228c",
+        "events": [
+          {
+            "event_id": "68bc1892-3f80-4b70-8c9e-0d3ccc07d5f5",
+            "stream_id": "conversation:6fc13437-a87d-4255-99a1-42ebd0930f19",
+            "sequence": 1,
+            "type": "conversation.created",
+            "schema_version": 1,
+            "payload": {
+              "conversation_id": "6fc13437-a87d-4255-99a1-42ebd0930f19",
+              "workspace_id": "ws_3061e600-af95-4b18-96f0-c70c4dee228c",
+              "title": "Researcher"
+            },
+            "workspace_id": "ws_3061e600-af95-4b18-96f0-c70c4dee228c",
+            "occurred_at": "2026-10-20T15:37:46.704Z",
+            "correlation_id": "agent-direct-chat:ws_3061e600-af95-4b18-96f0-c70c4dee228c:agent_researcher"
+          }
+        ],
+        "next_cursor": 1,
+        "replayed": true
+      }
+    ],
+    [
+      "stream.event",
+      {
+        "event_id": "d55c1868-98f1-4e66-bca0-a5adb23f5b1e",
+        "stream_id": "conversation:6fc13437-a87d-4255-99a1-42ebd0930f19",
+        "sequence": 2,
+        "type": "message.appended",
+        "schema_version": 1,
+        "payload": {
+          "conversation_id": "6fc13437-a87d-4255-99a1-42ebd0930f19",
+          "workspace_id": "ws_3061e600-af95-4b18-96f0-c70c4dee228c",
+          "message_id": "04213c93-a05a-42d3-b332-f2ed1876a8cf",
+          "sender": {
+            "kind": "user",
+            "display_name": "Browser QA"
+          },
+          "text": "Sequential parent review message"
+        },
+        "workspace_id": "ws_3061e600-af95-4b18-96f0-c70c4dee228c",
+        "occurred_at": "2026-10-20T15:37:47.714Z",
+        "correlation_id": "msg-141d1eca-2598-48e1-81b8-ae070bf116db"
+      }
+    ],
+    [
+      {
+        "kind": "events",
+        "stream_id": "conversation:6fc13437-a87d-4255-99a1-42ebd0930f19",
+        "workspace_id": "ws_3061e600-af95-4b18-96f0-c70c4dee228c",
+        "events": [
+          {
+            "event_id": "68bc1892-3f80-4b70-8c9e-0d3ccc07d5f5",
+            "stream_id": "conversation:6fc13437-a87d-4255-99a1-42ebd0930f19",
+            "sequence": 1,
+            "type": "conversation.created",
+            "schema_version": 1,
+            "payload": {
+              "conversation_id": "6fc13437-a87d-4255-99a1-42ebd0930f19",
+              "workspace_id": "ws_3061e600-af95-4b18-96f0-c70c4dee228c",
+              "title": "Researcher"
+            },
+            "workspace_id": "ws_3061e600-af95-4b18-96f0-c70c4dee228c",
+            "occurred_at": "2026-10-20T15:37:46.704Z",
+            "correlation_id": "agent-direct-chat:ws_3061e600-af95-4b18-96f0-c70c4dee228c:agent_researcher"
+          },
+          {
+            "event_id": "d55c1868-98f1-4e66-bca0-a5adb23f5b1e",
+            "stream_id": "conversation:6fc13437-a87d-4255-99a1-42ebd0930f19",
+            "sequence": 2,
+            "type": "message.appended",
+            "schema_version": 1,
+            "payload": {
+              "conversation_id": "6fc13437-a87d-4255-99a1-42ebd0930f19",
+              "workspace_id": "ws_3061e600-af95-4b18-96f0-c70c4dee228c",
+              "message_id": "04213c93-a05a-42d3-b332-f2ed1876a8cf",
+              "sender": {
+                "kind": "user",
+                "display_name": "Browser QA"
+              },
+              "text": "Sequential parent review message"
+            },
+            "workspace_id": "ws_3061e600-af95-4b18-96f0-c70c4dee228c",
+            "occurred_at": "2026-10-20T15:37:47.714Z",
+            "correlation_id": "msg-141d1eca-2598-48e1-81b8-ae070bf116db"
+          }
+        ],
+        "next_cursor": 2,
+        "replayed": true
+      }
+    ],
+    [
+      {
+        "kind": "events",
+        "stream_id": "conversation:6fc13437-a87d-4255-99a1-42ebd0930f19",
+        "workspace_id": "ws_3061e600-af95-4b18-96f0-c70c4dee228c",
+        "events": [],
+        "next_cursor": 2,
+        "replayed": true
+      }
+    ]
+  ],
+  "openStreamsAfterLogout": 0,
+  "sessionStatusAfterLogout": 401,
+  "reducedMotion": true
+}

@@ -1,0 +1,12 @@
+Scope: all 11 workspace projects
+✓ Lockfile passes supply-chain policies (verified 17d ago)
+Lockfile is up to date, resolution step is skipped
+Progress: resolved 90, reused 90, downloaded 0, added 69
+Packages: +109 -13
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++---------
+Progress: resolved 109, reused 109, downloaded 0, added 109, done
+
+devDependencies:
++ eslint-plugin-react-hooks 7.1.1
+
+Done in 4.2s using pnpm v12.4.1

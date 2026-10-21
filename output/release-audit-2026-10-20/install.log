@@ -1,0 +1,17 @@
+Scope: all 11 workspace projects
+✓ Lockfile passes supply-chain policies (verified 17d ago)
+Lockfile is up to date, resolution step is skipped
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Packages are hard linked from the content-addressable store to the virtual store.
+  Content-addressable store is at: E:\.pnpm-store\v11
+  Virtual store is at:             node_modules/.pnpm
+Progress: resolved 334, reused 334, downloaded 0, added 334
+Error: ERR_PNPM_NO_OFFLINE_TARBALL
+
+  × installing dependencies
+  ╰─▶ Failed to fetch tarball for @radix-ui/react-focus-scope@1.1.16 from
+      https://registry.npmjs.org/@radix-ui/react-focus-scope/-/react-focus-
+      scope-1.1.16.tgz in offline mode: snapshot not present in local store
+  help: Drop `--offline` (or `offline=true` in pnpm-workspace.yaml) or run an
+        online install first to populate the store.
+

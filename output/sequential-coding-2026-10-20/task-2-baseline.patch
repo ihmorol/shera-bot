@@ -1,0 +1,1617 @@
+diff --git a/apps/control-plane/src/index.ts b/apps/control-plane/src/index.ts
+index 0b8174c..f2c81ab 100644
+--- a/apps/control-plane/src/index.ts
++++ b/apps/control-plane/src/index.ts
+@@ -196,21 +196,7 @@ export async function createControlPlaneApp(
+ 
+   // Typed error boundary: full details go to the redacted log only; the
+   // response body carries safe_message + correlation_id (never internals).
+-  app.use((err: unknown, req: Request, res: Response) => {
+-    const correlationId = crypto.randomUUID();
+-    logger.error("request_failed", {
+-      correlation_id: correlationId,
+-      method: req.method,
+-      path: req.path,
+-      reason: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+-      stack: err instanceof Error ? (err.stack ?? null) : null,
+-    });
+-    if (res.headersSent) {
+-      res.end();
+-      return;
+-    }
+-    res.status(500).json(internalErrorPayload(correlationId));
+-  });
++  app.use(createErrorHandler(logger));
+ 
+   return {
+     app,
+@@ -227,3 +213,21 @@ export async function createControlPlaneApp(
+     },
+   };
+ }
++
++export function createErrorHandler(logger: Pick<ControlPlaneLogger, "error">) {
++  return (err: unknown, req: Request, res: Response, next: NextFunction) => {
++    const correlationId = crypto.randomUUID();
++    logger.error("request_failed", {
++      correlation_id: correlationId,
++      method: req.method,
++      path: req.path,
++      reason: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
++      stack: err instanceof Error ? (err.stack ?? null) : null,
++    });
++    if (res.headersSent) {
++      next(err);
++      return;
++    }
++    res.status(500).json(internalErrorPayload(correlationId));
++  };
++}
+diff --git a/apps/control-plane/src/modules/runtime-provisioning.ts b/apps/control-plane/src/modules/runtime-provisioning.ts
+index 5343106..a54d06f 100644
+--- a/apps/control-plane/src/modules/runtime-provisioning.ts
++++ b/apps/control-plane/src/modules/runtime-provisioning.ts
+@@ -27,7 +27,7 @@
+  * re-established (a real recovery — the handle changes).
+  */
+ import { randomUUID } from "node:crypto";
+-import { eq } from "drizzle-orm";
++import { eq, sql } from "drizzle-orm";
+ 
+ import {
+   type ProvisionRuntimeResult,
+@@ -116,24 +116,30 @@ export class ProvisioningService {
+     accountId: string,
+     correlationId?: string,
+   ): Promise<ProvisionRuntimeResult> {
+-    const mapping = await this.loadOrCreateMapping(accountId);
++    // A transaction-scoped database lock survives awaits and releases on crash.
++    // Holding it makes a leftover "provisioning" row recoverable without stealing
++    // an active request's credential or relying on an arbitrary stale timeout.
++    return this.deps.db.transaction(async (tx) => {
++      const lock = await tx.execute(
++        sql`select pg_try_advisory_xact_lock(hashtextextended(${accountId}, 0)) as acquired`,
++      );
++      if (lock.rows[0]?.["acquired"] !== true) throw runtimeProvisionInProgressError(correlationId);
++      return this.ensureProvisionedLocked(accountId, correlationId);
++    });
++  }
+ 
+-    if (mapping.provisioningStatus === "provisioning") {
+-      // KNOWN WEDGE (S06, documented posture — review finding, 2026-09-20): a
+-      // control-plane crash between setStatus("provisioning") below and
+-      // recordProvisioned leaves the mapping at status "provisioning" with
+-      // runtimeHandle=null forever; every later ensureProvisioned lands here
+-      // and throws RUNTIME_PROVISION_IN_PROGRESS. This is safe-but-stuck, not
+-      // unsafe: the error is truthful (no fake success, G4), nothing is
+-      // half-provisioned behind the wedge, and the name-keyed container means
+-      // no second container can exist. Bounded recovery (staleness rule /
+-      // lease / reaper) is owned by S07/S12 runtime supervision through the
+-      // E17 seam and is deliberately NOT built in this slice.
+-      throw runtimeProvisionInProgressError(correlationId);
+-    }
++  private async ensureProvisionedLocked(
++    accountId: string,
++    correlationId?: string,
++  ): Promise<ProvisionRuntimeResult> {
++    const mapping = await this.loadOrCreateMapping(accountId);
+ 
+     const existing = mapping.runtimeHandle ? await this.tryStatus(mapping, correlationId) : null;
+-    if (existing && existing.provisioning_status === "running") {
++    if (
++      existing &&
++      existing.provisioning_status === "running" &&
++      this.channelSecrets.get(accountId)?.sha256 === mapping.internalChannelTokenHash
++    ) {
+       return this.provisionResultFrom(existing);
+     }
+ 
+@@ -336,6 +342,21 @@ export class ProvisioningService {
+     return { runtime_handle: mapping.runtimeHandle, rotated_at: new Date().toISOString() };
+   }
+ 
++  /** Server-internal channel target; never serialize this to a browser. */
++  async getChannelTarget(accountId: string): Promise<{ endpoint: string; bearer: string }> {
++    const mapping = await this.requireMapping(accountId);
++    const credential = this.channelSecrets.get(accountId);
++    if (
++      mapping.provisioningStatus !== "running" ||
++      !mapping.runtimeEndpoint ||
++      !credential ||
++      credential.sha256 !== mapping.internalChannelTokenHash
++    ) {
++      throw runtimeUnavailableError();
++    }
++    return { endpoint: mapping.runtimeEndpoint, bearer: credential.raw };
++  }
++
+   // --- internals ------------------------------------------------------------
+ 
+   private async loadOrCreateMapping(accountId: string): Promise<MappingRow> {
+diff --git a/apps/control-plane/src/routes.ts b/apps/control-plane/src/routes.ts
+index 31ce3a1..3fcaeee 100644
+--- a/apps/control-plane/src/routes.ts
++++ b/apps/control-plane/src/routes.ts
+@@ -19,6 +19,7 @@ import type { SecretRegistry } from "./redaction.ts";
+ import { loadSessionProjection, touchLastActive } from "./modules/session-projection.ts";
+ import type { SecurityEventService } from "./modules/security-events.ts";
+ import type { SignupCapService } from "./modules/signup-cap.ts";
++import { createRuntimeApiProxy } from "./runtime/api-proxy.ts";
+ import { requireSession } from "./auth/session-middleware.ts";
+ 
+ export interface RouteDependencies {
+@@ -144,5 +145,13 @@ export function createRoutes(deps: RouteDependencies): Router {
+     runtimeHandler((accountId, correlationId) => deps.provisioning.stop(accountId, correlationId)),
+   );
+ 
++  router.use(
++    "/api/runtime/local",
++    requireSessionMiddleware,
++    createRuntimeApiProxy({
++      targetForAccount: (accountId) => deps.provisioning.getChannelTarget(accountId),
++    }),
++  );
++
+   return router;
+ }
+diff --git a/apps/control-plane/src/runtime/container-spec.ts b/apps/control-plane/src/runtime/container-spec.ts
+index d3b2365..d6e9a2b 100644
+--- a/apps/control-plane/src/runtime/container-spec.ts
++++ b/apps/control-plane/src/runtime/container-spec.ts
+@@ -46,6 +46,7 @@ export interface LocalContainerSpec {
+   Env: string[];
+   Labels: Record<string, string>;
+   HostConfig: {
++    Mounts: Array<{ Type: "volume"; Source: string; Target: string }>;
+     NanoCpus: number;
+     Memory: number;
+     /** Memory limit without swap headroom: no swap beyond the tier limit. */
+@@ -90,6 +91,9 @@ export function buildLocalContainerSpec(input: LocalContainerSpecInput): LocalCo
+       `SHERA_ACCOUNT_ID=${input.account_id}`,
+       `SHERA_TIER=${input.tier}`,
+       `SHERA_INTERNAL_PORT=${input.internal_port}`,
++      "RUNTIME_PORT=0",
++      "RUNTIME_DB_PATH=/app/data/runtime.db",
++      `RUNTIME_DEFAULT_WORKSPACE_ID=ws_${input.account_id}`,
+     ],
+     Labels: {
+       "shera.managed": "control-plane",
+@@ -100,6 +104,9 @@ export function buildLocalContainerSpec(input: LocalContainerSpecInput): LocalCo
+       "shera.tier_memory_bytes": String(limits.memory_bytes),
+     },
+     HostConfig: {
++      Mounts: [
++        { Type: "volume", Source: `shera-rt-data-${input.account_id}`, Target: "/app/data" },
++      ],
+       NanoCpus: limits.cpu_vcpus * 1_000_000_000,
+       Memory: limits.memory_bytes,
+       MemorySwap: limits.memory_bytes,
+diff --git a/apps/control-plane/src/runtime/local-container-backend.ts b/apps/control-plane/src/runtime/local-container-backend.ts
+index d67ae2e..5113538 100644
+--- a/apps/control-plane/src/runtime/local-container-backend.ts
++++ b/apps/control-plane/src/runtime/local-container-backend.ts
+@@ -19,7 +19,7 @@
+  *   container that does not have one; a missing/unmanaged label is a typed
+  *   failure). An owned container whose stored credential digest does NOT
+  *   match this call's token is REMOVED and RECREATED under the same
+- *   deterministic name with the new spec: recreation of an owned, volume-less
++ *   deterministic name with the new spec: recreation of an owned, persistently backed
+  *   container is the credential-recovery mechanism (the old digest is
+  *   unreachable, e.g. after a control-plane restart lost the in-memory raw
+  *   token), and the deterministic name keeps "one container per user" true.
+@@ -298,7 +298,7 @@ export class LocalContainerBackend implements RuntimeBackend {
+    *   must be returned — a handle is never minted for a container that does
+    *   not carry one, and a missing/unmanaged label is a typed failure.
+    * - An owned container whose credential digest does not match is REMOVED
+-   *   and the caller recreates it: recreation of an owned, volume-less
++   *   and the caller recreates it: recreation of an owned, persistently backed
+    *   container is the credential-recovery mechanism (the old digest is
+    *   unreachable, e.g. after a control-plane restart lost the in-memory raw
+    *   token).
+diff --git a/apps/control-plane/test/runtime-container-spec.test.ts b/apps/control-plane/test/runtime-container-spec.test.ts
+index 2be240b..8e9448e 100644
+--- a/apps/control-plane/test/runtime-container-spec.test.ts
++++ b/apps/control-plane/test/runtime-container-spec.test.ts
+@@ -78,6 +78,18 @@ describe("local container spec builder (PRD §3.3 tiers as real limits)", () =>
+     expect(JSON.stringify(spec).toLowerCase()).not.toContain("/var/run");
+   });
+ 
++  it("preserves product state across replacement with a stable per-account volume", () => {
++    const first = specFor("balanced");
++    const replacement = specFor("balanced");
++    expect(first.HostConfig.Mounts).toEqual([
++      { Type: "volume", Source: `shera-rt-data-${ACCOUNT}`, Target: "/app/data" },
++    ]);
++    expect(replacement.HostConfig.Mounts).toEqual(first.HostConfig.Mounts);
++    expect(first.Env).toContain("RUNTIME_DB_PATH=/app/data/runtime.db");
++    expect(first.Env).toContain(`RUNTIME_DEFAULT_WORKSPACE_ID=ws_${ACCOUNT}`);
++    expect(first.Env).toContain("RUNTIME_PORT=0");
++  });
++
+   it("restarts the container automatically unless explicitly stopped", () => {
+     const spec = specFor("balanced");
+     expect(spec.HostConfig.RestartPolicy).toEqual({ Name: "unless-stopped" });
+diff --git a/apps/control-plane/test/runtime-provisioning.test.ts b/apps/control-plane/test/runtime-provisioning.test.ts
+index 42df982..4631b5b 100644
+--- a/apps/control-plane/test/runtime-provisioning.test.ts
++++ b/apps/control-plane/test/runtime-provisioning.test.ts
+@@ -214,6 +214,16 @@ describe("failure is surfaced, never faked (G4)", () => {
+     expect(result.provisioning_status).toBe("running");
+   });
+ 
++  it("recovers a provisioning row left by a dead owner", async () => {
++    await controlPlane.db
++      .update(controlContainerMappings)
++      .set({ provisioningStatus: "provisioning" })
++      .where(eq(controlContainerMappings.accountId, B));
++    const result = await controlPlane.provisioning.ensureProvisioned(B);
++    expect(result.provisioning_status).toBe("running");
++    expect((await mapping(B))?.provisioningStatus).toBe("running");
++  });
++
+   it("a failed restart throws a typed error and records the operation failure", async () => {
+     const D = "d1b2c3d4-0000-4000-8000-000000000004";
+     await controlPlane.db
+@@ -325,7 +335,7 @@ describe("re-provisioning keeps the channel true (adoption invariants I1/I2)", (
+     await createAccount(H);
+     const first = await controlPlane.provisioning.ensureProvisioned(H);
+     const rowBefore = await mapping(H);
+-    await controlPlane.provisioning.stop(H);
++    // Keep the old runtime running: credential loss must recover this case too.
+ 
+     // A fresh service instance models the control-plane restart: it holds no
+     // in-memory token, so re-provisioning must recreate the container and
+diff --git a/apps/user-runtime/package.json b/apps/user-runtime/package.json
+index c69bab4..a31e8f7 100644
+--- a/apps/user-runtime/package.json
++++ b/apps/user-runtime/package.json
+@@ -10,6 +10,7 @@
+     }
+   },
+   "scripts": {
++    "start": "node --experimental-transform-types src/entrypoint.ts",
+     "typecheck": "tsc --noEmit -p tsconfig.json"
+   },
+   "dependencies": {
+diff --git a/apps/user-runtime/src/main.ts b/apps/user-runtime/src/main.ts
+index 6acf071..e344d49 100644
+--- a/apps/user-runtime/src/main.ts
++++ b/apps/user-runtime/src/main.ts
+@@ -25,9 +25,15 @@ import {
+   composeRuntime,
+   type RuntimeHandle,
+ } from "./transport/local-api/compose.ts";
++import {
++  createManagementServer,
++  managementConfigFromEnv,
++  type ManagementConfig,
++} from "./modules/runtime/management-server.ts";
+ import { defaultPacksRoot } from "./modules/runtime/pack-pin.ts";
+ 
+ export interface RuntimeNodeConfig {
++  management?: ManagementConfig;
+   /** Bind address; default 127.0.0.1 (loopback only). */
+   host?: string;
+   /** Listen port; 0 picks an ephemeral port. Default 8080. */
+@@ -56,6 +62,8 @@ export interface RuntimeNodeConfig {
+ }
+ 
+ export interface RuntimeNode {
++  /** Authenticated management listener; null in standalone local mode. */
++  managementPort: number | null;
+   host: string;
+   /** The bound port (resolved after listen — useful with ephemeral port 0). */
+   port: number;
+@@ -119,10 +127,24 @@ export function runtimeConfigFromEnv(
+ 
+ /** Start the runtime node: compose, bind, (optionally) wire shutdown signals. */
+ export async function startRuntimeNode(config: RuntimeNodeConfig = {}): Promise<RuntimeNode> {
+-  const { host, port, dbPath, defaultWorkspaceId, packsRoot } = runtimeConfigFromEnv(
+-    process.env,
+-    config,
+-  );
++  const management = config.management ?? managementConfigFromEnv(process.env);
++  const {
++    host,
++    port,
++    dbPath,
++    defaultWorkspaceId: configuredWorkspace,
++    packsRoot,
++  } = runtimeConfigFromEnv(process.env, config);
++  const defaultWorkspaceId = management ? `ws_${management.accountId}` : configuredWorkspace;
++  if (management && !isLoopbackHost(host))
++    throw new Error("managed runtime local API must bind loopback");
++  if (
++    management &&
++    (config.defaultWorkspaceId || process.env.RUNTIME_DEFAULT_WORKSPACE_ID) &&
++    configuredWorkspace !== defaultWorkspaceId
++  ) {
++    throw new Error("runtime workspace does not match the provisioned account");
++  }
+   mkdirSync(dirname(dbPath), { recursive: true });
+ 
+   const runtime: RuntimeHandle = composeRuntime({
+@@ -141,6 +163,28 @@ export async function startRuntimeNode(config: RuntimeNodeConfig = {}): Promise<
+   const address = runtime.httpServer.address();
+   const boundPort = typeof address === "object" && address ? address.port : port;
+ 
++  let managementServer: ReturnType<typeof createManagementServer> | undefined;
++  let managementPort: number | null = null;
++  try {
++    if (management) {
++      managementServer = createManagementServer(management, runtime.app, dbPath);
++      const server = managementServer;
++      await new Promise<void>((resolve, reject) => {
++        server.once("error", reject);
++        server.listen(management.port, management.host, () => {
++          server.off("error", reject);
++          resolve();
++        });
++      });
++      const address = server.address();
++      managementPort = typeof address === "object" && address ? address.port : null;
++    }
++  } catch (error) {
++    managementServer?.close();
++    await runtime.close();
++    throw error;
++  }
++
+   const signalHandlers = new Map<NodeJS.Signals, () => void>();
+   let stopped = false;
+   const stop = async (): Promise<void> => {
+@@ -155,6 +199,11 @@ export async function startRuntimeNode(config: RuntimeNodeConfig = {}): Promise<
+     // gateway.close() closes the WebSocket engine AND the HTTP server it is
+     // mounted on; composeRuntime then closes SQLite. Draining in-flight work
+     // beyond Socket.IO's own shutdown is later-slice supervision.
++    if (managementServer) {
++      await new Promise<void>((resolve, reject) =>
++        managementServer!.close((error) => (error ? reject(error) : resolve())),
++      );
++    }
+     await runtime.close();
+   };
+ 
+@@ -171,5 +220,5 @@ export async function startRuntimeNode(config: RuntimeNodeConfig = {}): Promise<
+     }
+   }
+ 
+-  return { host, port: boundPort, stop };
++  return { host, port: boundPort, managementPort, stop };
+ }
+diff --git a/apps/user-runtime/src/modules/agents/agent-folders.service.ts b/apps/user-runtime/src/modules/agents/agent-folders.service.ts
+index 4c036cf..ba1cce2 100644
+--- a/apps/user-runtime/src/modules/agents/agent-folders.service.ts
++++ b/apps/user-runtime/src/modules/agents/agent-folders.service.ts
+@@ -4,12 +4,8 @@
+  *
+  * Every Agent owns one private folder subtree, addressed by the URI the
+  * memory_link setting already surfaces (`agent://<agent_id>/`, the value the
+- * seeding writes into `agents.private_folder_path`). There is NO filesystem
+- * layer yet: this module is the seam the future file/terminal slices (S17
+- * workspace panel, S22 terminal/file tools) MUST route every private-folder
+- * access through BEFORE any byte moves. The store behind the seam is a
+- * minimal in-memory placeholder for tests — never real disk writes; a later
+- * slice swaps the store implementation without touching the guard.
++ * seeding writes into `agents.private_folder_path`). Production composition
++ * supplies disk-backed storage; direct unit tests may use the in-memory store.
+  *
+  * Three layers, each independently testable:
+  *
+@@ -33,10 +29,16 @@
+  * than guessing at permissions that do not exist yet. When a workspace
+  * permission convention arrives, it extends this module behind the same seam.
+  */
+-import { AgentNotFoundError, type AgentsRepository } from "../../adapters/sqlite/agents-repository.ts";
++import {
++  AgentNotFoundError,
++  type AgentsRepository,
++} from "../../adapters/sqlite/agents-repository.ts";
+ 
+ /** The AgentFolderUri host charset (packages/contracts agent.ts) — same rule. */
+ const AGENT_ID_CHARSET = /^[a-z0-9_-]+$/;
++function hasControlCharacter(value: string): boolean {
++  return Array.from(value).some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127);
++}
+ 
+ /** The parsed shape of an `agent://<agent_id>/<path>` URI. */
+ export interface ParsedAgentFolderUri {
+@@ -96,7 +98,7 @@ export class AgentFolderAccessDeniedError extends Error {
+  */
+ export function parseAgentFolderUri(uri: string): ParsedAgentFolderUri {
+   if (!uri.startsWith("agent://")) throw new AgentFolderUriInvalidError();
+-  if (/[\u0000-\u001f\u007f]/.test(uri)) throw new AgentFolderUriInvalidError();
++  if (hasControlCharacter(uri)) throw new AgentFolderUriInvalidError();
+ 
+   const afterScheme = uri.slice("agent://".length);
+   const hostEnd = afterScheme.indexOf("/");
+@@ -126,7 +128,7 @@ export function parseAgentFolderUri(uri: string): ParsedAgentFolderUri {
+     if (value.includes("/") || value.includes("\\")) {
+       throw new AgentFolderUriInvalidError();
+     }
+-    if (/[\u0000-\u001f\u007f]/.test(value)) throw new AgentFolderUriInvalidError();
++    if (hasControlCharacter(value)) throw new AgentFolderUriInvalidError();
+     decoded.push(value);
+   }
+   return { agent_id: agentId, path: decoded.join("/") };
+@@ -163,9 +165,7 @@ export function decideAgentFolderAccess(
+ }
+ 
+ /**
+- * The storage seam. The prototype ships `InMemoryAgentFolderStore` (tests and
+- * wiring prove the guard end-to-end without touching a disk); the file slice
+- * replaces the implementation — the guard and its callers do not change.
++ * Guarded storage seam: production uses disk-backed files; tests may use maps.
+  */
+ export interface AgentFolderStore {
+   /** The content at `path` inside this agent's subtree, or null when absent. */
+@@ -246,12 +246,7 @@ export class AgentFoldersService {
+   }
+ 
+   /** Guarded write: same rules as readFolder — own subtree only. */
+-  writeFolder(
+-    workspaceId: string,
+-    actorAgentId: string,
+-    uri: string,
+-    content: string,
+-  ): void {
++  writeFolder(workspaceId: string, actorAgentId: string, uri: string, content: string): void {
+     const target = this.guard(workspaceId, actorAgentId, uri);
+     this.#store.write(workspaceId, target.agent_id, target.path, content);
+   }
+@@ -282,11 +277,7 @@ export class AgentFoldersService {
+     return target;
+   }
+ 
+-  private guard(
+-    workspaceId: string,
+-    actorAgentId: string,
+-    uri: string,
+-  ): ParsedAgentFolderUri {
++  private guard(workspaceId: string, actorAgentId: string, uri: string): ParsedAgentFolderUri {
+     const target = this.resolveWithinWorkspace(workspaceId, actorAgentId, uri);
+     const decision = decideAgentFolderAccess(actorAgentId, target);
+     if (!decision.allowed) {
+diff --git a/apps/user-runtime/src/modules/agents/agents.service.test.ts b/apps/user-runtime/src/modules/agents/agents.service.test.ts
+index 7258241..6f9c0cb 100644
+--- a/apps/user-runtime/src/modules/agents/agents.service.test.ts
++++ b/apps/user-runtime/src/modules/agents/agents.service.test.ts
+@@ -16,10 +16,7 @@ import { fileURLToPath } from "node:url";
+ 
+ import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
+ 
+-import {
+-  AgentSettingsCommand,
+-  type AgentSettingsSnapshot,
+-} from "@shera-bot/contracts";
++import { AgentSettingsCommand, type AgentSettingsSnapshot } from "@shera-bot/contracts";
+ 
+ import {
+   AgentsRepository,
+@@ -35,10 +32,7 @@ import { EventsService } from "../events/events.service.ts";
+ import { AgentsService, AgentSettingsResetUnavailableError } from "./agents.service.ts";
+ 
+ const here = dirname(fileURLToPath(import.meta.url));
+-const studentManifestPath = resolve(
+-  here,
+-  "../../../../../agent-packs/student/v1/manifest.json",
+-);
++const studentManifestPath = resolve(here, "../../../../../agent-packs/student/v1/manifest.json");
+ const studentManifest = JSON.parse(readFileSync(studentManifestPath, "utf8")) as {
+   agents: Array<{
+     agent_id: string;
+@@ -56,9 +50,6 @@ const studentManifest = JSON.parse(readFileSync(studentManifestPath, "utf8")) as
+ const GENERAL = "agent_general_assistant";
+ const generalManifest = studentManifest.agents.find((agent) => agent.agent_id === GENERAL)!;
+ const RESEARCHER = "agent_researcher";
+-const researcherManifest = studentManifest.agents.find(
+-  (agent) => agent.agent_id === RESEARCHER,
+-)!;
+ 
+ const tempDirs: string[] = [];
+ 
+@@ -221,7 +212,10 @@ describe("AgentsService.getSettings (D16 read model)", () => {
+ describe("AgentsService.applySettingsCommand (D16 write path)", () => {
+   it("applies update commands and returns the read-after-write snapshot", () => {
+     const applied = service.applySettingsCommand(
+-      command({ type: "agent_settings.update_instructions", user_instructions: "Cite every source." }),
++      command({
++        type: "agent_settings.update_instructions",
++        user_instructions: "Cite every source.",
++      }),
+     );
+     expect(entry(applied, "user_instructions").value).toBe("Cite every source.");
+     expect(repo.getAgent("ws-primary", GENERAL)?.user_instructions).toBe("Cite every source.");
+@@ -298,9 +292,9 @@ describe("AgentsService.applySettingsCommand (D16 write path)", () => {
+     expect(entry(applied, "default_provider").value).toEqual(generalManifest.default_provider);
+     expect(entry(applied, "tool_defaults").value).toEqual([]);
+     // The researcher's instructions survive — reset_all targets ONE agent.
+-    expect(
+-      entry(service.getSettings("ws-primary", RESEARCHER), "user_instructions").value,
+-    ).toBe("General-only rule.");
++    expect(entry(service.getSettings("ws-primary", RESEARCHER), "user_instructions").value).toBe(
++      "General-only rule.",
++    );
+   });
+ 
+   it("keeps commands workspace-scoped (E12)", () => {
+@@ -315,7 +309,10 @@ describe("AgentsService.applySettingsCommand (D16 write path)", () => {
+   it("answers unknown agents with the typed 404-class rejection", () => {
+     expect(() =>
+       service.applySettingsCommand(
+-        command({ type: "agent_settings.update_instructions", user_instructions: "x" }, "agent_nobody"),
++        command(
++          { type: "agent_settings.update_instructions", user_instructions: "x" },
++          "agent_nobody",
++        ),
+       ),
+     ).toThrow(AgentNotFoundError);
+   });
+@@ -368,17 +365,13 @@ describe("read-model integrity against corrupted pack-owned data", () => {
+     const corruptManifest = structuredClone(studentManifest) as unknown as {
+       agents: Array<{ agent_id: string; skills: unknown } & Record<string, unknown>>;
+     };
+-    const corruptGeneral = corruptManifest.agents.find(
+-      (agent) => agent.agent_id === GENERAL,
+-    );
++    const corruptGeneral = corruptManifest.agents.find((agent) => agent.agent_id === GENERAL);
+     expect(corruptGeneral).toBeDefined();
+     corruptGeneral!.skills = 42;
+     repo.upsertFromPack(
+       "ws-primary",
+       corruptManifest.agents as unknown as Parameters<typeof repo.upsertFromPack>[1],
+     );
+-    expect(() => service.getSettings("ws-primary", GENERAL)).toThrow(
+-      AgentSettingsValidationError,
+-    );
++    expect(() => service.getSettings("ws-primary", GENERAL)).toThrow(AgentSettingsValidationError);
+   });
+ });
+diff --git a/apps/user-runtime/src/modules/runtime/channel-credentials.ts b/apps/user-runtime/src/modules/runtime/channel-credentials.ts
+index aef5d38..5f4eee6 100644
+--- a/apps/user-runtime/src/modules/runtime/channel-credentials.ts
++++ b/apps/user-runtime/src/modules/runtime/channel-credentials.ts
+@@ -35,6 +35,8 @@ function digestOfHex(hex: string): Buffer {
+ export class ChannelCredentialStore {
+   private readonly digests: Buffer[] = [];
+ 
++  constructor(private readonly changed?: (digests: string[]) => void) {}
++
+   /** Admit the provisioned credential; the raw value is hashed and discarded. */
+   admit(rawToken: string): void {
+     this.insert(digestOfRaw(rawToken));
+@@ -56,6 +58,7 @@ export class ChannelCredentialStore {
+   /** Keep only the committed digest; every other staged/old digest is pruned. */
+   commitTo(credentialSha256: Buffer): void {
+     if (this.digests.some((digest) => digest.equals(credentialSha256))) {
++      this.changed?.([credentialSha256.toString("hex")]);
+       this.digests.length = 0;
+       this.digests.push(Buffer.from(credentialSha256));
+     }
+@@ -87,6 +90,7 @@ export class ChannelCredentialStore {
+       // stage is accepted (bounded credential state, observable failure).
+       throw new Error("credential rotation bound reached: commit the staged digest first");
+     }
++    this.changed?.([...this.digests, digest].map((value) => value.toString("hex")));
+     this.digests.push(digest);
+   }
+ }
+diff --git a/apps/user-runtime/src/modules/runtime/internal-api.ts b/apps/user-runtime/src/modules/runtime/internal-api.ts
+index 8e2ba16..2806be3 100644
+--- a/apps/user-runtime/src/modules/runtime/internal-api.ts
++++ b/apps/user-runtime/src/modules/runtime/internal-api.ts
+@@ -16,6 +16,8 @@
+ import express, { type Express, type NextFunction, type Request, type Response } from "express";
+ 
+ import {
++  isBrowserRuntimePath,
++  runtimeWorkspaceMatches,
+   RuntimeCredentialCommitRequest,
+   RuntimeCredentialCommitResponse,
+   RuntimeCredentialRotationRequest,
+@@ -43,12 +45,12 @@ export { ChannelCredentialStore, InMemorySecurityEventRecorder };
+ export type { RuntimeRegistration } from "./runtime-registration.ts";
+ 
+ function internalChannelError(
+-  code: "INTERNAL_CHANNEL_UNAUTHORIZED" | "CONTRACT_VALIDATION_FAILED",
++  code: "INTERNAL_CHANNEL_UNAUTHORIZED" | "CONTRACT_VALIDATION_FAILED" | "RUNTIME_TENANT_MISMATCH",
+   safe_message: string,
+ ): SheraError {
+   return {
+     code,
+-    category: code === "INTERNAL_CHANNEL_UNAUTHORIZED" ? "unauthorized" : "validation",
++    category: code === "CONTRACT_VALIDATION_FAILED" ? "validation" : "unauthorized",
+     safe_message,
+     retryable: false,
+     user_action: null,
+@@ -68,6 +70,8 @@ function bearerOf(
+ 
+ export interface InternalApiDeps {
+   credentials: ChannelCredentialStore;
++  accountId?: string;
++  localApi?: Express;
+   securityEvents?: InternalSecurityEventRecorder;
+   registrations?: RuntimeRegistrationRegistry;
+ }
+@@ -147,6 +151,17 @@ export function createInternalApi(deps: InternalApiDeps): InternalApi {
+         );
+       return;
+     }
++    if (deps.accountId !== undefined && parsed.data.account_id !== deps.accountId) {
++      res
++        .status(403)
++        .json(
++          internalChannelError(
++            "RUNTIME_TENANT_MISMATCH",
++            "This runtime belongs to another account.",
++          ),
++        );
++      return;
++    }
+     const registration = registrations.register(parsed.data);
+     const response: RuntimeRegistrationResponse = {
+       registered: true,
+@@ -221,6 +236,31 @@ export function createInternalApi(deps: InternalApiDeps): InternalApi {
+   // Typed error middleware (closes the S06 review NOTE): every thrown failure
+   // and every unknown route answers with the SheraError taxonomy — never an
+   // Express default page, a stack trace, or raw internals (D23 rule 4, G3).
++  if (deps.localApi && deps.accountId) {
++    const localApi = deps.localApi;
++    const workspaceId = `ws_${deps.accountId}`;
++    app.use("/internal/v1/local", requireChannelCredential, (req, res, next) => {
++      if (!isBrowserRuntimePath(req.method, req.path)) {
++        notFoundRequestHandler(req, res, next);
++        return;
++      }
++      const query = new URL(req.url, "http://runtime.invalid").searchParams;
++      if (!runtimeWorkspaceMatches(req.method, query, req.body, workspaceId)) {
++        res
++          .status(403)
++          .json(
++            internalChannelError(
++              "RUNTIME_TENANT_MISMATCH",
++              "This workspace does not belong to this runtime.",
++            ),
++          );
++        return;
++      }
++      delete req.headers.authorization;
++      localApi(req, res, next);
++    });
++  }
++
+   app.use(notFoundRequestHandler);
+   app.use(typedErrorRequestHandler);
+ 
+diff --git a/apps/user-runtime/src/transport/local-api/compose.ts b/apps/user-runtime/src/transport/local-api/compose.ts
+index 562cdd4..6010482 100644
+--- a/apps/user-runtime/src/transport/local-api/compose.ts
++++ b/apps/user-runtime/src/transport/local-api/compose.ts
+@@ -19,6 +19,8 @@
+  * the hook fires strictly AFTER the committing transaction, whichever
+  * subscriber(s) are bound by then.
+  */
++import { dirname, join } from "node:path";
++import { FileAgentFolderStore } from "../../adapters/fs/agent-folder-store.ts";
+ import { createServer, type Server as HTTPServer } from "node:http";
+ 
+ import type { Express } from "express";
+@@ -144,7 +146,7 @@ export interface RuntimeHandle {
+    * the pinned pack; the agent API routes sit on top of this service.
+    */
+   agents: AgentsService;
+-  /** S11: the private-folder guard seam (same Agent records, one in-memory store). */
++  /** S11: durable private-folder storage behind the Agent access guard. */
+   folders: AgentFoldersService;
+   /** The scripted reply producer when enabled; undefined otherwise (G4). */
+   replyStreamer: ScriptedReplyStreamer | undefined;
+@@ -228,11 +230,10 @@ function wire(options: ComposeLocalApiOptions): Wired {
+     publish: containFanout((event) => publisher(event), logFault),
+   });
+ 
+-  // S11: the private-folder guard shares the SAME workspace-scoped Agent
+-  // records — resolution, isolation, and traversal safety live in the agents
+-  // module; the store is the module's in-memory placeholder until the file
+-  // slice swaps the implementation behind the identical seam.
+-  const folders = new AgentFoldersService({ agents: agentsRepository });
++  const folders = new AgentFoldersService({
++    agents: agentsRepository,
++    store: new FileAgentFolderStore(join(dirname(options.dbPath), "agent-files")),
++  });
+ 
+   const replay = new ReplayService({
+     journal,
+diff --git a/apps/user-runtime/src/transport/local-api/s11-agent-folder-api.test.ts b/apps/user-runtime/src/transport/local-api/s11-agent-folder-api.test.ts
+index ebee628..f83e95a 100644
+--- a/apps/user-runtime/src/transport/local-api/s11-agent-folder-api.test.ts
++++ b/apps/user-runtime/src/transport/local-api/s11-agent-folder-api.test.ts
+@@ -11,7 +11,6 @@
+  * resolution is workspace-scoped). The tests run the REAL composed stack —
+  * real SQLite, real pack seeding, real HTTP — per house convention.
+  */
+-import { readFileSync } from "node:fs";
+ import { dirname, join, resolve } from "node:path";
+ import { fileURLToPath } from "node:url";
+ 
+@@ -50,11 +49,7 @@ async function composeOn(dbPath: string): Promise<RunningRuntime> {
+   };
+ }
+ 
+-async function folderAccess(
+-  origin: string,
+-  actingAgentId: string,
+-  query: string,
+-) {
++async function folderAccess(origin: string, actingAgentId: string, query: string) {
+   const response = await fetch(
+     `${origin}/v1/agents/${actingAgentId}/folder?workspace_id=${DEFAULT_WORKSPACE_ID}&${query}`,
+   );
+@@ -100,10 +95,7 @@ describe("S11 agent folder access API (private-folder isolation guard)", () => {
+     const dir = makeTempDir("shera-runtime-s11-folder-deny-");
+     const running = await composeOn(join(dir, "runtime.db"));
+     try {
+-      for (const path of [
+-        `agent://${RESEARCHER}/`,
+-        `agent://${RESEARCHER}/notes/private.txt`,
+-      ]) {
++      for (const path of [`agent://${RESEARCHER}/`, `agent://${RESEARCHER}/notes/private.txt`]) {
+         const denied = await folderAccess(running.origin, GENERAL, `path=${path}`);
+         expect(denied.status).toBe(403);
+         expect(denied.body).toMatchObject({
+@@ -167,11 +159,7 @@ describe("S11 agent folder access API (private-folder isolation guard)", () => {
+       expect(shared.body).toMatchObject({ code: "AGENT_FOLDER_URI_INVALID" });
+ 
+       // Host outside the AgentFolderUri charset.
+-      const badHost = await folderAccess(
+-        running.origin,
+-        GENERAL,
+-        "path=agent://Agent_X/notes.txt",
+-      );
++      const badHost = await folderAccess(running.origin, GENERAL, "path=agent://Agent_X/notes.txt");
+       expect(badHost.status).toBe(400);
+       expect(badHost.body).toMatchObject({ code: "AGENT_FOLDER_URI_INVALID" });
+ 
+@@ -216,11 +204,31 @@ describe("S11 agent folder access API (private-folder isolation guard)", () => {
+         `${running.origin}/v1/agents/${GENERAL}/folder?workspace_id=ws-s11-foreign&path=agent://${GENERAL}/`,
+       );
+       expect(foreign.status).toBe(404);
+-      expect(((await foreign.json()) as Record<string, unknown>)["code"]).toBe(
+-        "AGENT_NOT_FOUND",
+-      );
++      expect(((await foreign.json()) as Record<string, unknown>)["code"]).toBe("AGENT_NOT_FOUND");
+     } finally {
+       await running.close();
+     }
+   });
+ });
++
++describe("private-folder persistence in the real composition", () => {
++  it("retains guarded file content after closing and reopening the runtime", async () => {
++    const dir = makeTempDir("shera-durable-agent-folder-");
++    const dbPath = join(dir, "runtime.db");
++    const uri = `agent://${GENERAL}/notes/restart.txt`;
++    const first = await composeOn(dbPath);
++    first.runtime.folders.writeFolder(DEFAULT_WORKSPACE_ID, GENERAL, uri, "durable note");
++    await first.close();
++    const reopened = await composeOn(dbPath);
++    try {
++      expect(reopened.runtime.folders.readFolder(DEFAULT_WORKSPACE_ID, GENERAL, uri)).toBe(
++        "durable note",
++      );
++      expect(() =>
++        reopened.runtime.folders.readFolder(DEFAULT_WORKSPACE_ID, RESEARCHER, uri),
++      ).toThrow();
++    } finally {
++      await reopened.close();
++    }
++  });
++});
+diff --git a/apps/web/app/app/layout.tsx b/apps/web/app/app/layout.tsx
+index cfc5b90..f519b69 100644
+--- a/apps/web/app/app/layout.tsx
++++ b/apps/web/app/app/layout.tsx
+@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
+ 
+ import { AppShell } from "@/components/shell/app-shell";
+ import { Providers } from "@/components/providers";
++import { ContainerGate } from "@/components/shell/container-gate";
+ 
+ export const metadata: Metadata = {
+   title: "Dashboard",
+@@ -12,7 +13,9 @@ export const metadata: Metadata = {
+ export default function AppLayout({ children }: { children: ReactNode }) {
+   return (
+     <Providers>
+-      <AppShell>{children}</AppShell>
++      <AppShell>
++        <ContainerGate>{children}</ContainerGate>
++      </AppShell>
+     </Providers>
+   );
+ }
+diff --git a/apps/web/app/app/page.tsx b/apps/web/app/app/page.tsx
+index dbc43cd..bc0c524 100644
+--- a/apps/web/app/app/page.tsx
++++ b/apps/web/app/app/page.tsx
+@@ -1,7 +1,6 @@
+ import type { Metadata } from "next";
+ import Link from "next/link";
+ 
+-import { ContainerGate } from "@/components/shell/container-gate";
+ import { EmptyState, SurfaceFrame } from "@/components/shell/surface-frame";
+ import { Button } from "@/components/ui/button";
+ import { PACK_AGENTS } from "@/lib/navigation";
+@@ -29,17 +28,15 @@ export default function DashboardPage() {
+   }
+ 
+   return (
+-    <ContainerGate>
+-      <SurfaceFrame title="Pick a conversation">
+-        <EmptyState
+-          explanation="Pick an Agent to start a conversation, or launch a pack-defined Operation from the sidebar."
+-          action={
+-            <Button asChild>
+-              <Link href={routes.agent(firstAgent.slug)}>Chat with {firstAgent.name}</Link>
+-            </Button>
+-          }
+-        />
+-      </SurfaceFrame>
+-    </ContainerGate>
++    <SurfaceFrame title="Pick a conversation">
++      <EmptyState
++        explanation="Pick an Agent to start a conversation, or launch a pack-defined Operation from the sidebar."
++        action={
++          <Button asChild>
++            <Link href={routes.agent(firstAgent.slug)}>Chat with {firstAgent.name}</Link>
++          </Button>
++        }
++      />
++    </SurfaceFrame>
+   );
+ }
+diff --git a/apps/web/app/login/page.tsx b/apps/web/app/login/page.tsx
+index 658c896..0734220 100644
+--- a/apps/web/app/login/page.tsx
++++ b/apps/web/app/login/page.tsx
+@@ -2,15 +2,12 @@ import type { Metadata } from "next";
+ 
+ import { Wordmark } from "@/components/shell/wordmark";
+ import { Button } from "@/components/ui/button";
++import { routes } from "@/lib/routes";
+ 
+ export const metadata: Metadata = {
+   title: "Sign in",
+ };
+ 
+-/**
+- * S1 login surface. OAuth wiring is a later slice — the primary action is
+- * visibly disabled rather than pretending to work (G4 honest states).
+- */
+ export default function LoginPage() {
+   return (
+     <main className="flex min-h-dvh items-center justify-center px-4 py-8">
+@@ -22,12 +19,11 @@ export default function LoginPage() {
+         <p className="mt-2 text-sm text-muted">
+           Your Agents, Operations, and workspace in one private place.
+         </p>
+-        <Button className="mt-8 w-full" disabled>
+-          Sign in with Google
++        <Button className="mt-8 w-full" asChild>
++          <a href={routes.controlPlaneSignIn()}>Sign in with Google</a>
+         </Button>
+         <p className="mt-4 text-xs text-muted">
+-          Google sign-in is not wired into this prototype build yet. When it goes live, access is
+-          capped at five accounts.
++          Sign in with your Google account. Private prototype access is capped at five accounts.
+         </p>
+       </div>
+     </main>
+diff --git a/apps/web/components/chat/agent-direct-chat-surface.tsx b/apps/web/components/chat/agent-direct-chat-surface.tsx
+index 3bd440f..1908a3a 100644
+--- a/apps/web/components/chat/agent-direct-chat-surface.tsx
++++ b/apps/web/components/chat/agent-direct-chat-surface.tsx
+@@ -4,7 +4,7 @@ import { AgentChatView } from "@/components/chat/agent-chat-view";
+ import type { Agent } from "@shera-bot/contracts";
+ 
+ import type { ConversationSummary, ThreadItem } from "@/lib/fixtures";
+-import { useContainerResolution } from "@/lib/container-connection";
++import { useContainerResolution, useSessionIdentity } from "@/lib/container-connection";
+ import type { ContainerResolutionState } from "@/lib/container-resolution";
+ import { useAgentDirectChat } from "@/lib/agent-data";
+ import { useLiveConversation } from "@/lib/runtime-live";
+@@ -31,13 +31,6 @@ export function agentChatSurfaceMode(
+   return state?.kind === "ready" ? "runtime" : "demo";
+ }
+ 
+-/**
+- * Fixture/demo user attribution (S01 fixture session) — the same constant the
+- * GA surface and the settings commands use; the real signed-in identity is
+- * later-slice work and is deliberately not faked (G4).
+- */
+-const LOCAL_USER_NAME = "Emon";
+-
+ export function AgentDirectChatSurface({
+   agent,
+   conversation,
+@@ -77,17 +70,21 @@ function RuntimeAgentDirectChat({
+   agent: Agent;
+   conversation: ConversationSummary;
+ }) {
++  const session = useSessionIdentity();
+   const real = useAgentDirectChat(workspaceId, agent.agent_id);
+ 
+   // S09 chunk 2's live pipeline, reused against the direct chat id (§6.3).
+   const wsUrl = process.env.NEXT_PUBLIC_RUNTIME_WS_URL ?? null;
+   const liveEnabled =
+-    wsUrl !== null && real.directChatId !== null && real.surfaceState === "ready";
++    session.data !== undefined &&
++    wsUrl !== null &&
++    real.directChatId !== null &&
++    real.surfaceState === "ready";
+   const live = useLiveConversation({
+     wsUrl,
+     workspaceId,
+     conversationId: real.directChatId ?? "",
+-    displayName: LOCAL_USER_NAME,
++    displayName: session.data?.display_name ?? "User",
+     agentId: agent.agent_id,
+     enabled: liveEnabled,
+   });
+diff --git a/apps/web/components/chat/general-assistant-surface.tsx b/apps/web/components/chat/general-assistant-surface.tsx
+index 0f19ddf..b4906e7 100644
+--- a/apps/web/components/chat/general-assistant-surface.tsx
++++ b/apps/web/components/chat/general-assistant-surface.tsx
+@@ -4,7 +4,7 @@ import { AgentChatView } from "@/components/chat/agent-chat-view";
+ import type { Agent } from "@shera-bot/contracts";
+ 
+ import type { ConversationSummary, ThreadItem } from "@/lib/fixtures";
+-import { useContainerResolution } from "@/lib/container-connection";
++import { useContainerResolution, useSessionIdentity } from "@/lib/container-connection";
+ import type { ContainerResolutionState } from "@/lib/container-resolution";
+ import { useRealConversationThread } from "@/lib/runtime-data";
+ import { useLiveConversation } from "@/lib/runtime-live";
+@@ -70,6 +70,7 @@ function RuntimeGeneralAssistantChat({
+   agent: Agent;
+   conversation: ConversationSummary;
+ }) {
++  const session = useSessionIdentity();
+   const real = useRealConversationThread(workspaceId);
+ 
+   // S09 chunk 2: the REAL conversation surface. When the conversation id is
+@@ -79,12 +80,15 @@ function RuntimeGeneralAssistantChat({
+   // script). Without a WS URL the chunk-1 HTTP snapshot stays, read-only.
+   const wsUrl = process.env.NEXT_PUBLIC_RUNTIME_WS_URL ?? null;
+   const liveEnabled =
+-    wsUrl !== null && real.conversationId !== null && real.surfaceState === "ready";
++    session.data !== undefined &&
++    wsUrl !== null &&
++    real.conversationId !== null &&
++    real.surfaceState === "ready";
+   const live = useLiveConversation({
+     wsUrl,
+     workspaceId,
+     conversationId: real.conversationId ?? "",
+-    displayName: LOCAL_USER_NAME,
++    displayName: session.data?.display_name ?? "User",
+     agentId: agent.agent_id,
+     enabled: liveEnabled,
+   });
+@@ -132,11 +136,3 @@ function RuntimeGeneralAssistantChat({
+     />
+   );
+ }
+-
+-/**
+- * Fixture/demo user attribution (S01 fixture session). Real sends in this
+- * slice are attributed to this named FIXTURE user — reading the REAL
+- * signed-in session's display name is later-slice work and is deliberately
+- * not faked here (G4: no fabricated identity).
+- */
+-const LOCAL_USER_NAME = "Emon";
+diff --git a/apps/web/lib/agent-api.ts b/apps/web/lib/agent-api.ts
+index f0fed69..fee074d 100644
+--- a/apps/web/lib/agent-api.ts
++++ b/apps/web/lib/agent-api.ts
+@@ -9,7 +9,6 @@ import {
+   type AgentSettingsCommand as AgentSettingsCommandType,
+ } from "@shera-bot/contracts";
+ 
+-import { RuntimeApiError } from "@/lib/runtime-client";
+ import { requestRuntime } from "@/lib/runtime-client";
+ 
+ /**
+diff --git a/apps/web/lib/container-connection.ts b/apps/web/lib/container-connection.ts
+index 9095221..01df8a7 100644
+--- a/apps/web/lib/container-connection.ts
++++ b/apps/web/lib/container-connection.ts
+@@ -164,3 +164,13 @@ export function useRetryResolution() {
+     void queryClient.refetchQueries({ queryKey: CONTAINER_RESOLUTION_QUERY_KEY });
+   };
+ }
++
++/** The signed-in name for live messages; optimistic attribution uses real identity. */
++export function useSessionIdentity() {
++  return useQuery({
++    queryKey: ["session-identity"],
++    queryFn: fetchSession,
++    retry: false,
++    staleTime: 0,
++  });
++}
+diff --git a/apps/web/lib/server/proxies.ts b/apps/web/lib/server/proxies.ts
+index 9464cbf..c48aaac 100644
+--- a/apps/web/lib/server/proxies.ts
++++ b/apps/web/lib/server/proxies.ts
+@@ -1,30 +1,8 @@
+ import { randomUUID } from "node:crypto";
++import { Session, isBrowserRuntimePath, runtimeWorkspaceMatches } from "@shera-bot/contracts";
+ 
+-/**
+- * Web server-side proxies (S09 chunk 1).
+- *
+- * The browser talks to THIS origin only; the Next server forwards two scoped
+- * surfaces deployment-internally:
+- *
+- * 1. control-plane proxy → S05 auth/session + S06 runtime lifecycle at
+- *    CONTROL_PLANE_URL (session resolution, provisioning status, the explicit
+- *    provision trigger). Auth.js session cookies flow through on both legs.
+- * 2. runtime proxy → the container-local S07 local API at
+- *    RUNTIME_LOCAL_API_URL, with a STRICT path allowlist (only the surfaces
+- *    the client uses: the two conversation surfaces and the four S11 agent
+- *    surfaces — never /internal/*, never the chunk-2 agent PATCH routes). The
+- *    local API stays loopback-only; the proxy is the prototype's deployment seam
+- *    and carries NO authentication in this slice — the principal-to-workspace
+- *    binding arrives with the authenticated transport wiring (recorded S07
+- *    posture). Documented honestly here rather than hidden (G4).
+- *
+- * Both are transport-only: typed SheraError bodies the services already
+- * redacted pass through verbatim (D23 rule 4), as do response redirects
+- * (location) and cache-control directives; nothing is logged or rewritten
+- * (G3). An unconfigured deployment is a first-class honest state, never a
+- * fake success.
+- */
+-
++/** Browser requests pass through the authenticated control plane, which owns
++ * per-account runtime routing. No browser request selects an internal endpoint. */
+ interface TypedFailure {
+   code: string;
+   category: string;
+@@ -73,21 +51,7 @@ export async function proxyToControlPlane(
+  * channel under /internal/* — is refused here, typed 404.
+  */
+ export async function proxyToLocalApi(request: Request, upstreamPath: string): Promise<Response> {
+-  const allowed =
+-    request.method === "POST" && upstreamPath === "/v1/conversations/commands"
+-      ? true
+-      : request.method === "GET" && /^\/v1\/conversations\/[^/]+\/events$/.test(upstreamPath)
+-        ? true
+-        : request.method === "GET" && upstreamPath === "/v1/agents"
+-          ? true
+-          : request.method === "GET" && /^\/v1\/agents\/[^/]+$/.test(upstreamPath)
+-            ? true
+-            : request.method === "GET" && /^\/v1\/agents\/[^/]+\/settings$/.test(upstreamPath)
+-              ? true
+-              : request.method === "POST" &&
+-                  /^\/v1\/agents\/[^/]+\/settings\/commands$/.test(upstreamPath)
+-                ? true
+-                : false;
++  const allowed = isBrowserRuntimePath(request.method, upstreamPath);
+   if (!allowed) {
+     return Response.json(
+       {
+@@ -102,7 +66,93 @@ export async function proxyToLocalApi(request: Request, upstreamPath: string): P
+       { status: 404 },
+     );
+   }
+-  return forward(request, process.env["RUNTIME_LOCAL_API_URL"], upstreamPath);
++  const base = process.env["CONTROL_PLANE_URL"];
++  const sessionResponse = await forward(
++    new Request(new URL("/api/session", request.url), { headers: request.headers }),
++    base,
++    "/api/session",
++  );
++  if (!sessionResponse.ok) return sessionResponse;
++  const session = Session.safeParse(await sessionResponse.json().catch(() => null));
++  if (!session.success) return typedFailure(PROXY_UNCONFIGURED, 503);
++  const url = new URL(request.url);
++  if (
++    request.method === "POST" &&
++    request.headers.has("origin") &&
++    request.headers.get("origin") !== url.origin
++  ) {
++    return tenantMismatch();
++  }
++  let body: unknown = null;
++  if (request.method === "POST") {
++    try {
++      const reader = request.body?.getReader();
++      const chunks: Uint8Array[] = [];
++      let size = 0;
++      if (reader) {
++        try {
++          for (;;) {
++            const { done, value } = await reader.read();
++            if (done) break;
++            size += value.byteLength;
++            if (size > 64 * 1024) {
++              await reader.cancel();
++              return typedFailure(
++                {
++                  code: "CONTRACT_VALIDATION_FAILED",
++                  category: "validation",
++                  safe_message: "The request body is too large.",
++                  retryable: false,
++                  user_action: null,
++                  internal_details: null,
++                },
++                413,
++              );
++            }
++            chunks.push(value);
++          }
++        } finally {
++          reader.releaseLock();
++        }
++      }
++      const raw = Buffer.concat(chunks).toString("utf8");
++      body = JSON.parse(raw);
++      request = new Request(request.url, {
++        method: request.method,
++        headers: request.headers,
++        body: raw,
++      });
++    } catch {
++      return typedFailure(
++        {
++          code: "CONTRACT_VALIDATION_FAILED",
++          category: "validation",
++          safe_message: "The request body must be valid JSON.",
++          retryable: false,
++          user_action: null,
++          internal_details: null,
++        },
++        400,
++      );
++    }
++  }
++  if (!runtimeWorkspaceMatches(request.method, url.searchParams, body, session.data.workspace_id))
++    return tenantMismatch();
++  return forward(request, base, `/api/runtime/local${upstreamPath}`);
++}
++
++function tenantMismatch(): Response {
++  return typedFailure(
++    {
++      code: "RUNTIME_TENANT_MISMATCH",
++      category: "unauthorized",
++      safe_message: "This workspace is not available to your account.",
++      retryable: false,
++      user_action: null,
++      internal_details: null,
++    },
++    403,
++  );
+ }
+ 
+ async function forward(
+@@ -137,6 +187,9 @@ async function forward(
+   try {
+     response = await fetch(upstream, {
+       method: request.method,
++      redirect: "manual",
++      signal: AbortSignal.timeout(15_000),
++      cache: "no-store",
+       headers,
+       ...(body === undefined ? {} : { body }),
+     });
+@@ -144,7 +197,10 @@ async function forward(
+     return typedFailure(PROXY_UNREACHABLE, 503);
+   }
+ 
+-  const payload = await response.text();
++  const payload =
++    request.method === "HEAD" || [204, 205, 304].includes(response.status)
++      ? null
++      : await response.text();
+   const downstream = new Response(payload, {
+     status: response.status,
+     headers: { "content-type": response.headers.get("content-type") ?? "application/json" },
+diff --git a/apps/web/test/e2e/mock-runtime-e2e.test.ts b/apps/web/test/e2e/mock-runtime-e2e.test.ts
+index 512229a..8ef5499 100644
+--- a/apps/web/test/e2e/mock-runtime-e2e.test.ts
++++ b/apps/web/test/e2e/mock-runtime-e2e.test.ts
+@@ -16,7 +16,7 @@
+  *   wire client (RuntimeSocket) feeding the web app's OWN reducer
+  *   (advanceLiveThread) — the same dispatches the React hook performs.
+  * - "Login" is asserted honestly: the S01 sign-in surface renders with its
+- *   visibly disabled provider button (OAuth is a later slice, G4) and the
++ *   control-plane provider link (real OAuth remains outside this mock test) and the
+  *   prototype session is the fixture user the sends are attributed to (Emon).
+  *
+  * DETERMINISM: the scripted reply streams one delta per 15ms and commits its
+@@ -69,9 +69,49 @@ async function startHarness(): Promise<E2eHarness> {
+   const mock = await startE2eMockRuntime();
+   tempDirs.push(join(mock.dbPath, ".."));
+   // The proxy reads its upstream from the deployment env — the harness IS the
+-  // deployment here, so the mock origin is the local API URL.
+-  const previousUpstream = process.env["RUNTIME_LOCAL_API_URL"];
+-  process.env["RUNTIME_LOCAL_API_URL"] = mock.origin;
++  // deployment here. Its explicit mock identity service is test-only; there
++  // is no production authentication bypass.
++  const previousUpstream = process.env["CONTROL_PLANE_URL"];
++  const control = createServer((req, res) => {
++    void (async () => {
++      if (req.url === "/api/session") {
++        res.writeHead(200, { "content-type": "application/json" });
++        res.end(
++          JSON.stringify({
++            workspace_id: mock.workspace_id,
++            google_sub: "e8-user",
++            email: "e8@example.com",
++            display_name: SESSION_USER,
++            tier: "balanced",
++            is_admin: false,
++            created_at: "2026-10-01T00:00:00Z",
++            last_active_at: "2026-10-01T00:00:00Z",
++          }),
++        );
++        return;
++      }
++      if (!req.url?.startsWith("/api/runtime/local/")) {
++        res.writeHead(404);
++        res.end();
++        return;
++      }
++      const chunks: Buffer[] = [];
++      for await (const chunk of req) chunks.push(chunk as Buffer);
++      const response = await fetch(mock.origin + req.url.slice("/api/runtime/local".length), {
++        method: req.method ?? "GET",
++        headers: { "content-type": "application/json" },
++        ...(chunks.length ? { body: Buffer.concat(chunks) } : {}),
++      });
++      res.writeHead(response.status, { "content-type": "application/json" });
++      res.end(await response.text());
++    })().catch(() => {
++      res.writeHead(500);
++      res.end();
++    });
++  });
++  await new Promise<void>((resolve) => control.listen(0, "127.0.0.1", resolve));
++  process.env["CONTROL_PLANE_URL"] =
++    `http://127.0.0.1:${(control.address() as { port: number }).port}`;
+ 
+   const proxy: HTTPServer = createServer((req, res) => {
+     void (async () => {
+@@ -113,11 +153,12 @@ async function startHarness(): Promise<E2eHarness> {
+       await new Promise<void>((resolve, reject) =>
+         proxy.close((error) => (error ? reject(error) : resolve())),
+       );
++      await new Promise<void>((resolve) => control.close(() => resolve()));
+       await mock.stop();
+       if (previousUpstream === undefined) {
+-        delete process.env["RUNTIME_LOCAL_API_URL"];
++        delete process.env["CONTROL_PLANE_URL"];
+       } else {
+-        process.env["RUNTIME_LOCAL_API_URL"] = previousUpstream;
++        process.env["CONTROL_PLANE_URL"] = previousUpstream;
+       }
+     },
+   };
+@@ -227,7 +268,7 @@ describe("S09 mock-runtime E2E (E8): login → chat → send → stream → refr
+     // -- Phase 0: LOGIN — the honest S01 surface, no fake provider success ----
+     const loginMarkup = renderToStaticMarkup(createElement(LoginPage));
+     expect(loginMarkup).toContain("Sign in");
+-    expect(loginMarkup).toContain("disabled");
++    expect(loginMarkup).toContain('href="/api/control/api/auth/signin/google"');
+     expect(loginMarkup).not.toContain("Signed in");
+ 
+     const harness = await startHarness();
+diff --git a/apps/web/test/proxies.test.ts b/apps/web/test/proxies.test.ts
+index a3c33c0..2336d50 100644
+--- a/apps/web/test/proxies.test.ts
++++ b/apps/web/test/proxies.test.ts
+@@ -15,6 +15,16 @@ import { proxyToControlPlane, proxyToLocalApi } from "../lib/server/proxies";
+ 
+ const CONTROL_BASE = "http://control-plane.test";
+ const RUNTIME_BASE = "http://runtime-local.test";
++const SESSION_BODY = {
++  workspace_id: "ws_account-1",
++  google_sub: "google-account-1",
++  email: "user@example.com",
++  display_name: "User",
++  tier: "balanced",
++  is_admin: false,
++  created_at: "2026-09-19T00:00:00.000Z",
++  last_active_at: "2026-10-20T00:00:00.000Z",
++};
+ 
+ /** The stubbed fetch's captured calls (input URL + the forwarded init). */
+ interface FetchCall {
+@@ -23,13 +33,16 @@ interface FetchCall {
+ }
+ 
+ /** A fetch stub that records every call and answers with the given response. */
+-function stubFetch(respond: () => Response): { calls: FetchCall[] } {
++function stubFetch(
++  respond: () => Response,
++  session: () => Response = () => Response.json({ ...SESSION_BODY, workspace_id: "ws_1" }),
++): { calls: FetchCall[] } {
+   const calls: FetchCall[] = [];
+   vi.stubGlobal(
+     "fetch",
+     vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+       calls.push({ input, init });
+-      return Promise.resolve(respond());
++      return Promise.resolve(String(input).endsWith("/api/session") ? session() : respond());
+     }),
+   );
+   return { calls };
+@@ -79,7 +92,79 @@ describe("control-plane proxy — redirect passthrough (sign-in 302)", () => {
+ });
+ 
+ describe("runtime proxy — allowlist + passthrough", () => {
++  it("rejects an anonymous command before the runtime can be reached", async () => {
++    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
++    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
++    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
++    const { calls } = stubFetch(
++      () => new Response(null, { status: 500 }),
++      () =>
++        Response.json(
++          {
++            code: "UNAUTHENTICATED",
++            category: "authentication",
++            safe_message: "Sign in to continue.",
++            retryable: false,
++            user_action: "Sign in with Google.",
++            internal_details: null,
++            correlation_id: "corr-unauthenticated",
++          },
++          { status: 401 },
++        ),
++    );
++
++    const request = new Request("http://web.test/api/runtime/v1/conversations/commands", {
++      method: "POST",
++      body: JSON.stringify({
++        type: "conversation.create",
++        workspace_id: "ws_victim",
++        idempotency_key: "anonymous-forgery",
++        payload: { title: "Victim workspace" },
++      }),
++      headers: { "content-type": "application/json" },
++    });
++    const response = await proxyToLocalApi(request, "/v1/conversations/commands");
++
++    expect(response.status).toBe(401);
++    expect((await response.json()) as { code: string }).toMatchObject({ code: "UNAUTHENTICATED" });
++    expect(calls).toHaveLength(1);
++    expect(String(calls[0]!.input)).toBe(`${CONTROL_BASE}/api/session`);
++  });
++
++  it("rejects a caller-chosen workspace that differs from the authenticated session", async () => {
++    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
++    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
++    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
++    const { calls } = stubFetch(
++      () => Response.json(SESSION_BODY),
++      () => Response.json(SESSION_BODY),
++    );
++
++    const request = new Request("http://web.test/api/runtime/v1/conversations/commands", {
++      method: "POST",
++      body: JSON.stringify({
++        type: "conversation.create",
++        workspace_id: "ws_victim",
++        idempotency_key: "authenticated-forgery",
++        payload: { title: "Victim workspace" },
++      }),
++      headers: {
++        "content-type": "application/json",
++        cookie: "shera.session=authenticated",
++      },
++    });
++    const response = await proxyToLocalApi(request, "/v1/conversations/commands");
++
++    expect(response.status).toBe(403);
++    expect((await response.json()) as { code: string }).toMatchObject({
++      code: "RUNTIME_TENANT_MISMATCH",
++    });
++    expect(calls).toHaveLength(1);
++    expect(String(calls[0]!.input)).toBe(`${CONTROL_BASE}/api/session`);
++  });
++
+   it("an allowed GET keeps transparent headers — cache-control reaches the client", async () => {
++    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+     process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+     stubFetch(
+       () =>
+@@ -89,9 +174,12 @@ describe("runtime proxy — allowlist + passthrough", () => {
+         }),
+     );
+ 
+-    const request = new Request("http://web.test/api/runtime/v1/conversations/conv-1/events", {
+-      method: "GET",
+-    });
++    const request = new Request(
++      "http://web.test/api/runtime/v1/conversations/conv-1/events?workspace_id=ws_1",
++      {
++        method: "GET",
++      },
++    );
+     const response = await proxyToLocalApi(request, "/v1/conversations/conv-1/events");
+ 
+     expect(response.status).toBe(200);
+@@ -120,6 +208,7 @@ describe("runtime proxy — allowlist + passthrough", () => {
+   });
+ 
+   it("the strict allowlist still refuses non-conversation paths", async () => {
++    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+     process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+     const calls: FetchCall[] = [];
+     vi.stubGlobal(
+@@ -150,6 +239,7 @@ describe("runtime proxy — S11 agent surfaces (allowlist additions)", () => {
+   }
+ 
+   it("forwards the workspace roster read", async () => {
++    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+     process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+     const { calls } = stubFetch(agentResponse);
+ 
+@@ -157,10 +247,13 @@ describe("runtime proxy — S11 agent surfaces (allowlist additions)", () => {
+     const response = await proxyToLocalApi(request, "/v1/agents");
+ 
+     expect(response.status).toBe(200);
+-    expect(calls[0]?.input).toBe(`${RUNTIME_BASE}/v1/agents?workspace_id=ws_1`);
++    expect(calls.at(-1)?.input).toBe(
++      `${CONTROL_BASE}/api/runtime/local/v1/agents?workspace_id=ws_1`,
++    );
+   });
+ 
+   it("forwards the agent detail read (the get-or-create direct chat binding)", async () => {
++    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+     process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+     const { calls } = stubFetch(agentResponse);
+ 
+@@ -170,30 +263,29 @@ describe("runtime proxy — S11 agent surfaces (allowlist additions)", () => {
+     const response = await proxyToLocalApi(request, "/v1/agents/agent_general_assistant");
+ 
+     expect(response.status).toBe(200);
+-    expect(calls[0]?.input).toBe(
+-      `${RUNTIME_BASE}/v1/agents/agent_general_assistant?workspace_id=ws_1`,
++    expect(calls.at(-1)?.input).toBe(
++      `${CONTROL_BASE}/api/runtime/local/v1/agents/agent_general_assistant?workspace_id=ws_1`,
+     );
+   });
+ 
+   it("forwards the settings snapshot read", async () => {
++    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+     process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+     const { calls } = stubFetch(agentResponse);
+ 
+     const request = new Request(
+       "http://web.test/api/runtime/v1/agents/agent_general_assistant/settings?workspace_id=ws_1",
+     );
+-    const response = await proxyToLocalApi(
+-      request,
+-      "/v1/agents/agent_general_assistant/settings",
+-    );
++    const response = await proxyToLocalApi(request, "/v1/agents/agent_general_assistant/settings");
+ 
+     expect(response.status).toBe(200);
+-    expect(calls[0]?.input).toBe(
+-      `${RUNTIME_BASE}/v1/agents/agent_general_assistant/settings?workspace_id=ws_1`,
++    expect(calls.at(-1)?.input).toBe(
++      `${CONTROL_BASE}/api/runtime/local/v1/agents/agent_general_assistant/settings?workspace_id=ws_1`,
+     );
+   });
+ 
+   it("forwards the D16 settings command POST with its body (the one mutation surface)", async () => {
++    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+     process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+     const { calls } = stubFetch(agentResponse);
+ 
+@@ -201,7 +293,7 @@ describe("runtime proxy — S11 agent surfaces (allowlist additions)", () => {
+       "http://web.test/api/runtime/v1/agents/agent_general_assistant/settings/commands",
+       {
+         method: "POST",
+-        body: JSON.stringify({ type: "agent_settings.reset_all" }),
++        body: JSON.stringify({ type: "agent_settings.reset_all", workspace_id: "ws_1" }),
+         headers: { "content-type": "application/json" },
+       },
+     );
+@@ -211,14 +303,17 @@ describe("runtime proxy — S11 agent surfaces (allowlist additions)", () => {
+     );
+ 
+     expect(response.status).toBe(200);
+-    const call = calls[0]!;
++    const call = calls.at(-1)!;
+     expect(String(call.input)).toBe(
+-      `${RUNTIME_BASE}/v1/agents/agent_general_assistant/settings/commands`,
++      `${CONTROL_BASE}/api/runtime/local/v1/agents/agent_general_assistant/settings/commands`,
++    );
++    expect(call.init?.body).toBe(
++      JSON.stringify({ type: "agent_settings.reset_all", workspace_id: "ws_1" }),
+     );
+-    expect(call.init?.body).toBe(JSON.stringify({ type: "agent_settings.reset_all" }));
+   });
+ 
+   it("still refuses the chunk-2 PATCH routes — the commands endpoint is the only agent mutation", async () => {
++    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+     process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+     const calls: FetchCall[] = [];
+     vi.stubGlobal(
+@@ -245,6 +340,7 @@ describe("runtime proxy — S11 agent surfaces (allowlist additions)", () => {
+   });
+ 
+   it("still refuses agent sub-paths outside the four surfaces (detail must not swallow settings)", async () => {
++    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+     process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+     const calls: FetchCall[] = [];
+     vi.stubGlobal(
+@@ -264,3 +360,29 @@ describe("runtime proxy — S11 agent surfaces (allowlist additions)", () => {
+     expect(calls).toHaveLength(0);
+   });
+ });
++
++describe("runtime request boundaries", () => {
++  it("rejects oversized bodies before forwarding commands", async () => {
++    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
++    const { calls } = stubFetch(() => Response.json({ ok: true }));
++    const response = await proxyToLocalApi(
++      new Request("http://web.test/api/runtime/v1/conversations/commands", {
++        method: "POST",
++        body: JSON.stringify({ workspace_id: "ws_1", text: "a".repeat(65536) }),
++      }),
++      "/v1/conversations/commands",
++    );
++    expect(response.status).toBe(413);
++    expect(calls).toHaveLength(1);
++  });
++  it("preserves empty upstream responses", async () => {
++    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
++    stubFetch(() => new Response(null, { status: 204 }));
++    const response = await proxyToControlPlane(
++      new Request("http://web.test/logout", { method: "POST" }),
++      "/logout",
++    );
++    expect(response.status).toBe(204);
++    expect(await response.text()).toBe("");
++  });
++});
+diff --git a/docs/TRACEABILITY.md b/docs/TRACEABILITY.md
+index 956ba1e..d96de76 100644
+--- a/docs/TRACEABILITY.md
++++ b/docs/TRACEABILITY.md
+@@ -103,6 +103,10 @@ On 2026-09-19 the owner directed dual harness support — "i want pi as a defaul
+ | E19 | Delegated engineering (pending owner review) | Issue #11 (S10); `agent-packs/student/v1/manifest.json`; D46, D29, D19 | Resolves the D46 subagent sub-item at the engineering level: subordinate execution = a typed task run through the gateway; one subordinate run per (workspace, Agent) placeholder for S16; no private-memory inheritance (S29) | §5, §13 | Pack manifest validation + workspace pack-pinning tests; `pack-pin.test.ts` |
+ | E20 | Delegated engineering (pending owner review) | Review of stacked PRs #46–#49 on `fix/s10-windows-portability-gates` (`48c1f00`, `aaf2be7`); fresh-context adversarial review + verification pass with negative controls | Records two cross-platform test-harness defects found by review — a hardcoded POSIX PostgreSQL path (`SHERA_PG_BIN` resolver replaces it) and SQLite temp dirs deleted with open handles (connection registry + bounded retry). Records the correction that the first fix missed two suites. **No product behavior, schema, contract, or acceptance criterion changed** | §22 (verification evidence only; no PRD text change) | `pnpm test` on Windows: 15 failed files / 604 passed → 9 failed files / 609 passed. **Not verified:** the 9 PostgreSQL-dependent suites against a real PostgreSQL 16 install (needs Linux CI or `SHERA_PG_BIN`) |
+ 
++## E22 implementation evidence, 2026-10-20
++
++[Engineering record E22](decisions/engineering-record-e22-runtime-integration-2026-10-20.md) records the runtime integration repair batch. Tests, build, type checking, source lint and boundary checks support bounded HTTP-routing, management-startup and persistence claims. PostgreSQL, Docker and browser QA remain unverified. Existing acceptance statuses below are unchanged. Implementation owner: coding agent; release verification owner: maintainer. Evidence: output/implementation-2026-10-20/ in this checkout.
++
+ ## D45 acceptance traceability (criteria 22–27)
+ 
+ | Criterion | Source decision | Implementation boundary | Verification target | Status |
+diff --git a/docs/decisions/README.md b/docs/decisions/README.md
+index a778d4d..3a24f0f 100644
+--- a/docs/decisions/README.md
++++ b/docs/decisions/README.md
+@@ -45,6 +45,7 @@
+ | [`engineering-record-e19-d46-subagent-semantics-2026-10-02.md`](engineering-record-e19-d46-subagent-semantics-2026-10-02.md) | E19 (filed 2026-10-02 with slice S10; **E18 remains reserved** for the D51 Hermes engineering record): resolves the D46 sub-item at the engineering level — subordinate execution = a typed task run through the gateway (same-identity worker reading; D46 reading 2 deferred to S13), one subordinate run per (workspace, Agent) placeholder, no private-memory inheritance. Delegated, owner veto at the S10 G8 gate. |
+ | [`engineering-record-e20-cross-platform-test-harnesses-2026-10-02.md`](engineering-record-e20-cross-platform-test-harnesses-2026-10-02.md) | E20 (filed 2026-10-02 during review of stacked PRs #46–#49): records two cross-platform test-harness defects — a hardcoded POSIX PostgreSQL binary path (now a `SHERA_PG_BIN` resolver, G4 configuration-state error) and SQLite temp directories deleted with open handles (connection registry + bounded retry). Records the correction that the first fix missed two suites. **No product behavior or acceptance status changes**; the 9 PostgreSQL-dependent suites remain unverified on a host without PostgreSQL 16. Delegated, pending owner review. |
+ | [`engineering-record-e21-agent-visual-identity-2026-10-02.md`](engineering-record-e21-agent-visual-identity-2026-10-02.md) | E21 (filed 2026-10-02 with the Agent 3D identity profiles change): records that the Pack's authored `ui_identity` (hue + glyph) is now authoritative in the client — previously declared and pinned by a test, then silently discarded at render time — plus the derived-fallback, hue-boundary, silhouette-distinctness, code-point-glyph, and non-finite-hue rules. Includes the correction that 4 silhouette buckets collapsed the six shipped Agents into 3. Presentation only (D38); **owner item:** `UI_DESIGN` §21 item 4 leaves avatar art open for the owner's sketch. Delegated, pending owner review. |
++| [E22 runtime integration](engineering-record-e22-runtime-integration-2026-10-20.md) | Session-derived HTTP routing, authenticated startup, durable credentials/Agent files, stable volume and provisioning lock. Partially verified; no acceptance upgrades. |
+ | [`proposal-history.md`](proposal-history.md) | Full P1–P9 problem statements, alternatives, recommendations, objections, and final dispositions. |
+ 
+ ## Current product model
+diff --git a/packages/contracts/src/index.ts b/packages/contracts/src/index.ts
+index 3db447f..c151895 100644
+--- a/packages/contracts/src/index.ts
++++ b/packages/contracts/src/index.ts
+@@ -34,3 +34,4 @@ export * from "./collaboration.ts";
+ export * from "./api.ts";
+ export * from "./runtime.ts";
+ export * from "./registry.ts";
++export * from "./runtime-access.ts";

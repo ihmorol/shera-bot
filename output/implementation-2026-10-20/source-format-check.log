@@ -1,0 +1,17 @@
+Checking formatting...
+[[33mwarn[39m] apps/user-runtime/src/adapters/sqlite/agents-repository.test.ts
+[[33mwarn[39m] apps/user-runtime/src/adapters/sqlite/agents-repository.ts
+[[33mwarn[39m] apps/user-runtime/src/modules/agents/agent-folders.service.test.ts
+[[33mwarn[39m] apps/user-runtime/src/modules/agents/agents.service.ts
+[[33mwarn[39m] apps/user-runtime/src/transport/http/typed-errors.ts
+[[33mwarn[39m] apps/user-runtime/src/transport/local-api/app.ts
+[[33mwarn[39m] apps/user-runtime/src/transport/local-api/s11-agents-api.test.ts
+[[33mwarn[39m] apps/web/components/settings/agent-settings.tsx
+[[33mwarn[39m] apps/web/components/shell/agent-roster.tsx
+[[33mwarn[39m] apps/web/components/shell/sidebar-content.tsx
+[[33mwarn[39m] apps/web/lib/agent-data.ts
+[[33mwarn[39m] apps/web/test/agent-surfaces.test.ts
+[[33mwarn[39m] packages/contracts/src/agent.ts
+[[33mwarn[39m] packages/contracts/src/registry.ts
+[[33mwarn[39m] tests/contract/agent-settings-contract.test.ts
+[[33mwarn[39m] Code style issues found in 15 files. Run Prettier with --write to fix.

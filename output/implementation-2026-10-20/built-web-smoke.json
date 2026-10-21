@@ -1,0 +1,37 @@
+[
+  {
+    "route": "/login",
+    "status": 200,
+    "assertion": "sign-in link rendered"
+  },
+  {
+    "route": "/app",
+    "status": 200,
+    "assertion": "private contents gated"
+  },
+  {
+    "route": "/app/settings",
+    "status": 200,
+    "assertion": "private contents gated"
+  },
+  {
+    "route": "/app/agent/agent_general_assistant",
+    "status": 200,
+    "assertion": "private contents gated"
+  },
+  {
+    "route": "/api/runtime/v1/agents?workspace_id=ws_other",
+    "status": 503,
+    "code": "AUTH_CONFIGURATION_INVALID"
+  },
+  {
+    "route": "/api/runtime/internal/v1/register",
+    "status": 404,
+    "code": "ROUTE_NOT_FOUND"
+  },
+  {
+    "route": "/api/control/api/session",
+    "status": 503,
+    "code": "AUTH_CONFIGURATION_INVALID"
+  }
+]

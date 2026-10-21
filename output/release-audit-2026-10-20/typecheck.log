@@ -1,0 +1,32 @@
+$ turbo run typecheck && tsc --noEmit -p tsconfig.json
+• turbo 2.10.13
+
+   • Packages in scope: @shera-bot/agent-pack-sdk, @shera-bot/clients, @shera-bot/contracts, @shera-bot/control-plane, @shera-bot/observability, @shera-bot/pi-protocol, @shera-bot/provider-contracts, @shera-bot/test-kit, @shera-bot/user-runtime, @shera-bot/web
+   • Running typecheck in 10 packages
+   • Remote caching disabled
+
+@shera-bot/observability:typecheck: cache miss, executing 3e5b46e49d5f20d6
+@shera-bot/test-kit:typecheck: cache miss, executing 8e382eb6d7892646
+@shera-bot/control-plane:typecheck: cache miss, executing b7be4adca3f37cda
+@shera-bot/agent-pack-sdk:typecheck: cache miss, executing 08535d42abf3b984
+@shera-bot/web:typecheck: cache miss, executing 9aa2938d9ad2a777
+@shera-bot/pi-protocol:typecheck: cache miss, executing b3211e9205c4e89c
+@shera-bot/contracts:typecheck: cache miss, executing f7cdee88dd3fa76c
+@shera-bot/provider-contracts:typecheck: cache miss, executing 27817d50346f394f
+@shera-bot/user-runtime:typecheck: cache miss, executing 07cc10014320576e
+@shera-bot/clients:typecheck: cache miss, executing abdddbdfab015e9e
+@shera-bot/observability:typecheck: $ tsc --noEmit -p tsconfig.json
+@shera-bot/test-kit:typecheck: $ tsc --noEmit -p tsconfig.json
+@shera-bot/control-plane:typecheck: $ tsc --noEmit -p tsconfig.json
+@shera-bot/agent-pack-sdk:typecheck: $ tsc --noEmit -p tsconfig.json
+@shera-bot/web:typecheck: $ tsc --noEmit -p tsconfig.json
+@shera-bot/pi-protocol:typecheck: $ tsc --noEmit -p tsconfig.json
+@shera-bot/contracts:typecheck: $ tsc --noEmit -p tsconfig.json
+@shera-bot/provider-contracts:typecheck: $ tsc --noEmit -p tsconfig.json
+@shera-bot/user-runtime:typecheck: $ tsc --noEmit -p tsconfig.json
+@shera-bot/clients:typecheck: $ tsc --noEmit -p tsconfig.json
+
+ Tasks:    10 successful, 10 total
+Cached:    0 cached, 10 total
+  Time:    10.64s 
+

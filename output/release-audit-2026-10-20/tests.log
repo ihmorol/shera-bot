@@ -1,0 +1,317 @@
+$ vitest run
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.1 [39m[90mE:/PROJECTS/shera-bot/output/release-audit-2026-10-20/source[39m
+
+ [32m✓[39m packages/agent-pack-sdk/src/manifest.test.ts [2m([22m[2m24 tests[22m[2m)[22m[32m 112[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/modules/runtime/harness-run-service.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 201[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/modules/runtime/pack-pin.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 188[2mms[22m[39m
+ [32m✓[39m apps/web/test/fixtures.test.ts [2m([22m[2m30 tests[22m[2m)[22m[32m 24[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/modules/conversations/conversations.test.ts [2m([22m[2m19 tests[22m[2m)[22m[33m 397[2mms[22m[39m
+ [32m✓[39m apps/web/test/runtime-live.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m apps/web/test/agent-identity.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 39[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/transport/http/typed-errors.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+ [32m✓[39m apps/web/test/container-resolution.test.ts [2m([22m[2m16 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m apps/web/test/chat-view.test.ts [2m([22m[2m22 tests[22m[2m)[22m[32m 102[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/modules/tasks/task-transitions.test.ts [2m([22m[2m43 tests[22m[2m)[22m[32m 39[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/modules/conversations/messages.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 126[2mms[22m[39m
+ [32m✓[39m packages/agent-pack-sdk/src/loader.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 118[2mms[22m[39m
+ [32m✓[39m apps/web/test/a11y.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 90[2mms[22m[39m
+{"event":"e2e_send_ack_ms","measured":29,"target":500}
+ [32m✓[39m apps/web/test/connection.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 155[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/modules/runtime/internal-channel.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 620[2mms[22m[39m
+   [32m✓[39m runtime internal API (authenticated internal channel) [2m(10)[22m
+     [33m[2m✓[22m[39m rejects a request without any credential with the typed 401 and records the security event[33m 335[2mms[22m[39m
+[90mstderr[2m | apps/user-runtime/src/transport/local-api/local-api.test.ts[2m > [22m[2mlocal API — typed error middleware integration[2m > [22m[2mdegrades an untyped internal fault to a generic 500 that leaks nothing (G3)
+[22m[39m{"level":"error","event":"untyped_request_fault","correlation_id":"a37d11c7-74be-4a3e-8a50-8ab033732244","method":"POST","path":"/v1/conversations/commands","name":"Error","message":"SQLITE_CONSTRAINT: secret table schema leaked","stack":"Error: SQLITE_CONSTRAINT: secret table schema leaked\n    at Object.throwing [as executeCommand] (E:/PROJECTS/shera-bot/output/release-audit-2026-10-20/source/apps/user-runtime/src/transport/local-api/local-api.test.ts:414:13)\n    at E:/PROJECTS/shera-bot/output/release-audit-2026-10-20/source/apps/user-runtime/src/transport/local-api/app.ts:84:45\n    at Layer.handleRequest (E:\\PROJECTS\\shera-bot\\output\\release-audit-2026-10-20\\source\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\layer.js:152:17)\n    at next (E:\\PROJECTS\\shera-bot\\output\\release-audit-2026-10-20\\source\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\route.js:157:13)\n    at Route.dispatch (E:\\PROJECTS\\shera-bot\\output\\release-audit-2026-10-20\\source\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\route.js:117:3)\n    at handle (E:\\PROJECTS\\shera-bot\\output\\release-audit-2026-10-20\\source\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\index.js:435:11)\n    at Layer.handleRequest (E:\\PROJECTS\\shera-bot\\output\\release-audit-2026-10-20\\source\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\layer.js:152:17)\n    at E:\\PROJECTS\\shera-bot\\output\\release-audit-2026-10-20\\source\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\index.js:295:15\n    at processParams (E:\\PROJECTS\\shera-bot\\output\\release-audit-2026-10-20\\source\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\index.js:582:12)\n    at next (E:\\PROJECTS\\shera-bot\\output\\release-audit-2026-10-20\\source\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\index.js:291:5)"}
+
+ [32m✓[39m apps/user-runtime/src/transport/local-api/local-api.test.ts [2m([22m[2m13 tests[22m[2m)[22m[33m 571[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/modules/conversations/reply-streamer.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 3665[2mms[22m[39m
+   [32m✓[39m compose-level scripted replies (full runtime, real HTTP + real timers) [2m(1)[22m
+     [33m[2m✓[22m[39m a turn over HTTP produces a durable reply and never a task event on the stream[33m 3579[2mms[22m[39m
+ [32m✓[39m apps/web/test/streaming.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 41[2mms[22m[39m
+ [32m✓[39m apps/web/test/collaboration-surface.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 66[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/modules/events/events.service.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 135[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/transport/websocket/websocket.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 1219[2mms[22m[39m
+ [32m✓[39m packages/agent-pack-sdk/src/pack-content.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 47[2mms[22m[39m
+ [32m✓[39m tests/contract/runtime-portability.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 82[2mms[22m[39m
+ [32m✓[39m apps/web/test/e2e/mock-runtime-e2e.test.ts [2m([22m[2m1 test[22m[2m)[22m[33m 1934[2mms[22m[39m
+   [32m✓[39m S09 mock-runtime E2E (E8): login → chat → send → stream → refresh → replay [2m(1)[22m
+     [33m[2m✓[22m[39m drives the full thin-slice path through the real client, proxy, and runtime[33m 1930[2mms[22m[39m
+ [32m✓[39m tests/contract/contracts-unknown-fields.test.ts [2m([22m[2m42 tests[22m[2m)[22m[32m 85[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/test/recovery/recovery-probes.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 2130[2mms[22m[39m
+   [32m✓[39m recovery: two tabs on one conversation (fanout, reconnect replay, no duplicates) [2m(1)[22m
+     [33m[2m✓[22m[39m fans out to both tabs and replays a reconnecting tab's missed events exactly once[33m 1693[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/transport/local-api/s09-real-rows.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 275[2mms[22m[39m
+ [32m✓[39m tests/contract/contracts-roundtrip.test.ts [2m([22m[2m91 tests[22m[2m)[22m[32m 171[2mms[22m[39m
+ [32m✓[39m apps/web/test/control-plane-client.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 53[2mms[22m[39m
+ [32m✓[39m apps/control-plane/test/local-container-backend.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m tests/contract/user-runtime-boundary.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 56[2mms[22m[39m
+ [32m✓[39m apps/web/test/navigation.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 71[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/mock/e2e-mode.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 241[2mms[22m[39m
+ [32m✓[39m packages/agent-pack-sdk/src/mockup-divergence.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 136[2mms[22m[39m
+ [32m✓[39m apps/web/test/proxies.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 41[2mms[22m[39m
+ [32m✓[39m apps/web/test/runtime-client.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 82[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/main.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 228[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/test/recovery/kill9-recovery.test.ts [2m([22m[2m1 test[22m[2m)[22m[33m 2958[2mms[22m[39m
+   [32m✓[39m recovery: kill -9 mid-reply-stream, restart on the same database [2m(1)[22m
+     [33m[2m✓[22m[39m recovers the committed prefix exactly, replays the receipt, invents nothing[33m 2954[2mms[22m[39m
+ [32m✓[39m apps/web/test/runtime-chat.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 63[2mms[22m[39m
+ [32m✓[39m apps/web/test/container-gate.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 34[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/modules/tasks/task-run-creator.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 58[2mms[22m[39m
+ [32m✓[39m tests/contract/license-expression.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m apps/control-plane/test/runtime-container-spec.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/adapters/sqlite/connection.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 62[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/adapters/sqlite/workspaces-repository.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 86[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/transport/local-api/s09-message-send.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 210[2mms[22m[39m
+ [32m✓[39m apps/web/test/ws-socket.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 112[2mms[22m[39m
+ [32m✓[39m tests/contract/typed-execution-event.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 22[2mms[22m[39m
+ [32m✓[39m tests/contract/codegen.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 1225[2mms[22m[39m
+   [32m✓[39m S02 codegen (D25, zod-to-openapi) [2m(4)[22m
+     [33m[2m✓[22m[39m passes --check against the committed output (reproducible: same input, same output)[33m 1173[2mms[22m[39m
+ [32m✓[39m packages/agent-pack-sdk/src/compatibility.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 36[2mms[22m[39m
+ [32m✓[39m apps/control-plane/test/helpers/pg-cluster.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/adapters/process/fake-harness-adapter.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m apps/web/test/design-tokens.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 67[2mms[22m[39m
+ [32m✓[39m packages/agent-pack-sdk/src/vocabulary.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m packages/test-kit/src/fake-container-backend.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 18[2mms[22m[39m
+ [32m✓[39m packages/agent-pack-sdk/src/integrity.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m tests/contract/workspace-graph.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m apps/web/test/runtime-thread.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 25[2mms[22m[39m
+ [31m❯[39m apps/control-plane/test/signup-cap.test.ts [2m([22m[2m3 tests[22m[2m | [22m[33m3 skipped[39m[2m)[22m[32m 37[2mms[22m[39m
+   [2m[90m↓[39m[22m five-account signup cap (server-enforced) [2m(3)[22m
+     [2m[90m↓[39m[22m refuses the sixth signup at the server and serves the exact S1 refusal payload
+     [2m[90m↓[39m[22m records the refusal as a security event and is not bypassable by a second flow
+     [2m[90m↓[39m[22m never refuses a returning user (the cap limits signups, not sign-ins)
+ [31m❯[39m tests/integration/runtime-provisioning.test.ts [2m([22m[2m6 tests[22m[2m | [22m[33m6 skipped[39m[2m)[22m[32m 27[2mms[22m[39m
+   [2m[90m↓[39m[22m provision → status → restart → status (deterministic, no cloud dependency) [2m(2)[22m
+     [2m[90m↓[39m[22m runs the full lifecycle over the web-facing routes with the real channel
+     [2m[90m↓[39m[22m a second user provisions an independent runtime (one container per user)
+   [2m[90m↓[39m[22m internal channel rejects unauthenticated and cross-tenant access (S27 input) [2m(3)[22m
+     [2m[90m↓[39m[22m a request to a container's internal channel without a credential is rejected and recorded
+     [2m[90m↓[39m[22m another container's token is rejected on the internal channel (cross-tenant)
+     [2m[90m↓[39m[22m user B's context can never reach user A's runtime through the control plane
+   [2m[90m↓[39m[22m credential rotation over the real channel [2m(1)[22m
+     [2m[90m↓[39m[22m rotates user A's channel credential: the old token dies, the channel keeps working
+ [31m❯[39m apps/control-plane/test/redaction.test.ts [2m([22m[2m3 tests[22m[2m | [22m[33m3 skipped[39m[2m)[22m[32m 41[2mms[22m[39m
+   [2m[90m↓[39m[22m secret redaction (G3) [2m(3)[22m
+     [2m[90m↓[39m[22m never writes the auth secret, client secret, access token, or session token to the log
+     [2m[90m↓[39m[22m never stores issued token values in the security_events table
+     [2m[90m↓[39m[22m records login events with redacted, non-credential details
+ [31m❯[39m apps/control-plane/test/auth-flow.test.ts [2m([22m[2m7 tests[22m[2m | [22m[33m7 skipped[39m[2m)[22m[32m 59[2mms[22m[39m
+   [2m[90m↓[39m[22m Google OAuth flow (only login method) [2m(7)[22m
+     [2m[90m↓[39m[22m reports the configured auth state on /healthz (G4)
+     [2m[90m↓[39m[22m refuses an unauthenticated /api/session with the typed 401
+     [2m[90m↓[39m[22m runs the full browser-equivalent OAuth flow and sets the secure session cookie
+     [2m[90m↓[39m[22m serves the S02 Session projection behind the session gate
+     [2m[90m↓[39m[22m invalidates the session on logout and records the security event
+     [2m[90m↓[39m[22m records session_validation_failed when an invalid session cookie is presented
+     [2m[90m↓[39m[22m signs a returning user in without creating a second account
+ [32m✓[39m apps/web/test/vocabulary.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 59[2mms[22m[39m
+ [31m❯[39m apps/control-plane/test/runtime-provisioning.test.ts [2m([22m[2m15 tests[22m[2m | [22m[33m15 skipped[39m[2m)[22m[32m 23[2mms[22m[39m
+   [2m[90m↓[39m[22m provisioning lifecycle (idempotent, truthful) [2m(6)[22m
+     [2m[90m↓[39m[22m provisions at first login with the account's Balanced limits applied as real limits
+     [2m[90m↓[39m[22m records the control-plane mapping with infrastructure identifiers and the credential digest
+     [2m[90m↓[39m[22m is idempotent: a repeated provision never creates a second container
+     [2m[90m↓[39m[22m restart is idempotent and restart after stop returns to running
+     [2m[90m↓[39m[22m stop is idempotent: a repeated stop is a truthful no-op success
+     [2m[90m↓[39m[22m getStatus returns truthful state and syncs the control-plane record
+   [2m[90m↓[39m[22m failure is surfaced, never faked (G4) [2m(3)[22m
+     [2m[90m↓[39m[22m a failed provision throws the typed error, records 'failed', and logs the security event
+     [2m[90m↓[39m[22m a failed restart throws a typed error and records the operation failure
+     [2m[90m↓[39m[22m operations without a mapping surface RUNTIME_NOT_PROVISIONED (no silent auto-create)
+   [2m[90m↓[39m[22m tiers and credentials [2m(3)[22m
+     [2m[90m↓[39m[22m applies the account's assigned tier (Heavy maps to the PRD §3.3 Heavy row)
+     [2m[90m↓[39m[22m rotates the channel credential: hash changes, event recorded, raw token never stored
+     [2m[90m↓[39m[22m records runtime_provisioned as a security event with no credential material
+   [2m[90m↓[39m[22m re-provisioning keeps the channel true (adoption invariants I1/I2) [2m(2)[22m
+     [2m[90m↓[39m[22m re-provisioning after stop reuses the in-memory token: same handle, one credential, channel works immediately
+     [2m[90m↓[39m[22m re-provisioning after token loss (control-plane restart) recreates: new handle, re-established credential and registration
+   [2m[90m↓[39m[22m concurrent first login (unique-violation race, FIX 3) [2m(1)[22m
+     [2m[90m↓[39m[22m a racing insert that hits the account_id unique constraint is retried, not surfaced as a 500
+ [32m✓[39m tests/contract/approval-contract.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [31m❯[39m apps/control-plane/test/schema-and-migrations.test.ts [2m([22m[2m5 tests[22m[2m | [22m[33m5 skipped[39m[2m)[22m[32m 17[2mms[22m[39m
+   [2m[90m↓[39m[22m control-plane schema scope (D2, PRD §12) [2m(5)[22m
+     [2m[90m↓[39m[22m migrations apply from an empty database and record in the journal
+     [2m[90m↓[39m[22m contains exactly the control-plane tables — nothing else
+     [2m[90m↓[39m[22m never stores product-state-shaped records (conversations, tasks, memories, provider keys)
+     [2m[90m↓[39m[22m installs the admin-flag audit trigger (PRD §15: manual flag, DB-level audit)
+     [2m[90m↓[39m[22m records an admin_flag_changed security event when the flag changes via direct SQL
+ [31m❯[39m apps/control-plane/test/admin-flag.test.ts [2m([22m[2m5 tests[22m[2m | [22m[33m5 skipped[39m[2m)[22m[32m 18[2mms[22m[39m
+   [2m[90m↓[39m[22m no endpoint can set the administrator flag [2m(5)[22m
+     [2m[90m↓[39m[22m POST /api/admin does not exist as an admin path
+     [2m[90m↓[39m[22m PATCH /api/admin does not exist as an admin path
+     [2m[90m↓[39m[22m POST /api/accounts/promote does not exist as an admin path
+     [2m[90m↓[39m[22m PATCH /api/session does not exist as an admin path
+     [2m[90m↓[39m[22m POST /api/session/admin does not exist as an admin path
+ [31m❯[39m apps/control-plane/test/runtime-response-scanning.test.ts [2m([22m[2m4 tests[22m[2m | [22m[33m4 skipped[39m[2m)[22m[33m 180045[2mms[22m[39m
+   [2m[90m↓[39m[22m no infrastructure identifier or credential ever reaches a web-facing response [2m(4)[22m
+     [2m[90m↓[39m[22m walks every reachable route with an authenticated session and scans body + headers
+     [2m[90m↓[39m[22m unauthenticated responses (typed 401s) leak nothing either
+     [2m[90m↓[39m[22m the internal channel token never reaches the server log (G3)
+     [2m[90m↓[39m[22m rejected internal-channel requests are recorded without credential material
+ [31m❯[39m apps/control-plane/test/unconfigured.test.ts [2m([22m[2m2 tests[22m[2m | [22m[33m2 skipped[39m[2m)[22m[33m 180027[2mms[22m[39m
+   [2m[90m↓[39m[22m unconfigured OAuth environment (G4) [2m(2)[22m
+     [2m[90m↓[39m[22m reports auth.configured: false on /healthz
+     [2m[90m↓[39m[22m refuses sign-in endpoints with the typed configuration error
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Suites 9 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m tests/integration/runtime-provisioning.test.ts[2m [ tests/integration/runtime-provisioning.test.ts ][22m
+[31m[1mError[22m: PostgreSQL 16 server binaries were not found (G4: no fake pass). Set SHERA_PG_BIN to the directory containing initdb, or put initdb on PATH. Probed SHERA_PG_BIN=(unset); directories: /usr/lib/postgresql/16/bin, /usr/pgsql-16/bin, /usr/pgsql/16/bin, /opt/homebrew/opt/postgresql@16/bin, /usr/local/opt/postgresql@16/bin, C:\Program Files\PostgreSQL\16\bin, C:\Program Files (x86)\PostgreSQL\16\bin; PATH entries: 58 checked.[39m
+[36m [2m❯[22m resolvePgBin apps/control-plane/test/helpers/pg-cluster.ts:[2m87:9[22m[39m
+    [90m 85|[39m   }
+    [90m 86|[39m
+    [90m 87|[39m   throw new Error(
+    [90m   |[39m         [31m^[39m
+    [90m 88|[39m     [
+    [90m 89|[39m       `PostgreSQL ${PG_VERSION} server binaries were not found (G4: no…
+[90m [2m❯[22m startTestCluster apps/control-plane/test/helpers/pg-cluster.ts:[2m134:17[22m[39m
+[90m [2m❯[22m tests/integration/runtime-provisioning.test.ts:[2m87:19[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m apps/control-plane/test/admin-flag.test.ts[2m [ apps/control-plane/test/admin-flag.test.ts ][22m
+[31m[1mError[22m: PostgreSQL 16 server binaries were not found (G4: no fake pass). Set SHERA_PG_BIN to the directory containing initdb, or put initdb on PATH. Probed SHERA_PG_BIN=(unset); directories: /usr/lib/postgresql/16/bin, /usr/pgsql-16/bin, /usr/pgsql/16/bin, /opt/homebrew/opt/postgresql@16/bin, /usr/local/opt/postgresql@16/bin, C:\Program Files\PostgreSQL\16\bin, C:\Program Files (x86)\PostgreSQL\16\bin; PATH entries: 58 checked.[39m
+[36m [2m❯[22m resolvePgBin apps/control-plane/test/helpers/pg-cluster.ts:[2m87:9[22m[39m
+    [90m 85|[39m   }
+    [90m 86|[39m
+    [90m 87|[39m   throw new Error(
+    [90m   |[39m         [31m^[39m
+    [90m 88|[39m     [
+    [90m 89|[39m       `PostgreSQL ${PG_VERSION} server binaries were not found (G4: no…
+[90m [2m❯[22m startTestCluster apps/control-plane/test/helpers/pg-cluster.ts:[2m134:17[22m[39m
+[90m [2m❯[22m apps/control-plane/test/admin-flag.test.ts:[2m20:19[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m apps/control-plane/test/auth-flow.test.ts[2m [ apps/control-plane/test/auth-flow.test.ts ][22m
+[31m[1mError[22m: PostgreSQL 16 server binaries were not found (G4: no fake pass). Set SHERA_PG_BIN to the directory containing initdb, or put initdb on PATH. Probed SHERA_PG_BIN=(unset); directories: /usr/lib/postgresql/16/bin, /usr/pgsql-16/bin, /usr/pgsql/16/bin, /opt/homebrew/opt/postgresql@16/bin, /usr/local/opt/postgresql@16/bin, C:\Program Files\PostgreSQL\16\bin, C:\Program Files (x86)\PostgreSQL\16\bin; PATH entries: 58 checked.[39m
+[36m [2m❯[22m resolvePgBin apps/control-plane/test/helpers/pg-cluster.ts:[2m87:9[22m[39m
+    [90m 85|[39m   }
+    [90m 86|[39m
+    [90m 87|[39m   throw new Error(
+    [90m   |[39m         [31m^[39m
+    [90m 88|[39m     [
+    [90m 89|[39m       `PostgreSQL ${PG_VERSION} server binaries were not found (G4: no…
+[90m [2m❯[22m startTestCluster apps/control-plane/test/helpers/pg-cluster.ts:[2m134:17[22m[39m
+[90m [2m❯[22m apps/control-plane/test/auth-flow.test.ts:[2m42:19[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m apps/control-plane/test/redaction.test.ts[2m [ apps/control-plane/test/redaction.test.ts ][22m
+[31m[1mError[22m: PostgreSQL 16 server binaries were not found (G4: no fake pass). Set SHERA_PG_BIN to the directory containing initdb, or put initdb on PATH. Probed SHERA_PG_BIN=(unset); directories: /usr/lib/postgresql/16/bin, /usr/pgsql-16/bin, /usr/pgsql/16/bin, /opt/homebrew/opt/postgresql@16/bin, /usr/local/opt/postgresql@16/bin, C:\Program Files\PostgreSQL\16\bin, C:\Program Files (x86)\PostgreSQL\16\bin; PATH entries: 58 checked.[39m
+[36m [2m❯[22m resolvePgBin apps/control-plane/test/helpers/pg-cluster.ts:[2m87:9[22m[39m
+    [90m 85|[39m   }
+    [90m 86|[39m
+    [90m 87|[39m   throw new Error(
+    [90m   |[39m         [31m^[39m
+    [90m 88|[39m     [
+    [90m 89|[39m       `PostgreSQL ${PG_VERSION} server binaries were not found (G4: no…
+[90m [2m❯[22m startTestCluster apps/control-plane/test/helpers/pg-cluster.ts:[2m134:17[22m[39m
+[90m [2m❯[22m apps/control-plane/test/redaction.test.ts:[2m44:19[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m apps/control-plane/test/runtime-provisioning.test.ts[2m [ apps/control-plane/test/runtime-provisioning.test.ts ][22m
+[31m[1mError[22m: PostgreSQL 16 server binaries were not found (G4: no fake pass). Set SHERA_PG_BIN to the directory containing initdb, or put initdb on PATH. Probed SHERA_PG_BIN=(unset); directories: /usr/lib/postgresql/16/bin, /usr/pgsql-16/bin, /usr/pgsql/16/bin, /opt/homebrew/opt/postgresql@16/bin, /usr/local/opt/postgresql@16/bin, C:\Program Files\PostgreSQL\16\bin, C:\Program Files (x86)\PostgreSQL\16\bin; PATH entries: 58 checked.[39m
+[36m [2m❯[22m resolvePgBin apps/control-plane/test/helpers/pg-cluster.ts:[2m87:9[22m[39m
+    [90m 85|[39m   }
+    [90m 86|[39m
+    [90m 87|[39m   throw new Error(
+    [90m   |[39m         [31m^[39m
+    [90m 88|[39m     [
+    [90m 89|[39m       `PostgreSQL ${PG_VERSION} server binaries were not found (G4: no…
+[90m [2m❯[22m startTestCluster apps/control-plane/test/helpers/pg-cluster.ts:[2m134:17[22m[39m
+[90m [2m❯[22m apps/control-plane/test/runtime-provisioning.test.ts:[2m50:19[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m apps/control-plane/test/runtime-response-scanning.test.ts[2m [ apps/control-plane/test/runtime-response-scanning.test.ts ][22m
+[31m[1mError[22m: PostgreSQL 16 server binaries were not found (G4: no fake pass). Set SHERA_PG_BIN to the directory containing initdb, or put initdb on PATH. Probed SHERA_PG_BIN=(unset); directories: /usr/lib/postgresql/16/bin, /usr/pgsql-16/bin, /usr/pgsql/16/bin, /opt/homebrew/opt/postgresql@16/bin, /usr/local/opt/postgresql@16/bin, C:\Program Files\PostgreSQL\16\bin, C:\Program Files (x86)\PostgreSQL\16\bin; PATH entries: 58 checked.[39m
+[36m [2m❯[22m resolvePgBin apps/control-plane/test/helpers/pg-cluster.ts:[2m87:9[22m[39m
+    [90m 85|[39m   }
+    [90m 86|[39m
+    [90m 87|[39m   throw new Error(
+    [90m   |[39m         [31m^[39m
+    [90m 88|[39m     [
+    [90m 89|[39m       `PostgreSQL ${PG_VERSION} server binaries were not found (G4: no…
+[90m [2m❯[22m startTestCluster apps/control-plane/test/helpers/pg-cluster.ts:[2m134:17[22m[39m
+[90m [2m❯[22m apps/control-plane/test/runtime-response-scanning.test.ts:[2m55:19[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m apps/control-plane/test/runtime-response-scanning.test.ts[2m [ apps/control-plane/test/runtime-response-scanning.test.ts ][22m
+[31m[1mError[22m: Hook timed out in 180000ms.
+If this is a long-running hook, pass a timeout value as the last argument or configure it globally with "hookTimeout".[39m
+[36m [2m❯[22m apps/control-plane/test/runtime-response-scanning.test.ts:[2m88:1[22m[39m
+    [90m 86|[39m }, 180_000);
+    [90m 87|[39m
+    [90m 88|[39m afterAll(async () => {
+    [90m   |[39m [31m^[39m
+    [90m 89|[39m   await fixture?.stop();
+    [90m 90|[39m   await idp?.close();
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m apps/control-plane/test/schema-and-migrations.test.ts[2m [ apps/control-plane/test/schema-and-migrations.test.ts ][22m
+[31m[1mError[22m: PostgreSQL 16 server binaries were not found (G4: no fake pass). Set SHERA_PG_BIN to the directory containing initdb, or put initdb on PATH. Probed SHERA_PG_BIN=(unset); directories: /usr/lib/postgresql/16/bin, /usr/pgsql-16/bin, /usr/pgsql/16/bin, /opt/homebrew/opt/postgresql@16/bin, /usr/local/opt/postgresql@16/bin, C:\Program Files\PostgreSQL\16\bin, C:\Program Files (x86)\PostgreSQL\16\bin; PATH entries: 58 checked.[39m
+[36m [2m❯[22m resolvePgBin apps/control-plane/test/helpers/pg-cluster.ts:[2m87:9[22m[39m
+    [90m 85|[39m   }
+    [90m 86|[39m
+    [90m 87|[39m   throw new Error(
+    [90m   |[39m         [31m^[39m
+    [90m 88|[39m     [
+    [90m 89|[39m       `PostgreSQL ${PG_VERSION} server binaries were not found (G4: no…
+[90m [2m❯[22m startTestCluster apps/control-plane/test/helpers/pg-cluster.ts:[2m134:17[22m[39m
+[90m [2m❯[22m apps/control-plane/test/schema-and-migrations.test.ts:[2m30:19[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m apps/control-plane/test/signup-cap.test.ts[2m [ apps/control-plane/test/signup-cap.test.ts ][22m
+[31m[1mError[22m: PostgreSQL 16 server binaries were not found (G4: no fake pass). Set SHERA_PG_BIN to the directory containing initdb, or put initdb on PATH. Probed SHERA_PG_BIN=(unset); directories: /usr/lib/postgresql/16/bin, /usr/pgsql-16/bin, /usr/pgsql/16/bin, /opt/homebrew/opt/postgresql@16/bin, /usr/local/opt/postgresql@16/bin, C:\Program Files\PostgreSQL\16\bin, C:\Program Files (x86)\PostgreSQL\16\bin; PATH entries: 58 checked.[39m
+[36m [2m❯[22m resolvePgBin apps/control-plane/test/helpers/pg-cluster.ts:[2m87:9[22m[39m
+    [90m 85|[39m   }
+    [90m 86|[39m
+    [90m 87|[39m   throw new Error(
+    [90m   |[39m         [31m^[39m
+    [90m 88|[39m     [
+    [90m 89|[39m       `PostgreSQL ${PG_VERSION} server binaries were not found (G4: no…
+[90m [2m❯[22m startTestCluster apps/control-plane/test/helpers/pg-cluster.ts:[2m134:17[22m[39m
+[90m [2m❯[22m apps/control-plane/test/signup-cap.test.ts:[2m42:19[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m apps/control-plane/test/unconfigured.test.ts[2m [ apps/control-plane/test/unconfigured.test.ts ][22m
+[31m[1mError[22m: PostgreSQL 16 server binaries were not found (G4: no fake pass). Set SHERA_PG_BIN to the directory containing initdb, or put initdb on PATH. Probed SHERA_PG_BIN=(unset); directories: /usr/lib/postgresql/16/bin, /usr/pgsql-16/bin, /usr/pgsql/16/bin, /opt/homebrew/opt/postgresql@16/bin, /usr/local/opt/postgresql@16/bin, C:\Program Files\PostgreSQL\16\bin, C:\Program Files (x86)\PostgreSQL\16\bin; PATH entries: 58 checked.[39m
+[36m [2m❯[22m resolvePgBin apps/control-plane/test/helpers/pg-cluster.ts:[2m87:9[22m[39m
+    [90m 85|[39m   }
+    [90m 86|[39m
+    [90m 87|[39m   throw new Error(
+    [90m   |[39m         [31m^[39m
+    [90m 88|[39m     [
+    [90m 89|[39m       `PostgreSQL ${PG_VERSION} server binaries were not found (G4: no…
+[90m [2m❯[22m startTestCluster apps/control-plane/test/helpers/pg-cluster.ts:[2m134:17[22m[39m
+[90m [2m❯[22m apps/control-plane/test/unconfigured.test.ts:[2m18:19[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m apps/control-plane/test/unconfigured.test.ts[2m [ apps/control-plane/test/unconfigured.test.ts ][22m
+[31m[1mError[22m: Hook timed out in 180000ms.
+If this is a long-running hook, pass a timeout value as the last argument or configure it globally with "hookTimeout".[39m
+[36m [2m❯[22m apps/control-plane/test/unconfigured.test.ts:[2m32:1[22m[39m
+    [90m 30|[39m }, 180_000);
+    [90m 31|[39m
+    [90m 32|[39m afterAll(async () => {
+    [90m   |[39m [31m^[39m
+    [90m 33|[39m   await new Promise<void>((resolve) => httpServer?.close(() => resolve…
+    [90m 34|[39m   await controlPlane?.close();
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/11]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m9 failed[39m[22m[2m | [22m[1m[32m61 passed[39m[22m[90m (70)[39m
+[2m      Tests [22m [1m[32m645 passed[39m[22m[2m | [22m[33m50 skipped[39m[90m (695)[39m
+[2m   Start at [22m 09:22:25
+[2m   Duration [22m 195.70s[2m (tests 76%, import 22%, transform 2%)[22m
+
+[ELIFECYCLE] Test failed. See above for more details.

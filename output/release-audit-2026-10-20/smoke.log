@@ -1,0 +1,6 @@
+(node:34592) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+OBSERVED B01: built /login serves a disabled Google sign-in button
+OBSERVED B05: real runtime bootstrap returns HTTP 404 for POST /internal/v1/registration
+OBSERVED B02: built web proxy accepts unauthenticated conversation.create with caller-chosen workspace_id (HTTP 200)
+PASS: all three source findings reproduced through real boot/HTTP surfaces against disposable audit data

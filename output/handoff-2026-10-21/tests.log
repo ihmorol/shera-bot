@@ -1,0 +1,670 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.1 [39m[90mE:/PROJECTS/shera-bot[39m
+
+(node:21620) Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests insecure by disabling certificate verification.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mprovision → status → restart → status (deterministic, no cloud dependency)[2m > [22m[2mruns the full lifecycle over the web-facing routes with the real channel
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:23.621Z","message":"CREATE_PKCECODEVERIFIER"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mprovision → status → restart → status (deterministic, no cloud dependency)[2m > [22m[2mruns the full lifecycle over the web-facing routes with the real channel
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:23.631Z","message":"authorization url is ready"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mprovision → status → restart → status (deterministic, no cloud dependency)[2m > [22m[2mruns the full lifecycle over the web-facing routes with the real channel
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:23.661Z","message":"USE_PKCECODEVERIFIER"}
+{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:23.662Z","message":"PARSE_PKCECODEVERIFIER"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mprovision → status → restart → status (deterministic, no cloud dependency)[2m > [22m[2mruns the full lifecycle over the web-facing routes with the real channel
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:23.666Z","message":"CLEAR_PKCECODEVERIFIER"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mprovision → status → restart → status (deterministic, no cloud dependency)[2m > [22m[2mruns the full lifecycle over the web-facing routes with the real channel
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:23.680Z","message":"authorization result"}
+{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:23.681Z","message":"adapter_getUserByAccount"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mprovision → status → restart → status (deterministic, no cloud dependency)[2m > [22m[2mruns the full lifecycle over the web-facing routes with the real channel
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:23.695Z","message":"adapter_getUserByAccount"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mprovision → status → restart → status (deterministic, no cloud dependency)[2m > [22m[2mruns the full lifecycle over the web-facing routes with the real channel
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:23.697Z","message":"adapter_getUserByEmail"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mprovision → status → restart → status (deterministic, no cloud dependency)[2m > [22m[2mruns the full lifecycle over the web-facing routes with the real channel
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:23.698Z","message":"adapter_createUser"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mprovision → status → restart → status (deterministic, no cloud dependency)[2m > [22m[2mruns the full lifecycle over the web-facing routes with the real channel
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:23.703Z","message":"adapter_linkAccount"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mprovision → status → restart → status (deterministic, no cloud dependency)[2m > [22m[2mruns the full lifecycle over the web-facing routes with the real channel
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:23.706Z","message":"adapter_createSession"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mprovision → status → restart → status (deterministic, no cloud dependency)[2m > [22m[2mruns the full lifecycle over the web-facing routes with the real channel
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:23.725Z","message":"adapter_getSessionAndUser"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mprovision → status → restart → status (deterministic, no cloud dependency)[2m > [22m[2mruns the full lifecycle over the web-facing routes with the real channel
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:23.818Z","message":"adapter_getSessionAndUser"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mprovision → status → restart → status (deterministic, no cloud dependency)[2m > [22m[2mruns the full lifecycle over the web-facing routes with the real channel
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:23.834Z","message":"adapter_getSessionAndUser"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mprovision → status → restart → status (deterministic, no cloud dependency)[2m > [22m[2mruns the full lifecycle over the web-facing routes with the real channel
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:23.851Z","message":"adapter_getSessionAndUser"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mprovision → status → restart → status (deterministic, no cloud dependency)[2m > [22m[2mruns the full lifecycle over the web-facing routes with the real channel
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:23.867Z","message":"adapter_getSessionAndUser"}
+
+[90mstdout[2m | apps/control-plane/test/runtime-provisioning.test.ts[2m > [22m[2mfailure is surfaced, never faked (G4)[2m > [22m[2ma failed provision throws the typed error, records 'failed', and logs the security event
+[22m[39m{"level":"error","service":"control-plane","time":"2026-10-21T00:38:23.884Z","message":"runtime_provision_failed","details":{"account_id":"c1b2c3d4-0000-4000-8000-000000000003","reason":"backend_RUNTIME_PROVISION_FAILED"}}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mprovision → status → restart → status (deterministic, no cloud dependency)[2m > [22m[2ma second user provisions an independent runtime (one container per user)
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:23.914Z","message":"CREATE_PKCECODEVERIFIER"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mprovision → status → restart → status (deterministic, no cloud dependency)[2m > [22m[2ma second user provisions an independent runtime (one container per user)
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:23.915Z","message":"authorization url is ready"}
+
+[90mstdout[2m | apps/control-plane/test/runtime-provisioning.test.ts[2m > [22m[2mfailure is surfaced, never faked (G4)[2m > [22m[2ma failed restart throws a typed error and records the operation failure
+[22m[39m{"level":"error","service":"control-plane","time":"2026-10-21T00:38:23.933Z","message":"runtime_operation_failed","details":{"operation":"restart","account_id":"d1b2c3d4-0000-4000-8000-000000000004","reason":"backend_RUNTIME_UNAVAILABLE"}}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mprovision → status → restart → status (deterministic, no cloud dependency)[2m > [22m[2ma second user provisions an independent runtime (one container per user)
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:23.944Z","message":"USE_PKCECODEVERIFIER"}
+{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:23.944Z","message":"PARSE_PKCECODEVERIFIER"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mprovision → status → restart → status (deterministic, no cloud dependency)[2m > [22m[2ma second user provisions an independent runtime (one container per user)
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:23.946Z","message":"CLEAR_PKCECODEVERIFIER"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mprovision → status → restart → status (deterministic, no cloud dependency)[2m > [22m[2ma second user provisions an independent runtime (one container per user)
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:23.961Z","message":"authorization result"}
+{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:23.961Z","message":"adapter_getUserByAccount"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mprovision → status → restart → status (deterministic, no cloud dependency)[2m > [22m[2ma second user provisions an independent runtime (one container per user)
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:23.964Z","message":"adapter_getUserByAccount"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mprovision → status → restart → status (deterministic, no cloud dependency)[2m > [22m[2ma second user provisions an independent runtime (one container per user)
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:23.965Z","message":"adapter_createSession"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mprovision → status → restart → status (deterministic, no cloud dependency)[2m > [22m[2ma second user provisions an independent runtime (one container per user)
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:23.976Z","message":"adapter_getSessionAndUser"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mprovision → status → restart → status (deterministic, no cloud dependency)[2m > [22m[2ma second user provisions an independent runtime (one container per user)
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.024Z","message":"CREATE_PKCECODEVERIFIER"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mprovision → status → restart → status (deterministic, no cloud dependency)[2m > [22m[2ma second user provisions an independent runtime (one container per user)
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.025Z","message":"authorization url is ready"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mprovision → status → restart → status (deterministic, no cloud dependency)[2m > [22m[2ma second user provisions an independent runtime (one container per user)
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.071Z","message":"USE_PKCECODEVERIFIER"}
+{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.071Z","message":"PARSE_PKCECODEVERIFIER"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mprovision → status → restart → status (deterministic, no cloud dependency)[2m > [22m[2ma second user provisions an independent runtime (one container per user)
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.072Z","message":"CLEAR_PKCECODEVERIFIER"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mprovision → status → restart → status (deterministic, no cloud dependency)[2m > [22m[2ma second user provisions an independent runtime (one container per user)
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.087Z","message":"authorization result"}
+{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.087Z","message":"adapter_getUserByAccount"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mprovision → status → restart → status (deterministic, no cloud dependency)[2m > [22m[2ma second user provisions an independent runtime (one container per user)
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.090Z","message":"adapter_getUserByAccount"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mprovision → status → restart → status (deterministic, no cloud dependency)[2m > [22m[2ma second user provisions an independent runtime (one container per user)
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.091Z","message":"adapter_getUserByEmail"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mprovision → status → restart → status (deterministic, no cloud dependency)[2m > [22m[2ma second user provisions an independent runtime (one container per user)
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.092Z","message":"adapter_createUser"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mprovision → status → restart → status (deterministic, no cloud dependency)[2m > [22m[2ma second user provisions an independent runtime (one container per user)
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.094Z","message":"adapter_linkAccount"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mprovision → status → restart → status (deterministic, no cloud dependency)[2m > [22m[2ma second user provisions an independent runtime (one container per user)
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.095Z","message":"adapter_createSession"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mprovision → status → restart → status (deterministic, no cloud dependency)[2m > [22m[2ma second user provisions an independent runtime (one container per user)
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.102Z","message":"adapter_getSessionAndUser"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2minternal channel rejects unauthenticated and cross-tenant access (S27 input)[2m > [22m[2muser B's context can never reach user A's runtime through the control plane
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.165Z","message":"CREATE_PKCECODEVERIFIER"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2minternal channel rejects unauthenticated and cross-tenant access (S27 input)[2m > [22m[2muser B's context can never reach user A's runtime through the control plane
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.166Z","message":"authorization url is ready"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2minternal channel rejects unauthenticated and cross-tenant access (S27 input)[2m > [22m[2muser B's context can never reach user A's runtime through the control plane
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.212Z","message":"USE_PKCECODEVERIFIER"}
+{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.212Z","message":"PARSE_PKCECODEVERIFIER"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2minternal channel rejects unauthenticated and cross-tenant access (S27 input)[2m > [22m[2muser B's context can never reach user A's runtime through the control plane
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.213Z","message":"CLEAR_PKCECODEVERIFIER"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2minternal channel rejects unauthenticated and cross-tenant access (S27 input)[2m > [22m[2muser B's context can never reach user A's runtime through the control plane
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.229Z","message":"authorization result"}
+{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.229Z","message":"adapter_getUserByAccount"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2minternal channel rejects unauthenticated and cross-tenant access (S27 input)[2m > [22m[2muser B's context can never reach user A's runtime through the control plane
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.231Z","message":"adapter_getUserByAccount"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2minternal channel rejects unauthenticated and cross-tenant access (S27 input)[2m > [22m[2muser B's context can never reach user A's runtime through the control plane
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.233Z","message":"adapter_createSession"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2minternal channel rejects unauthenticated and cross-tenant access (S27 input)[2m > [22m[2muser B's context can never reach user A's runtime through the control plane
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.273Z","message":"CREATE_PKCECODEVERIFIER"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2minternal channel rejects unauthenticated and cross-tenant access (S27 input)[2m > [22m[2muser B's context can never reach user A's runtime through the control plane
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.274Z","message":"authorization url is ready"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2minternal channel rejects unauthenticated and cross-tenant access (S27 input)[2m > [22m[2muser B's context can never reach user A's runtime through the control plane
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.278Z","message":"USE_PKCECODEVERIFIER"}
+{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.278Z","message":"PARSE_PKCECODEVERIFIER"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2minternal channel rejects unauthenticated and cross-tenant access (S27 input)[2m > [22m[2muser B's context can never reach user A's runtime through the control plane
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.288Z","message":"CLEAR_PKCECODEVERIFIER"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2minternal channel rejects unauthenticated and cross-tenant access (S27 input)[2m > [22m[2muser B's context can never reach user A's runtime through the control plane
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.307Z","message":"authorization result"}
+{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.307Z","message":"adapter_getUserByAccount"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2minternal channel rejects unauthenticated and cross-tenant access (S27 input)[2m > [22m[2muser B's context can never reach user A's runtime through the control plane
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.311Z","message":"adapter_getUserByAccount"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2minternal channel rejects unauthenticated and cross-tenant access (S27 input)[2m > [22m[2muser B's context can never reach user A's runtime through the control plane
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.312Z","message":"adapter_createSession"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2minternal channel rejects unauthenticated and cross-tenant access (S27 input)[2m > [22m[2muser B's context can never reach user A's runtime through the control plane
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.322Z","message":"adapter_getSessionAndUser"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2minternal channel rejects unauthenticated and cross-tenant access (S27 input)[2m > [22m[2muser B's context can never reach user A's runtime through the control plane
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.338Z","message":"adapter_getSessionAndUser"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2minternal channel rejects unauthenticated and cross-tenant access (S27 input)[2m > [22m[2muser B's context can never reach user A's runtime through the control plane
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.353Z","message":"adapter_getSessionAndUser"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mcredential rotation over the real channel[2m > [22m[2mrotates user A's channel credential: the old token dies, the channel keeps working
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.385Z","message":"CREATE_PKCECODEVERIFIER"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mcredential rotation over the real channel[2m > [22m[2mrotates user A's channel credential: the old token dies, the channel keeps working
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.386Z","message":"authorization url is ready"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mcredential rotation over the real channel[2m > [22m[2mrotates user A's channel credential: the old token dies, the channel keeps working
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.432Z","message":"USE_PKCECODEVERIFIER"}
+{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.432Z","message":"PARSE_PKCECODEVERIFIER"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mcredential rotation over the real channel[2m > [22m[2mrotates user A's channel credential: the old token dies, the channel keeps working
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.433Z","message":"CLEAR_PKCECODEVERIFIER"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mcredential rotation over the real channel[2m > [22m[2mrotates user A's channel credential: the old token dies, the channel keeps working
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.449Z","message":"authorization result"}
+{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.449Z","message":"adapter_getUserByAccount"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mcredential rotation over the real channel[2m > [22m[2mrotates user A's channel credential: the old token dies, the channel keeps working
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.452Z","message":"adapter_getUserByAccount"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mcredential rotation over the real channel[2m > [22m[2mrotates user A's channel credential: the old token dies, the channel keeps working
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.453Z","message":"adapter_createSession"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mcredential rotation over the real channel[2m > [22m[2mrotates user A's channel credential: the old token dies, the channel keeps working
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.464Z","message":"adapter_getSessionAndUser"}
+
+[90mstdout[2m | tests/integration/runtime-provisioning.test.ts[2m > [22m[2mcredential rotation over the real channel[2m > [22m[2mrotates user A's channel credential: the old token dies, the channel keeps working
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:24.528Z","message":"adapter_getSessionAndUser"}
+
+ [32m✓[39m apps/control-plane/test/runtime-provisioning.test.ts [2m([22m[2m16 tests[22m[2m)[22m[33m 10663[2mms[22m[39m
+   [32m✓[39m provisioning lifecycle (idempotent, truthful) [2m(6)[22m
+     [33m[2m✓[22m[39m provisions at first login with the account's Balanced limits applied as real limits[33m 356[2mms[22m[39m
+ [32m✓[39m tests/integration/runtime-provisioning.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 11240[2mms[22m[39m
+   [32m✓[39m provision → status → restart → status (deterministic, no cloud dependency) [2m(2)[22m
+     [33m[2m✓[22m[39m runs the full lifecycle over the web-facing routes with the real channel[33m 487[2mms[22m[39m
+(node:3084) Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests insecure by disabling certificate verification.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[90mstdout[2m | apps/control-plane/test/runtime-response-scanning.test.ts[2m > [22m[2mno infrastructure identifier or credential ever reaches a web-facing response[2m > [22m[2mwalks every reachable route with an authenticated session and scans body + headers
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:34.212Z","message":"CREATE_PKCECODEVERIFIER"}
+
+[90mstdout[2m | apps/control-plane/test/runtime-response-scanning.test.ts[2m > [22m[2mno infrastructure identifier or credential ever reaches a web-facing response[2m > [22m[2mwalks every reachable route with an authenticated session and scans body + headers
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:34.223Z","message":"authorization url is ready"}
+
+[90mstdout[2m | apps/control-plane/test/runtime-response-scanning.test.ts[2m > [22m[2mno infrastructure identifier or credential ever reaches a web-facing response[2m > [22m[2mwalks every reachable route with an authenticated session and scans body + headers
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:34.262Z","message":"USE_PKCECODEVERIFIER"}
+{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:34.262Z","message":"PARSE_PKCECODEVERIFIER"}
+
+[90mstdout[2m | apps/control-plane/test/runtime-response-scanning.test.ts[2m > [22m[2mno infrastructure identifier or credential ever reaches a web-facing response[2m > [22m[2mwalks every reachable route with an authenticated session and scans body + headers
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:34.266Z","message":"CLEAR_PKCECODEVERIFIER"}
+
+[90mstdout[2m | apps/control-plane/test/runtime-response-scanning.test.ts[2m > [22m[2mno infrastructure identifier or credential ever reaches a web-facing response[2m > [22m[2mwalks every reachable route with an authenticated session and scans body + headers
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:34.280Z","message":"authorization result"}
+{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:34.281Z","message":"adapter_getUserByAccount"}
+
+(node:39068) Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests insecure by disabling certificate verification.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[90mstdout[2m | apps/control-plane/test/runtime-response-scanning.test.ts[2m > [22m[2mno infrastructure identifier or credential ever reaches a web-facing response[2m > [22m[2mwalks every reachable route with an authenticated session and scans body + headers
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:34.297Z","message":"adapter_getUserByAccount"}
+
+[90mstdout[2m | apps/control-plane/test/runtime-response-scanning.test.ts[2m > [22m[2mno infrastructure identifier or credential ever reaches a web-facing response[2m > [22m[2mwalks every reachable route with an authenticated session and scans body + headers
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:34.299Z","message":"adapter_getUserByEmail"}
+
+[90mstdout[2m | apps/control-plane/test/runtime-response-scanning.test.ts[2m > [22m[2mno infrastructure identifier or credential ever reaches a web-facing response[2m > [22m[2mwalks every reachable route with an authenticated session and scans body + headers
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:34.302Z","message":"adapter_createUser"}
+
+[90mstdout[2m | apps/control-plane/test/runtime-response-scanning.test.ts[2m > [22m[2mno infrastructure identifier or credential ever reaches a web-facing response[2m > [22m[2mwalks every reachable route with an authenticated session and scans body + headers
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:34.308Z","message":"adapter_linkAccount"}
+
+[90mstdout[2m | apps/control-plane/test/runtime-response-scanning.test.ts[2m > [22m[2mno infrastructure identifier or credential ever reaches a web-facing response[2m > [22m[2mwalks every reachable route with an authenticated session and scans body + headers
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:34.311Z","message":"adapter_createSession"}
+
+[90mstdout[2m | apps/control-plane/test/runtime-response-scanning.test.ts[2m > [22m[2mno infrastructure identifier or credential ever reaches a web-facing response[2m > [22m[2mwalks every reachable route with an authenticated session and scans body + headers
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:34.339Z","message":"adapter_getSessionAndUser"}
+
+[90mstdout[2m | apps/control-plane/test/redaction.test.ts
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:34.370Z","message":"CREATE_PKCECODEVERIFIER"}
+
+[90mstdout[2m | apps/control-plane/test/redaction.test.ts
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:34.384Z","message":"authorization url is ready"}
+
+[90mstdout[2m | apps/control-plane/test/redaction.test.ts
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:34.432Z","message":"USE_PKCECODEVERIFIER"}
+{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:34.434Z","message":"PARSE_PKCECODEVERIFIER"}
+
+[90mstdout[2m | apps/control-plane/test/redaction.test.ts
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:34.439Z","message":"CLEAR_PKCECODEVERIFIER"}
+
+[90mstdout[2m | apps/control-plane/test/redaction.test.ts
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:34.454Z","message":"authorization result"}
+{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:34.454Z","message":"adapter_getUserByAccount"}
+
+[90mstdout[2m | apps/control-plane/test/runtime-response-scanning.test.ts[2m > [22m[2mno infrastructure identifier or credential ever reaches a web-facing response[2m > [22m[2mwalks every reachable route with an authenticated session and scans body + headers
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:34.463Z","message":"adapter_getSessionAndUser"}
+
+[90mstdout[2m | apps/control-plane/test/redaction.test.ts
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:34.468Z","message":"adapter_getUserByAccount"}
+
+[90mstdout[2m | apps/control-plane/test/redaction.test.ts
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:34.470Z","message":"adapter_getUserByEmail"}
+
+[90mstdout[2m | apps/control-plane/test/redaction.test.ts
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:34.471Z","message":"adapter_createUser"}
+
+[90mstdout[2m | apps/control-plane/test/redaction.test.ts
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:34.478Z","message":"adapter_linkAccount"}
+
+[90mstdout[2m | apps/control-plane/test/runtime-response-scanning.test.ts[2m > [22m[2mno infrastructure identifier or credential ever reaches a web-facing response[2m > [22m[2mwalks every reachable route with an authenticated session and scans body + headers
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:34.478Z","message":"adapter_getSessionAndUser"}
+
+[90mstdout[2m | apps/control-plane/test/redaction.test.ts
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:34.481Z","message":"adapter_createSession"}
+
+[90mstdout[2m | apps/control-plane/test/runtime-response-scanning.test.ts[2m > [22m[2mno infrastructure identifier or credential ever reaches a web-facing response[2m > [22m[2mwalks every reachable route with an authenticated session and scans body + headers
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:34.494Z","message":"adapter_getSessionAndUser"}
+
+[90mstdout[2m | apps/control-plane/test/runtime-response-scanning.test.ts[2m > [22m[2mno infrastructure identifier or credential ever reaches a web-facing response[2m > [22m[2mwalks every reachable route with an authenticated session and scans body + headers
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:34.509Z","message":"adapter_getSessionAndUser"}
+
+[90mstdout[2m | apps/control-plane/test/runtime-response-scanning.test.ts[2m > [22m[2mno infrastructure identifier or credential ever reaches a web-facing response[2m > [22m[2mwalks every reachable route with an authenticated session and scans body + headers
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:34.525Z","message":"adapter_getSessionAndUser"}
+
+[90mstdout[2m | apps/control-plane/test/redaction.test.ts
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:34.526Z","message":"adapter_getSessionAndUser"}
+
+[90mstdout[2m | apps/control-plane/test/redaction.test.ts
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:34.531Z","message":"adapter_deleteSession"}
+
+[90mstdout[2m | apps/control-plane/test/runtime-response-scanning.test.ts[2m > [22m[2mno infrastructure identifier or credential ever reaches a web-facing response[2m > [22m[2mwalks every reachable route with an authenticated session and scans body + headers
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:34.602Z","message":"adapter_getSessionAndUser"}
+
+[90mstdout[2m | apps/control-plane/test/runtime-response-scanning.test.ts[2m > [22m[2mno infrastructure identifier or credential ever reaches a web-facing response[2m > [22m[2munauthenticated responses (typed 401s) leak nothing either
+[22m[39m{"level":"info","service":"control-plane","time":"2026-10-21T00:38:34.618Z","message":"session_gate_rejected","details":{"correlation_id":"c24975c2-d018-49ae-aaf6-fd9ad0852ed6","had_cookie":"[REDACTED]"}}
+
+[90mstdout[2m | apps/control-plane/test/runtime-response-scanning.test.ts[2m > [22m[2mno infrastructure identifier or credential ever reaches a web-facing response[2m > [22m[2munauthenticated responses (typed 401s) leak nothing either
+[22m[39m{"level":"info","service":"control-plane","time":"2026-10-21T00:38:34.623Z","message":"session_gate_rejected","details":{"correlation_id":"ac758c28-ccd8-4ee7-81d5-ea03c9406caa","had_cookie":"[REDACTED]"}}
+
+ [32m✓[39m apps/control-plane/test/redaction.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 8252[2mms[22m[39m
+ [32m✓[39m apps/control-plane/test/runtime-response-scanning.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 8504[2mms[22m[39m
+   [32m✓[39m no infrastructure identifier or credential ever reaches a web-facing response [2m(4)[22m
+     [33m[2m✓[22m[39m walks every reachable route with an authenticated session and scans body + headers[33m 490[2mms[22m[39m
+(node:12472) Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests insecure by disabling certificate verification.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[90mstdout[2m | apps/control-plane/test/runtime-live-transport.test.ts[2m > [22m[2mauthenticated live runtime transport[2m > [22m[2mroutes the authenticated account and carries subscribe/replay frames both ways
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:44.958Z","message":"adapter_getSessionAndUser"}
+
+[90mstdout[2m | apps/control-plane/test/runtime-live-transport.test.ts[2m > [22m[2mauthenticated live runtime transport[2m > [22m[2mroutes the authenticated account and carries subscribe/replay frames both ways
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:44.963Z","message":"adapter_updateSession"}
+
+[90mstdout[2m | apps/control-plane/test/runtime-live-transport.test.ts[2m > [22m[2mauthenticated live runtime transport[2m > [22m[2mparses and forwards authenticated JSON commands through the real app
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:45.002Z","message":"adapter_getSessionAndUser"}
+
+[90mstdout[2m | apps/control-plane/test/signup-cap.test.ts[2m > [22m[2mfive-account signup cap (server-enforced)[2m > [22m[2mrefuses the sixth signup at the server and serves the exact S1 refusal payload
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:45.007Z","message":"CREATE_PKCECODEVERIFIER"}
+
+[90mstdout[2m | apps/control-plane/test/signup-cap.test.ts[2m > [22m[2mfive-account signup cap (server-enforced)[2m > [22m[2mrefuses the sixth signup at the server and serves the exact S1 refusal payload
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:45.017Z","message":"authorization url is ready"}
+
+[90mstdout[2m | apps/control-plane/test/signup-cap.test.ts[2m > [22m[2mfive-account signup cap (server-enforced)[2m > [22m[2mrefuses the sixth signup at the server and serves the exact S1 refusal payload
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:45.045Z","message":"USE_PKCECODEVERIFIER"}
+{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:45.046Z","message":"PARSE_PKCECODEVERIFIER"}
+
+[90mstdout[2m | apps/control-plane/test/signup-cap.test.ts[2m > [22m[2mfive-account signup cap (server-enforced)[2m > [22m[2mrefuses the sixth signup at the server and serves the exact S1 refusal payload
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:45.050Z","message":"CLEAR_PKCECODEVERIFIER"}
+
+[90mstdout[2m | apps/control-plane/test/signup-cap.test.ts[2m > [22m[2mfive-account signup cap (server-enforced)[2m > [22m[2mrefuses the sixth signup at the server and serves the exact S1 refusal payload
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:45.057Z","message":"authorization result"}
+{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:45.058Z","message":"adapter_getUserByAccount"}
+
+[90mstdout[2m | apps/control-plane/test/signup-cap.test.ts[2m > [22m[2mfive-account signup cap (server-enforced)[2m > [22m[2mrefuses the sixth signup at the server and serves the exact S1 refusal payload
+[22m[39m{"level":"info","service":"control-plane","time":"2026-10-21T00:38:45.071Z","message":"signup_cap_refused","details":{"provider_account_id":"sixth-sub-001"}}
+
+[90mstdout[2m | apps/control-plane/test/signup-cap.test.ts[2m > [22m[2mfive-account signup cap (server-enforced)[2m > [22m[2mrefuses the sixth signup at the server and serves the exact S1 refusal payload
+[22m[39m{"level":"error","service":"control-plane","time":"2026-10-21T00:38:45.072Z","message":"{\"name\":\"AccessDenied\",\"message\":\"AccessDenied. Read more at https://errors.authjs.dev#accessdenied\"}"}
+
+[90mstdout[2m | apps/control-plane/test/runtime-live-transport.test.ts[2m > [22m[2mauthenticated live runtime transport[2m > [22m[2mfails closed when the database session is directly revoked
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:45.083Z","message":"adapter_getSessionAndUser"}
+
+[90mstdout[2m | apps/control-plane/test/signup-cap.test.ts[2m > [22m[2mfive-account signup cap (server-enforced)[2m > [22m[2mrecords the refusal as a security event and is not bypassable by a second flow
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:45.123Z","message":"CREATE_PKCECODEVERIFIER"}
+
+[90mstdout[2m | apps/control-plane/test/signup-cap.test.ts[2m > [22m[2mfive-account signup cap (server-enforced)[2m > [22m[2mrecords the refusal as a security event and is not bypassable by a second flow
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:45.124Z","message":"authorization url is ready"}
+
+[90mstdout[2m | apps/control-plane/test/signup-cap.test.ts[2m > [22m[2mfive-account signup cap (server-enforced)[2m > [22m[2mrecords the refusal as a security event and is not bypassable by a second flow
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:45.168Z","message":"USE_PKCECODEVERIFIER"}
+{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:45.168Z","message":"PARSE_PKCECODEVERIFIER"}
+
+[90mstdout[2m | apps/control-plane/test/signup-cap.test.ts[2m > [22m[2mfive-account signup cap (server-enforced)[2m > [22m[2mrecords the refusal as a security event and is not bypassable by a second flow
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:45.169Z","message":"CLEAR_PKCECODEVERIFIER"}
+
+[90mstdout[2m | apps/control-plane/test/signup-cap.test.ts[2m > [22m[2mfive-account signup cap (server-enforced)[2m > [22m[2mrecords the refusal as a security event and is not bypassable by a second flow
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:45.185Z","message":"authorization result"}
+{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:45.185Z","message":"adapter_getUserByAccount"}
+
+[90mstdout[2m | apps/control-plane/test/signup-cap.test.ts[2m > [22m[2mfive-account signup cap (server-enforced)[2m > [22m[2mrecords the refusal as a security event and is not bypassable by a second flow
+[22m[39m{"level":"info","service":"control-plane","time":"2026-10-21T00:38:45.189Z","message":"signup_cap_refused","details":{"provider_account_id":"sixth-sub-002"}}
+
+[90mstdout[2m | apps/control-plane/test/signup-cap.test.ts[2m > [22m[2mfive-account signup cap (server-enforced)[2m > [22m[2mrecords the refusal as a security event and is not bypassable by a second flow
+[22m[39m{"level":"error","service":"control-plane","time":"2026-10-21T00:38:45.190Z","message":"{\"name\":\"AccessDenied\",\"message\":\"AccessDenied. Read more at https://errors.authjs.dev#accessdenied\"}"}
+
+[90mstdout[2m | apps/control-plane/test/signup-cap.test.ts[2m > [22m[2mfive-account signup cap (server-enforced)[2m > [22m[2mnever refuses a returning user (the cap limits signups, not sign-ins)
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:45.216Z","message":"CREATE_PKCECODEVERIFIER"}
+
+[90mstdout[2m | apps/control-plane/test/signup-cap.test.ts[2m > [22m[2mfive-account signup cap (server-enforced)[2m > [22m[2mnever refuses a returning user (the cap limits signups, not sign-ins)
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:45.217Z","message":"authorization url is ready"}
+
+[90mstdout[2m | apps/control-plane/test/signup-cap.test.ts[2m > [22m[2mfive-account signup cap (server-enforced)[2m > [22m[2mnever refuses a returning user (the cap limits signups, not sign-ins)
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:45.260Z","message":"USE_PKCECODEVERIFIER"}
+{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:45.260Z","message":"PARSE_PKCECODEVERIFIER"}
+
+[90mstdout[2m | apps/control-plane/test/signup-cap.test.ts[2m > [22m[2mfive-account signup cap (server-enforced)[2m > [22m[2mnever refuses a returning user (the cap limits signups, not sign-ins)
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:45.261Z","message":"CLEAR_PKCECODEVERIFIER"}
+
+[90mstdout[2m | apps/control-plane/test/signup-cap.test.ts[2m > [22m[2mfive-account signup cap (server-enforced)[2m > [22m[2mnever refuses a returning user (the cap limits signups, not sign-ins)
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:45.277Z","message":"authorization result"}
+{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:45.277Z","message":"adapter_getUserByAccount"}
+
+[90mstdout[2m | apps/control-plane/test/signup-cap.test.ts[2m > [22m[2mfive-account signup cap (server-enforced)[2m > [22m[2mnever refuses a returning user (the cap limits signups, not sign-ins)
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:45.282Z","message":"adapter_getUserByAccount"}
+
+[90mstdout[2m | apps/control-plane/test/signup-cap.test.ts[2m > [22m[2mfive-account signup cap (server-enforced)[2m > [22m[2mnever refuses a returning user (the cap limits signups, not sign-ins)
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:45.283Z","message":"adapter_createSession"}
+
+[90mstdout[2m | apps/control-plane/test/signup-cap.test.ts[2m > [22m[2mfive-account signup cap (server-enforced)[2m > [22m[2mnever refuses a returning user (the cap limits signups, not sign-ins)
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:45.293Z","message":"adapter_getSessionAndUser"}
+
+ [32m✓[39m apps/control-plane/test/runtime-live-transport.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 7294[2mms[22m[39m
+ [32m✓[39m apps/control-plane/test/signup-cap.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 7680[2mms[22m[39m
+(node:13868) Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests insecure by disabling certificate verification.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2mrefuses an unauthenticated /api/session with the typed 401
+[22m[39m{"level":"info","service":"control-plane","time":"2026-10-21T00:38:55.409Z","message":"session_gate_rejected","details":{"correlation_id":"22b32716-761d-4786-8439-1c4e11589ad2","had_cookie":"[REDACTED]"}}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2mruns the full browser-equivalent OAuth flow and sets the secure session cookie
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.457Z","message":"CREATE_PKCECODEVERIFIER"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2mruns the full browser-equivalent OAuth flow and sets the secure session cookie
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.462Z","message":"authorization url is ready"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2mruns the full browser-equivalent OAuth flow and sets the secure session cookie
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.484Z","message":"USE_PKCECODEVERIFIER"}
+{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.484Z","message":"PARSE_PKCECODEVERIFIER"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2mruns the full browser-equivalent OAuth flow and sets the secure session cookie
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.486Z","message":"CLEAR_PKCECODEVERIFIER"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2mruns the full browser-equivalent OAuth flow and sets the secure session cookie
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.502Z","message":"authorization result"}
+{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.502Z","message":"adapter_getUserByAccount"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2mruns the full browser-equivalent OAuth flow and sets the secure session cookie
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.512Z","message":"adapter_getUserByAccount"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2mruns the full browser-equivalent OAuth flow and sets the secure session cookie
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.513Z","message":"adapter_getUserByEmail"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2mruns the full browser-equivalent OAuth flow and sets the secure session cookie
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.514Z","message":"adapter_createUser"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2mruns the full browser-equivalent OAuth flow and sets the secure session cookie
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.518Z","message":"adapter_linkAccount"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2mruns the full browser-equivalent OAuth flow and sets the secure session cookie
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.520Z","message":"adapter_createSession"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2mserves the S02 Session projection behind the session gate
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.579Z","message":"CREATE_PKCECODEVERIFIER"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2mserves the S02 Session projection behind the session gate
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.581Z","message":"authorization url is ready"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2mserves the S02 Session projection behind the session gate
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.623Z","message":"USE_PKCECODEVERIFIER"}
+{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.623Z","message":"PARSE_PKCECODEVERIFIER"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2mserves the S02 Session projection behind the session gate
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.624Z","message":"CLEAR_PKCECODEVERIFIER"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2mserves the S02 Session projection behind the session gate
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.640Z","message":"authorization result"}
+{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.640Z","message":"adapter_getUserByAccount"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2mserves the S02 Session projection behind the session gate
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.645Z","message":"adapter_getUserByAccount"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2mserves the S02 Session projection behind the session gate
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.647Z","message":"adapter_getUserByEmail"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2mserves the S02 Session projection behind the session gate
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.648Z","message":"adapter_createUser"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2mserves the S02 Session projection behind the session gate
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.650Z","message":"adapter_linkAccount"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2mserves the S02 Session projection behind the session gate
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.651Z","message":"adapter_createSession"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2mserves the S02 Session projection behind the session gate
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.671Z","message":"adapter_getSessionAndUser"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2minvalidates the session on logout and records the security event
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.717Z","message":"CREATE_PKCECODEVERIFIER"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2minvalidates the session on logout and records the security event
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.718Z","message":"authorization url is ready"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2minvalidates the session on logout and records the security event
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.764Z","message":"USE_PKCECODEVERIFIER"}
+{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.764Z","message":"PARSE_PKCECODEVERIFIER"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2minvalidates the session on logout and records the security event
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.765Z","message":"CLEAR_PKCECODEVERIFIER"}
+
+ [32m✓[39m apps/control-plane/test/schema-and-migrations.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 7595[2mms[22m[39m
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2minvalidates the session on logout and records the security event
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.781Z","message":"authorization result"}
+{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.781Z","message":"adapter_getUserByAccount"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2minvalidates the session on logout and records the security event
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.784Z","message":"adapter_getUserByAccount"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2minvalidates the session on logout and records the security event
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.785Z","message":"adapter_getUserByEmail"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2minvalidates the session on logout and records the security event
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.786Z","message":"adapter_createUser"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2minvalidates the session on logout and records the security event
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.788Z","message":"adapter_linkAccount"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2minvalidates the session on logout and records the security event
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.790Z","message":"adapter_createSession"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2minvalidates the session on logout and records the security event
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.812Z","message":"adapter_getSessionAndUser"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2minvalidates the session on logout and records the security event
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.816Z","message":"adapter_deleteSession"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2minvalidates the session on logout and records the security event
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.825Z","message":"adapter_getSessionAndUser"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2minvalidates the session on logout and records the security event
+[22m[39m{"level":"info","service":"control-plane","time":"2026-10-21T00:38:55.827Z","message":"session_gate_rejected","details":{"correlation_id":"8b3c321c-521f-4eb2-b53a-867134e69f16","had_cookie":"[REDACTED]"}}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2mrecords session_validation_failed when an invalid session cookie is presented
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.841Z","message":"adapter_getSessionAndUser"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2mrecords session_validation_failed when an invalid session cookie is presented
+[22m[39m{"level":"info","service":"control-plane","time":"2026-10-21T00:38:55.844Z","message":"session_gate_rejected","details":{"correlation_id":"ddfe45ba-3bd7-4913-bf58-e0fbfb637732","had_cookie":"[REDACTED]"}}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2msigns a returning user in without creating a second account
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.888Z","message":"CREATE_PKCECODEVERIFIER"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2msigns a returning user in without creating a second account
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.889Z","message":"authorization url is ready"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2msigns a returning user in without creating a second account
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.936Z","message":"USE_PKCECODEVERIFIER"}
+{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.936Z","message":"PARSE_PKCECODEVERIFIER"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2msigns a returning user in without creating a second account
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.937Z","message":"CLEAR_PKCECODEVERIFIER"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2msigns a returning user in without creating a second account
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.951Z","message":"authorization result"}
+{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.951Z","message":"adapter_getUserByAccount"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2msigns a returning user in without creating a second account
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.953Z","message":"adapter_getUserByAccount"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2msigns a returning user in without creating a second account
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.954Z","message":"adapter_createSession"}
+
+[90mstdout[2m | apps/control-plane/test/auth-flow.test.ts[2m > [22m[2mGoogle OAuth flow (only login method)[2m > [22m[2msigns a returning user in without creating a second account
+[22m[39m{"level":"debug","service":"control-plane","time":"2026-10-21T00:38:55.966Z","message":"adapter_getSessionAndUser"}
+
+ [32m✓[39m apps/control-plane/test/auth-flow.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 8479[2mms[22m[39m
+ [32m✓[39m apps/control-plane/test/admin-flag.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 7800[2mms[22m[39m
+ [32m✓[39m apps/control-plane/test/unconfigured.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 8323[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/test/recovery/kill9-recovery.test.ts [2m([22m[2m1 test[22m[2m)[22m[33m 1707[2mms[22m[39m
+   [32m✓[39m recovery: kill -9 mid-reply-stream, restart on the same database [2m(1)[22m
+     [33m[2m✓[22m[39m recovers the committed prefix exactly, replays the receipt, invents nothing[33m 1703[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/test/recovery/recovery-probes.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 1567[2mms[22m[39m
+   [32m✓[39m recovery: two tabs on one conversation (fanout, reconnect replay, no duplicates) [2m(1)[22m
+     [33m[2m✓[22m[39m fans out to both tabs and replays a reconnecting tab's missed events exactly once[33m 1293[2mms[22m[39m
+{"event":"e2e_send_ack_ms","measured":46,"target":500}
+ [32m✓[39m apps/user-runtime/src/modules/conversations/reply-streamer.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 1064[2mms[22m[39m
+   [32m✓[39m compose-level scripted replies (full runtime, real HTTP + real timers) [2m(1)[22m
+     [33m[2m✓[22m[39m a turn over HTTP produces a durable reply and never a task event on the stream[33m 982[2mms[22m[39m
+ [32m✓[39m apps/web/test/e2e/mock-runtime-e2e.test.ts [2m([22m[2m1 test[22m[2m)[22m[33m 1602[2mms[22m[39m
+   [32m✓[39m S09 mock-runtime E2E (E8): login → chat → send → stream → refresh → replay [2m(1)[22m
+     [33m[2m✓[22m[39m drives the full thin-slice path through the real client, proxy, and runtime[33m 1598[2mms[22m[39m
+ [32m✓[39m tests/contract/codegen.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 843[2mms[22m[39m
+   [32m✓[39m S02 codegen (D25, zod-to-openapi) [2m(4)[22m
+     [33m[2m✓[22m[39m passes --check against the committed output (reproducible: same input, same output)[33m 793[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/transport/websocket/websocket.test.ts [2m([22m[2m13 tests[22m[2m)[22m[33m 1020[2mms[22m[39m
+[90mstderr[2m | apps/user-runtime/src/transport/local-api/local-api.test.ts[2m > [22m[2mlocal API — typed error middleware integration[2m > [22m[2mdegrades an untyped internal fault to a generic 500 that leaks nothing (G3)
+[22m[39m{"level":"error","event":"untyped_request_fault","correlation_id":"31cdc271-11dd-4a65-8aa8-dccfa84d5427","method":"POST","path":"/v1/conversations/commands","name":"Error","message":"SQLITE_CONSTRAINT: secret table schema leaked","stack":"Error: SQLITE_CONSTRAINT: secret table schema leaked\n    at Object.throwing [as executeCommand] (E:/PROJECTS/shera-bot/apps/user-runtime/src/transport/local-api/local-api.test.ts:414:13)\n    at E:/PROJECTS/shera-bot/apps/user-runtime/src/transport/local-api/app.ts:182:45\n    at Layer.handleRequest (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\layer.js:152:17)\n    at next (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\route.js:157:13)\n    at Route.dispatch (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\route.js:117:3)\n    at handle (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\index.js:435:11)\n    at Layer.handleRequest (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\layer.js:152:17)\n    at E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\index.js:295:15\n    at processParams (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\index.js:582:12)\n    at next (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\index.js:291:5)"}
+
+ [32m✓[39m apps/user-runtime/src/transport/local-api/local-api.test.ts [2m([22m[2m13 tests[22m[2m)[22m[33m 496[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/transport/local-api/s11-agents-api.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 783[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/modules/conversations/conversations.test.ts [2m([22m[2m19 tests[22m[2m)[22m[33m 416[2mms[22m[39m
+[90mstderr[2m | apps/user-runtime/src/transport/local-api/s11-agent-folder-api.test.ts[2m > [22m[2mS11 agent folder access API (private-folder isolation guard)[2m > [22m[2mdenies ANY other Agent's private subtree — root and nested, with the typed 403
+[22m[39m{"level":"error","event":"untyped_request_fault","correlation_id":"7696e059-f58e-409f-999f-727718f1c878","method":"GET","path":"/v1/agents/agent_general_assistant/folder","name":"AgentFolderAccessDeniedError","message":"agent agent_general_assistant may not access agent agent_researcher's private folder","stack":"AgentFolderAccessDeniedError: agent agent_general_assistant may not access agent agent_researcher's private folder\n    at AgentFoldersService.guard (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:284:13)\n    at AgentFoldersService.resolveAccess (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:228:25)\n    at E:/PROJECTS/shera-bot/apps/user-runtime/src/transport/local-api/app.ts:363:26\n    at Layer.handleRequest (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\layer.js:152:17)\n    at next (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\route.js:157:13)\n    at Route.dispatch (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\route.js:117:3)\n    at handle (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\index.js:435:11)\n    at Layer.handleRequest (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\layer.js:152:17)\n    at E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\index.js:295:15\n    at param (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\index.js:600:14)"}
+
+[90mstderr[2m | apps/user-runtime/src/transport/local-api/s11-agent-folder-api.test.ts[2m > [22m[2mS11 agent folder access API (private-folder isolation guard)[2m > [22m[2mdenies ANY other Agent's private subtree — root and nested, with the typed 403
+[22m[39m{"level":"error","event":"untyped_request_fault","correlation_id":"4ed97f6a-1fce-42d0-85b3-59529bbd1cf2","method":"GET","path":"/v1/agents/agent_general_assistant/folder","name":"AgentFolderAccessDeniedError","message":"agent agent_general_assistant may not access agent agent_researcher's private folder","stack":"AgentFolderAccessDeniedError: agent agent_general_assistant may not access agent agent_researcher's private folder\n    at AgentFoldersService.guard (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:284:13)\n    at AgentFoldersService.resolveAccess (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:228:25)\n    at E:/PROJECTS/shera-bot/apps/user-runtime/src/transport/local-api/app.ts:363:26\n    at Layer.handleRequest (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\layer.js:152:17)\n    at next (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\route.js:157:13)\n    at Route.dispatch (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\route.js:117:3)\n    at handle (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\index.js:435:11)\n    at Layer.handleRequest (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\layer.js:152:17)\n    at E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\index.js:295:15\n    at param (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\index.js:600:14)"}
+
+[90mstderr[2m | apps/user-runtime/src/transport/local-api/s11-agent-folder-api.test.ts[2m > [22m[2mS11 agent folder access API (private-folder isolation guard)[2m > [22m[2mrejects traversal-shaped URIs with the typed 400 — no percent-encoding escape
+[22m[39m{"level":"error","event":"untyped_request_fault","correlation_id":"f903f428-1963-46e2-91a5-0379bb3aa9c0","method":"GET","path":"/v1/agents/agent_general_assistant/folder","name":"AgentFolderUriInvalidError","message":"the folder URI is not a safe agent://<agent_id>/<path> address","stack":"AgentFolderUriInvalidError: the folder URI is not a safe agent://<agent_id>/<path> address\n    at parseAgentFolderUri (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:126:13)\n    at AgentFoldersService.resolveWithinWorkspace (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:266:20)\n    at AgentFoldersService.guard (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:281:25)\n    at AgentFoldersService.resolveAccess (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:228:25)\n    at E:/PROJECTS/shera-bot/apps/user-runtime/src/transport/local-api/app.ts:363:26\n    at Layer.handleRequest (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\layer.js:152:17)\n    at next (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\route.js:157:13)\n    at Route.dispatch (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\route.js:117:3)\n    at handle (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\index.js:435:11)\n    at Layer.handleRequest (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\layer.js:152:17)"}
+
+[90mstderr[2m | apps/user-runtime/src/transport/local-api/s11-agent-folder-api.test.ts[2m > [22m[2mS11 agent folder access API (private-folder isolation guard)[2m > [22m[2mrejects traversal-shaped URIs with the typed 400 — no percent-encoding escape
+[22m[39m{"level":"error","event":"untyped_request_fault","correlation_id":"d4078167-5071-43a6-b393-4c285920f4f6","method":"GET","path":"/v1/agents/agent_general_assistant/folder","name":"AgentFolderUriInvalidError","message":"the folder URI is not a safe agent://<agent_id>/<path> address","stack":"AgentFolderUriInvalidError: the folder URI is not a safe agent://<agent_id>/<path> address\n    at parseAgentFolderUri (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:126:13)\n    at AgentFoldersService.resolveWithinWorkspace (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:266:20)\n    at AgentFoldersService.guard (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:281:25)\n    at AgentFoldersService.resolveAccess (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:228:25)\n    at E:/PROJECTS/shera-bot/apps/user-runtime/src/transport/local-api/app.ts:363:26\n    at Layer.handleRequest (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\layer.js:152:17)\n    at next (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\route.js:157:13)\n    at Route.dispatch (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\route.js:117:3)\n    at handle (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\index.js:435:11)\n    at Layer.handleRequest (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\layer.js:152:17)"}
+
+[90mstderr[2m | apps/user-runtime/src/transport/local-api/s11-agent-folder-api.test.ts[2m > [22m[2mS11 agent folder access API (private-folder isolation guard)[2m > [22m[2mrejects non-agent:// schemes and malformed folder URIs — shared paths are S17's model
+[22m[39m{"level":"error","event":"untyped_request_fault","correlation_id":"2b625f45-bbdd-47b8-a5ec-3d61fd6a5339","method":"GET","path":"/v1/agents/agent_general_assistant/folder","name":"AgentFolderUriInvalidError","message":"the folder URI is not a safe agent://<agent_id>/<path> address","stack":"AgentFolderUriInvalidError: the folder URI is not a safe agent://<agent_id>/<path> address\n    at parseAgentFolderUri (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:100:42)\n    at AgentFoldersService.resolveWithinWorkspace (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:266:20)\n    at AgentFoldersService.guard (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:281:25)\n    at AgentFoldersService.resolveAccess (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:228:25)\n    at E:/PROJECTS/shera-bot/apps/user-runtime/src/transport/local-api/app.ts:363:26\n    at Layer.handleRequest (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\layer.js:152:17)\n    at next (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\route.js:157:13)\n    at Route.dispatch (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\route.js:117:3)\n    at handle (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\index.js:435:11)\n    at Layer.handleRequest (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\layer.js:152:17)"}
+
+[90mstderr[2m | apps/user-runtime/src/transport/local-api/s11-agent-folder-api.test.ts[2m > [22m[2mS11 agent folder access API (private-folder isolation guard)[2m > [22m[2mrejects non-agent:// schemes and malformed folder URIs — shared paths are S17's model
+[22m[39m{"level":"error","event":"untyped_request_fault","correlation_id":"1b75d57e-ccd4-4ef3-a4b5-8ac8e1877b0c","method":"GET","path":"/v1/agents/agent_general_assistant/folder","name":"AgentFolderUriInvalidError","message":"the folder URI is not a safe agent://<agent_id>/<path> address","stack":"AgentFolderUriInvalidError: the folder URI is not a safe agent://<agent_id>/<path> address\n    at parseAgentFolderUri (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:109:46)\n    at AgentFoldersService.resolveWithinWorkspace (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:266:20)\n    at AgentFoldersService.guard (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:281:25)\n    at AgentFoldersService.resolveAccess (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:228:25)\n    at E:/PROJECTS/shera-bot/apps/user-runtime/src/transport/local-api/app.ts:363:26\n    at Layer.handleRequest (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\layer.js:152:17)\n    at next (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\route.js:157:13)\n    at Route.dispatch (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\route.js:117:3)\n    at handle (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\index.js:435:11)\n    at Layer.handleRequest (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\layer.js:152:17)"}
+
+ [32m✓[39m apps/user-runtime/src/transport/local-api/s11-agent-folder-api.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 300[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/modules/agents/agents.service.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 247[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/adapters/sqlite/agents-repository.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 263[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/modules/runtime/internal-channel.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 258[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/mock/e2e-mode.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 204[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/modules/agents/agent-folders.service.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 221[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/management-bootstrap.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 198[2mms[22m[39m
+ [32m✓[39m apps/web/test/agent-surfaces.test.ts [2m([22m[2m30 tests[22m[2m)[22m[32m 185[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/modules/runtime/harness-run-service.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 145[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/transport/local-api/s09-real-rows.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 122[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/main.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 141[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/modules/conversations/messages.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 138[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/modules/runtime/pack-pin.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 138[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/modules/events/events.service.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 112[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/transport/local-api/s09-message-send.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 138[2mms[22m[39m
+ [32m✓[39m packages/agent-pack-sdk/src/mockup-divergence.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 112[2mms[22m[39m
+ [32m✓[39m packages/agent-pack-sdk/src/manifest.test.ts [2m([22m[2m24 tests[22m[2m)[22m[32m 112[2mms[22m[39m
+ [32m✓[39m apps/control-plane/test/runtime-api-proxy.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 103[2mms[22m[39m
+ [32m✓[39m packages/agent-pack-sdk/src/loader.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 117[2mms[22m[39m
+ [32m✓[39m apps/web/test/connection.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 101[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/adapters/sqlite/connection.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 57[2mms[22m[39m
+ [32m✓[39m apps/web/test/a11y.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 96[2mms[22m[39m
+ [32m✓[39m apps/web/test/ws-socket.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 85[2mms[22m[39m
+ [32m✓[39m tests/contract/contracts-roundtrip.test.ts [2m([22m[2m105 tests[22m[2m)[22m[32m 90[2mms[22m[39m
+ [32m✓[39m apps/web/test/chat-view.test.ts [2m([22m[2m22 tests[22m[2m)[22m[32m 94[2mms[22m[39m
+ [32m✓[39m tests/contract/contracts-unknown-fields.test.ts [2m([22m[2m49 tests[22m[2m)[22m[32m 74[2mms[22m[39m
+ [32m✓[39m tests/contract/runtime-portability.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 57[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/main-startup-failure.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 58[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/adapters/sqlite/workspaces-repository.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 57[2mms[22m[39m
+ [32m✓[39m apps/web/test/runtime-chat.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 54[2mms[22m[39m
+ [32m✓[39m apps/web/test/collaboration-surface.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 59[2mms[22m[39m
+ [32m✓[39m apps/control-plane/test/error-boundary.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 62[2mms[22m[39m
+ [32m✓[39m apps/web/test/runtime-client.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 50[2mms[22m[39m
+ [32m✓[39m apps/web/test/proxies.test.ts [2m([22m[2m16 tests[22m[2m)[22m[32m 74[2mms[22m[39m
+ [32m✓[39m apps/web/test/control-plane-client.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 64[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/modules/tasks/task-transitions.test.ts [2m([22m[2m43 tests[22m[2m)[22m[32m 49[2mms[22m[39m
+ [32m✓[39m tests/contract/user-runtime-boundary.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 39[2mms[22m[39m
+ [32m✓[39m apps/web/test/vocabulary.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 37[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/modules/tasks/task-run-creator.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 28[2mms[22m[39m
+ [32m✓[39m apps/web/test/agent-identity.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 32[2mms[22m[39m
+ [32m✓[39m apps/web/test/design-tokens.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 25[2mms[22m[39m
+ [32m✓[39m apps/web/test/login.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 34[2mms[22m[39m
+ [32m✓[39m apps/web/test/streaming.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 32[2mms[22m[39m
+ [32m✓[39m tests/contract/agent-settings-contract.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 27[2mms[22m[39m
+ [32m✓[39m tests/contract/typed-execution-event.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m apps/web/test/container-gate.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 25[2mms[22m[39m
+ [32m✓[39m packages/agent-pack-sdk/src/compatibility.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 25[2mms[22m[39m
+ [32m✓[39m apps/web/test/navigation.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 23[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/adapters/fs/agent-folder-store.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m packages/agent-pack-sdk/src/pack-content.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 40[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/transport/http/typed-errors.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m apps/web/test/fixtures.test.ts [2m([22m[2m30 tests[22m[2m)[22m[32m 18[2mms[22m[39m
+ [32m✓[39m apps/control-plane/test/local-container-backend.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m apps/web/test/runtime-thread.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m packages/test-kit/src/fake-container-backend.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m apps/web/test/runtime-live.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m packages/agent-pack-sdk/src/vocabulary.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m tests/contract/workspace-graph.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m apps/web/test/container-resolution.test.ts [2m([22m[2m16 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m apps/control-plane/test/runtime-container-spec.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m tests/contract/license-expression.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/adapters/process/fake-harness-adapter.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m packages/agent-pack-sdk/src/integrity.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m tests/contract/approval-contract.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m tests/contract/runtime-access.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m apps/control-plane/test/helpers/pg-cluster.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m85 passed[39m[22m[90m (85)[39m
+[2m      Tests [22m [1m[32m842 passed[39m[22m[90m (842)[39m
+[2m   Start at [22m 06:37:53
+[2m   Duration [22m 98.93s[2m (tests 55%, import 43%, transform 2%)[22m
+
+[2m    Isolate [22m [33m85 workers spawned[39m[2m · ~169ms startup each (spawn + environment, per file)[22m
+[2m            [22m [2mat least ~7.00s faster with [22m[33misolate: false[39m[2m — reuses workers across files instead of one per file[22m
+

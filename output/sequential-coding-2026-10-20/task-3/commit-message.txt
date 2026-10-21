@@ -1,0 +1,11 @@
+test(db): avoid inherited startup pipes
+
+Allow the Windows test launcher to return after PostgreSQL starts so
+real database validation can complete. Record fresh parent verification.
+
+Constraint: keep PostgreSQL installation local to this workspace
+Rejected: captured launcher pipes | server inherits handles on Windows
+Confidence: high
+Scope-risk: narrow
+Tested: 834 tests in 84 files with real PostgreSQL; lint; diff check
+Not-tested: Docker recreation, real OAuth, providers and browser QA

@@ -1,0 +1,64 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.1 [39m[90mE:/PROJECTS/shera-bot[39m
+
+ [31m❯[39m apps/web/test/proxies.test.ts [2m([22m[2m12 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[32m 41[2mms[22m[39m
+   [32m✓[39m control-plane proxy — redirect passthrough (sign-in 302) [2m(1)[22m
+     [32m✓[39m a 302's location (and cache-control) reaches the client — the OAuth handoff works[32m 20[2mms[22m[39m
+   [31m❯[39m runtime proxy — allowlist + passthrough [2m(5)[22m
+[31m     [31m×[31m rejects an anonymous command before the runtime can be reached[39m[32m 9[2mms[22m[39m
+[31m     [31m×[31m rejects a caller-chosen workspace that differs from the authenticated session[39m[32m 2[2mms[22m[39m
+     [32m✓[39m an allowed GET keeps transparent headers — cache-control reaches the client[32m 1[2mms[22m[39m
+     [32m✓[39m bodies forward for every body-bearing method, not only POST[32m 2[2mms[22m[39m
+     [32m✓[39m the strict allowlist still refuses non-conversation paths[32m 1[2mms[22m[39m
+   [32m✓[39m runtime proxy — S11 agent surfaces (allowlist additions) [2m(6)[22m
+     [32m✓[39m forwards the workspace roster read[32m 2[2mms[22m[39m
+     [32m✓[39m forwards the agent detail read (the get-or-create direct chat binding)[32m 0[2mms[22m[39m
+     [32m✓[39m forwards the settings snapshot read[32m 1[2mms[22m[39m
+     [32m✓[39m forwards the D16 settings command POST with its body (the one mutation surface)[32m 1[2mms[22m[39m
+     [32m✓[39m still refuses the chunk-2 PATCH routes — the commands endpoint is the only agent mutation[32m 1[2mms[22m[39m
+     [32m✓[39m still refuses agent sub-paths outside the four surfaces (detail must not swallow settings)[32m 0[2mms[22m[39m
+ [32m✓[39m tests/contract/runtime-access.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 2 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m apps/web/test/proxies.test.ts[2m > [22mruntime proxy — allowlist + passthrough[2m > [22mrejects an anonymous command before the runtime can be reached
+[31m[1mAssertionError[22m: expected 'http://runtime-local.test/v1/conversa…' to be 'http://control-plane.test/api/session' // Object.is equality[39m
+
+Expected: [32m"http://[7mcontrol-plane.test/api/session[27m"[39m
+Received: [31m"http://[7mruntime-local.test/v1/conversations/commands[27m"[39m
+
+[36m [2m❯[22m apps/web/test/proxies.test.ts:[2m125:37[22m[39m
+    [90m123|[39m     expect((await response.json()) as { code: string }).toMatchObject(…
+    [90m124|[39m     expect(calls).toHaveLength(1);
+    [90m125|[39m     expect(String(calls[0]!.input)).toBe(`${CONTROL_BASE}/api/session`…
+    [90m   |[39m                                     [31m^[39m
+    [90m126|[39m   });
+    [90m127|[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m apps/web/test/proxies.test.ts[2m > [22mruntime proxy — allowlist + passthrough[2m > [22mrejects a caller-chosen workspace that differs from the authenticated session
+[31m[1mAssertionError[22m: expected 200 to be 403 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 403[39m
+[31m+ 200[39m
+
+[36m [2m❯[22m apps/web/test/proxies.test.ts:[2m148:29[22m[39m
+    [90m146|[39m     const response = await proxyToLocalApi(request, "/v1/conversations…
+    [90m147|[39m
+    [90m148|[39m     expect(response.status).toBe(403);
+    [90m   |[39m                             [31m^[39m
+    [90m149|[39m     expect((await response.json()) as { code: string }).toMatchObject({
+    [90m150|[39m       code: "RUNTIME_TENANT_MISMATCH",
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m1 passed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m12 passed[39m[22m[90m (14)[39m
+[2m   Start at [22m 16:02:43
+[2m   Duration [22m 581ms[2m (import 56%, transform 34%, tests 8%, worker 2%)[22m
+

@@ -1,0 +1,48 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.1 [39m[90mE:/PROJECTS/shera-bot[39m
+
+ [31m❯[39m apps/control-plane/test/schema-and-migrations.test.ts [2m([22m[2m5 tests[22m[2m | [22m[33m5 skipped[39m[2m)[22m[33m 300649[2mms[22m[39m
+   [2m[90m↓[39m[22m control-plane schema scope (D2, PRD §12) [2m(5)[22m
+     [2m[90m↓[39m[22m migrations apply from an empty database and record in the journal
+     [2m[90m↓[39m[22m contains exactly the control-plane tables — nothing else
+     [2m[90m↓[39m[22m never stores product-state-shaped records (conversations, tasks, memories, provider keys)
+     [2m[90m↓[39m[22m installs the admin-flag audit trigger (PRD §15: manual flag, DB-level audit)
+     [2m[90m↓[39m[22m records an admin_flag_changed security event when the flag changes via direct SQL
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Suites 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m apps/control-plane/test/schema-and-migrations.test.ts[2m [ apps/control-plane/test/schema-and-migrations.test.ts ][22m
+[31m[1mError[22m: Hook timed out in 180000ms.
+If this is a long-running hook, pass a timeout value as the last argument or configure it globally with "hookTimeout".[39m
+[36m [2m❯[22m apps/control-plane/test/schema-and-migrations.test.ts:[2m29:1[22m[39m
+    [90m 27|[39m let controlPlane: ControlPlaneApp;
+    [90m 28|[39m
+    [90m 29|[39m beforeAll(async () => {
+    [90m   |[39m [31m^[39m
+    [90m 30|[39m   cluster = await startTestCluster("schema");
+    [90m 31|[39m   controlPlane = await createControlPlaneApp({
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m apps/control-plane/test/schema-and-migrations.test.ts[2m [ apps/control-plane/test/schema-and-migrations.test.ts ][22m
+[31m[1mError[22m: Command failed: E:\PROJECTS\shera-bot\output\sequential-coding-2026-10-20\task-3\extracted\pgsql\bin\pg_ctl -D C:\Users\User\AppData\Local\Temp\shera-cp-schema-yBZfjc\data -m fast -w stop
+pg_ctl: PID file "C:/Users/User/AppData/Local/Temp/shera-cp-schema-yBZfjc/data/postmaster.pid" does not exist
+Is server running?
+[39m
+[36m [2m❯[22m Object.stop apps/control-plane/test/helpers/pg-cluster.ts:[2m186:13[22m[39m
+    [90m184|[39m         async stop() {
+    [90m185|[39m           try {
+    [90m186|[39m             execFileSync(join(pgBin, "pg_ctl"), ["-D", dataDir, "-m", …
+    [90m   |[39m             [31m^[39m
+    [90m187|[39m               stdio: "pipe",
+    [90m188|[39m             });
+[90m [2m❯[22m apps/control-plane/test/schema-and-migrations.test.ts:[2m39:18[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [33m5 skipped[39m[90m (5)[39m
+[2m   Start at [22m 16:50:18
+[2m   Duration [22m 303.07s[2m (tests 99%, import 1%)[22m
+

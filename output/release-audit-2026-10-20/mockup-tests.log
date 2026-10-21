@@ -1,0 +1,35 @@
+✔ dock width bounds track the available width — no artificial cap (1.8373ms)
+✔ rendering clamps a saved width to keep the chat usable without mutating it (0.205ms)
+✔ dragging past the chat threshold fills the dock and keeps the pre-fill width (0.1518ms)
+✔ any shrink leaves fill mode at the chat minimum, then tracks the pointer (0.1481ms)
+✔ a continuous drag holds fill while widening and leaves it on a narrowing move (0.1567ms)
+✔ leaveFill restores the last chosen width and reset clears fill (0.7048ms)
+✔ one/two panels stack and three through six keep deterministic groups (0.318ms)
+✔ row heights use proportions and spend all available space (0.2257ms)
+✔ minimums redistribute remaining space rather than compress bodies (0.2055ms)
+✔ short viewports overflow with usable body minimums (0.2036ms)
+✔ collapsed panel is header-only and donates space to siblings (0.1687ms)
+✔ all collapsed panels remain reachable headers without filling empty space (0.1349ms)
+✔ maximize/restore and collapse/expand preserve row and column preferences (0.176ms)
+✔ reset affects only the selected chat and keeps its panels (0.1375ms)
+✔ keyboard steps, endpoints and reset stay bounded (0.1288ms)
+✔ timeline supports empty chats and ignores a different chat's selected run (0.9017ms)
+✔ dock renders named focusable separators and independent collapse controls (0.5572ms)
+✔ resize controls live in the Add panel menu, not the dock head (0.375ms)
+✔ chat topbar: icon search opens a modal; model stays in the composer; account rows (1.1434ms)
+✔ dock head carries the Back to chat control that exits fill mode (0.163ms)
+✔ agent profile panel renders identity, quick actions and collapsible sections (0.5737ms)
+✔ profile mute reflects in-memory state and ongoing tasks list current-chat runs (0.2414ms)
+✔ profile panel on an Operation chat shows the roster instead of an Agent identity (0.349ms)
+✔ agent chat header and full-page workspace expose the profile (0.3678ms)
+✔ sidebar groups Operations into Templates and Active chats with labeled controls (0.5648ms)
+✔ esc escapes markup-significant characters (0.1384ms)
+✔ every internal link in rendered views resolves to a real route (2.7419ms)
+ℹ tests 27
+ℹ suites 0
+ℹ pass 27
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 96.334

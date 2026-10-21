@@ -1,0 +1,2 @@
+$ node scripts/boundary-guards.ts
+boundary guards: PASS — 220 source files scanned (SQL + sqlite only under adapters/sqlite; child_process only under adapters/process, named test-infra exceptions).

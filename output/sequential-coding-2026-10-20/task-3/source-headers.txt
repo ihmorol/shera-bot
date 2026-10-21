@@ -1,0 +1,31 @@
+HTTP/2 302 
+content-type: text/html; charset=utf-8
+content-length: 0
+location: https://get.enterprisedb.com/postgresql/postgresql-16.15-5-windows-x64-binaries.zip
+date: Tue, 20 Oct 2026 10:59:57 GMT
+cross-origin-opener-policy: same-origin
+server: nginx/1.24.0 (Ubuntu)
+x-frame-options: DENY
+vary: Cookie
+x-content-type-options: nosniff
+referrer-policy: same-origin
+x-cache: Miss from cloudfront
+via: 1.1 43c5bcc15e61ebfef70a711f4d1b6da6.cloudfront.net (CloudFront)
+x-amz-cf-pop: CCU50-P5
+x-amz-cf-id: i1fRtLi4W_LxAG-TuSJDy8ChovvYwhm6wWm55r8xkZz6iIxqNMUXug==
+
+HTTP/2 200 
+content-type: application/zip
+content-length: 373254386
+accept-ranges: bytes
+server: AmazonS3
+last-modified: Mon, 05 Oct 2026 07:57:16 GMT
+x-amz-server-side-encryption: AES256
+date: Tue, 20 Oct 2026 06:31:46 GMT
+etag: "a82f19db343fdba43c9b60ca424b0b37-45"
+x-cache: Hit from cloudfront
+via: 1.1 43a13daf1d3dd98892db3d8c9b8134e6.cloudfront.net (CloudFront)
+x-amz-cf-pop: MRS53-P5
+x-amz-cf-id: Q2j5z1Y22YDOie4m8N3vNNRxeSnk71EdIwdGQAJkfSQPO5-ZuyOGbw==
+age: 17263
+

@@ -1,0 +1,337 @@
+(node:29068) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:03.857Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:03.860Z","message":"adapter_updateSession"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:03.876Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:06.080Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:06.188Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:06.253Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:06.261Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:06.262Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:06.263Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:06.281Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:06.288Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:06.301Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:06.364Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:06.448Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:06.459Z","message":"adapter_getSessionAndUser"}
+Draft before save: Parent browser reset regression
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:06.498Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:06.504Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:06.520Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:06.661Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:06.677Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:06.817Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:06.833Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:06.977Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:06.993Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:07.135Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:07.140Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:07.277Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:07.292Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:07.431Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:07.446Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:07.586Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:07.602Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:07.743Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:07.759Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:07.901Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:07.917Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:08.058Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:08.074Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:08.214Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:08.230Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:08.369Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:08.384Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:08.524Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:08.540Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:08.681Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:08.686Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:08.833Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:08.842Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:08.981Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:08.997Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:09.140Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:09.155Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:09.295Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:09.310Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:09.451Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:09.467Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:09.607Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:09.612Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:09.749Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:09.755Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:09.893Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:09.908Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:10.063Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:10.079Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:10.216Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:10.231Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:10.372Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:10.387Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:10.528Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:10.543Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:10.682Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:10.697Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:10.838Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:10.854Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:10.992Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:11.008Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:11.146Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:11.161Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:11.302Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:11.317Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:11.456Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:11.471Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:11.610Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:11.625Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:11.763Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:11.778Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:11.919Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:11.935Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:12.074Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:12.078Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:12.214Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:12.230Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:12.368Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:12.383Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:12.524Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:12.539Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:12.679Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:12.695Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:12.820Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:12.825Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:12.958Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:12.974Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:13.103Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:13.116Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:13.259Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:13.275Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:13.418Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:13.434Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:13.574Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:13.589Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:13.731Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:13.747Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:13.890Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:13.905Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:14.047Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:14.062Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:14.205Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:14.209Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:14.347Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:14.363Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:14.505Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:14.520Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:14.662Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:14.666Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:14.802Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:14.817Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:14.959Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:14.975Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:15.116Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:15.131Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:15.273Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:15.289Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:15.417Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:15.433Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:15.574Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:15.590Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:15.730Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:15.746Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:15.889Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:15.905Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:16.032Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:16.047Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:16.186Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:16.201Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:16.327Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:16.341Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:16.468Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:16.483Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:16.625Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:16.641Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:16.784Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:16.800Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:16.943Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:16.959Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:17.115Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:17.130Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:17.273Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:17.288Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:17.431Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:17.446Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:17.587Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:17.593Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:17.729Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:17.744Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:17.884Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:17.900Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:18.037Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:18.053Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:18.180Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:18.192Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:18.334Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:18.350Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:18.492Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:18.508Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:18.650Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:18.664Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:18.795Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:18.805Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:18.945Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:18.961Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:19.104Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:19.120Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:19.260Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:19.275Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:19.405Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:19.418Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:19.557Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:19.573Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:19.704Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:19.716Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:19.859Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:19.874Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:20.016Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:20.032Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:20.175Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:20.192Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:20.333Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:20.348Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:20.478Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:20.489Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:20.631Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:20.647Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:20.790Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:20.806Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:20.946Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:20.962Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:21.103Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:21.120Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:21.262Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:21.279Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:21.419Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:21.434Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:21.576Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:21.592Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:21.734Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:21.750Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:21.891Z","message":"adapter_getSessionAndUser"}
+{"level":"debug","service":"control-plane","time":"2026-10-20T15:18:21.907Z","message":"adapter_getSessionAndUser"}
+Skip to conversation
+S
+Shera Bot
+
+AGENTS
+
+C
+Citation Manager
+The Citation Manager maintains source indexes, reference metadata, and citation formats across research work. It checks citations for consistency, preserves provenance for every source, and supports the Research Paper Operation; where Exam Preparation needs syllabus source indexing, it is triggered there as a subagent.
+D
+Developer
+The Developer inspects repositories, creates and modifies code, runs tests/linters/type checks/builds, diagnoses regressions, creates scripts and integrations, runs technical experiments, operates browsers and terminals, manages branches/worktrees/commits/patches, generates documentation, monitors repositories/files/builds/webhooks, and creates reusable tools.
+G
+General Assistant
+The General Assistant handles general questions, planning, coordination, user-facing synthesis, memory, task creation, and Operation coordination. It clarifies goals, chooses whether one or multiple Agents are needed, delegates to Researcher and Developer, combines results, writes and formats content, manages notes/checklists/documents, tracks approvals, and produces final answers/artifacts. It is the default coordinator of every Operation and is removable; pack definitions may name a different coordinator Agent or none.
+P
+Programming Tutor
+The Programming Tutor helps students understand code and assignments: it explains concepts, reviews solutions, guides practice, and produces study-oriented explanations and exercises for the Programming Assignment Operation; Exam Preparation past-paper drills run as its subagent work.
+R
+Researcher
+The Researcher investigates questions and produces evidence-backed outputs. It searches and reads public web sources, compares authority and recency, extracts claims and quotations, reads uploaded PDFs/documents/spreadsheets/images, creates literature reviews and reports, manages citations and source indexes, monitors configured sources, and delegates coding/data work to Developer or synthesis work to General Assistant.
+S
+Study Planner
+The Study Planner turns courses, deadlines, and exam dates into study schedules, tracks progress against them, and adjusts plans as work completes, supporting the Exam Preparation Operation.
+
+OPERATIONS
+
++ New
+Research Paper
+Programming Assignment
+Exam Preparation
+
+ACTIVE CHATS
+
+Research Paper
+Pack-defined · 2 Agents
+work in progress
+Ad-hoc
+Ad-hoc · 2 Agents
+failed
+
+STUDENT PACK V1
+
+Settings
+
+Agents
+
+R
+Researcher
+
+AGENT SETTINGS
+
+Reset all settings
+
+This workspace is not available to your account.
+
+ROLE
+READ-ONLY
+
+The fixed role the pack declared for this Agent; your instructions layer above it.
+
+The Researcher investigates questions and produces evidence-backed outputs. It searches and reads public web sources, compares authority and recency, extracts claims and quotations, reads uploaded PDFs/documents/spreadsheets/images, creates literature reviews and reports, manages citations and source indexes, monitors configured sources, and delegates coding/data work to Developer or synthesis work to General Assistant.
+
+YOUR INSTRUCTIONS
+EDITABLE
+
+Personal guidance layered above the pack role. Clearing it returns to pack-only behavior.
+
+Not set — the pack role runs alone.
+
+Save
+Clear
+Reset to default
+MEMORY
+READ-ONLY
+
+This Agent's private memory folder. Publication rules arrive with the memory slice.
+
+agent://agent_researcher/
+
+DEFAULT PROVIDER AND MODEL
+EDITABLE
+
+Which provider and model answer by default for this Agent.
+
+provider_platform · platform-default
+
+Recommended default: provider_platform · platform-default
+
+Save
+
+Providers differ in privacy and cost behavior; the pack's recommendation avoids surprises.
+
+Reset to default
+CAPABILITIES
+READ-ONLY
+
+The skills, tools, and connectors the pack gave this Agent.
+
+Skills: skill_research_core
+
+Tools: tool_web_search@1.4.0, tool_file_read@1.2.0
+
+Connectors: connector_scholar_library
+
+APPEARANCE
+READ-ONLY
+
+Authored visual identity (hue and glyph); presentation only, never a capability.
+
+R
+hue 192 · glyph R
+
+Show advanced settings
+Error: Instructions save failed
+    at file:///E:/PROJECTS/shera-bot/output/sequential-coding-2026-10-20/parent-browser/settings-reset.mjs:55:88

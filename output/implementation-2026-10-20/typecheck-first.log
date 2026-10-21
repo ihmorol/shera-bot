@@ -1,0 +1,39 @@
+$ turbo run typecheck && tsc --noEmit -p tsconfig.json
+• turbo 2.10.13
+
+   • Packages in scope: @shera-bot/agent-pack-sdk, @shera-bot/clients, @shera-bot/contracts, @shera-bot/control-plane, @shera-bot/observability, @shera-bot/pi-protocol, @shera-bot/provider-contracts, @shera-bot/test-kit, @shera-bot/user-runtime, @shera-bot/web
+   • Running typecheck in 10 packages
+   • Remote caching disabled
+
+@shera-bot/web:typecheck: cache miss, executing f58c85c1235a4263
+@shera-bot/user-runtime:typecheck: cache miss, executing d661cfe407aa9ffa
+@shera-bot/agent-pack-sdk:typecheck: cache miss, executing 004f42da79625068
+@shera-bot/test-kit:typecheck: cache miss, executing bb02d83667f59208
+@shera-bot/clients:typecheck: cache miss, executing 4667b65c2a4d9cf9
+@shera-bot/provider-contracts:typecheck: cache miss, executing 1439f6852e0ef097
+@shera-bot/observability:typecheck: cache miss, executing eb124a0a63ebadf9
+@shera-bot/contracts:typecheck: cache miss, executing ca3bdc899965dcc5
+@shera-bot/control-plane:typecheck: cache miss, executing a99820e82180c314
+@shera-bot/pi-protocol:typecheck: cache miss, executing 501fdee25126d685
+@shera-bot/web:typecheck: $ tsc --noEmit -p tsconfig.json
+@shera-bot/user-runtime:typecheck: $ tsc --noEmit -p tsconfig.json
+@shera-bot/agent-pack-sdk:typecheck: $ tsc --noEmit -p tsconfig.json
+@shera-bot/test-kit:typecheck: $ tsc --noEmit -p tsconfig.json
+@shera-bot/clients:typecheck: $ tsc --noEmit -p tsconfig.json
+@shera-bot/provider-contracts:typecheck: $ tsc --noEmit -p tsconfig.json
+@shera-bot/observability:typecheck: $ tsc --noEmit -p tsconfig.json
+@shera-bot/contracts:typecheck: $ tsc --noEmit -p tsconfig.json
+@shera-bot/control-plane:typecheck: $ tsc --noEmit -p tsconfig.json
+@shera-bot/pi-protocol:typecheck: $ tsc --noEmit -p tsconfig.json
+@shera-bot/contracts:typecheck: src/runtime-access.ts(15,26): error TS2304: Cannot find name 'URLSearchParams'.
+@shera-bot/contracts:typecheck: src/runtime-access.ts(18,46): error TS7006: Parameter 'value' implicitly has an 'any' type.
+@shera-bot/contracts:typecheck: [ELIFECYCLE] Command failed with exit code 2.
+@shera-bot/contracts#typecheck:  ERROR  command (E:\PROJECTS\shera-bot\packages\contracts) C:\Program Files\nodejs\pnpm.CMD run typecheck exited (2)
+
+ Tasks:    3 successful, 10 total
+Cached:    0 cached, 10 total
+  Time:    3.742s 
+Failed:    @shera-bot/contracts#typecheck
+
+ ERROR  run failed: command  exited (2)
+[ELIFECYCLE] Command failed with exit code 2.

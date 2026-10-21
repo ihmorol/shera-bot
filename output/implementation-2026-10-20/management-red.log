@@ -1,0 +1,27 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.1 [39m[90mE:/PROJECTS/shera-bot[39m
+
+ [31m❯[39m apps/user-runtime/src/management-bootstrap.test.ts [2m([22m[2m1 test[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 75[2mms[22m[39m
+   [31m❯[39m production management boot [2m(1)[22m
+[31m     [31m×[31m authenticates registration, refuses a foreign account and binds local commands to its owner[39m[32m 74[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m apps/user-runtime/src/management-bootstrap.test.ts[2m > [22mproduction management boot[2m > [22mauthenticates registration, refuses a foreign account and binds local commands to its owner
+[31m[1mTypeError[22m: actual value must be number or bigint, received "undefined"[39m
+[36m [2m❯[22m apps/user-runtime/src/management-bootstrap.test.ts:[2m15:32[22m[39m
+    [90m 13|[39m   const node=await startRuntimeNode({port:0,dbPath:join(dir,"runtime.d…
+    [90m 14|[39m   try {
+    [90m 15|[39m    expect(node.managementPort).toBeGreaterThan(0);
+    [90m   |[39m                                [31m^[39m
+    [90m 16|[39m    const base=`http://127.0.0.1:${node.managementPort}`;
+    [90m 17|[39m    const registration={account_id:"owner",runtime_handle:"rt_owner",ti…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m   Start at [22m 16:05:09
+[2m   Duration [22m 2.86s[2m (import 76%, transform 21%, tests 3%)[22m
+

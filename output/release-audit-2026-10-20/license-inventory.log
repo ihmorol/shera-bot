@@ -1,0 +1,19 @@
+$ node scripts/license-inventory.ts
+License inventory: 408 packages, 11 distinct licenses
+   325  MIT
+    28  ISC
+    26  Apache-2.0
+    16  BSD-3-Clause
+     6  BSD-2-Clause
+     2  MPL-2.0
+     1  Apache-2.0 AND LGPL-3.0-or-later
+     1  CC-BY-4.0
+     1  BlueOak-1.0.0
+     1  0BSD
+     1  Unlicense
+
+Reviewed exceptions applied (owner review pending): @img/sharp-win32-x64
+
+Inventory written to .\artifacts\license-inventory.json
+
+All licenses are allowed or covered by a matching reviewed exception.

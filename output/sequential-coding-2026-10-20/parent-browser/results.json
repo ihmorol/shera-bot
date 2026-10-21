@@ -1,0 +1,46 @@
+{
+  "browser": "Chrome/155.0.8059.80",
+  "label": "Real browser against built website; unauthenticated login only",
+  "widths": [
+    {
+      "width": 360,
+      "heading": "Sign in to Shera Bot",
+      "link": "/api/control/api/auth/signin/google",
+      "overflow": false,
+      "button": {
+        "x": 49,
+        "width": 262,
+        "height": 40
+      },
+      "background": "rgb(5, 10, 20)",
+      "keyboardFocus": "Sign in with Google"
+    },
+    {
+      "width": 768,
+      "heading": "Sign in to Shera Bot",
+      "link": "/api/control/api/auth/signin/google",
+      "overflow": false,
+      "button": {
+        "x": 225,
+        "width": 318,
+        "height": 40
+      },
+      "background": "rgb(5, 10, 20)",
+      "keyboardFocus": "Sign in with Google"
+    },
+    {
+      "width": 1440,
+      "heading": "Sign in to Shera Bot",
+      "link": "/api/control/api/auth/signin/google",
+      "overflow": false,
+      "button": {
+        "x": 561,
+        "width": 318,
+        "height": 40
+      },
+      "background": "rgb(5, 10, 20)",
+      "keyboardFocus": "Sign in with Google"
+    }
+  ],
+  "reducedMotion": true
+}

@@ -1,0 +1,36 @@
+$ node --test mockup/dock-layout.test.cjs
+✔ dock width bounds track the available width — no artificial cap (3.1149ms)
+✔ rendering clamps a saved width to keep the chat usable without mutating it (0.413ms)
+✔ dragging past the chat threshold fills the dock and keeps the pre-fill width (0.3766ms)
+✔ any shrink leaves fill mode at the chat minimum, then tracks the pointer (0.5294ms)
+✔ a continuous drag holds fill while widening and leaves it on a narrowing move (0.2916ms)
+✔ leaveFill restores the last chosen width and reset clears fill (0.3056ms)
+✔ one/two panels stack and three through six keep deterministic groups (0.6408ms)
+✔ row heights use proportions and spend all available space (1.8383ms)
+✔ minimums redistribute remaining space rather than compress bodies (0.3102ms)
+✔ short viewports overflow with usable body minimums (0.2747ms)
+✔ collapsed panel is header-only and donates space to siblings (0.2005ms)
+✔ all collapsed panels remain reachable headers without filling empty space (0.1743ms)
+✔ maximize/restore and collapse/expand preserve row and column preferences (0.2432ms)
+✔ reset affects only the selected chat and keeps its panels (0.2087ms)
+✔ keyboard steps, endpoints and reset stay bounded (0.176ms)
+✔ timeline supports empty chats and ignores a different chat's selected run (1.4547ms)
+✔ dock renders named focusable separators and independent collapse controls (0.9658ms)
+✔ resize controls live in the Add panel menu, not the dock head (0.8784ms)
+✔ chat topbar: icon search opens a modal; model stays in the composer; account rows (1.7514ms)
+✔ dock head carries the Back to chat control that exits fill mode (0.2559ms)
+✔ agent profile panel renders identity, quick actions and collapsible sections (0.923ms)
+✔ profile mute reflects in-memory state and ongoing tasks list current-chat runs (0.3127ms)
+✔ profile panel on an Operation chat shows the roster instead of an Agent identity (0.4661ms)
+✔ agent chat header and full-page workspace expose the profile (0.5419ms)
+✔ sidebar groups Operations into Templates and Active chats with labeled controls (0.6894ms)
+✔ esc escapes markup-significant characters (0.1723ms)
+✔ every internal link in rendered views resolves to a real route (4.4837ms)
+ℹ tests 27
+ℹ suites 0
+ℹ pass 27
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 196.2491

@@ -1,0 +1,48 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.1 [39m[90mE:/PROJECTS/shera-bot[39m
+
+ [31m❯[39m apps/control-plane/test/runtime-container-spec.test.ts [2m([22m[2m9 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 11[2mms[22m[39m
+   [31m❯[39m local container spec builder (PRD §3.3 tiers as real limits) [2m(9)[22m
+     [32m✓[39m derives a deterministic per-user container name[32m 2[2mms[22m[39m
+     [32m✓[39m applies the Balanced limits as hard CPU and memory limits (the prototype default)[32m 0[2mms[22m[39m
+     [32m✓[39m maps every tier onto the PRD §3.3 table[32m 0[2mms[22m[39m
+     [32m✓[39m keeps the credential digest only in the environment — never the raw token (G3)[32m 1[2mms[22m[39m
+     [32m✓[39m carries the tenancy labels the control plane needs for ownership checks[32m 0[2mms[22m[39m
+     [32m✓[39m never mounts host paths, never publishes ports, never exposes the engine socket (D27)[32m 0[2mms[22m[39m
+[31m     [31m×[31m preserves product state across replacement with a stable per-account volume[39m[32m 5[2mms[22m[39m
+     [32m✓[39m restarts the container automatically unless explicitly stopped[32m 0[2mms[22m[39m
+     [32m✓[39m defines an in-container liveness healthcheck (loopback, credential-free)[32m 0[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m apps/control-plane/test/runtime-container-spec.test.ts[2m > [22mlocal container spec builder (PRD §3.3 tiers as real limits)[2m > [22mpreserves product state across replacement with a stable per-account volume
+[31m[1mAssertionError[22m: expected undefined to deeply equal [ { Type: 'volume', …(2) } ][39m
+
+[32m- Expected:[39m
+[
+  {
+    "Source": "shera-rt-data-a1b2c3d4-0000-4000-8000-000000000001",
+    "Target": "/app/data",
+    "Type": "volume",
+  },
+]
+
+[31m+ Received:[39m
+undefined
+
+[36m [2m❯[22m apps/control-plane/test/runtime-container-spec.test.ts:[2m84:37[22m[39m
+    [90m 82|[39m     const first = specFor("balanced");
+    [90m 83|[39m     const replacement = specFor("balanced");
+    [90m 84|[39m     expect(first.HostConfig.Mounts).toEqual([{Type:"volume",Source:`sh…
+    [90m   |[39m                                     [31m^[39m
+    [90m 85|[39m     expect(replacement.HostConfig.Mounts).toEqual(first.HostConfig.Mou…
+    [90m 86|[39m     expect(first.Env).toContain("RUNTIME_DB_PATH=/app/data/runtime.db"…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m8 passed[39m[22m[90m (9)[39m
+[2m   Start at [22m 16:07:51
+[2m   Duration [22m 600ms[2m (import 64%, transform 32%, tests 2%, worker 1%)[22m
+

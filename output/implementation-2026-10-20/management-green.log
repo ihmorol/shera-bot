@@ -1,0 +1,32 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.1 [39m[90mE:/PROJECTS/shera-bot[39m
+
+ [32m✓[39m apps/control-plane/test/runtime-api-proxy.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 68[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/modules/runtime/internal-channel.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 230[2mms[22m[39m
+ [31m❯[39m apps/user-runtime/src/management-bootstrap.test.ts [2m([22m[2m1 test[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 102[2mms[22m[39m
+   [31m❯[39m production management boot [2m(1)[22m
+[31m     [31m×[31m authenticates registration, refuses a foreign account and binds local commands to its owner[39m[32m 101[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/main.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 139[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m apps/user-runtime/src/management-bootstrap.test.ts[2m > [22mproduction management boot[2m > [22mauthenticates registration, refuses a foreign account and binds local commands to its owner
+[31m[1mAssertionError[22m: expected 400 to be 403 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 403[39m
+[31m+ 400[39m
+
+[36m [2m❯[22m apps/user-runtime/src/management-bootstrap.test.ts:[2m20:99[22m[39m
+
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m3 passed[39m[22m[90m (4)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m26 passed[39m[22m[90m (27)[39m
+[2m   Start at [22m 16:06:31
+[2m   Duration [22m 1.53s[2m (import 68%, transform 20%, tests 11%)[22m
+

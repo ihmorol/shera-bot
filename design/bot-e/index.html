@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>bot-e — 3d mascot</title>
+<link rel="icon" href="bot-e.svg" type="image/svg+xml" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;800;900&display=swap" rel="stylesheet" />
+<script>
+  if (new URLSearchParams(location.search).get('ui') === '0') {
+    document.documentElement.classList.add('no-ui');
+  }
+</script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    font-family: "Nunito", "Segoe UI Rounded", "Segoe UI", system-ui, sans-serif;
+    background:
+      radial-gradient(880px 600px at 50% 32%, #FFF8EC 0%, rgba(255,248,236,0) 62%),
+      radial-gradient(1200px 700px at 50% 108%, #E9CFA9 0%, rgba(233,207,169,0) 56%),
+      linear-gradient(178deg, #FAEEDF 0%, #F2E1C9 56%, #E7D0B2 100%);
+    color: #262A33;
+  }
+  canvas { display: block; }
+
+  /* paper grain — the render should read as a photographed toy, not a flat render */
+  .grain {
+    position: fixed; inset: 0; z-index: 5; pointer-events: none;
+    opacity: 0.3; mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='170' height='170'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='170' height='170' filter='url(%23n)' opacity='0.55'/></svg>");
+    background-size: 170px 170px;
+  }
+  .vignette {
+    position: fixed; inset: 0; z-index: 6; pointer-events: none;
+    background: radial-gradient(122% 94% at 50% 42%, rgba(0,0,0,0) 54%, rgba(88,58,24,0.17) 100%);
+  }
+
+  .overlay { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+  .overlay > * { pointer-events: auto; }
+
+  .brand { position: absolute; top: 30px; left: 34px; user-select: none; }
+  .brand h1 {
+    font-size: 46px; font-weight: 900; letter-spacing: -0.035em; line-height: 1;
+    color: #2A2E37; text-shadow: 0 2px 0 rgba(255,255,255,0.55);
+  }
+  .brand h1 .e { color: #DE8A3C; }
+  .brand h1 .dot { color: #F5B061; }
+  .brand p { margin-top: 7px; font-size: 15px; font-weight: 700; color: #A98F6B; letter-spacing: 0.03em; }
+  .badge {
+    display: inline-block; margin-top: 11px; padding: 4px 10px 5px;
+    font-size: 11px; font-weight: 900; letter-spacing: 0.13em; text-transform: uppercase;
+    color: #9A7346; background: rgba(255,255,255,0.6);
+    border: 1px solid rgba(154,115,70,0.22); border-radius: 999px;
+  }
+
+  .moods {
+    position: absolute; bottom: 66px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 9px; padding: 9px 11px;
+    background: rgba(255,252,245,0.66); backdrop-filter: blur(10px);
+    border: 1px solid rgba(154,115,70,0.16);
+    border-radius: 999px; box-shadow: 0 6px 22px rgba(150, 110, 50, 0.14);
+  }
+  .moods button {
+    width: 42px; height: 42px; border: none; border-radius: 50%; cursor: pointer;
+    font-size: 17px; font-weight: 900; color: #DE8A3C;
+    background: #FFFCF6; line-height: 1;
+    box-shadow: inset 0 0 0 1.5px rgba(154,115,70,0.16), 0 2px 7px rgba(150,110,50,0.14);
+    transition: transform 0.16s cubic-bezier(.34,1.56,.64,1), background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+    font-family: "Segoe UI Emoji", "Nunito", sans-serif;
+  }
+  .moods button:hover { transform: translateY(-3px) scale(1.04); }
+  .moods button.active {
+    background: #E2894A; color: #FFF8EC;
+    box-shadow: inset 0 0 0 1.5px rgba(226,137,74,0.9), 0 4px 12px rgba(226,137,74,0.4);
+    transform: translateY(-2px) scale(1.06);
+  }
+
+  .hint {
+    position: absolute; bottom: 26px; left: 50%; transform: translateX(-50%);
+    font-size: 13px; font-weight: 700; color: #A98F6B; white-space: nowrap; letter-spacing: 0.02em;
+  }
+
+  .actions { position: absolute; bottom: 24px; right: 28px; display: flex; gap: 10px; }
+  .actions button {
+    font-family: inherit; font-size: 14.5px; font-weight: 800; color: #2A2E37;
+    background: rgba(255,252,246,0.88); border: 1px solid rgba(154,115,70,0.16); cursor: pointer;
+    padding: 11px 18px; border-radius: 15px;
+    box-shadow: 0 4px 14px rgba(150, 110, 50, 0.13);
+    transition: transform 0.16s cubic-bezier(.34,1.56,.64,1), box-shadow 0.16s ease;
+  }
+  .actions button:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(150, 110, 50, 0.2); }
+  .actions button:active { transform: translateY(-1px); }
+
+  .palette { position: absolute; bottom: 24px; left: 28px; display: flex; gap: 7px; align-items: center; }
+  .palette .chip {
+    width: 25px; height: 25px; border-radius: 8px;
+    box-shadow: inset 0 0 0 1.5px rgba(38,42,51,0.09), 0 2px 6px rgba(150,110,50,0.14);
+  }
+  .palette .label { font-size: 12px; font-weight: 800; color: #A98F6B; margin-left: 6px; letter-spacing: 0.06em; }
+
+  .error-fallback {
+    display: none; position: fixed; inset: 0; z-index: 50;
+    align-items: center; justify-content: center; text-align: center;
+    font-size: 16px; font-weight: 700; color: #8A7A63; padding: 24px;
+  }
+
+  html.no-ui .overlay, html.no-ui .grain, html.no-ui .vignette { display: none; }
+
+  @media (max-width: 640px) {
+    .brand h1 { font-size: 34px; }
+    .palette { display: none; }
+    .moods { bottom: 92px; }
+  }
+</style>
+</head>
+<body>
+<div class="grain"></div>
+<div class="vignette"></div>
+<div class="overlay">
+  <div class="brand">
+    <h1>bot<span class="e">-e</span><span class="dot">.</span></h1>
+    <p>curious by default.</p>
+    <span class="badge">clay edition · v0.4</span>
+  </div>
+
+  <div class="moods" id="moods">
+    <button data-expr="idle"    title="idle">◡</button>
+    <button data-expr="happy"   title="happy">⌣</button>
+    <button data-expr="curious" title="curious">●</button>
+    <button data-expr="wavy"    title="silly">〰</button>
+    <button data-expr="excited" title="excited">&gt;&lt;</button>
+    <button data-expr="heart"   title="love">♥</button>
+    <button data-expr="sparkle" title="sparkle">✦</button>
+  </div>
+  <div class="hint">drag to orbit &nbsp;·&nbsp; click bot-e for a hello &nbsp;·&nbsp; pick a mood</div>
+
+  <div class="palette">
+    <div class="chip" style="background:#F2A24B"></div>
+    <div class="chip" style="background:#F4ECDD"></div>
+    <div class="chip" style="background:#FFC46B"></div>
+    <div class="chip" style="background:#17181D"></div>
+    <div class="chip" style="background:#F27E9D"></div>
+    <div class="chip" style="background:#7BC96F"></div>
+    <div class="label">bot-e palette v0.4</div>
+  </div>
+
+  <div class="actions">
+    <button id="btn-wave">👋 say hi</button>
+    <button id="btn-love">🧡 love</button>
+    <button id="btn-glb">⬇ .glb</button>
+  </div>
+</div>
+<div class="error-fallback" id="fallback">
+  bot-e couldn't wake up — this browser blocked WebGL.<br/>try Chrome, Edge or Firefox with hardware acceleration on.
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+const params = new URLSearchParams(location.search);
+const STATIC_POSE = params.has('static');
+
+// ---------- palette (unchanged from v0.3 — the finish changed, the colours didn't) ----------
+const C = {
+  orange:  0xF2A24B,
+  cream:   0xF4ECDD,
+  amber:   0xFFC46B,
+  dark:    0x17181D,
+  pink:    0xF27E9D,
+  leaf:    0x7BC96F,
+  leafD:   0x5FAE57,
+  rust:    0xD9772F,
+};
+
+// ------------------------------------------------------------------
+// BODY PROFILE
+//   One solid of revolution, shaped by hand-placed control points so the
+//   silhouette stays a soft potato: wide rounded crown, generous belly,
+//   round tucked base — never a cone.
+//   t = normalised height (-1 bottom … +1 crown), r = radius fraction
+// ------------------------------------------------------------------
+const SX = 0.81, SY = 1.12, SZ = 0.75;
+
+const PROFILE = [
+  [-1.00, 0.00], [-0.96, 0.30], [-0.88, 0.50], [-0.76, 0.67], [-0.60, 0.80],
+  [-0.40, 0.90], [-0.18, 0.965], [0.05, 1.00], [0.30, 1.00], [0.50, 0.955],
+  [0.68, 0.87], [0.82, 0.72], [0.92, 0.52], [0.97, 0.30], [1.00, 0.00],
+];
+
+function profileShape(t) {
+  const P = PROFILE, n = P.length;
+  let i = 0;
+  while (i < n - 2 && t > P[i + 1][0]) i++;
+  const t0 = P[i][0], t1 = P[i + 1][0];
+  const u = Math.max(0, Math.min(1, (t - t0) / (t1 - t0)));
+  const p0 = P[Math.max(0, i - 1)][1], p1 = P[i][1], p2 = P[i + 1][1], p3 = P[Math.min(n - 1, i + 2)][1];
+  const u2 = u * u, u3 = u2 * u;
+  return 0.5 * ((2 * p1) + (-p0 + p2) * u + (2 * p0 - 5 * p1 + 4 * p2 - p3) * u2 + (-p0 + 3 * p1 - 3 * p2 + p3) * u3);
+}
+function profileR(t) {
+  return Math.max(0, profileShape(Math.max(-1, Math.min(1, t)))) * SX;
+}
+function frontZ(x, y) {
+  const t = Math.max(-0.999, Math.min(0.999, y / SY));
+  const R = profileR(t);
+  const k = Math.max(0, 1 - (x / R) * (x / R));
+  return R * Math.sqrt(k) * (SZ / SX);
+}
+function surfaceNormal(x, y) {
+  const e = 0.012;
+  const dzdx = (frontZ(x + e, y) - frontZ(x - e, y)) / (2 * e);
+  const dzdy = (frontZ(x, y + e) - frontZ(x, y - e)) / (2 * e);
+  return new THREE.Vector3(-dzdx, -dzdy, 1).normalize();
+}
+
+// ---------- deterministic value noise (JS side, for the clay mottle) ----------
+function hash3(ix, iy, iz) {
+  let h = Math.imul(ix, 374761393) ^ Math.imul(iy, 668265263) ^ Math.imul(iz, 1274126177);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+function vnoise3(x, y, z) {
+  const ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z);
+  const fx = x - ix, fy = y - iy, fz = z - iz;
+  const ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy), uz = fz * fz * (3 - 2 * fz);
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const c00 = lerp(hash3(ix, iy, iz),         hash3(ix + 1, iy, iz), ux);
+  const c10 = lerp(hash3(ix, iy + 1, iz),     hash3(ix + 1, iy + 1, iz), ux);
+  const c01 = lerp(hash3(ix, iy, iz + 1),     hash3(ix + 1, iy, iz + 1), ux);
+  const c11 = lerp(hash3(ix, iy + 1, iz + 1), hash3(ix + 1, iy + 1, iz + 1), ux);
+  return lerp(lerp(c00, c10, uy), lerp(c01, c11, uy), uz);
+}
+function fbm3(x, y, z) {
+  return vnoise3(x, y, z) * 0.58 + vnoise3(x * 2.13, y * 2.13, z * 2.13) * 0.28
+       + vnoise3(x * 4.37, y * 4.37, z * 4.37) * 0.14;
+}
+function gaussLump(x, y, z, dir, w) {
+  const len = Math.hypot(dir[0], dir[1], dir[2]);
+  const d = (x * dir[0] + y * dir[1] + z * dir[2]) / len;
+  const t = 1 - d;
+  return Math.exp(-(t * t) / (w * w));
+}
+
+// ---------- renderer / scene ----------
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+} catch (e) {
+  document.getElementById('fallback').style.display = 'flex';
+  throw e;
+}
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.14;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(36, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.set(1.05, 1.42, 4.75);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 1.24, 0);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.minDistance = 3;
+controls.maxDistance = 10;
+controls.maxPolarAngle = Math.PI * 0.52;
+controls.enablePan = false;
+
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+pmrem.dispose();
+
+// ---------- soft studio light ----------
+scene.add(new THREE.HemisphereLight(0xFFF6E8, 0xE7C49A, 0.58));
+const key = new THREE.DirectionalLight(0xFFFDF6, 1.18);
+key.position.set(2.4, 6.2, 4.6);
+key.castShadow = true;
+key.shadow.mapSize.set(1024, 1024);
+key.shadow.camera.left = -3.2; key.shadow.camera.right = 3.2;
+key.shadow.camera.top = 4.0;   key.shadow.camera.bottom = -2.6;
+key.shadow.bias = -0.0004;
+key.shadow.radius = 7;
+scene.add(key);
+const rim = new THREE.DirectionalLight(0xBFE2FF, 0.32);
+rim.position.set(-3.8, 2.6, -3.6);
+scene.add(rim);
+const fill = new THREE.DirectionalLight(0xFFE3BE, 0.28);
+fill.position.set(-2.6, 0.6, 3.4);
+scene.add(fill);
+// warm bounce off the floor — the tell of a fired-clay object
+const bounce = new THREE.DirectionalLight(0xFFB870, 0.26);
+bounce.position.set(0.4, -3.0, 2.2);
+scene.add(bounce);
+
+// ---------- ground: shadow catcher + contact shadow + amber hover pool ----------
+const groundShadow = new THREE.Mesh(
+  new THREE.CircleGeometry(9, 48),
+  new THREE.ShadowMaterial({ opacity: 0.13 })
+);
+groundShadow.rotation.x = -Math.PI / 2;
+groundShadow.receiveShadow = true;
+scene.add(groundShadow);
+
+function makeRadialTexture(rgb, aMid) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(128, 128, 8, 128, 128, 128);
+  grad.addColorStop(0, `rgba(${rgb},${aMid})`);
+  grad.addColorStop(0.5, `rgba(${rgb},${aMid * 0.38})`);
+  grad.addColorStop(1, `rgba(${rgb},0)`);
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 256, 256);
+  return new THREE.CanvasTexture(c);
+}
+const contactShadow = new THREE.Mesh(
+  new THREE.CircleGeometry(0.80, 40),
+  new THREE.MeshBasicMaterial({ map: makeRadialTexture('92,62,34', 0.5), transparent: true, opacity: 0.46, depthWrite: false })
+);
+contactShadow.rotation.x = -Math.PI / 2;
+contactShadow.position.y = 0.012;
+scene.add(contactShadow);
+
+const glowTex = makeRadialTexture('255,186,104', 0.85);
+const groundGlow = new THREE.Mesh(
+  new THREE.CircleGeometry(1.18, 40),
+  new THREE.MeshBasicMaterial({ map: glowTex, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false })
+);
+groundGlow.rotation.x = -Math.PI / 2;
+groundGlow.position.y = 0.022;
+scene.add(groundGlow);
+
+// ---------- materials: hand-thrown clay, wet glass eyes ----------
+const GRAIN_GLSL = `
+float hash13(vec3 p){ p = fract(p * 0.3183099 + vec3(0.11,0.27,0.43)); p *= 17.0;
+  return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+float vnoise(vec3 x){ vec3 i = floor(x); vec3 f = fract(x); f = f*f*(3.0-2.0*f);
+  return mix(mix(mix(hash13(i), hash13(i+vec3(1,0,0)), f.x),
+                 mix(hash13(i+vec3(0,1,0)), hash13(i+vec3(1,1,0)), f.x), f.y),
+             mix(mix(hash13(i+vec3(0,0,1)), hash13(i+vec3(1,0,1)), f.x),
+                 mix(hash13(i+vec3(0,1,1)), hash13(i+vec3(1,1,1)), f.x), f.y), f.z); }
+`;
+
+function clayMaterial(color, opts = {}) {
+  const m = new THREE.MeshPhysicalMaterial({
+    color,
+    metalness: 0.0,
+    roughness: opts.roughness ?? 0.88,
+    clearcoat: opts.clearcoat ?? 0.05,
+    clearcoatRoughness: opts.clearcoatRoughness ?? 0.85,
+    sheen: opts.sheen ?? 1.0,
+    sheenRoughness: opts.sheenRoughness ?? 0.9,
+    sheenColor: new THREE.Color(opts.sheenColor ?? 0xFFDCAE),
+    envMapIntensity: opts.envMapIntensity ?? 0.34,
+    vertexColors: opts.vertexColors ?? false,
+  });
+  m.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vClayPos;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvClayPos = position;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vClayPos;\n' + GRAIN_GLSL)
+      .replace('#include <map_fragment>', '#include <map_fragment>\n  diffuseColor.rgb *= (0.945 + 0.10 * vnoise(vClayPos * 46.0));')
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  roughnessFactor = clamp(roughnessFactor + (vnoise(vClayPos * 72.0) - 0.5) * 0.22, 0.10, 1.0);');
+  };
+  m.customProgramCacheKey = () => 'clay' + (opts.vertexColors ? 'vc' : '');
+  return m;
+}
+
+const M = {
+  clay:  clayMaterial(C.orange, { vertexColors: true, roughness: 0.9, clearcoat: 0.04, sheen: 1.0, envMapIntensity: 0.3 }),
+  cream: clayMaterial(C.cream,  { roughness: 0.92, clearcoat: 0.03, sheen: 0.7, envMapIntensity: 0.26 }),
+  eye: new THREE.MeshPhysicalMaterial({
+    color: C.dark, metalness: 0.0, roughness: 0.42,
+    clearcoat: 0.38, clearcoatRoughness: 0.26, envMapIntensity: 0.16,
+  }),
+  rust: new THREE.MeshPhysicalMaterial({ color: C.rust, roughness: 0.82, clearcoat: 0.05, sheen: 0.4 }),
+  leaf: new THREE.MeshPhysicalMaterial({ color: C.leaf, roughness: 0.66, clearcoat: 0.22, clearcoatRoughness: 0.5, sheen: 0.5 }),
+  leafD:new THREE.MeshPhysicalMaterial({ color: C.leafD, roughness: 0.66, clearcoat: 0.22, clearcoatRoughness: 0.5, sheen: 0.5 }),
+};
+const iconMat = new THREE.MeshBasicMaterial({ color: C.amber, transparent: true, toneMapped: false });
+const glintMat = new THREE.MeshBasicMaterial({ color: 0xFFF6E6, transparent: true, opacity: 0.85, toneMapped: false });
+const pillMat = new THREE.MeshBasicMaterial({ color: C.amber, transparent: true, toneMapped: false, opacity: 0.95 });
+const thrusterMat = new THREE.MeshBasicMaterial({ color: C.amber, transparent: true, toneMapped: false, opacity: 0.9 });
+
+function sphere(r, mat, ws = 56, hs = 40) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(r, ws, hs), mat);
+  m.castShadow = true;
+  return m;
+}
+function cyl(rt, rb, h, mat, seg = 40) {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), mat);
+  m.castShadow = true;
+  return m;
+}
+
+// ------------------------------------------------------------------
+// THE BLOB
+// ------------------------------------------------------------------
+const rig = new THREE.Group();    // hover bob
+scene.add(rig);
+const bot = new THREE.Group();    // exported to .glb
+rig.add(bot);
+const bodyGroup = new THREE.Group();
+bot.add(bodyGroup);
+
+function buildBlobGeometry() {
+  const geo = new THREE.SphereGeometry(1, 176, 132);
+  const pos = geo.attributes.position;
+  const colors = new Float32Array(pos.count * 3);
+  const v = new THREE.Vector3();
+  const c = new THREE.Color();
+
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i);
+    const t = v.y;
+
+    // base solid of revolution — the hand-drawn profile REPLACES the sphere's radius
+    const shape = profileShape(t);
+    const ring = Math.sqrt(Math.max(0, 1 - t * t));
+    let dx0 = 0, dz0 = 0;
+    if (ring > 1e-5) { dx0 = v.x / ring; dz0 = v.z / ring; }
+    const R = shape * SX;
+    let x = dx0 * R;
+    let z = dz0 * R * (SZ / SX);
+    let y = t * SY;
+
+    // hand-formed irregularity, pushed along the surface normal
+    const nl = Math.hypot(x, y, z) || 1;
+    const nx = x / nl, ny = y / nl, nz = z / nl;
+
+    let d = (fbm3(v.x * 2.4 + 11.2, v.y * 2.4 + 3.7, v.z * 2.4 + 19.4) - 0.5) * 0.105;
+    d += gaussLump(v.x, v.y, v.z, [-0.30, 0.88, -0.14], 0.34) * 0.085;  // crown bump (the sprout sits here)
+    d += gaussLump(v.x, v.y, v.z, [ 0.74, 0.44, -0.51], 0.32) * 0.060;  // upper-right lump
+    d -= gaussLump(v.x, v.y, v.z, [-0.72, -0.10, 0.69], 0.28) * 0.055; // thumb press, front-left
+    d -= gaussLump(v.x, v.y, v.z, [ 0.52, -0.66, 0.54], 0.26) * 0.048; // thumb press, low front-right
+
+    x += nx * d; y += ny * d; z += nz * d;
+
+    // settle the very bottom so it hovers level
+    if (t < -0.9) y = Math.max(y, -1.145);
+
+    pos.setXYZ(i, x, y, z);
+
+    // vertex-colour mottle: hand-mixed clay, never flat
+    const mottle = 1 + (fbm3(v.x * 3.1 + 4.1, v.y * 3.1 + 8.3, v.z * 3.1 + 1.9) - 0.5) * 0.085;
+    const lift = 1 + v.y * 0.055;
+    const cval = mottle * lift;
+    c.setRGB(cval, cval, cval);
+    colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geo.computeVertexNormals();
+  return geo;
+}
+
+const body = new THREE.Mesh(buildBlobGeometry(), M.clay);
+body.castShadow = true;
+body.receiveShadow = true;
+bodyGroup.add(body);
+
+// ------------------------------------------------------------------
+// THE FACE — two big vertical ovals, side by side ("00")
+// ------------------------------------------------------------------
+const EYE = { rx: 0.215, ry: 0.275, rz: 0.17 };
+const EYE_X = 0.295;
+const EYE_Y = 0.62;
+
+function eyeConform(x, y) {
+  const u = x / EYE.rx, v = y / EYE.ry;
+  const w = Math.max(0.06, 1 - u * u - v * v);
+  return EYE.rz * Math.sqrt(w);
+}
+
+const eyePivots = {};
+for (const side of [-1, 1]) {
+  const key = side < 0 ? 'L' : 'R';
+  const pivot = new THREE.Group();
+
+  const n = surfaceNormal(side * EYE_X, EYE_Y);
+  const zAxis = n.clone();
+  const xAxis = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), zAxis).normalize();
+  const yAxis = new THREE.Vector3().crossVectors(zAxis, xAxis).normalize();
+  pivot.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis));
+
+  const surfZ = frontZ(side * EYE_X, EYE_Y);
+  pivot.position.set(side * EYE_X, EYE_Y, surfZ - n.z * EYE.rz + 0.125);
+  bodyGroup.add(pivot);
+
+  const squash = new THREE.Group();     // blink squash target
+  pivot.add(squash);
+
+  const ball = sphere(1, M.eye, 64, 48);
+  ball.scale.set(EYE.rx, EYE.ry, EYE.rz);
+  squash.add(ball);
+
+  // one small clean catchlight — the whole eye is a matte black seed
+  const glint = new THREE.Mesh(new THREE.CircleGeometry(0.048, 20), glintMat);
+  glint.position.set(-EYE.rx * 0.40, EYE.ry * 0.44, eyeConform(-EYE.rx * 0.40, EYE.ry * 0.44) + 0.004);
+  squash.add(glint);
+
+  eyePivots[key] = { pivot, squash, side };
+}
+
+// ---------- expression glyphs (drawn in the eye, same 7-glyph product language) ----------
+function arcGlyph(radius, arc, tube = 0.026) {
+  const m = new THREE.Mesh(new THREE.TorusGeometry(radius, tube, 12, 48, arc), iconMat);
+  m.rotation.z = -Math.PI + (Math.PI - arc) / 2;
+  return m;
+}
+function tubeGlyph(points, r = 0.026) {
+  const curve = new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(p[0], p[1], 0)));
+  return new THREE.Mesh(new THREE.TubeGeometry(curve, 26, r, 8, false), iconMat);
+}
+function heartGlyph(scale = 1) {
+  const s = new THREE.Shape();
+  s.moveTo(25, 25);
+  s.bezierCurveTo(25, 25, 20, 0, 0, 0);
+  s.bezierCurveTo(-30, 0, -30, 35, -30, 35);
+  s.bezierCurveTo(-30, 55, -10, 77, 25, 95);
+  s.bezierCurveTo(60, 77, 80, 55, 80, 35);
+  s.bezierCurveTo(80, 35, 80, 0, 50, 0);
+  s.bezierCurveTo(35, 0, 25, 25, 25, 25);
+  const g = new THREE.ShapeGeometry(s, 12);
+  g.scale(scale, scale, 1);
+  g.center();
+  g.rotateZ(Math.PI);
+  return g;
+}
+function sparkleGlyph(scale = 1) {
+  const s = new THREE.Shape();
+  s.moveTo(0, 0.115); s.lineTo(0.03, 0.03); s.lineTo(0.115, 0); s.lineTo(0.03, -0.03);
+  s.lineTo(0, -0.115); s.lineTo(-0.03, -0.03); s.lineTo(-0.115, 0); s.lineTo(-0.03, 0.03);
+  s.closePath();
+  const g = new THREE.ShapeGeometry(s, 4);
+  g.scale(scale, scale, 1);
+  return g;
+}
+
+const EXPR_BUILDERS = {
+  // ◡ relaxed — a shallow half-lidded curve
+  idle: (g) => {
+    const a = arcGlyph(0.115, Math.PI * 0.60);
+    a.position.set(0, 0.015, eyeConform(0, 0.015) + 0.006);
+    g.add(a);
+  },
+  // ⌣ delighted — a wide open smile arc
+  happy: (g) => {
+    const a = arcGlyph(0.165, Math.PI * 0.98);
+    a.position.set(0, 0.03, eyeConform(0, 0.03) + 0.006);
+    g.add(a);
+  },
+  // ● curious — a bright amber pupil
+  curious: (g) => {
+    const dot = new THREE.Mesh(new THREE.CircleGeometry(0.078, 28), iconMat);
+    dot.position.set(0, 0.01, eyeConform(0, 0.01) + 0.006);
+    g.add(dot);
+  },
+  // 〰 silly — a lazy wave
+  wavy: (g) => {
+    const pts = [];
+    for (let i = 0; i <= 8; i++) {
+      const x = -0.15 + (0.30 * i) / 8;
+      pts.push([x, Math.sin((i / 8) * Math.PI * 2) * 0.042]);
+    }
+    const w = tubeGlyph(pts);
+    w.position.set(0, 0.02, eyeConform(0.15, 0.06) + 0.006);
+    g.add(w);
+  },
+  // >< excited — squint chevrons pointing inward
+  excited: (g, side) => {
+    const chev = tubeGlyph(side < 0
+      ? [[-0.075, 0.10], [0.06, 0], [-0.075, -0.10]]
+      : [[0.075, 0.10], [-0.06, 0], [0.075, -0.10]], 0.03);
+    chev.position.set(0, 0, eyeConform(side < 0 ? 0.06 : -0.06, 0.1) + 0.006);
+    g.add(chev);
+  },
+  // ♥ love
+  heart: (g) => {
+    const h = new THREE.Mesh(heartGlyph(0.0017), iconMat);
+    h.position.set(0, 0.02, eyeConform(0, 0.02) + 0.006);
+    g.add(h);
+  },
+  // ✦ sparkle
+  sparkle: (g) => {
+    const st = new THREE.Mesh(sparkleGlyph(1.15), iconMat);
+    st.position.set(0, 0.02, eyeConform(0, 0.02) + 0.006);
+    g.add(st);
+  },
+};
+
+const expressions = { L: {}, R: {} };
+for (const key of ['L', 'R']) {
+  const side = key === 'L' ? -1 : 1;
+  for (const [name, build] of Object.entries(EXPR_BUILDERS)) {
+    const g = new THREE.Group();
+    build(g, side);
+    g.visible = false;
+    eyePivots[key].squash.add(g);
+    expressions[key][name] = g;
+  }
+}
+
+// ------------------------------------------------------------------
+// STATUS PIN — a small amber light low on the chest (off-centre, so it
+// never reads as a navel). The belly stays plain clay, like the sketch.
+// ------------------------------------------------------------------
+{
+  const y = -0.42, x = -0.24;
+  const n = surfaceNormal(x, y);
+  const pin = new THREE.Mesh(new THREE.SphereGeometry(0.045, 20, 14), pillMat);
+  pin.scale.set(1, 1, 0.55);
+  pin.position.set(x, y, frontZ(x, y) + 0.022);
+  bodyGroup.add(pin);
+}
+
+// ------------------------------------------------------------------
+// SPROUT — the brand marker, grown from the crown bump
+// ------------------------------------------------------------------
+const sprout = new THREE.Group();
+{
+  const pot = cyl(0.105, 0.082, 0.15, M.rust, 24);
+  pot.position.y = 0.075;
+  sprout.add(pot);
+  const stem = cyl(0.021, 0.021, 0.17, M.leafD, 12);
+  stem.position.y = 0.215;
+  sprout.add(stem);
+  for (const [dx, rz, mat] of [[-0.075, 0.62, M.leaf], [0.075, -0.62, M.leafD]]) {
+    const leaf = sphere(0.078, mat, 20, 14);
+    leaf.scale.set(1, 0.42, 0.72);
+    leaf.position.set(dx, 0.29, 0);
+    leaf.rotation.z = rz;
+    sprout.add(leaf);
+  }
+  sprout.scale.setScalar(0.58);
+  sprout.rotation.set(0.10, 0.4, -0.13);
+  bodyGroup.add(sprout);
+
+  // seat the pot on the actual clay surface so it never sinks or floats
+  scene.updateMatrixWorld(true);
+  const probe = new THREE.Raycaster(new THREE.Vector3(-0.17, 4, -0.04), new THREE.Vector3(0, -1, 0));
+  const hit = probe.intersectObject(body, false)[0];
+  if (hit) {
+    const nrm = hit.face.normal.clone().normalize();
+    sprout.position.copy(hit.point).addScaledVector(nrm, -0.035);
+    sprout.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), nrm);
+    sprout.rotateY(0.55);
+  }
+}
+
+// ------------------------------------------------------------------
+// TAIL NUB — the little protrusion from the sketch
+// ------------------------------------------------------------------
+{
+  const tail = sphere(1, M.clay, 32, 24);
+  tail.scale.set(0.135, 0.115, 0.135);
+  tail.position.set(0.34, -0.72, -0.40);
+  bodyGroup.add(tail);
+  const tip = sphere(1, M.clay, 24, 18);
+  tip.scale.set(0.092, 0.085, 0.092);
+  tip.position.set(0.44, -0.78, -0.47);
+  bodyGroup.add(tip);
+}
+
+// ------------------------------------------------------------------
+// NUB ARMS — short stubs at the sides (as drawn)
+// ------------------------------------------------------------------
+function makeArm(side) {
+  const pivot = new THREE.Group();
+  const t = 0.08 / SY;
+  pivot.position.set(side * profileR(t) * 0.84, 0.08, 0.03);
+  const shoulder = sphere(0.145, M.clay, 30, 22);
+  shoulder.scale.set(1, 0.95, 1);
+  pivot.add(shoulder);
+  const mitt = sphere(0.105, M.cream, 30, 22);
+  mitt.position.set(side * 0.115, -0.045, 0.02);
+  pivot.add(mitt);
+  bodyGroup.add(pivot);
+  return pivot;
+}
+const armL = makeArm(-1);
+const armR = makeArm(1);
+const ARM = { rest: 0.34, up: 2.35 };
+
+// ------------------------------------------------------------------
+// HOVER THRUSTER
+// ------------------------------------------------------------------
+const thruster = sphere(0.22, thrusterMat, 32, 20);
+thruster.scale.set(1, 0.2, 1);
+thruster.position.y = -1.2;
+bot.add(thruster);
+const thrLight = new THREE.PointLight(0xFFB45E, 1.7, 3.0, 2);
+thrLight.position.set(0, -1.04, 0);
+bot.add(thrLight);
+
+// ------------------------------------------------------------------
+// FLOATING HEARTS
+// ------------------------------------------------------------------
+const floatHearts = [];
+function spawnHeart(t) {
+  const m = new THREE.Mesh(heartGlyph(0.0042), new THREE.MeshBasicMaterial({ color: C.pink, transparent: true, toneMapped: false }));
+  m.position.set((Math.random() - 0.5) * 1.8, 2.05 + Math.random() * 0.3, 1.35);
+  m.rotation.z = Math.PI + (Math.random() - 0.5) * 0.3;
+  scene.add(m);
+  floatHearts.push({ m, born: t });
+}
+
+// ------------------------------------------------------------------
+// STATE
+// ------------------------------------------------------------------
+const state = {
+  pointer: { x: 0, y: 0 },
+  expr: 'idle',
+  userExpr: 'idle',
+  exprOverride: null,
+  overrideUntil: 0,
+  popT0: -10,
+  armMode: 'rest',
+  armUntil: 0,
+  waveT0: -10,
+  nextCurious: 7.5,
+  curiousUntil: -1,
+  blinkT0: -10,
+  nextBlink: 4.0,
+};
+
+const clock = new THREE.Clock();
+
+function setExpression(name, { pop = true } = {}) {
+  if (state.expr !== name) {
+    for (const k of ['L', 'R']) {
+      if (expressions[k][state.expr]) expressions[k][state.expr].visible = false;
+    }
+    state.expr = name;
+  }
+  for (const k of ['L', 'R']) {
+    if (expressions[k][name]) expressions[k][name].visible = true;
+  }
+  if (pop) state.popT0 = clock.elapsedTime;
+  document.querySelectorAll('#moods button').forEach(b =>
+    b.classList.toggle('active', b.dataset.expr === state.userExpr));
+}
+
+window.addEventListener('pointermove', (e) => {
+  state.pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+  state.pointer.y = -((e.clientY / window.innerHeight) * 2 - 1);
+});
+
+const raycaster = new THREE.Raycaster();
+const clickNdc = new THREE.Vector2();
+renderer.domElement.addEventListener('click', (e) => {
+  clickNdc.set((e.clientX / window.innerWidth) * 2 - 1, -((e.clientY / window.innerHeight) * 2 - 1));
+  raycaster.setFromCamera(clickNdc, camera);
+  if (raycaster.intersectObject(bot, true).length > 0) greet();
+});
+
+function greet() {
+  const t = clock.elapsedTime;
+  if (t - state.waveT0 < 1.8) return;
+  state.waveT0 = t;
+  state.armMode = 'wave';
+  state.armUntil = t + 1.6;
+  state.exprOverride = 'happy';
+  state.overrideUntil = t + 1.6;
+  setExpression('happy');
+}
+
+document.getElementById('btn-wave').addEventListener('click', greet);
+document.getElementById('btn-love').addEventListener('click', () => {
+  const t = clock.elapsedTime;
+  state.userExpr = 'heart';
+  setExpression('heart');
+  state.armMode = 'up';
+  state.armUntil = t + 1.4;
+  for (let i = 0; i < 3; i++) setTimeout(() => spawnHeart(clock.elapsedTime), i * 220);
+});
+document.querySelectorAll('#moods button').forEach(b => {
+  b.addEventListener('click', () => {
+    state.userExpr = b.dataset.expr;
+    state.exprOverride = null;
+    setExpression(b.dataset.expr);
+  });
+});
+
+document.getElementById('btn-glb').addEventListener('click', () => {
+  new GLTFExporter().parse(bot, (gltf) => {
+    const blob = new Blob([gltf], { type: 'model/gltf-binary' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'bot-e.glb';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }, (err) => console.error('glb export failed', err), { binary: true });
+});
+
+const lerp = (a, b, k) => a + (b - a) * k;
+const easeOutBack = (k) => 1 + 2.7 * Math.pow(k - 1, 3) + 1.7 * Math.pow(k - 1, 2);
+
+// ------------------------------------------------------------------
+// LOOP
+// ------------------------------------------------------------------
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const t = clock.elapsedTime;
+
+  // hover bob + cartoon squash-and-stretch
+  const bob = Math.sin(t * 1.45);
+  rig.position.y = 1.30 + bob * 0.055;
+  bodyGroup.scale.set(1 + bob * 0.016, 1 - bob * 0.022, 1 + bob * 0.016);
+  bodyGroup.rotation.z = Math.sin(t * 0.62) * 0.026;
+  groundGlow.material.opacity = 0.38 - bob * 0.06;
+  groundGlow.scale.setScalar(1 - bob * 0.035);
+  thrLight.intensity = 1.6 - bob * 0.35;
+  thrusterMat.opacity = 0.8 + Math.sin(t * 6) * 0.08;
+  pillMat.opacity = 0.68 + Math.sin(t * 2.2) * 0.26;
+
+  // blink — squash the marbles into a closed line
+  if (!STATIC_POSE && t > state.nextBlink) {
+    state.blinkT0 = t;
+    state.nextBlink = t + 3.2 + Math.random() * 4.4;
+  }
+  const blinkAge = t - state.blinkT0;
+  let blinkK = 1;
+  if (blinkAge >= 0 && blinkAge < 0.16) {
+    const k = blinkAge / 0.16;
+    blinkK = k < 0.45 ? 1 - k / 0.45 : (k - 0.45) / 0.55;
+    blinkK = 0.06 + 0.94 * blinkK;
+  }
+  for (const k of ['L', 'R']) eyePivots[k].squash.scale.y = blinkK;
+
+  // occasional curious glance
+  if (!STATIC_POSE && state.userExpr === 'idle' && !state.exprOverride) {
+    if (t > state.nextCurious && t > state.curiousUntil) {
+      state.curiousUntil = t + 1.5;
+      state.nextCurious = t + 7 + Math.random() * 6;
+      setExpression('curious');
+    } else if (t > state.curiousUntil && state.expr === 'curious') {
+      setExpression('idle');
+    }
+  }
+
+  // temporary override (greet) falls back to the user's mood
+  if (state.exprOverride && t > state.overrideUntil) {
+    state.exprOverride = null;
+    setExpression(state.userExpr);
+  }
+
+  // expression pop — the glyph swells a touch
+  const popK = Math.min(1, (t - state.popT0) / 0.3);
+  const popS = 0.6 + 0.4 * easeOutBack(popK);
+  for (const k of ['L', 'R']) {
+    const grp = expressions[k][state.expr];
+    if (grp) grp.scale.setScalar(popS);
+  }
+
+  // arms
+  let targetL = ARM.rest, targetR = ARM.rest;
+  if (state.armMode === 'wave') {
+    if (t > state.armUntil) state.armMode = 'rest';
+    else {
+      const phase = 1 - (state.armUntil - t) / 1.6;
+      if (phase < 0.2) targetR = lerp(ARM.rest, ARM.up, phase / 0.2);
+      else if (phase < 0.75) targetR = ARM.up + Math.sin((phase - 0.2) * Math.PI * 6) * 0.28;
+      else targetR = lerp(ARM.up, ARM.rest, (phase - 0.75) / 0.25);
+    }
+  } else if (state.armMode === 'up') {
+    if (t > state.armUntil) state.armMode = 'rest';
+    else { targetL = ARM.up; targetR = ARM.up; }
+  }
+  const smooth = 1 - Math.pow(0.0001, dt);
+  armR.rotation.z = lerp(armR.rotation.z, targetR, smooth);
+  armL.rotation.z = lerp(armL.rotation.z, -targetL, smooth);
+
+  // the face looks at you
+  const px = STATIC_POSE ? 0 : state.pointer.x;
+  const py = STATIC_POSE ? 0 : state.pointer.y;
+  bodyGroup.rotation.y = lerp(bodyGroup.rotation.y, px * 0.16, 0.07);
+  for (const k of ['L', 'R']) {
+    const p = eyePivots[k].pivot;
+    p.rotation.y = lerp(p.rotation.y, px * 0.13, 0.09);
+    p.rotation.x = lerp(p.rotation.x, -py * 0.10, 0.09);
+  }
+
+  // floating hearts
+  for (let i = floatHearts.length - 1; i >= 0; i--) {
+    const h = floatHearts[i];
+    const k = (t - h.born) / 1.5;
+    if (k >= 1) {
+      scene.remove(h.m);
+      h.m.material.dispose();
+      floatHearts.splice(i, 1);
+    } else {
+      h.m.position.y = 2.05 + k * 1.15;
+      h.m.material.opacity = (1 - k) * 0.95;
+      h.m.scale.setScalar(0.5 + 0.3 * k);
+      h.m.rotation.z = Math.PI + Math.sin(t * 3 + h.born) * 0.12;
+    }
+  }
+
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+const initialExpr = params.get('expr');
+if (initialExpr && expressions.L[initialExpr]) state.userExpr = initialExpr;
+setExpression(state.userExpr);
+if (STATIC_POSE) {
+  camera.position.set(1.05, 1.42, 4.75);
+  controls.target.set(0, 1.24, 0);
+}
+animate();
+
+// verification hook (lets tooling drive the camera and moods)
+window.__bote = { camera, controls, setExpression, expressions, spawnHeart, greet, rig, bot, bodyGroup, eyePivots, state };
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>

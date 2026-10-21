@@ -1,0 +1,41 @@
+[
+  {
+    "origin": null,
+    "status": 403,
+    "body": {
+      "code": "RUNTIME_TENANT_MISMATCH",
+      "category": "policy",
+      "safe_message": "This runtime belongs to another account.",
+      "retryable": false,
+      "user_action": null,
+      "internal_details": null,
+      "correlation_id": "a2faf7e3-cf94-4761-86c3-c2ff9421bb32"
+    }
+  },
+  {
+    "origin": "http://127.0.0.1:3177",
+    "status": 403,
+    "body": {
+      "code": "RUNTIME_TENANT_MISMATCH",
+      "category": "unauthorized",
+      "safe_message": "This workspace is not available to your account.",
+      "retryable": false,
+      "user_action": null,
+      "internal_details": null,
+      "correlation_id": "a2c1441d-f1da-4485-b287-e178793f13d3"
+    }
+  },
+  {
+    "origin": "http://localhost:3177",
+    "status": 403,
+    "body": {
+      "code": "RUNTIME_TENANT_MISMATCH",
+      "category": "policy",
+      "safe_message": "This runtime belongs to another account.",
+      "retryable": false,
+      "user_action": null,
+      "internal_details": null,
+      "correlation_id": "c31486c8-88a5-4ab0-b173-9582c0c71bbd"
+    }
+  }
+]

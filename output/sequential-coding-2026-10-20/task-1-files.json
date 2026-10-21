@@ -1,0 +1,17 @@
+[
+  "apps/user-runtime/src/adapters/sqlite/agents-repository.test.ts",
+  "apps/user-runtime/src/adapters/sqlite/agents-repository.ts",
+  "apps/user-runtime/src/modules/agents/agent-folders.service.test.ts",
+  "apps/user-runtime/src/modules/agents/agents.service.ts",
+  "apps/user-runtime/src/transport/http/typed-errors.ts",
+  "apps/user-runtime/src/transport/local-api/app.ts",
+  "apps/user-runtime/src/transport/local-api/s11-agents-api.test.ts",
+  "apps/web/components/settings/agent-settings.tsx",
+  "apps/web/components/shell/agent-roster.tsx",
+  "apps/web/components/shell/sidebar-content.tsx",
+  "apps/web/lib/agent-data.ts",
+  "apps/web/test/agent-surfaces.test.ts",
+  "packages/contracts/src/agent.ts",
+  "packages/contracts/src/registry.ts",
+  "tests/contract/agent-settings-contract.test.ts"
+]

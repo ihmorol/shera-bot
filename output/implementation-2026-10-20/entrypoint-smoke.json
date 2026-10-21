@@ -1,0 +1,5 @@
+{
+  "entrypoint": "apps/user-runtime/src/entrypoint.ts",
+  "authenticatedHealth": 200,
+  "anonymousHealth": 401
+}

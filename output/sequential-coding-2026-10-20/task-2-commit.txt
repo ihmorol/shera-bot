@@ -1,0 +1,12 @@
+fix(runtime): secure account routing and storage
+
+Route browser commands through authenticated account mappings and wire
+the internal listener into actual runtime startup. Preserve credentials
+and Agent files across restart, retain container data on replacement,
+and contain malformed requests and failed listener startup.
+
+Constraint: preserve runtime authority and keep bearers server-side
+Confidence: medium
+Scope-risk: moderate
+Tested: 772 tests, source lint/format, typecheck, production build
+Not-tested: real PostgreSQL, Docker recreation, browser QA

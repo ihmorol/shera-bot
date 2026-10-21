@@ -1,0 +1,10 @@
+{
+  "browser": "Chrome/155.0.8059.80",
+  "label": "Real seeded session and runtime; browser settings reset probe",
+  "original": null,
+  "saved": "Parent browser reset regression",
+  "persistedAfterReset": null,
+  "editorAfterReset": "Parent browser reset regression",
+  "resetEditorMatchesAuthoritative": false,
+  "reducedMotion": true
+}

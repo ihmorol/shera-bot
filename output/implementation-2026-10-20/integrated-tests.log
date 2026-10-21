@@ -1,0 +1,144 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.1 [39m[90mE:/PROJECTS/shera-bot[39m
+
+ [32m✓[39m apps/user-runtime/src/modules/agents/agent-folders.service.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 1073[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/modules/agents/agents.service.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 1186[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/adapters/sqlite/agents-repository.test.ts [2m([22m[2m14 tests[22m[2m)[22m[33m 1345[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/modules/conversations/conversations.test.ts [2m([22m[2m19 tests[22m[2m)[22m[33m 1421[2mms[22m[39m
+ [32m✓[39m tests/contract/codegen.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 2214[2mms[22m[39m
+   [32m✓[39m S02 codegen (D25, zod-to-openapi) [2m(4)[22m
+     [33m[2m✓[22m[39m passes --check against the committed output (reproducible: same input, same output)[33m 2150[2mms[22m[39m
+{"event":"e2e_send_ack_ms","measured":61,"target":500}
+ [32m✓[39m apps/user-runtime/src/modules/conversations/reply-streamer.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 2440[2mms[22m[39m
+   [32m✓[39m compose-level scripted replies (full runtime, real HTTP + real timers) [2m(1)[22m
+     [33m[2m✓[22m[39m a turn over HTTP produces a durable reply and never a task event on the stream[33m 2176[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/modules/runtime/harness-run-service.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 512[2mms[22m[39m
+[90mstderr[2m | apps/user-runtime/src/transport/local-api/local-api.test.ts[2m > [22m[2mlocal API — typed error middleware integration[2m > [22m[2mdegrades an untyped internal fault to a generic 500 that leaks nothing (G3)
+[22m[39m{"level":"error","event":"untyped_request_fault","correlation_id":"857b2736-3521-47f9-be9b-b8bc1e56fdff","method":"POST","path":"/v1/conversations/commands","name":"Error","message":"SQLITE_CONSTRAINT: secret table schema leaked","stack":"Error: SQLITE_CONSTRAINT: secret table schema leaked\n    at Object.throwing [as executeCommand] (E:/PROJECTS/shera-bot/apps/user-runtime/src/transport/local-api/local-api.test.ts:414:13)\n    at E:/PROJECTS/shera-bot/apps/user-runtime/src/transport/local-api/app.ts:182:45\n    at Layer.handleRequest (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\layer.js:152:17)\n    at next (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\route.js:157:13)\n    at Route.dispatch (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\route.js:117:3)\n    at handle (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\index.js:435:11)\n    at Layer.handleRequest (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\layer.js:152:17)\n    at E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\index.js:295:15\n    at processParams (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\index.js:582:12)\n    at next (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\index.js:291:5)"}
+
+ [32m✓[39m apps/user-runtime/src/transport/local-api/local-api.test.ts [2m([22m[2m13 tests[22m[2m)[22m[33m 1249[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/transport/local-api/s11-agents-api.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 1562[2mms[22m[39m
+   [32m✓[39m S11 restart persistence (issue #12 AC: history and identity survive a restart) [2m(1)[22m
+     [33m[2m✓[22m[39m preserves agents, chat binding, history, and settings across a full close and re-open[33m 320[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/transport/websocket/websocket.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 1814[2mms[22m[39m
+   [32m✓[39m websocket gateway — live fanout (D26/AC8) [2m(3)[22m
+     [33m[2m✓[22m[39m fans out each committed event exactly once to the stream's subscribers[33m 432[2mms[22m[39m
+     [33m[2m✓[22m[39m keeps twin streams apart across workspaces (E12 room scoping)[33m 363[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/mock/e2e-mode.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 482[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/modules/runtime/internal-channel.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 428[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/modules/conversations/messages.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 553[2mms[22m[39m
+ [32m✓[39m apps/web/test/agent-surfaces.test.ts [2m([22m[2m30 tests[22m[2m)[22m[33m 458[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/main.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 627[2mms[22m[39m
+   [32m✓[39m runtime node bootstrap [2m(2)[22m
+     [33m[2m✓[22m[39m starts on an ephemeral port, serves health, and stops cleanly[33m 308[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/modules/events/events.service.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 411[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/modules/runtime/pack-pin.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 500[2mms[22m[39m
+[90mstderr[2m | apps/user-runtime/src/transport/local-api/s11-agent-folder-api.test.ts[2m > [22m[2mS11 agent folder access API (private-folder isolation guard)[2m > [22m[2mdenies ANY other Agent's private subtree — root and nested, with the typed 403
+[22m[39m{"level":"error","event":"untyped_request_fault","correlation_id":"468b4167-7d06-4e9c-a92c-cfe3e6bf1e10","method":"GET","path":"/v1/agents/agent_general_assistant/folder","name":"AgentFolderAccessDeniedError","message":"agent agent_general_assistant may not access agent agent_researcher's private folder","stack":"AgentFolderAccessDeniedError: agent agent_general_assistant may not access agent agent_researcher's private folder\n    at AgentFoldersService.guard (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:284:13)\n    at AgentFoldersService.resolveAccess (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:228:25)\n    at E:/PROJECTS/shera-bot/apps/user-runtime/src/transport/local-api/app.ts:362:20\n    at Layer.handleRequest (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\layer.js:152:17)\n    at next (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\route.js:157:13)\n    at Route.dispatch (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\route.js:117:3)\n    at handle (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\index.js:435:11)\n    at Layer.handleRequest (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\layer.js:152:17)\n    at E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\index.js:295:15\n    at param (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\index.js:600:14)"}
+
+[90mstderr[2m | apps/user-runtime/src/transport/local-api/s11-agent-folder-api.test.ts[2m > [22m[2mS11 agent folder access API (private-folder isolation guard)[2m > [22m[2mdenies ANY other Agent's private subtree — root and nested, with the typed 403
+[22m[39m{"level":"error","event":"untyped_request_fault","correlation_id":"8f73416a-803d-4443-98cf-919273eb9017","method":"GET","path":"/v1/agents/agent_general_assistant/folder","name":"AgentFolderAccessDeniedError","message":"agent agent_general_assistant may not access agent agent_researcher's private folder","stack":"AgentFolderAccessDeniedError: agent agent_general_assistant may not access agent agent_researcher's private folder\n    at AgentFoldersService.guard (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:284:13)\n    at AgentFoldersService.resolveAccess (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:228:25)\n    at E:/PROJECTS/shera-bot/apps/user-runtime/src/transport/local-api/app.ts:362:20\n    at Layer.handleRequest (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\layer.js:152:17)\n    at next (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\route.js:157:13)\n    at Route.dispatch (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\route.js:117:3)\n    at handle (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\index.js:435:11)\n    at Layer.handleRequest (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\layer.js:152:17)\n    at E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\index.js:295:15\n    at param (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\index.js:600:14)"}
+
+[90mstderr[2m | apps/user-runtime/src/transport/local-api/s11-agent-folder-api.test.ts[2m > [22m[2mS11 agent folder access API (private-folder isolation guard)[2m > [22m[2mrejects traversal-shaped URIs with the typed 400 — no percent-encoding escape
+[22m[39m{"level":"error","event":"untyped_request_fault","correlation_id":"9860bcf6-fde1-448b-9e34-b0893b592f9e","method":"GET","path":"/v1/agents/agent_general_assistant/folder","name":"AgentFolderUriInvalidError","message":"the folder URI is not a safe agent://<agent_id>/<path> address","stack":"AgentFolderUriInvalidError: the folder URI is not a safe agent://<agent_id>/<path> address\n    at parseAgentFolderUri (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:126:13)\n    at AgentFoldersService.resolveWithinWorkspace (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:266:20)\n    at AgentFoldersService.guard (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:281:25)\n    at AgentFoldersService.resolveAccess (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:228:25)\n    at E:/PROJECTS/shera-bot/apps/user-runtime/src/transport/local-api/app.ts:362:20\n    at Layer.handleRequest (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\layer.js:152:17)\n    at next (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\route.js:157:13)\n    at Route.dispatch (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\route.js:117:3)\n    at handle (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\index.js:435:11)\n    at Layer.handleRequest (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\layer.js:152:17)"}
+
+[90mstderr[2m | apps/user-runtime/src/transport/local-api/s11-agent-folder-api.test.ts[2m > [22m[2mS11 agent folder access API (private-folder isolation guard)[2m > [22m[2mrejects traversal-shaped URIs with the typed 400 — no percent-encoding escape
+[22m[39m{"level":"error","event":"untyped_request_fault","correlation_id":"6f675350-8bb2-44c4-b878-31ef567364a0","method":"GET","path":"/v1/agents/agent_general_assistant/folder","name":"AgentFolderUriInvalidError","message":"the folder URI is not a safe agent://<agent_id>/<path> address","stack":"AgentFolderUriInvalidError: the folder URI is not a safe agent://<agent_id>/<path> address\n    at parseAgentFolderUri (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:126:13)\n    at AgentFoldersService.resolveWithinWorkspace (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:266:20)\n    at AgentFoldersService.guard (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:281:25)\n    at AgentFoldersService.resolveAccess (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:228:25)\n    at E:/PROJECTS/shera-bot/apps/user-runtime/src/transport/local-api/app.ts:362:20\n    at Layer.handleRequest (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\layer.js:152:17)\n    at next (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\route.js:157:13)\n    at Route.dispatch (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\route.js:117:3)\n    at handle (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\index.js:435:11)\n    at Layer.handleRequest (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\layer.js:152:17)"}
+
+[90mstderr[2m | apps/user-runtime/src/transport/local-api/s11-agent-folder-api.test.ts[2m > [22m[2mS11 agent folder access API (private-folder isolation guard)[2m > [22m[2mrejects non-agent:// schemes and malformed folder URIs — shared paths are S17's model
+[22m[39m{"level":"error","event":"untyped_request_fault","correlation_id":"73c37b18-4545-40fa-8610-2baa61bcabaa","method":"GET","path":"/v1/agents/agent_general_assistant/folder","name":"AgentFolderUriInvalidError","message":"the folder URI is not a safe agent://<agent_id>/<path> address","stack":"AgentFolderUriInvalidError: the folder URI is not a safe agent://<agent_id>/<path> address\n    at parseAgentFolderUri (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:100:42)\n    at AgentFoldersService.resolveWithinWorkspace (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:266:20)\n    at AgentFoldersService.guard (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:281:25)\n    at AgentFoldersService.resolveAccess (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:228:25)\n    at E:/PROJECTS/shera-bot/apps/user-runtime/src/transport/local-api/app.ts:362:20\n    at Layer.handleRequest (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\layer.js:152:17)\n    at next (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\route.js:157:13)\n    at Route.dispatch (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\route.js:117:3)\n    at handle (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\index.js:435:11)\n    at Layer.handleRequest (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\layer.js:152:17)"}
+
+[90mstderr[2m | apps/user-runtime/src/transport/local-api/s11-agent-folder-api.test.ts[2m > [22m[2mS11 agent folder access API (private-folder isolation guard)[2m > [22m[2mrejects non-agent:// schemes and malformed folder URIs — shared paths are S17's model
+[22m[39m{"level":"error","event":"untyped_request_fault","correlation_id":"e4809914-f431-4fcf-87a3-ee2be78b9334","method":"GET","path":"/v1/agents/agent_general_assistant/folder","name":"AgentFolderUriInvalidError","message":"the folder URI is not a safe agent://<agent_id>/<path> address","stack":"AgentFolderUriInvalidError: the folder URI is not a safe agent://<agent_id>/<path> address\n    at parseAgentFolderUri (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:109:46)\n    at AgentFoldersService.resolveWithinWorkspace (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:266:20)\n    at AgentFoldersService.guard (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:281:25)\n    at AgentFoldersService.resolveAccess (E:/PROJECTS/shera-bot/apps/user-runtime/src/modules/agents/agent-folders.service.ts:228:25)\n    at E:/PROJECTS/shera-bot/apps/user-runtime/src/transport/local-api/app.ts:362:20\n    at Layer.handleRequest (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\layer.js:152:17)\n    at next (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\route.js:157:13)\n    at Route.dispatch (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\route.js:117:3)\n    at handle (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\index.js:435:11)\n    at Layer.handleRequest (E:\\PROJECTS\\shera-bot\\node_modules\\.pnpm\\router@2.2.0\\node_modules\\router\\lib\\layer.js:152:17)"}
+
+ [31m❯[39m apps/control-plane/test/redaction.test.ts [2m([22m[2m3 tests[22m[2m | [22m[33m3 skipped[39m[2m)[22m[32m 32[2mms[22m[39m
+   [2m[90m↓[39m[22m secret redaction (G3) [2m(3)[22m
+     [2m[90m↓[39m[22m never writes the auth secret, client secret, access token, or session token to the log
+     [2m[90m↓[39m[22m never stores issued token values in the security_events table
+     [2m[90m↓[39m[22m records login events with redacted, non-credential details
+ [32m✓[39m packages/agent-pack-sdk/src/loader.test.ts [2m([22m[2m14 tests[22m[2m)[22m[33m 357[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/transport/local-api/s11-agent-folder-api.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 876[2mms[22m[39m
+   [32m✓[39m S11 agent folder access API (private-folder isolation guard) [2m(5)[22m
+     [33m[2m✓[22m[39m resolves an Agent's OWN subtree — root and nested, both verbs granted[33m 313[2mms[22m[39m
+ [32m✓[39m apps/web/test/e2e/mock-runtime-e2e.test.ts [2m([22m[2m1 test[22m[2m)[22m[33m 3219[2mms[22m[39m
+   [32m✓[39m S09 mock-runtime E2E (E8): login → chat → send → stream → refresh → replay [2m(1)[22m
+     [33m[2m✓[22m[39m drives the full thin-slice path through the real client, proxy, and runtime[33m 3214[2mms[22m[39m
+ [32m✓[39m packages/agent-pack-sdk/src/mockup-divergence.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 211[2mms[22m[39m
+ [32m✓[39m apps/web/test/a11y.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 200[2mms[22m[39m
+ [32m✓[39m packages/agent-pack-sdk/src/manifest.test.ts [2m([22m[2m24 tests[22m[2m)[22m[32m 182[2mms[22m[39m
+ [32m✓[39m tests/contract/contracts-unknown-fields.test.ts [2m([22m[2m49 tests[22m[2m)[22m[32m 132[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/transport/local-api/s09-message-send.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 239[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/adapters/sqlite/workspaces-repository.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 188[2mms[22m[39m
+ [32m✓[39m apps/web/test/chat-view.test.ts [2m([22m[2m22 tests[22m[2m)[22m[32m 195[2mms[22m[39m
+ [32m✓[39m tests/contract/contracts-roundtrip.test.ts [2m([22m[2m105 tests[22m[2m)[22m[32m 165[2mms[22m[39m
+ [32m✓[39m apps/web/test/ws-socket.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 153[2mms[22m[39m
+ [32m✓[39m tests/contract/runtime-portability.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 174[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/transport/local-api/s09-real-rows.test.ts [2m([22m[2m1 test[22m[2m)[22m[33m 347[2mms[22m[39m
+   [32m✓[39m S09 real-rows round trip (web backing path over the local API) [2m(1)[22m
+     [33m[2m✓[22m[39m creates the conversation, replays the seed receipt, and reads the journal back[33m 320[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/adapters/sqlite/connection.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 151[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/management-bootstrap.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 435[2mms[22m[39m
+ [32m✓[39m apps/web/test/connection.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 112[2mms[22m[39m
+ [32m✓[39m apps/web/test/navigation.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 34[2mms[22m[39m
+ [32m✓[39m tests/contract/user-runtime-boundary.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 84[2mms[22m[39m
+ [32m✓[39m apps/web/test/control-plane-client.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 98[2mms[22m[39m
+ [32m✓[39m apps/web/test/agent-identity.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 44[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/modules/tasks/task-transitions.test.ts [2m([22m[2m43 tests[22m[2m)[22m[32m 51[2mms[22m[39m
+ [32m✓[39m apps/web/test/collaboration-surface.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 67[2mms[22m[39m
+ [32m✓[39m apps/web/test/runtime-client.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 55[2mms[22m[39m
+ [32m✓[39m apps/web/test/design-tokens.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 48[2mms[22m[39m
+ [32m✓[39m packages/agent-pack-sdk/src/pack-content.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 31[2mms[22m[39m
+ [32m✓[39m apps/web/test/vocabulary.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 88[2mms[22m[39m
+ [32m✓[39m apps/web/test/runtime-chat.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 74[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/adapters/fs/agent-folder-store.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 35[2mms[22m[39m
+ [32m✓[39m packages/agent-pack-sdk/src/compatibility.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 37[2mms[22m[39m
+ [32m✓[39m tests/contract/agent-settings-contract.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 38[2mms[22m[39m
+ [32m✓[39m apps/web/test/proxies.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 115[2mms[22m[39m
+ [32m✓[39m apps/web/test/streaming.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 72[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/modules/tasks/task-run-creator.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 83[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/transport/http/typed-errors.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 37[2mms[22m[39m
+ [32m✓[39m apps/web/test/container-gate.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 39[2mms[22m[39m
+ [32m✓[39m apps/control-plane/test/runtime-api-proxy.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 196[2mms[22m[39m
+ [32m✓[39m tests/contract/typed-execution-event.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 28[2mms[22m[39m
+ [32m✓[39m packages/agent-pack-sdk/src/vocabulary.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m apps/web/test/fixtures.test.ts [2m([22m[2m30 tests[22m[2m)[22m[32m 26[2mms[22m[39m
+ [32m✓[39m apps/user-runtime/src/adapters/process/fake-harness-adapter.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m apps/web/test/runtime-thread.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 35[2mms[22m[39m
+ [32m✓[39m apps/web/test/container-resolution.test.ts [2m([22m[2m16 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m tests/contract/license-expression.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m apps/web/test/runtime-live.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 38[2mms[22m[39m
+ [32m✓[39m apps/web/test/login.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 62[2mms[22m[39m
+ [32m✓[39m packages/test-kit/src/fake-container-backend.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m packages/agent-pack-sdk/src/integrity.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m tests/contract/approval-contract.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m tests/contract/workspace-graph.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m tests/contract/runtime-access.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m apps/control-plane/test/runtime-container-spec.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m apps/control-plane/test/local-container-backend.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 41[2mms[22m[39m
+ [32m✓[39m apps/control-plane/test/error-boundary.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 181[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Suites 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m apps/control-plane/test/redaction.test.ts[2m [ apps/control-plane/test/redaction.test.ts ][22m
+[31m[1mError[22m: PostgreSQL 16 server binaries were not found (G4: no fake pass). Set SHERA_PG_BIN to the directory containing initdb, or put initdb on PATH. Probed SHERA_PG_BIN=(unset); directories: /usr/lib/postgresql/16/bin, /usr/pgsql-16/bin, /usr/pgsql/16/bin, /opt/homebrew/opt/postgresql@16/bin, /usr/local/opt/postgresql@16/bin, C:\Program Files\PostgreSQL\16\bin, C:\Program Files (x86)\PostgreSQL\16\bin; PATH entries: 57 checked.[39m
+[36m [2m❯[22m resolvePgBin apps/control-plane/test/helpers/pg-cluster.ts:[2m87:9[22m[39m
+    [90m 85|[39m   }
+    [90m 86|[39m
+    [90m 87|[39m   throw new Error(
+    [90m   |[39m         [31m^[39m
+    [90m 88|[39m     [
+    [90m 89|[39m       `PostgreSQL ${PG_VERSION} server binaries were not found (G4: no…
+[90m [2m❯[22m startTestCluster apps/control-plane/test/helpers/pg-cluster.ts:[2m134:17[22m[39m
+[90m [2m❯[22m apps/control-plane/test/redaction.test.ts:[2m44:19[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m71 passed[39m[22m[90m (72)[39m
+[2m      Tests [22m [1m[32m769 passed[39m[22m[2m | [22m[33m3 skipped[39m[90m (772)[39m
+[2m   Start at [22m 16:21:57
+[2m   Duration [22m 14.22s[2m (import 59%, tests 29%, transform 11%, worker 1%)[22m
+
+[2m    Isolate [22m [33m72 workers spawned[39m[2m · ~450ms startup each (spawn + environment, per file)[22m
+[2m            [22m [2mat least ~2.50s faster with [22m[33misolate: false[39m[2m — reuses workers across files instead of one per file[22m
+

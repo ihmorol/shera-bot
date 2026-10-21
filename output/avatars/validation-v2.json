@@ -1,0 +1,17 @@
+{
+  "file": "shera-main-v2.glb",
+  "bytes": 20241004,
+  "meshes": 32,
+  "checks": [
+    "GLB header and chunks",
+    "finite accessor values",
+    "buffer alignment and lengths",
+    "unit normals",
+    "index bounds",
+    "matching vertex attribute counts",
+    "unit rotation quaternion",
+    "embedded PNG signature",
+    "idle animation channel"
+  ],
+  "result": "passed"
+}

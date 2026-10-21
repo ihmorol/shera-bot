@@ -1,0 +1,26 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.1 [39m[90mE:/PROJECTS/shera-bot[39m
+
+ [31m❯[39m apps/control-plane/test/error-boundary.test.ts [2m([22m[2m1 test[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 7[2mms[22m[39m
+[31m   [31m×[31m returns a typed safe error when a route throws[39m[32m 5[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m apps/control-plane/test/error-boundary.test.ts[2m > [22mreturns a typed safe error when a route throws
+[31m[1mTypeError[22m: createErrorHandler is not a function[39m
+[36m [2m❯[22m apps/control-plane/test/error-boundary.test.ts:[2m10:11[22m[39m
+    [90m  8|[39m   app.get("/failure", () => { throw new Error("private-failure-sentine…
+    [90m  9|[39m   const logger = { error: vi.fn() };
+    [90m 10|[39m   app.use(createErrorHandler(logger));
+    [90m   |[39m           [31m^[39m
+    [90m 11|[39m   const server = createServer(app);
+    [90m 12|[39m   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", r…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m   Start at [22m 16:20:07
+[2m   Duration [22m 5.23s[2m (import 94%, transform 6%)[22m
+

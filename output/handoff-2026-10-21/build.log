@@ -1,0 +1,48 @@
+$ turbo run build
+• turbo 2.10.13
+
+   • Packages in scope: @shera-bot/agent-pack-sdk, @shera-bot/clients, @shera-bot/contracts, @shera-bot/control-plane, @shera-bot/observability, @shera-bot/pi-protocol, @shera-bot/provider-contracts, @shera-bot/test-kit, @shera-bot/user-runtime, @shera-bot/web
+   • Running build in 10 packages
+   • Remote caching disabled
+
+@shera-bot/web:build: cache miss, executing b6318148d2c28a7f
+@shera-bot/web:build: $ next build
+@shera-bot/web:build: ▲ Next.js 16.3.5 (Turbopack)
+@shera-bot/web:build: ✓ Running next.config.ts took 460ms
+@shera-bot/web:build: 
+@shera-bot/web:build:   Creating an optimized production build ...
+@shera-bot/web:build: ✓ Compiled successfully in 8.7s
+@shera-bot/web:build:   Running TypeScript ...
+@shera-bot/web:build:   Finished TypeScript in 9.8s ...
+@shera-bot/web:build:   Collecting page data using 11 workers ...
+@shera-bot/web:build:   Generating static pages using 11 workers (0/6) ...
+@shera-bot/web:build:   Generating static pages using 11 workers (1/6) 
+@shera-bot/web:build:   Generating static pages using 11 workers (2/6) 
+@shera-bot/web:build:   Generating static pages using 11 workers (4/6) 
+@shera-bot/web:build: ✓ Generating static pages using 11 workers (6/6) in 533ms
+@shera-bot/web:build:   Finalizing page optimization ...
+@shera-bot/web:build: 
+@shera-bot/web:build: Route (app)
+@shera-bot/web:build: ┌ ○ /
+@shera-bot/web:build: ├ ○ /_not-found
+@shera-bot/web:build: ├ ƒ /api/control/[...path]
+@shera-bot/web:build: ├ ƒ /api/runtime/[...path]
+@shera-bot/web:build: ├ ○ /app
+@shera-bot/web:build: ├ ƒ /app/agent/[agentId]
+@shera-bot/web:build: ├ ƒ /app/chat/[chatId]/workspace
+@shera-bot/web:build: ├ ƒ /app/chat/[chatId]/workspace/full
+@shera-bot/web:build: ├ ƒ /app/operation/[operationId]
+@shera-bot/web:build: ├ ƒ /app/operation/[operationId]/preview
+@shera-bot/web:build: ├ ○ /app/operation/new
+@shera-bot/web:build: ├ ƒ /app/settings/[[...section]]
+@shera-bot/web:build: └ ○ /login
+@shera-bot/web:build: 
+@shera-bot/web:build: 
+@shera-bot/web:build: ○  (Static)   prerendered as static content
+@shera-bot/web:build: ƒ  (Dynamic)  server-rendered on demand
+@shera-bot/web:build: 
+
+ Tasks:    1 successful, 1 total
+Cached:    0 cached, 1 total
+  Time:    35.035s 
+

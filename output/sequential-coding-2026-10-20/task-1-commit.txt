@@ -1,0 +1,10 @@
+style(agents): satisfy source formatting gate
+
+Make the inherited S11 files pass the shared formatting gate so
+subsequent behavioral changes can be reviewed independently.
+
+Constraint: preserve behavior and all unrelated working changes
+Confidence: high
+Scope-risk: narrow
+Tested: exact formatter comparison, source lint, 84 tests
+Not-tested: PostgreSQL, browser and container behavior

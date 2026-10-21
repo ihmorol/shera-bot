@@ -1,0 +1,42 @@
+
+> rea-agents@6.4.0 build:cached
+> node scripts/check-dependency-install.mjs && node scripts/run-exclusive.mjs artifacts turbo run artifacts:skills
+
+
+   • turbo 2.11.7
+   • Running artifacts:skills
+   • Remote caching disabled
+
+metadata:check: cache miss, executing 43f5e7c610b7412c
+metadata:check: 
+metadata:check: > rea-agents@6.4.0 metadata:check
+metadata:check: > node scripts/generate-package-metadata.mjs --check
+metadata:check: 
+compile: cache miss, executing 79693c2f3ab2bd4f
+compile: 
+compile: > rea-agents@6.4.0 compile
+compile: > node scripts/clean-build-output.mjs && tsc -p tsconfig.build.json && node scripts/bundle-runtime.mjs
+compile: 
+compile: src/application/SupportedClients.ts(542,5): error TS2322: Type '"devin"' is not assignable to type 'NonNullable<"commandcode" | "copilot_cli" | "dsh" | "grok" | "hermes" | "json" | "kimi" | "omp" | "opencode" | "pi" | "toml" | "unsupported" | "vscode" | "zcode" | undefined>'.
+compile: src/application/SupportedClients.ts(744,9): error TS2322: Type 'readonly [{ readonly name: "claude_code"; readonly displayName: "Claude Code"; readonly skillPath: ({ home, env }: ClientPathContext) => string; readonly configPath: (context: ClientPathContext) => string; readonly markerPath: ({ home, env }: ClientPathContext) => string; readonly format: "json"; }, ... 22 more ...,...' is not assignable to type 'readonly ClientDefinition[]'.
+compile:   Type '{ readonly name: "claude_code"; readonly displayName: "Claude Code"; readonly skillPath: ({ home, env }: ClientPathContext) => string; readonly configPath: (context: ClientPathContext) => string; readonly markerPath: ({ home, env }: ClientPathContext) => string; readonly format: "json"; } | ... 22 more ... | { ...; }' is not assignable to type 'ClientDefinition'.
+compile:     Type '{ readonly name: "devin"; readonly displayName: "Devin"; readonly configPath: ({ home, platform, env }: ClientPathContext) => string; readonly markerPath: ({ home, platform, env }: ClientPathContext) => string; readonly format: "devin"; }' is not assignable to type 'ClientDefinition'.
+compile:       Type '{ readonly name: "devin"; readonly displayName: "Devin"; readonly configPath: ({ home, platform, env }: ClientPathContext) => string; readonly markerPath: ({ home, platform, env }: ClientPathContext) => string; readonly format: "devin"; }' is not assignable to type 'ClientDefinitionBase & { readonly configPath: ClientPath; readonly markerPath: ClientPath; readonly location?: undefined; }'.
+compile:         Type '{ readonly name: "devin"; readonly displayName: "Devin"; readonly configPath: ({ home, platform, env }: ClientPathContext) => string; readonly markerPath: ({ home, platform, env }: ClientPathContext) => string; readonly format: "devin"; }' is not assignable to type 'ClientDefinitionBase'.
+compile:           Types of property 'format' are incompatible.
+compile:             Type '"devin"' is not assignable to type 'NonNullable<"commandcode" | "copilot_cli" | "dsh" | "grok" | "hermes" | "json" | "kimi" | "omp" | "opencode" | "pi" | "toml" | "unsupported" | "vscode" | "zcode" | undefined>'.
+compile: src/application/SupportedClients.ts(809,9): error TS2322: Type 'readonly [{ readonly name: "claude_code"; readonly displayName: "Claude Code"; readonly skillPath: ({ home, env }: ClientPathContext) => string; readonly configPath: (context: ClientPathContext) => string; readonly markerPath: ({ home, env }: ClientPathContext) => string; readonly format: "json"; }, ... 22 more ...,...' is not assignable to type 'readonly ClientDefinition[]'.
+compile:   Type '{ readonly name: "claude_code"; readonly displayName: "Claude Code"; readonly skillPath: ({ home, env }: ClientPathContext) => string; readonly configPath: (context: ClientPathContext) => string; readonly markerPath: ({ home, env }: ClientPathContext) => string; readonly format: "json"; } | ... 22 more ... | { ...; }' is not assignable to type 'ClientDefinition'.
+compile:     Type '{ readonly name: "devin"; readonly displayName: "Devin"; readonly configPath: ({ home, platform, env }: ClientPathContext) => string; readonly markerPath: ({ home, platform, env }: ClientPathContext) => string; readonly format: "devin"; }' is not assignable to type 'ClientDefinition'.
+compile:       Type '{ readonly name: "devin"; readonly displayName: "Devin"; readonly configPath: ({ home, platform, env }: ClientPathContext) => string; readonly markerPath: ({ home, platform, env }: ClientPathContext) => string; readonly format: "devin"; }' is not assignable to type 'ClientDefinitionBase & { readonly configPath: ClientPath; readonly markerPath: ClientPath; readonly location?: undefined; }'.
+compile:         Type '{ readonly name: "devin"; readonly displayName: "Devin"; readonly configPath: ({ home, platform, env }: ClientPathContext) => string; readonly markerPath: ({ home, platform, env }: ClientPathContext) => string; readonly format: "devin"; }' is not assignable to type 'ClientDefinitionBase'.
+compile:           Types of property 'format' are incompatible.
+compile:             Type '"devin"' is not assignable to type 'NonNullable<"commandcode" | "copilot_cli" | "dsh" | "grok" | "hermes" | "json" | "kimi" | "omp" | "opencode" | "pi" | "toml" | "unsupported" | "vscode" | "zcode" | undefined>'.
+compile:  ERROR  command (E:\PROJECTS\shera-bot\output\rea-source\) C:\Program Files\nodejs\node.exe C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js run compile exited (2)
+
+ Tasks:    1 successful, 2 total
+Cached:    0 cached, 2 total
+  Time:    14.543s 
+Failed:    //#compile
+
+ ERROR  run failed: command  exited (2)

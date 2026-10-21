@@ -1,0 +1,38 @@
+apps/control-plane/src/index.ts 82ms
+[90mapps/control-plane/src/modules/runtime-provisioning.ts[39m 50ms (unchanged)
+[90mapps/control-plane/src/routes.ts[39m 12ms (unchanged)
+apps/control-plane/src/runtime/api-proxy.ts 8ms
+[90mapps/control-plane/src/runtime/container-spec.ts[39m 8ms (unchanged)
+[90mapps/control-plane/src/runtime/local-container-backend.ts[39m 24ms (unchanged)
+apps/control-plane/test/error-boundary.test.ts 5ms
+apps/control-plane/test/runtime-api-proxy.test.ts 16ms
+[90mapps/control-plane/test/runtime-container-spec.test.ts[39m 12ms (unchanged)
+[90mapps/control-plane/test/runtime-provisioning.test.ts[39m 40ms (unchanged)
+[90mapps/user-runtime/package.json[39m 11ms (unchanged)
+[90mapps/user-runtime/src/adapters/fs/agent-folder-store.test.ts[39m 5ms (unchanged)
+apps/user-runtime/src/adapters/fs/agent-folder-store.ts 10ms
+[90mapps/user-runtime/src/adapters/fs/channel-state.ts[39m 4ms (unchanged)
+[90mapps/user-runtime/src/entrypoint.ts[39m 2ms (unchanged)
+[90mapps/user-runtime/src/main.ts[39m 14ms (unchanged)
+[90mapps/user-runtime/src/management-bootstrap.test.ts[39m 11ms (unchanged)
+apps/user-runtime/src/modules/agents/agent-folders.service.ts 17ms
+apps/user-runtime/src/modules/agents/agents.service.test.ts 22ms
+[90mapps/user-runtime/src/modules/runtime/channel-credentials.ts[39m 5ms (unchanged)
+[90mapps/user-runtime/src/modules/runtime/internal-api.ts[39m 10ms (unchanged)
+[90mapps/user-runtime/src/modules/runtime/management-server.ts[39m 3ms (unchanged)
+[90mapps/user-runtime/src/transport/local-api/compose.ts[39m 25ms (unchanged)
+apps/user-runtime/src/transport/local-api/s11-agent-folder-api.test.ts 13ms
+[90mapps/web/app/app/layout.tsx[39m 7ms (unchanged)
+[90mapps/web/app/app/page.tsx[39m 3ms (unchanged)
+[90mapps/web/app/login/page.tsx[39m 3ms (unchanged)
+[90mapps/web/components/chat/agent-direct-chat-surface.tsx[39m 8ms (unchanged)
+[90mapps/web/components/chat/general-assistant-surface.tsx[39m 6ms (unchanged)
+apps/web/lib/agent-api.ts 10ms
+[90mapps/web/lib/container-connection.ts[39m 7ms (unchanged)
+apps/web/lib/server/proxies.ts 10ms
+[90mapps/web/test/e2e/mock-runtime-e2e.test.ts[39m 33ms (unchanged)
+apps/web/test/login.test.ts 2ms
+apps/web/test/proxies.test.ts 18ms
+[90mpackages/contracts/src/index.ts[39m 1ms (unchanged)
+[90mpackages/contracts/src/runtime-access.ts[39m 2ms (unchanged)
+[90mtests/contract/runtime-access.test.ts[39m 2ms (unchanged)

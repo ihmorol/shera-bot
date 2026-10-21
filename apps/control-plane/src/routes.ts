@@ -2,13 +2,14 @@
  * HTTP routes for the identity layer (S05). ExpressAuth owns /api/auth/*
  * (mounted in the factory); this module owns the typed surfaces around it.
  */
-import { Router, type Request, type Response } from "express";
+import express, { Router, type NextFunction, type Request, type Response } from "express";
 
 import type { ExpressAuthConfig } from "@auth/express";
 
 import type { ControlPlaneDb } from "./db/client.ts";
 import {
   authSignInFailedError,
+  contractValidationError,
   statusForError,
   signupCapReachedError,
   RuntimeOperationError,
@@ -31,6 +32,7 @@ export interface RouteDependencies {
   authConfigured: boolean;
   logger: ControlPlaneLogger;
   provisioning: ProvisioningService;
+  runtimeTargetForAccount: (accountId: string) => Promise<{ endpoint: string; bearer: string }>;
 }
 
 export function createRoutes(deps: RouteDependencies): Router {
@@ -41,6 +43,27 @@ export function createRoutes(deps: RouteDependencies): Router {
     registry: deps.registry,
     logger: deps.logger,
   });
+  const runtimeJsonParser = express.json({ limit: "64kb" });
+  const parseRuntimeJson = (req: Request, res: Response, next: NextFunction): void => {
+    runtimeJsonParser(req, res, (error) => {
+      if (!error) {
+        next();
+        return;
+      }
+      const tooLarge =
+        typeof error === "object" &&
+        error !== null &&
+        "type" in error &&
+        error.type === "entity.too.large";
+      res
+        .status(tooLarge ? 413 : 400)
+        .json(
+          contractValidationError(
+            tooLarge ? "The request body is too large." : "The request body must be valid JSON.",
+          ),
+        );
+    });
+  };
 
   /**
    * S1 signup-cap refusal / redacted error state (docs/UI_DESIGN.md S1).
@@ -148,8 +171,9 @@ export function createRoutes(deps: RouteDependencies): Router {
   router.use(
     "/api/runtime/local",
     requireSessionMiddleware,
+    parseRuntimeJson,
     createRuntimeApiProxy({
-      targetForAccount: (accountId) => deps.provisioning.getChannelTarget(accountId),
+      targetForAccount: deps.runtimeTargetForAccount,
     }),
   );
 

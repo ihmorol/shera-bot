@@ -32,6 +32,7 @@ import { SecretRegistry } from "./redaction.ts";
 import { ProvisioningService } from "./modules/runtime-provisioning.ts";
 import { RuntimeChannelClient } from "./runtime/channel-client.ts";
 import { LocalContainerBackend } from "./runtime/local-container-backend.ts";
+import { createLiveRuntimeTransport, type LiveRuntimeTransport } from "./runtime/live-transport.ts";
 import { SecurityEventService } from "./modules/security-events.ts";
 import { SignupCapService } from "./modules/signup-cap.ts";
 import { createSheraAuthAdapter } from "./auth/adapter.ts";
@@ -64,6 +65,10 @@ export interface ControlPlaneOptions {
    * environment constructs fine and provisioning fails truthfully (G4).
    */
   runtimeBackend?: RuntimeBackend;
+  /** TEST SEAM: bypass container lifecycle while exercising runtime HTTP and live proxies. */
+  runtimeTargetForAccount?: (accountId: string) => Promise<{ endpoint: string; bearer: string }>;
+  /** TEST SEAM: shorten direct session-revocation checks. */
+  liveSessionValidationIntervalMs?: number;
 }
 
 export interface ControlPlaneApp {
@@ -74,6 +79,7 @@ export interface ControlPlaneApp {
   securityEvents: SecurityEventService;
   signupCap: SignupCapService;
   provisioning: ProvisioningService;
+  liveTransport: LiveRuntimeTransport;
   authConfigured: boolean;
   env: ReturnType<typeof readEnv>;
   close(): Promise<void>;
@@ -114,7 +120,13 @@ export async function createControlPlaneApp(
     logger,
   });
 
-  const adapter = createSheraAuthAdapter({ db, signupCap, registry });
+  const liveTransportRef: { current?: LiveRuntimeTransport } = {};
+  const adapter = createSheraAuthAdapter({
+    db,
+    signupCap,
+    registry,
+    onSessionDeleted: (token) => liveTransportRef.current?.revokeSession(token),
+  });
   const authConfigured = isAuthConfigured(env);
 
   const app = express();
@@ -131,6 +143,21 @@ export async function createControlPlaneApp(
     registry,
     ...(options.googleIssuer ? { googleIssuer: options.googleIssuer } : {}),
   });
+  const runtimeTargetForAccount =
+    options.runtimeTargetForAccount ??
+    ((accountId: string) => provisioning.getChannelTarget(accountId));
+  const liveTransport = createLiveRuntimeTransport({
+    db,
+    authConfig,
+    registry,
+    trustedWebOrigin: env.SHERA_WEB_ORIGIN,
+    targetForAccount: runtimeTargetForAccount,
+    logger,
+    ...(options.liveSessionValidationIntervalMs === undefined
+      ? {}
+      : { sessionValidationIntervalMs: options.liveSessionValidationIntervalMs }),
+  });
+  liveTransportRef.current = liveTransport;
 
   if (authConfigured) {
     // Logout audit (issue #6 security events; E-note): @auth/core 0.41.3 does
@@ -185,6 +212,7 @@ export async function createControlPlaneApp(
       authConfigured,
       logger,
       provisioning,
+      runtimeTargetForAccount,
     }),
   );
 
@@ -206,9 +234,11 @@ export async function createControlPlaneApp(
     securityEvents,
     signupCap,
     provisioning,
+    liveTransport,
     authConfigured,
     env,
     async close() {
+      liveTransport.close();
       await pool.end();
     },
   };

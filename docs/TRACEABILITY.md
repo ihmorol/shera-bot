@@ -171,3 +171,8 @@ Each remaining item needs an owner, evidence target, and decision record before 
 ## PostgreSQL verification follow-up, 2026-10-20
 
 The earlier E20/E22 local PostgreSQL verification gap is resolved: the executor and parent independently passed 834 tests in 84 files using real PostgreSQL 16.15. See the dated follow-ups in E20 and E22 and `output/sequential-coding-2026-10-20/task-3/parent-full-suite.log`. Acceptance statuses are unchanged; Docker, real OAuth/provider integration and browser acceptance still need their recorded checks.
+
+
+## E23 live transport follow-up, 2026-10-20
+
+[Engineering record E23](decisions/engineering-record-e23-authenticated-live-transport-2026-10-20.md) completes E22's deferred authenticated live-routing implementation. Parent browser evidence covers a seeded real session, account-bound runtime, live user message, refresh/reconnect and actual Auth.js signout; this does not prove real Google login, model execution, Docker replacement or full browser acceptance. Full integration checks and exact commit are pending the sequential review ledger. Existing acceptance statuses and product decisions are unchanged.

@@ -168,7 +168,7 @@ export async function startRuntimeNode(config: RuntimeNodeConfig = {}): Promise<
     boundPort = typeof address === "object" && address ? address.port : port;
 
     if (management) {
-      managementServer = createManagementServer(management, runtime.app, dbPath);
+      managementServer = createManagementServer(management, runtime.app, dbPath, boundPort);
       const server = managementServer;
       await new Promise<void>((resolve, reject) => {
         server.once("error", reject);
@@ -181,6 +181,7 @@ export async function startRuntimeNode(config: RuntimeNodeConfig = {}): Promise<
       managementPort = typeof address === "object" && address ? address.port : null;
     }
   } catch (error) {
+    managementServer?.closeLiveConnections();
     managementServer?.close();
     await runtime.close();
     throw error;
@@ -201,6 +202,7 @@ export async function startRuntimeNode(config: RuntimeNodeConfig = {}): Promise<
     // mounted on; composeRuntime then closes SQLite. Draining in-flight work
     // beyond Socket.IO's own shutdown is later-slice supervision.
     if (managementServer) {
+      managementServer.closeLiveConnections();
       await new Promise<void>((resolve, reject) =>
         managementServer!.close((error) => (error ? reject(error) : resolve())),
       );

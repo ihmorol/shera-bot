@@ -7,7 +7,7 @@ import type { ConversationSummary, ThreadItem } from "@/lib/fixtures";
 import { useContainerResolution, useSessionIdentity } from "@/lib/container-connection";
 import type { ContainerResolutionState } from "@/lib/container-resolution";
 import { useAgentDirectChat } from "@/lib/agent-data";
-import { useLiveConversation } from "@/lib/runtime-live";
+import { useLiveConversation, useSameOriginRuntimeSocketUrl } from "@/lib/runtime-live";
 
 /**
  * An Agent direct chat's data source (S11 chunk 4) — the General Assistant
@@ -74,7 +74,7 @@ function RuntimeAgentDirectChat({
   const real = useAgentDirectChat(workspaceId, agent.agent_id);
 
   // S09 chunk 2's live pipeline, reused against the direct chat id (§6.3).
-  const wsUrl = process.env.NEXT_PUBLIC_RUNTIME_WS_URL ?? null;
+  const wsUrl = useSameOriginRuntimeSocketUrl();
   const liveEnabled =
     session.data !== undefined &&
     wsUrl !== null &&

@@ -63,6 +63,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   delete process.env["CONTROL_PLANE_URL"];
   delete process.env["RUNTIME_LOCAL_API_URL"];
+  delete process.env["SHERA_WEB_ORIGIN"];
 });
 
 describe("control-plane proxy — redirect passthrough (sign-in 302)", () => {
@@ -92,6 +93,50 @@ describe("control-plane proxy — redirect passthrough (sign-in 302)", () => {
 });
 
 describe("runtime proxy — allowlist + passthrough", () => {
+  it("accepts the configured public origin when the internal request URL differs", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["SHERA_WEB_ORIGIN"] = "https://public.shera.test";
+    const { calls } = stubFetch(() => Response.json({ ok: true }));
+    const request = new Request("http://internal-next:3000/api/runtime/v1/conversations/commands", {
+      method: "POST",
+      body: JSON.stringify({
+        type: "conversation.create",
+        workspace_id: "ws_1",
+        idempotency_key: "public-origin",
+        payload: { title: "Public origin" },
+      }),
+      headers: {
+        "content-type": "application/json",
+        origin: "https://public.shera.test",
+      },
+    });
+
+    const response = await proxyToLocalApi(request, "/v1/conversations/commands");
+
+    expect(response.status).toBe(200);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("rejects a foreign browser origin before forwarding a command", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["SHERA_WEB_ORIGIN"] = "https://public.shera.test";
+    const { calls } = stubFetch(() => Response.json({ ok: true }));
+    const request = new Request("http://internal-next:3000/api/runtime/v1/conversations/commands", {
+      method: "POST",
+      body: JSON.stringify({ workspace_id: "ws_1" }),
+      headers: {
+        "content-type": "application/json",
+        origin: "https://foreign.test",
+      },
+    });
+
+    const response = await proxyToLocalApi(request, "/v1/conversations/commands");
+
+    expect(response.status).toBe(403);
+    expect(calls).toHaveLength(1);
+    expect(String(calls[0]!.input)).toBe(`${CONTROL_BASE}/api/session`);
+  });
+
   it("rejects an anonymous command before the runtime can be reached", async () => {
     process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
     process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;

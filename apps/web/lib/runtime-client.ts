@@ -4,7 +4,7 @@ import { TypedHttpError, UNREACHABLE_ERROR, typedErrorFromPayload } from "@/lib/
 
 /**
  * Typed browser client for the container's local API (S09 chunk 1), reached
- * through the same-origin proxy (/api/runtime/* → RUNTIME_LOCAL_API_URL,
+ * through the same-origin proxy (/api/runtime/* → CONTROL_PLANE_URL,
  * strict two-path allowlist). This is the REAL conversation backing: the
  * General Assistant direct chat reads and writes real container-local SQLite
  * rows through exactly the two S07 surfaces —

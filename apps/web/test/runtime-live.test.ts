@@ -7,6 +7,7 @@ import {
   connectionStateOf,
   DeltaBuffer,
   INITIAL_LIVE_STATE,
+  sameOriginRuntimeSocketUrl,
   type LiveThreadState,
 } from "../lib/runtime-live";
 import type { RuntimeEvent } from "../lib/runtime-client";
@@ -21,6 +22,17 @@ import { SNAPSHOT_REQUIRED_MESSAGE } from "../lib/runtime-data";
  */
 
 const CONVERSATION = "conv-1";
+
+describe("same-origin runtime websocket URL", () => {
+  it("keeps runtime selection and credentials out of the browser URL", () => {
+    expect(sameOriginRuntimeSocketUrl({ protocol: "https:", host: "shera.test" })).toBe(
+      "wss://shera.test/api/runtime/live?EIO=4&transport=websocket",
+    );
+    expect(sameOriginRuntimeSocketUrl({ protocol: "http:", host: "127.0.0.1:3177" })).toBe(
+      "ws://127.0.0.1:3177/api/runtime/live?EIO=4&transport=websocket",
+    );
+  });
+});
 
 function messageEvent(overrides: {
   sequence: number;

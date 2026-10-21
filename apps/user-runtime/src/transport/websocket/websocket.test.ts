@@ -808,3 +808,48 @@ describe("websocket gateway — transport heartbeats", () => {
     }
   });
 });
+
+describe("websocket gateway — managed workspace boundary", () => {
+  it("rejects foreign subscriptions and replay before touching the replay service", async () => {
+    const server = createServer();
+    let replayCalls = 0;
+    const gateway = attachWebSocketGateway(server, {
+      authorizedWorkspaceId: WS_A,
+      replay: {
+        resolve(workspaceId, streamId) {
+          replayCalls += 1;
+          return {
+            kind: "events",
+            workspace_id: workspaceId,
+            stream_id: streamId,
+            events: [],
+            next_cursor: 0,
+            replayed: true,
+          };
+        },
+      },
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address() as { port: number };
+    const client = await WsTestClient.open(`http://127.0.0.1:${address.port}`);
+    try {
+      await expect(
+        client.emitWithAck("stream.subscribe", {
+          workspace_id: WS_B,
+          stream_id: "conversation:foreign",
+        }),
+      ).resolves.toMatchObject({ code: "RUNTIME_TENANT_MISMATCH" });
+      await expect(
+        client.emitWithAck("replay.request", {
+          workspace_id: WS_B,
+          stream_id: "conversation:foreign",
+          last_acknowledged_sequence: 0,
+        }),
+      ).resolves.toMatchObject({ code: "RUNTIME_TENANT_MISMATCH" });
+      expect(replayCalls).toBe(0);
+    } finally {
+      client.close();
+      await gateway.close();
+    }
+  });
+});

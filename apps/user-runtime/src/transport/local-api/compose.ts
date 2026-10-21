@@ -294,9 +294,11 @@ export function composeLocalApi(options: ComposeLocalApiOptions): LocalApiHandle
  */
 export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
   const wired = wire(options);
+  const workspaceId = options.workspaceId ?? DEFAULT_WORKSPACE_ID;
   const httpServer = createServer(wired.app);
   const gateway = attachWebSocketGateway(httpServer, {
     replay: wired.replay,
+    ...(options.workspaceId ? { authorizedWorkspaceId: workspaceId } : {}),
     ...(options.pingIntervalMs ? { pingIntervalMs: options.pingIntervalMs } : {}),
     ...(options.pingTimeoutMs ? { pingTimeoutMs: options.pingTimeoutMs } : {}),
   });
@@ -306,7 +308,6 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
   // task can use it) and pinned on the workspace (first install or upgrade;
   // the pin upgrade affects NEW tasks only, D19 — existing task snapshots
   // live in their task.created journal payloads).
-  const workspaceId = options.workspaceId ?? DEFAULT_WORKSPACE_ID;
   const pack: WorkspacePack | undefined = options.packsRoot
     ? loadWorkspacePack({
         packsRoot: options.packsRoot,

@@ -7,7 +7,7 @@ import type { ConversationSummary, ThreadItem } from "@/lib/fixtures";
 import { useContainerResolution, useSessionIdentity } from "@/lib/container-connection";
 import type { ContainerResolutionState } from "@/lib/container-resolution";
 import { useRealConversationThread } from "@/lib/runtime-data";
-import { useLiveConversation } from "@/lib/runtime-live";
+import { useLiveConversation, useSameOriginRuntimeSocketUrl } from "@/lib/runtime-live";
 
 /**
  * The General Assistant direct chat's data source (S09 chunk 1).
@@ -74,11 +74,11 @@ function RuntimeGeneralAssistantChat({
   const real = useRealConversationThread(workspaceId);
 
   // S09 chunk 2: the REAL conversation surface. When the conversation id is
-  // known and a WS gateway URL is configured, the thread runs on the live
+  // known and the same-origin WS gateway URL is ready, the thread runs on the live
   // conversation: journal events over the socket, the idempotent send, and
   // the §6.4 banner driven by the REAL connection lifecycle (never the demo
-  // script). Without a WS URL the chunk-1 HTTP snapshot stays, read-only.
-  const wsUrl = process.env.NEXT_PUBLIC_RUNTIME_WS_URL ?? null;
+  // script). Before hydration resolves the URL, the HTTP snapshot stays read-only.
+  const wsUrl = useSameOriginRuntimeSocketUrl();
   const liveEnabled =
     session.data !== undefined &&
     wsUrl !== null &&

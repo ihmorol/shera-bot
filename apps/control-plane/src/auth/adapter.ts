@@ -18,6 +18,7 @@ export function createSheraAuthAdapter(args: {
   db: NodePgDatabase;
   signupCap: SignupCapService;
   registry: SecretRegistry;
+  onSessionDeleted?: (sessionToken: string) => void;
 }): Adapter {
   const base = DrizzleAdapter(args.db, {
     usersTable: controlAccounts,
@@ -25,8 +26,12 @@ export function createSheraAuthAdapter(args: {
     sessionsTable: controlSessions,
   });
   const baseLinkAccount = base.linkAccount;
+  const baseDeleteSession = base.deleteSession;
   if (!baseLinkAccount) {
     throw new Error("drizzle adapter did not provide linkAccount");
+  }
+  if (!baseDeleteSession) {
+    throw new Error("drizzle adapter did not provide deleteSession");
   }
 
   return {
@@ -38,6 +43,10 @@ export function createSheraAuthAdapter(args: {
       args.registry.register(data.refresh_token, "refresh-token");
       args.registry.register(data.id_token, "id-token");
       await baseLinkAccount(data);
+    },
+    async deleteSession(sessionToken) {
+      await baseDeleteSession(sessionToken);
+      args.onSessionDeleted?.(sessionToken);
     },
     async createUser(data): Promise<AdapterUser> {
       try {

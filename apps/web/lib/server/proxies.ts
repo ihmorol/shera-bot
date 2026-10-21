@@ -79,7 +79,7 @@ export async function proxyToLocalApi(request: Request, upstreamPath: string): P
   if (
     request.method === "POST" &&
     request.headers.has("origin") &&
-    request.headers.get("origin") !== url.origin
+    request.headers.get("origin") !== process.env["SHERA_WEB_ORIGIN"]
   ) {
     return tenantMismatch();
   }

@@ -140,7 +140,10 @@ function RuntimeOperationChat({
   const runs = detail.detail?.runs ?? [];
   const pending = rosterCommand.isPending || coordinatorCommand.isPending;
 
-  const rosterMembers: OperationRosterMember[] = detail.detail?.roster ?? [];
+  const rosterMembers: OperationRosterMember[] = useMemo(
+    () => detail.detail?.roster ?? [],
+    [detail.detail?.roster],
+  );
   const candidates = useMemo(
     () =>
       candidateAgentsForOperation(

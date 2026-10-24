@@ -44,6 +44,22 @@ import type { SqliteTransactions } from "./transactions.ts";
 /** The reserved stream-sentinel prefix no run id may take (v6 header note). */
 export const OPERATION_CHAT_STREAM_PREFIX = "operation:";
 
+/**
+ * True when an Operation-chat binding insert lost the race against the
+ * winner's committed (workspace_id, operation_id) primary key (B5, the v5
+ * direct-chat pattern): THIS unit rolled back atomically and the winner's
+ * binding is durable, so the caller re-reads and resolves to it.
+ */
+export function isOperationChatConflict(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error as { code?: unknown }).code === "ERR_SQLITE_ERROR" &&
+    error.message.includes("UNIQUE constraint failed") &&
+    error.message.includes("operation_chats.workspace_id") &&
+    error.message.includes("operation_chats.operation_id")
+  );
+}
+
 /** The stream id of the Operation chat itself (events with run_id = null). */
 export function operationChatStreamId(operationId: string): string {
   return `${OPERATION_CHAT_STREAM_PREFIX}${operationId}`;
@@ -524,6 +540,103 @@ export class OperationsRepository {
          ORDER BY id`,
       )
       .all(workspaceId, operationId) as unknown as OperationCoordinatorEventRow[];
+  }
+
+  // -------------------------------------------------------------------------
+  // Operation chat binding (D41 — one conversation per workspace+operation)
+  // -------------------------------------------------------------------------
+
+  /**
+   * The conversation bound to THIS operation's chat, or null when the binding
+   * does not exist yet (lazy creation — the first thread access creates it).
+   */
+  findChat(workspaceId: string, operationId: string, exec?: DatabaseSync): string | null {
+    const db = exec ?? this.tx.connection();
+    const row = db
+      .prepare(
+        `SELECT conversation_id FROM operation_chats
+         WHERE workspace_id = ? AND operation_id = ?`,
+      )
+      .get(workspaceId, operationId) as { conversation_id: string } | undefined;
+    return row === undefined ? null : row.conversation_id;
+  }
+
+  /**
+   * Bind one conversation as THIS operation's chat. The conversation row is
+   * created in the SAME transaction by the caller (the v5 discipline — no
+   * FOREIGN KEY, the writer validates). A racing loser's insert fails the
+   * primary key; the caller detects it via isOperationChatConflict.
+   */
+  bindChat(
+    workspaceId: string,
+    input: { operation_id: string; conversation_id: string; created_at: string },
+    exec?: DatabaseSync,
+  ): void {
+    const db = exec ?? this.tx.connection();
+    db.prepare(
+      `INSERT INTO operation_chats (workspace_id, operation_id, conversation_id, created_at)
+       VALUES (?, ?, ?, ?)`,
+    ).run(workspaceId, input.operation_id, input.conversation_id, input.created_at);
+  }
+
+  // -------------------------------------------------------------------------
+  // Message addressing (D7 recipient semantics on the Operation chat)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Record the @-addressing resolution of one Operation-chat message: the
+   * resolved recipient Agent ids, keyed by (workspace_id, message_id). Written
+   * in the SAME transaction as the message append. An absent row means the
+   * message was unaddressed (recipients = [], Operation-wide).
+   */
+  recordMessageRecipients(
+    workspaceId: string,
+    input: { message_id: string; operation_id: string; addressed_to: string[]; recorded_at: string },
+    exec?: DatabaseSync,
+  ): void {
+    const db = exec ?? this.tx.connection();
+    db.prepare(
+      `INSERT INTO operation_message_recipients
+         (workspace_id, message_id, operation_id, addressed_to_json, recorded_at)
+       VALUES (?, ?, ?, ?, ?)`,
+    ).run(
+      workspaceId,
+      input.message_id,
+      input.operation_id,
+      JSON.stringify(input.addressed_to),
+      input.recorded_at,
+    );
+  }
+
+  /**
+   * The stored addressing of one message: the resolved recipient Agent ids,
+   * or null when the message carries no addressing row (unaddressed → the
+   * read model reports []).
+   */
+  findMessageRecipients(workspaceId: string, messageId: string, exec?: DatabaseSync): string[] | null {
+    const db = exec ?? this.tx.connection();
+    const row = db
+      .prepare(
+        `SELECT addressed_to_json FROM operation_message_recipients
+         WHERE workspace_id = ? AND message_id = ?`,
+      )
+      .get(workspaceId, messageId) as { addressed_to_json: string } | undefined;
+    if (row === undefined) {
+      return null;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(row.addressed_to_json);
+    } catch {
+      throw new OperationRecordCorruptError("message recipients JSON (invalid JSON)");
+    }
+    if (
+      !Array.isArray(parsed) ||
+      parsed.some((agentId) => typeof agentId !== "string" || agentId.length === 0)
+    ) {
+      throw new OperationRecordCorruptError("message recipients JSON");
+    }
+    return parsed;
   }
 
   // -------------------------------------------------------------------------

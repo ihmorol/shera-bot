@@ -94,6 +94,26 @@
  * with PRIMARY KEY (workspace_id, stream_id, sequence) and workspace-scoped
  * event_id uniqueness — the same shape as the v1 journal. The run cursor and
  * the event row commit in the SAME transaction.
+ *
+ * v7 — Operation chat binding + message addressing (S13 chunk 3; D41, D7):
+ * an Operation chat IS a real conversation (D41 chat taxonomy), so the
+ * binding follows the v5 agent_direct_chats pattern: a dedicated mapping
+ * table, not a column on conversations. PRIMARY KEY (workspace_id,
+ * operation_id) makes "exactly one chat conversation per (workspace,
+ * operation)" unrepresentable to violate, and UNIQUE (workspace_id,
+ * conversation_id) keeps the mapping one-to-one; the conversation row is
+ * created in the SAME transaction as the binding, so no FOREIGN KEY is
+ * declared (the v4/v5/v6 discipline). The same operation_id in two
+ * workspaces binds two independent chats (E12).
+ *
+ * operation_message_recipients stores the @-addressing resolution of one
+ * Operation-chat message (D7 recipient semantics): when a message text
+ * mentions roster Agents, the runtime resolves the mentions against the
+ * Operation roster at SEND time and records the resolved recipient Agent ids
+ * here, keyed by (workspace_id, message_id) — the journal event payload stays
+ * verbatim (the literal text is never rewritten), and an absent row means the
+ * message was unaddressed (recipients = [], Operation-wide). The conversation
+ * aggregate itself stays agent-agnostic; this is Operation-domain metadata.
  */
 import type { DatabaseSync } from "node:sqlite";
 
@@ -338,6 +358,29 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
 
       CREATE INDEX IF NOT EXISTS operation_collaboration_events_by_operation_idx
         ON operation_collaboration_events (workspace_id, operation_id);
+    `,
+  },
+  {
+    version: 7,
+    name: "operation-chat-binding-and-addressing",
+    sql: `
+      CREATE TABLE IF NOT EXISTS operation_chats (
+        workspace_id    TEXT NOT NULL,
+        operation_id    TEXT NOT NULL,
+        conversation_id TEXT NOT NULL,
+        created_at      TEXT NOT NULL,
+        PRIMARY KEY (workspace_id, operation_id),
+        UNIQUE (workspace_id, conversation_id)
+      ) STRICT;
+
+      CREATE TABLE IF NOT EXISTS operation_message_recipients (
+        workspace_id      TEXT NOT NULL,
+        message_id        TEXT NOT NULL,
+        operation_id      TEXT NOT NULL,
+        addressed_to_json TEXT NOT NULL CHECK (json_valid(addressed_to_json)),
+        recorded_at       TEXT NOT NULL,
+        PRIMARY KEY (workspace_id, message_id)
+      ) STRICT;
     `,
   },
 ];

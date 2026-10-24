@@ -595,10 +595,12 @@ describe("S13 collaboration events over HTTP (D7/D26) and delegation (D34/D46)",
       const firstChildId = first.body["child_run_id"] as string;
       expect(typeof firstChildId).toBe("string");
 
-      const runsAfterFirst = (await getJson(
-        running.origin,
-        `/v1/operations/${running.operationId}/runs?workspace_id=${WORKSPACE}`,
-      ))["runs"] as Array<Record<string, unknown>>;
+      const runsAfterFirst = (
+        (await getJson(
+          running.origin,
+          `/v1/operations/${running.operationId}/runs?workspace_id=${WORKSPACE}`,
+        )).body["runs"]
+      ) as Array<Record<string, unknown>>;
       const children = runsAfterFirst.filter((run) => run["parent_task_id"] === "run_parent_001");
       expect(children).toHaveLength(1);
       expect(children[0]!["run_id"]).toBe(firstChildId);
@@ -610,10 +612,12 @@ describe("S13 collaboration events over HTTP (D7/D26) and delegation (D34/D46)",
       expect(replay.status).toBe(201);
       expect(replay.body).toMatchObject({ created: false, child_run_id: firstChildId });
 
-      const runsAfterReplay = (await getJson(
-        running.origin,
-        `/v1/operations/${running.operationId}/runs?workspace_id=${WORKSPACE}`,
-      ))["runs"] as Array<Record<string, unknown>>;
+      const runsAfterReplay = (
+        (await getJson(
+          running.origin,
+          `/v1/operations/${running.operationId}/runs?workspace_id=${WORKSPACE}`,
+        )).body["runs"]
+      ) as Array<Record<string, unknown>>;
       expect(
         runsAfterReplay.filter((run) => run["parent_task_id"] === "run_parent_001"),
       ).toHaveLength(1);

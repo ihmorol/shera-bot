@@ -835,6 +835,81 @@ describe("S13 operation thread read model + @-addressing (D41, D7)", () => {
   });
 });
 
+describe("S13 AC8 — the chat stays usable after runs complete", () => {
+  it("accepts a follow-up message and a NEW run after a run reaches a terminal state", async () => {
+    const dir = makeTempDir("shera-runtime-s13-ac8-after-run-");
+    const running = await composeWithOperation(join(dir, "runtime.db"));
+    const opId = running.operationId;
+    try {
+      const run = await postJson(running.origin, `/v1/operations/${opId}/runs`, {
+        workspace_id: WORKSPACE,
+      });
+      expect(run.status).toBe(201);
+      const runId = run.body["run_id"] as string;
+
+      // Drive the run to a terminal state through the composed runtime's
+      // service seam (in-process: applyRunState validates the D8 vocabulary;
+      // transition LEGALITY is the runtime gateway's job, and no HTTP route
+      // exposes state writes in this slice).
+      const finished = running.runtime.operations.applyRunState(
+        WORKSPACE,
+        opId,
+        runId,
+        "SUCCEEDED",
+      );
+      expect(finished.state).toBe("SUCCEEDED");
+
+      // The thread accepts a follow-up message AFTER the run is terminal.
+      const sent = await postJson(running.origin, `/v1/operations/${opId}/thread/messages`, {
+        workspace_id: WORKSPACE,
+        idempotency_key: "idem_ac8_after_terminal_1",
+        sender: { kind: "user", display_name: "Emon" },
+        text: "the run finished — @agent_researcher please summarize",
+      });
+      expect(sent.status).toBe(201);
+      expect(sent.body).toMatchObject({
+        kind: "message_sent",
+        addressed_to: [RESEARCHER],
+        created: true,
+      });
+
+      // A NEW run can be created afterwards.
+      const next = await postJson(running.origin, `/v1/operations/${opId}/runs`, {
+        workspace_id: WORKSPACE,
+        run_id: "run_ac8_followup",
+      });
+      expect(next.status).toBe(201);
+      expect(next.body).toMatchObject({ run_id: "run_ac8_followup", state: "CREATED" });
+
+      // Both appear: the thread renders the follow-up message and the runs
+      // list shows the terminal run BESIDE the new one.
+      const thread = await getJson(
+        running.origin,
+        `/v1/operations/${opId}/thread?workspace_id=${WORKSPACE}`,
+      );
+      expect(thread.status).toBe(200);
+      expect(messageItems(thread.body).map((item) => item["text"])).toEqual([
+        "the run finished — @agent_researcher please summarize",
+      ]);
+      const runs = await getJson(
+        running.origin,
+        `/v1/operations/${opId}/runs?workspace_id=${WORKSPACE}`,
+      );
+      expect(runs.status).toBe(200);
+      const stateById = new Map(
+        (runs.body["runs"] as Array<Record<string, unknown>>).map((row) => [
+          row["run_id"],
+          row["state"],
+        ]),
+      );
+      expect(stateById.get(runId)).toBe("SUCCEEDED");
+      expect(stateById.get("run_ac8_followup")).toBe("CREATED");
+    } finally {
+      await running.close();
+    }
+  });
+});
+
 describe("S13 typed failures + workspace scoping (E12)", () => {
   it("unknown operation → typed 404 on every route; foreign workspaces cannot reach it", async () => {
     const dir = makeTempDir("shera-runtime-s13-scoping-");

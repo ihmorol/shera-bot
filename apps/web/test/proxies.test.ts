@@ -424,7 +424,9 @@ describe("runtime proxy — S13 Operation surfaces (allowlist additions)", () =>
     const response = await proxyToLocalApi(request, "/v1/operations");
 
     expect(response.status).toBe(200);
-    expect(calls.at(-1)?.input).toBe(`${CONTROL_BASE}/api/runtime/local/v1/operations?workspace_id=ws_1`);
+    expect(calls.at(-1)?.input).toBe(
+      `${CONTROL_BASE}/api/runtime/local/v1/operations?workspace_id=ws_1`,
+    );
   });
 
   it("forwards the Operation detail read (roster + runs + refusals + chat binding)", async () => {
@@ -505,7 +507,10 @@ describe("runtime proxy — S13 Operation surfaces (allowlist additions)", () =>
         headers: { "content-type": "application/json" },
       },
     );
-    const response = await proxyToLocalApi(request, "/v1/operations/op_research_01/roster/commands");
+    const response = await proxyToLocalApi(
+      request,
+      "/v1/operations/op_research_01/roster/commands",
+    );
 
     expect(response.status).toBe(200);
     const call = calls.at(-1)!;
@@ -600,14 +605,11 @@ describe("runtime proxy — S13 Operation surfaces (allowlist additions)", () =>
       }),
     );
 
-    const request = new Request(
-      "http://web.test/api/runtime/v1/operations/op_research_01/events",
-      {
-        method: "POST",
-        body: JSON.stringify({ workspace_id: "ws_1" }),
-        headers: { "content-type": "application/json" },
-      },
-    );
+    const request = new Request("http://web.test/api/runtime/v1/operations/op_research_01/events", {
+      method: "POST",
+      body: JSON.stringify({ workspace_id: "ws_1" }),
+      headers: { "content-type": "application/json" },
+    });
     const response = await proxyToLocalApi(request, "/v1/operations/op_research_01/events");
 
     expect(response.status).toBe(404);

@@ -410,10 +410,7 @@ export function sqliteTableExists(db: DatabaseSync, tableName: string): boolean 
     Record<string, string | number | bigint | null>
   >;
   return rows.some(
-    (row) =>
-      row.schema === "main" &&
-      row.type === "table" &&
-      row.name === tableName,
+    (row) => row.schema === "main" && row.type === "table" && row.name === tableName,
   );
 }
 

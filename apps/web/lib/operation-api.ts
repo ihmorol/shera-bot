@@ -431,7 +431,11 @@ export function buildOperationRosterCommand(
   const parsed =
     action.type === "operation.add_roster_agent"
       ? AddRosterAgentCommand.parse({ ...action, ...envelope, actor: AGENT_SETTINGS_USER_ACTOR })
-      : RemoveRosterAgentCommand.parse({ ...action, ...envelope, actor: AGENT_SETTINGS_USER_ACTOR });
+      : RemoveRosterAgentCommand.parse({
+          ...action,
+          ...envelope,
+          actor: AGENT_SETTINGS_USER_ACTOR,
+        });
   return parsed;
 }
 

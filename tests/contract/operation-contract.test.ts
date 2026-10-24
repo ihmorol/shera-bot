@@ -29,19 +29,14 @@ type AnyResult = {
   error?: { issues: Array<{ code: string; path: unknown[]; message: string }> };
 };
 
-function expectTypedIssue(
-  result: AnyResult,
-  expectedPath: string,
-  expectedCode: string,
-): void {
+function expectTypedIssue(result: AnyResult, expectedPath: string, expectedCode: string): void {
   expect(result.success).toBe(false);
   if (result.success) {
     return;
   }
   const issue = result.error.issues.find(
     (candidate) =>
-      candidate.code === expectedCode &&
-      candidate.path.map(String).join(".") === expectedPath,
+      candidate.code === expectedCode && candidate.path.map(String).join(".") === expectedPath,
   );
   expect(
     issue,
@@ -49,9 +44,7 @@ function expectTypedIssue(
   ).toBeDefined();
 }
 
-function baseOperationRecord(
-  overrides: Record<string, unknown> = {},
-): Record<string, unknown> {
+function baseOperationRecord(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     operation_id: "op_001",
     workspace_id: "ws_default_01",
@@ -100,9 +93,7 @@ function baseRosterCommandEnvelope(): Record<string, unknown> {
   };
 }
 
-function baseAddCommand(
-  overrides: Record<string, unknown> = {},
-): Record<string, unknown> {
+function baseAddCommand(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     ...baseRosterCommandEnvelope(),
     type: "operation.add_roster_agent",
@@ -161,10 +152,8 @@ describe("Operation record contract (D31, D42, D49)", () => {
     expect(result.success, JSON.stringify(result)).toBe(true);
   });
 
-  it("accepts the coordinator literal \"none\" (D42/D49)", () => {
-    const result = OperationRecord.safeParse(
-      baseOperationRecord({ coordinator_agent_id: "none" }),
-    );
+  it('accepts the coordinator literal "none" (D42/D49)', () => {
+    const result = OperationRecord.safeParse(baseOperationRecord({ coordinator_agent_id: "none" }));
     expect(result.success).toBe(true);
   });
 
@@ -176,23 +165,17 @@ describe("Operation record contract (D31, D42, D49)", () => {
   });
 
   it("rejects an empty coordinator agent id", () => {
-    const result = OperationRecord.safeParse(
-      baseOperationRecord({ coordinator_agent_id: "" }),
-    );
+    const result = OperationRecord.safeParse(baseOperationRecord({ coordinator_agent_id: "" }));
     expect(result.success).toBe(false);
   });
 
   it("rejects an unknown status", () => {
-    const result = OperationRecord.safeParse(
-      baseOperationRecord({ status: "paused" }),
-    );
+    const result = OperationRecord.safeParse(baseOperationRecord({ status: "paused" }));
     expect(result.success).toBe(false);
   });
 
   it("rejects a missing name with a typed error", () => {
-    const result = OperationRecord.safeParse(
-      baseOperationRecord({ name: undefined }),
-    );
+    const result = OperationRecord.safeParse(baseOperationRecord({ name: undefined }));
     expectTypedIssue(result as AnyResult, "name", "invalid_type");
   });
 
@@ -242,9 +225,9 @@ describe("Roster-change command contracts (D36)", () => {
       }),
     );
     expect(result.success).toBe(false);
-    expect(
-      result.success ? "" : JSON.stringify(result.error.issues),
-    ).toContain("cost-increase-needs-approval");
+    expect(result.success ? "" : JSON.stringify(result.error.issues)).toContain(
+      "cost-increase-needs-approval",
+    );
   });
 
   it("refuses a foreign-pack addition outright with a typed refusal code", () => {
@@ -259,9 +242,9 @@ describe("Roster-change command contracts (D36)", () => {
       }),
     );
     expect(result.success).toBe(false);
-    expect(
-      result.success ? "" : JSON.stringify(result.error.issues),
-    ).toContain("foreign-pack-refused");
+    expect(result.success ? "" : JSON.stringify(result.error.issues)).toContain(
+      "foreign-pack-refused",
+    );
   });
 
   it("parses a roster removal command (D49: removable at any time)", () => {
@@ -299,9 +282,7 @@ describe("Roster-change command contracts (D36)", () => {
         agent_id: "agent_developer",
         pack_id: "agent-packs/other/v1",
       });
-      expect(result.success, `refusal code ${refusal_code} should parse`).toBe(
-        true,
-      );
+      expect(result.success, `refusal code ${refusal_code} should parse`).toBe(true);
     }
     const unknown = RosterRefusal.safeParse({
       refusal_code: "because-i-said-so",
@@ -318,9 +299,7 @@ describe("Operation run contract (D31, D34, D46)", () => {
   });
 
   it("accepts a run with parent_task_id set (D34/D46 delegation link)", () => {
-    const result = OperationRun.safeParse(
-      baseRun({ parent_task_id: "task_042" }),
-    );
+    const result = OperationRun.safeParse(baseRun({ parent_task_id: "task_042" }));
     expect(result.success).toBe(true);
   });
 
@@ -335,9 +314,7 @@ describe("Operation run contract (D31, D34, D46)", () => {
   });
 
   it("rejects a negative events_seq_cursor", () => {
-    const result = OperationRun.safeParse(
-      baseRun({ events_seq_cursor: -1 }),
-    );
+    const result = OperationRun.safeParse(baseRun({ events_seq_cursor: -1 }));
     expect(result.success).toBe(false);
   });
 });
@@ -361,9 +338,7 @@ describe("D7 collaboration event union", () => {
 
   for (const [type, payload] of Object.entries(D7_PAYLOAD_SAMPLES)) {
     it(`parses a valid ${type} event`, () => {
-      const result = OperationCollaborationEvent.safeParse(
-        collaborationEvent(type, payload),
-      );
+      const result = OperationCollaborationEvent.safeParse(collaborationEvent(type, payload));
       expect(result.success, JSON.stringify(result)).toBe(true);
     });
 
@@ -389,9 +364,7 @@ describe("D7 collaboration event union", () => {
     if (!result.success) {
       expect(result.error.issues.length).toBeGreaterThan(0);
       expect(
-        result.error.issues.every(
-          (issue: { code: string }) => typeof issue.code === "string",
-        ),
+        result.error.issues.every((issue: { code: string }) => typeof issue.code === "string"),
       ).toBe(true);
     }
   });
@@ -407,9 +380,7 @@ describe("D7 collaboration event union", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(
-        result.error.issues.some(
-          (issue: { code: string }) => issue.code === "unrecognized_keys",
-        ),
+        result.error.issues.some((issue: { code: string }) => issue.code === "unrecognized_keys"),
         JSON.stringify(result.error.issues),
       ).toBe(true);
     }
@@ -417,9 +388,13 @@ describe("D7 collaboration event union", () => {
 
   it("rejects a run_id that is neither null nor a string", () => {
     const result = OperationCollaborationEvent.safeParse(
-      collaborationEvent("ProgressReported", { progress_text: "ok" }, {
-        run_id: 5,
-      }),
+      collaborationEvent(
+        "ProgressReported",
+        { progress_text: "ok" },
+        {
+          run_id: 5,
+        },
+      ),
     );
     expectTypedIssue(result as AnyResult, "run_id", "invalid_type");
   });

@@ -203,7 +203,11 @@ const THREAD: OperationThreadPayload = {
       kind: "collaboration_event",
       sequence: 2,
       stream_id: "stream_operation_chat_01",
-      sender: { kind: "agent", agent_id: RESEARCHER.agent_id, display_name: RESEARCHER.display_name },
+      sender: {
+        kind: "agent",
+        agent_id: RESEARCHER.agent_id,
+        display_name: RESEARCHER.display_name,
+      },
       event: collaborationEvent(
         "ProgressReported",
         { progress_text: "Found 12 candidate sources." },
@@ -365,7 +369,9 @@ describe("Operation roster panel (§S4, D36/D42/D49)", () => {
       refusalMessage: "Adding this Agent increases cost or access and needs your approval first.",
     });
     expect(html).toContain('role="alert"');
-    expect(html).toContain("Adding this Agent increases cost or access and needs your approval first.");
+    expect(html).toContain(
+      "Adding this Agent increases cost or access and needs your approval first.",
+    );
   });
 
   it("falls back to the detail read model's most recent persisted refusal (the UI's why)", () => {
@@ -737,9 +743,9 @@ describe("Operation client (proxy paths)", () => {
   });
 
   it("submitOperationRosterCommand parses the applied/refused outcome union", async () => {
-    const applied = vi.fn().mockResolvedValue(
-      jsonResponse(200, { outcome: "applied", operation: OPERATION }),
-    );
+    const applied = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(200, { outcome: "applied", operation: OPERATION }));
     vi.stubGlobal("fetch", applied);
     const command = buildOperationRosterCommand(
       { type: "operation.remove_roster_agent", agent_id: RESEARCHER.agent_id },

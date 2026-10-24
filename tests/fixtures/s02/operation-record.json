@@ -8,15 +8,8 @@
   "pinning": {
     "pack_id": "agent-packs/student/v1",
     "pack_version": "1.0.0",
-    "roster_agent_ids": [
-      "agent_general_assistant",
-      "agent_researcher",
-      "agent_citation_manager"
-    ],
-    "capabilities": [
-      "skill_planning_core",
-      "skill_source_search"
-    ],
+    "roster_agent_ids": ["agent_general_assistant", "agent_researcher", "agent_citation_manager"],
+    "capabilities": ["skill_planning_core", "skill_source_search"],
     "provider_snapshot": {
       "provider_id": "provider_platform",
       "model": "platform-default"

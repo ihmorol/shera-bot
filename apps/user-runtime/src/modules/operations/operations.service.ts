@@ -65,7 +65,10 @@ import {
 } from "@shera-bot/contracts";
 
 import type { PackAgentSeed } from "../../adapters/sqlite/agents-repository.ts";
-import { CommandReceiptsRepository, isReceiptKeyConflict } from "../../adapters/sqlite/command-receipts-repository.ts";
+import {
+  CommandReceiptsRepository,
+  isReceiptKeyConflict,
+} from "../../adapters/sqlite/command-receipts-repository.ts";
 import type { ConversationsRepository } from "../../adapters/sqlite/conversations-repository.ts";
 import type { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
 import {
@@ -208,7 +211,9 @@ export interface OperationsServiceDeps {
  * Post-commit live fanout for the Operation chat (the WebSocket layer
  * implements it; the same containment rules as every other stream).
  */
-export type OperationChatPublisher = (event: ConversationCreatedEvent | MessageAppendedEvent) => void;
+export type OperationChatPublisher = (
+  event: ConversationCreatedEvent | MessageAppendedEvent,
+) => void;
 
 /**
  * The packless default: no pack claims any agent, so every roster/coordinator
@@ -269,8 +274,7 @@ export interface OperationMessageSendResult {
 
 /** Sender attribution on a thread item: user display name or Agent id. */
 export type OperationMessageSender =
-  | { kind: "user"; display_name: string }
-  | { kind: "agent"; agent_id: string };
+  { kind: "user"; display_name: string } | { kind: "agent"; agent_id: string };
 
 /**
  * One merged Operation-chat thread item (the runs panel/timeline read model):
@@ -370,7 +374,11 @@ export class OperationsService {
     agents: Pick<AgentsRepository, "getAgent"> | null;
     publish: OperationChatPublisher | null;
   } {
-    if (this.deps.conversations === undefined || this.deps.events === undefined || this.deps.journal === undefined) {
+    if (
+      this.deps.conversations === undefined ||
+      this.deps.events === undefined ||
+      this.deps.journal === undefined
+    ) {
       throw new OperationsServiceError(
         "OPERATION_COMMAND_INVALID",
         "state",
@@ -469,7 +477,10 @@ export class OperationsService {
   }
 
   /** The D36 membership rows (requires_approval flags included) of one operation. */
-  listRoster(workspaceId: string, operationId: string): ReturnType<OperationsRepository["listRoster"]> {
+  listRoster(
+    workspaceId: string,
+    operationId: string,
+  ): ReturnType<OperationsRepository["listRoster"]> {
     this.requireOperation(workspaceId, operationId);
     return this.deps.operations.listRoster(workspaceId, operationId);
   }
@@ -502,7 +513,11 @@ export class OperationsService {
     if (!parsed.success) {
       const refusal = this.refusalFromParseIssues(parsed.error.issues, scope.raw);
       if (refusal !== null) {
-        return { outcome: "refused", refusal, refusal_row: this.persistRefusal(workspaceId, operationId, refusal, scope.raw) };
+        return {
+          outcome: "refused",
+          refusal,
+          refusal_row: this.persistRefusal(workspaceId, operationId, refusal, scope.raw),
+        };
       }
       throw new OperationsServiceError(
         "OPERATION_COMMAND_INVALID",
@@ -593,7 +608,11 @@ export class OperationsService {
         parsed.data.agent_id,
         exec,
       );
-      const operation = this.deps.operations.getOperation(scope.workspace_id, scope.operation_id, exec);
+      const operation = this.deps.operations.getOperation(
+        scope.workspace_id,
+        scope.operation_id,
+        exec,
+      );
       if (operation === null) {
         throw new OperationsServiceError(
           "OPERATION_NOT_FOUND",
@@ -675,7 +694,11 @@ export class OperationsService {
    * ("none yet"), empty credits, no artifacts. Typed creation only (D34) —
    * the runtime gateway, never an agent, decides that a run exists.
    */
-  createRun(workspaceId: string, operationId: string, input: CreateOperationRunInput = {}): OperationRun {
+  createRun(
+    workspaceId: string,
+    operationId: string,
+    input: CreateOperationRunInput = {},
+  ): OperationRun {
     this.requireOperation(workspaceId, operationId);
 
     const runId = input.run_id ?? randomUUID();
@@ -757,7 +780,12 @@ export class OperationsService {
    * vocabulary. Transition LEGALITY (which state may follow which) belongs to
    * the runtime gateway — this never invents a second state machine.
    */
-  applyRunState(workspaceId: string, operationId: string, runId: string, state: string): OperationRun {
+  applyRunState(
+    workspaceId: string,
+    operationId: string,
+    runId: string,
+    state: string,
+  ): OperationRun {
     this.requireOperation(workspaceId, operationId);
     this.requireRunRow(workspaceId, operationId, runId);
     const parsed = RunState.safeParse(state);
@@ -773,7 +801,12 @@ export class OperationsService {
   }
 
   /** Replace the run's credits placeholder (D20/D22 shape arrives with the credits slice). */
-  recordRunCredits(workspaceId: string, operationId: string, runId: string, credits: unknown): OperationRun {
+  recordRunCredits(
+    workspaceId: string,
+    operationId: string,
+    runId: string,
+    credits: unknown,
+  ): OperationRun {
     this.requireOperation(workspaceId, operationId);
     this.requireRunRow(workspaceId, operationId, runId);
     const parsed = JsonObject.safeParse(credits);
@@ -789,7 +822,12 @@ export class OperationsService {
   }
 
   /** Publish one artifact id onto the run (idempotent; contract cap 100). */
-  publishRunArtifact(workspaceId: string, operationId: string, runId: string, artifactId: string): OperationRun {
+  publishRunArtifact(
+    workspaceId: string,
+    operationId: string,
+    runId: string,
+    artifactId: string,
+  ): OperationRun {
     this.requireOperation(workspaceId, operationId);
     const run = this.requireRunRow(workspaceId, operationId, runId);
     if (!Id.safeParse(artifactId).success) {
@@ -1078,7 +1116,11 @@ export class OperationsService {
     input: SendOperationMessageInput,
   ): OperationMessageSendResult {
     this.requireOperation(workspaceId, operationId);
-    if (typeof input.idempotency_key !== "string" || input.idempotency_key.length < 8 || input.idempotency_key.length > 200) {
+    if (
+      typeof input.idempotency_key !== "string" ||
+      input.idempotency_key.length < 8 ||
+      input.idempotency_key.length > 200
+    ) {
       throw new OperationsServiceError(
         "OPERATION_COMMAND_INVALID",
         "validation",
@@ -1206,7 +1248,9 @@ export class OperationsService {
    * Replay a recorded operation.message_send receipt, or null when no
    * receipt (or a foreign command family's receipt) sits on the key.
    */
-  private replayMessageReceipt(receipt: ReturnType<CommandReceiptsRepository["findById"]>): OperationMessageSendResult | null {
+  private replayMessageReceipt(
+    receipt: ReturnType<CommandReceiptsRepository["findById"]>,
+  ): OperationMessageSendResult | null {
     if (receipt === null || receipt.command_type !== "operation.message_send") {
       if (receipt !== null) {
         throw new OperationsServiceError(
@@ -1217,7 +1261,12 @@ export class OperationsService {
       }
       return null;
     }
-    let stored: { conversation_id?: unknown; message_id?: unknown; addressed_to?: unknown; event_id?: unknown };
+    let stored: {
+      conversation_id?: unknown;
+      message_id?: unknown;
+      addressed_to?: unknown;
+      event_id?: unknown;
+    };
     try {
       stored = JSON.parse(receipt.result_json) as typeof stored;
     } catch {
@@ -1267,11 +1316,19 @@ export class OperationsService {
     const after = options.after_sequence ?? 0;
     const items: OperationThreadItem[] = [];
 
-    for (const row of deps.journal.listStream(conversationStreamFor(chat.conversation_id), workspaceId)) {
+    for (const row of deps.journal.listStream(
+      conversationStreamFor(chat.conversation_id),
+      workspaceId,
+    )) {
       if (row.sequence <= after || row.event_type !== "message.appended") {
         continue;
       }
-      let payload: { message_id?: unknown; sender?: unknown; text?: unknown; conversation_id?: unknown };
+      let payload: {
+        message_id?: unknown;
+        sender?: unknown;
+        text?: unknown;
+        conversation_id?: unknown;
+      };
       try {
         payload = JSON.parse(row.payload) as typeof payload;
       } catch {
@@ -1285,7 +1342,10 @@ export class OperationsService {
       ) {
         throw new OperationRecordCorruptError("message.appended journal payload");
       }
-      const recipients = this.deps.operations.findMessageRecipients(workspaceId, payload.message_id);
+      const recipients = this.deps.operations.findMessageRecipients(
+        workspaceId,
+        payload.message_id,
+      );
       items.push({
         kind: "message",
         message_id: payload.message_id,
@@ -1301,8 +1361,7 @@ export class OperationsService {
     for (const persisted of this.deps.operations.listCollaborationEvents(workspaceId, operationId, {
       runId: undefined,
     })) {
-      const agent =
-        deps.agents?.getAgent(workspaceId, persisted.event.sender_agent_id) ?? null;
+      const agent = deps.agents?.getAgent(workspaceId, persisted.event.sender_agent_id) ?? null;
       items.push({
         kind: "collaboration_event",
         sequence: persisted.sequence,
@@ -1388,10 +1447,13 @@ export class OperationsService {
       throw new OperationsServiceError(
         "OPERATION_COMMAND_INVALID",
         "validation",
-        "coordinator_agent_id must be an Agent id or \"none\"",
+        'coordinator_agent_id must be an Agent id or "none"',
       );
     }
-    if (coordinator !== "none" && !this.catalog.agents.some((agent) => agent.agent_id === coordinator)) {
+    if (
+      coordinator !== "none" &&
+      !this.catalog.agents.some((agent) => agent.agent_id === coordinator)
+    ) {
       throw new OperationsServiceError(
         "OPERATION_COORDINATOR_NOT_FOUND",
         "state",
@@ -1440,9 +1502,12 @@ export class OperationsService {
     workspace_id: string;
     operation_id: string;
   } {
-    const raw = typeof command === "object" && command !== null ? (command as Record<string, unknown>) : null;
-    const workspaceId = raw !== null && typeof raw.workspace_id === "string" ? raw.workspace_id : null;
-    const operationId = raw !== null && typeof raw.operation_id === "string" ? raw.operation_id : null;
+    const raw =
+      typeof command === "object" && command !== null ? (command as Record<string, unknown>) : null;
+    const workspaceId =
+      raw !== null && typeof raw.workspace_id === "string" ? raw.workspace_id : null;
+    const operationId =
+      raw !== null && typeof raw.operation_id === "string" ? raw.operation_id : null;
     if (workspaceId === null || operationId === null) {
       throw new OperationsServiceError(
         "OPERATION_COMMAND_INVALID",

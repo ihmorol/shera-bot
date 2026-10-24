@@ -77,9 +77,7 @@ export function OperationRunsPanel({
                 </span>
                 <span>{run.events_seq_cursor} events</span>
                 <span>
-                  {run.artifacts.length === 1
-                    ? "1 artifact"
-                    : `${run.artifacts.length} artifacts`}
+                  {run.artifacts.length === 1 ? "1 artifact" : `${run.artifacts.length} artifacts`}
                 </span>
               </p>
               {run.parent_task_id ? (

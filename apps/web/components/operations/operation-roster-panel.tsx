@@ -4,10 +4,7 @@ import { AgentAvatar } from "@/components/chat/agent-avatar";
 import { ErrorState } from "@/components/shell/states";
 import { Button } from "@/components/ui/button";
 import type { AgentRosterSummary } from "@/lib/agent-api";
-import {
-  agentIdentityFromSummary,
-  type OperationRosterMember,
-} from "@/lib/operation-api";
+import { agentIdentityFromSummary, type OperationRosterMember } from "@/lib/operation-api";
 import { cn } from "@/lib/utils";
 
 /**
@@ -86,7 +83,10 @@ export function OperationRosterPanel({
   if (state === "error") {
     return (
       <div className={cn("px-4 py-3", className)}>
-        <ErrorState safeMessage={safeErrorMessage ?? "The Operation could not be loaded."} onRetry={onRetry} />
+        <ErrorState
+          safeMessage={safeErrorMessage ?? "The Operation could not be loaded."}
+          onRetry={onRetry}
+        />
       </div>
     );
   }
@@ -188,58 +188,59 @@ export function OperationRosterPanel({
             </li>
           );
         })}
-        {coordinatorAgentId !== "none" && !roster.some((member) => member.agent_id === coordinatorAgentId) ? (
-          // D46: the coordinator is present in every Operation BY ROLE, not by
-          // roster assignment — when the coordinating Agent holds no membership
-          // the chip still renders (identity from the workspace roster), with
-          // the coordinator-remove action only (nothing to remove from the
-          // roster it is not on).
-          (() => {
-            const identity = identityFor(coordinatorAgentId);
-            const displayName = identity?.display_name ?? coordinatorAgentId;
-            return (
-              <li
-                data-testid="operation-roster-chip"
-                data-coordinator="true"
-                className="flex min-w-0 items-center gap-2 rounded-xl border border-line-accent bg-surface-elevated px-3 py-2"
-              >
-                {identity ? (
-                  <AgentAvatar agent={agentIdentityFromSummary(identity)} size="sm" />
-                ) : (
-                  <span
-                    aria-hidden="true"
-                    className="flex size-6 shrink-0 items-center justify-center rounded-full bg-surface font-mono text-[10px] text-muted"
-                  >
-                    ?
-                  </span>
-                )}
-                <span className="min-w-0">
-                  <span className="flex items-center gap-1.5">
-                    <span className="truncate text-sm text-text">{displayName}</span>
-                    <span className="rounded-full bg-brand px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-text">
-                      Coordinator
-                    </span>
-                  </span>
-                  {identity?.role_description ? (
-                    <span className="block truncate text-xs text-muted">
-                      {identity.role_description}
-                    </span>
-                  ) : null}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="-my-1"
-                  disabled={pending}
-                  onClick={() => onCoordinatorChange("none")}
-                  aria-label="Remove the coordinator role"
+        {coordinatorAgentId !== "none" &&
+        !roster.some((member) => member.agent_id === coordinatorAgentId)
+          ? // D46: the coordinator is present in every Operation BY ROLE, not by
+            // roster assignment — when the coordinating Agent holds no membership
+            // the chip still renders (identity from the workspace roster), with
+            // the coordinator-remove action only (nothing to remove from the
+            // roster it is not on).
+            (() => {
+              const identity = identityFor(coordinatorAgentId);
+              const displayName = identity?.display_name ?? coordinatorAgentId;
+              return (
+                <li
+                  data-testid="operation-roster-chip"
+                  data-coordinator="true"
+                  className="flex min-w-0 items-center gap-2 rounded-xl border border-line-accent bg-surface-elevated px-3 py-2"
                 >
-                  Remove
-                </Button>
-              </li>
-            );
-          })()
-        ) : null}
+                  {identity ? (
+                    <AgentAvatar agent={agentIdentityFromSummary(identity)} size="sm" />
+                  ) : (
+                    <span
+                      aria-hidden="true"
+                      className="flex size-6 shrink-0 items-center justify-center rounded-full bg-surface font-mono text-[10px] text-muted"
+                    >
+                      ?
+                    </span>
+                  )}
+                  <span className="min-w-0">
+                    <span className="flex items-center gap-1.5">
+                      <span className="truncate text-sm text-text">{displayName}</span>
+                      <span className="rounded-full bg-brand px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-text">
+                        Coordinator
+                      </span>
+                    </span>
+                    {identity?.role_description ? (
+                      <span className="block truncate text-xs text-muted">
+                        {identity.role_description}
+                      </span>
+                    ) : null}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="-my-1"
+                    disabled={pending}
+                    onClick={() => onCoordinatorChange("none")}
+                    aria-label="Remove the coordinator role"
+                  >
+                    Remove
+                  </Button>
+                </li>
+              );
+            })()
+          : null}
       </ul>
 
       {confirmingAdd && !pending ? (

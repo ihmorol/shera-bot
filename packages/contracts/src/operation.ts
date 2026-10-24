@@ -288,8 +288,7 @@ export const OPERATION_COLLABORATION_EVENT_TYPES = [
   "TaskCompleted",
   "HandoffRequested",
 ] as const;
-export type OperationCollaborationEventType =
-  (typeof OPERATION_COLLABORATION_EVENT_TYPES)[number];
+export type OperationCollaborationEventType = (typeof OPERATION_COLLABORATION_EVENT_TYPES)[number];
 
 const OperationCollaborationEventEnvelope = {
   event_id: Id,

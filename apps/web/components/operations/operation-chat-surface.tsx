@@ -11,10 +11,7 @@ import { OperationThreadView } from "@/components/operations/operation-thread";
 import { ContainerGate } from "@/components/shell/container-gate";
 import { EmptyState, SurfaceFrame } from "@/components/shell/surface-frame";
 import type { AgentRosterSummary } from "@/lib/agent-api";
-import {
-  safeRuntimeMessage,
-  useAgentRoster as useWorkspaceRoster,
-} from "@/lib/agent-data";
+import { safeRuntimeMessage, useAgentRoster as useWorkspaceRoster } from "@/lib/agent-data";
 import { useContainerResolution, useSessionIdentity } from "@/lib/container-connection";
 import { operationInstanceById, rosterSubtitle } from "@/lib/fixtures";
 import { findOperationTemplate } from "@/lib/navigation";
@@ -341,10 +338,7 @@ function RuntimeNewOperation({ workspaceId }: { workspaceId: string }) {
         pending={createOperation.isPending}
         errorMessage={
           createOperation.isError
-            ? safeRuntimeMessage(
-                createOperation.error,
-                "The Operation could not be created.",
-              )
+            ? safeRuntimeMessage(createOperation.error, "The Operation could not be created.")
             : null
         }
         defaultCoordinatorId={DEFAULT_COORDINATOR_ID}

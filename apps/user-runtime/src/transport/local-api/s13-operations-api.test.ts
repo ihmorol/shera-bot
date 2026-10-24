@@ -155,7 +155,11 @@ async function composeWithOperation(
   createExtra: Record<string, unknown> = {},
 ): Promise<RunningWithOperation> {
   const running = await composeOn(dbPath);
-  const created = await postJson(running.origin, "/v1/operations", createOperationBody(createExtra));
+  const created = await postJson(
+    running.origin,
+    "/v1/operations",
+    createOperationBody(createExtra),
+  );
   expect(created.status).toBe(201);
   return { ...running, operationId: created.body["operation_id"] as string };
 }
@@ -242,7 +246,11 @@ describe("S13 Operation API — create, list, detail (D31, D29, D36, D41)", () =
     const dir = makeTempDir("shera-runtime-s13-create-failures-");
     const running = await composeOn(join(dir, "runtime.db"));
     try {
-      const malformed = await postJson(running.origin, "/v1/operations", createOperationBody({ name: "" }));
+      const malformed = await postJson(
+        running.origin,
+        "/v1/operations",
+        createOperationBody({ name: "" }),
+      );
       expect(malformed.status).toBe(400);
       expect(malformed.body).toMatchObject({ code: "CONTRACT_VALIDATION_FAILED" });
 
@@ -279,12 +287,14 @@ describe("S13 roster commands over HTTP (D36)", () => {
     const commandsPath = `/v1/operations/${running.operationId}/roster/commands`;
     try {
       // Same-pack low-risk add applies.
-      const applied = await postJson(running.origin, commandsPath, addRosterCommand(running.operationId));
+      const applied = await postJson(
+        running.origin,
+        commandsPath,
+        addRosterCommand(running.operationId),
+      );
       expect(applied.status).toBe(200);
       expect(applied.body).toMatchObject({ outcome: "applied" });
-      expect(
-        (applied.body["operation"] as Record<string, unknown>)["pinning"],
-      ).toMatchObject({
+      expect((applied.body["operation"] as Record<string, unknown>)["pinning"]).toMatchObject({
         roster_agent_ids: expect.arrayContaining([RESEARCHER, CITATION, DEVELOPER]),
       });
 
@@ -468,10 +478,14 @@ describe("S13 runs over HTTP (D31/AC24, D8 vocabulary, D26 cursor)", () => {
       expect(missing.body).toMatchObject({ code: "OPERATION_RUN_NOT_FOUND" });
 
       // Run ids may never take the reserved Operation-chat stream prefix.
-      const reserved = await postJson(running.origin, `/v1/operations/${running.operationId}/runs`, {
-        workspace_id: WORKSPACE,
-        run_id: "operation:evil",
-      });
+      const reserved = await postJson(
+        running.origin,
+        `/v1/operations/${running.operationId}/runs`,
+        {
+          workspace_id: WORKSPACE,
+          run_id: "operation:evil",
+        },
+      );
       expect(reserved.status).toBe(400);
       expect(reserved.body).toMatchObject({ code: "OPERATION_COMMAND_INVALID" });
     } finally {
@@ -528,7 +542,10 @@ describe("S13 collaboration events over HTTP (D7/D26) and delegation (D34/D46)",
       });
       expect(malformed.status).toBe(400);
       const mismatched = await postJson(running.origin, eventsPath, {
-        ...collaborationEvent(running.operationId, { event_id: "evt_bad", operation_id: "op_other" }),
+        ...collaborationEvent(running.operationId, {
+          event_id: "evt_bad",
+          operation_id: "op_other",
+        }),
       });
       expect(mismatched.status).toBe(400);
     } finally {
@@ -540,12 +557,16 @@ describe("S13 collaboration events over HTTP (D7/D26) and delegation (D34/D46)",
     const dir = makeTempDir("shera-runtime-s13-thread-events-");
     const running = await composeWithOperation(join(dir, "runtime.db"));
     try {
-      const appended = await postJson(running.origin, `/v1/operations/${running.operationId}/events`, {
-        ...collaborationEvent(running.operationId, {
-          event_id: "evt_thread_001",
-          sender_agent_id: RESEARCHER,
-        }),
-      });
+      const appended = await postJson(
+        running.origin,
+        `/v1/operations/${running.operationId}/events`,
+        {
+          ...collaborationEvent(running.operationId, {
+            event_id: "evt_thread_001",
+            sender_agent_id: RESEARCHER,
+          }),
+        },
+      );
       expect(appended.status).toBe(201);
 
       const thread = await getJson(
@@ -598,11 +619,11 @@ describe("S13 collaboration events over HTTP (D7/D26) and delegation (D34/D46)",
       expect(typeof firstChildId).toBe("string");
 
       const runsAfterFirst = (
-        (await getJson(
+        await getJson(
           running.origin,
           `/v1/operations/${running.operationId}/runs?workspace_id=${WORKSPACE}`,
-        )).body["runs"]
-      ) as Array<Record<string, unknown>>;
+        )
+      ).body["runs"] as Array<Record<string, unknown>>;
       const children = runsAfterFirst.filter((run) => run["parent_task_id"] === "run_parent_001");
       expect(children).toHaveLength(1);
       expect(children[0]!["run_id"]).toBe(firstChildId);
@@ -615,11 +636,11 @@ describe("S13 collaboration events over HTTP (D7/D26) and delegation (D34/D46)",
       expect(replay.body).toMatchObject({ created: false, child_run_id: firstChildId });
 
       const runsAfterReplay = (
-        (await getJson(
+        await getJson(
           running.origin,
           `/v1/operations/${running.operationId}/runs?workspace_id=${WORKSPACE}`,
-        )).body["runs"]
-      ) as Array<Record<string, unknown>>;
+        )
+      ).body["runs"] as Array<Record<string, unknown>>;
       expect(
         runsAfterReplay.filter((run) => run["parent_task_id"] === "run_parent_001"),
       ).toHaveLength(1);
@@ -713,9 +734,9 @@ describe("S13 operation thread read model + @-addressing (D41, D7)", () => {
         running.origin,
         `/v1/operations/${running.operationId}/thread?workspace_id=${WORKSPACE}&after=${cursor}`,
       );
-      expect(
-        messageItems(paged.body).map((item) => item["message_id"]),
-      ).toEqual(messages.slice(2).map((item) => item["message_id"]));
+      expect(messageItems(paged.body).map((item) => item["message_id"])).toEqual(
+        messages.slice(2).map((item) => item["message_id"]),
+      );
 
       // The binding get-or-create journaled the conversation like every chat.
       const events = await getJson(
@@ -798,7 +819,10 @@ describe("S13 typed failures + workspace scoping (E12)", () => {
       expect(foreignCommand.status).toBe(404);
       expect(foreignCommand.body).toMatchObject({ code: "OPERATION_NOT_FOUND" });
 
-      const foreignList = await getJson(running.origin, "/v1/operations?workspace_id=ws-s13-foreign");
+      const foreignList = await getJson(
+        running.origin,
+        "/v1/operations?workspace_id=ws-s13-foreign",
+      );
       expect(foreignList.status).toBe(200);
       expect(foreignList.body["operations"]).toEqual([]);
     } finally {

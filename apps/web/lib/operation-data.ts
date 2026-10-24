@@ -36,7 +36,10 @@ import {
 
 const GENERIC_OPERATION_ERROR_MESSAGE = "The Operation data could not be loaded.";
 
-export function safeOperationMessage(error: unknown, fallback = GENERIC_OPERATION_ERROR_MESSAGE): string {
+export function safeOperationMessage(
+  error: unknown,
+  fallback = GENERIC_OPERATION_ERROR_MESSAGE,
+): string {
   if (error instanceof RuntimeApiError) {
     return error.sheraError.safe_message;
   }
@@ -62,13 +65,21 @@ export function useOperationsList(workspaceId: string): {
   });
 
   if (listQuery.isPending) {
-    return { state: "loading", operations: [], safeErrorMessage: undefined, refetch: () => undefined };
+    return {
+      state: "loading",
+      operations: [],
+      safeErrorMessage: undefined,
+      refetch: () => undefined,
+    };
   }
   if (listQuery.isError) {
     return {
       state: "error",
       operations: [],
-      safeErrorMessage: safeOperationMessage(listQuery.error, "The Operations could not be loaded."),
+      safeErrorMessage: safeOperationMessage(
+        listQuery.error,
+        "The Operations could not be loaded.",
+      ),
       refetch: () => void listQuery.refetch(),
     };
   }
@@ -84,7 +95,10 @@ export function useOperationsList(workspaceId: string): {
 // Operation detail (GET /v1/operations/:id — roster + runs + refusals)
 // ---------------------------------------------------------------------------
 
-export function useOperationDetail(workspaceId: string, operationId: string): {
+export function useOperationDetail(
+  workspaceId: string,
+  operationId: string,
+): {
   state: "loading" | "ready" | "error";
   detail: OperationDetail | null;
   safeErrorMessage: string | undefined;
@@ -99,7 +113,12 @@ export function useOperationDetail(workspaceId: string, operationId: string): {
   });
 
   if (detailQuery.isPending) {
-    return { state: "loading", detail: null, safeErrorMessage: undefined, refetch: () => undefined };
+    return {
+      state: "loading",
+      detail: null,
+      safeErrorMessage: undefined,
+      refetch: () => undefined,
+    };
   }
   if (detailQuery.isError) {
     return {
@@ -143,7 +162,12 @@ export function useOperationThread(
   });
 
   if (threadQuery.isPending) {
-    return { state: "loading", thread: null, safeErrorMessage: undefined, refetch: () => undefined };
+    return {
+      state: "loading",
+      thread: null,
+      safeErrorMessage: undefined,
+      refetch: () => undefined,
+    };
   }
   if (threadQuery.isError) {
     return {
@@ -185,7 +209,9 @@ export function useRosterCommand(workspaceId: string, operationId: string) {
         }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["operation-detail", workspaceId, operationId] });
+      void queryClient.invalidateQueries({
+        queryKey: ["operation-detail", workspaceId, operationId],
+      });
     },
   });
 }
@@ -197,7 +223,9 @@ export function useCoordinatorCommand(workspaceId: string, operationId: string) 
     mutationFn: (coordinatorAgentId: string) =>
       setOperationCoordinator(workspaceId, operationId, coordinatorAgentId),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["operation-detail", workspaceId, operationId] });
+      void queryClient.invalidateQueries({
+        queryKey: ["operation-detail", workspaceId, operationId],
+      });
     },
   });
 }
@@ -208,7 +236,9 @@ export function useCreateRun(workspaceId: string, operationId: string) {
   return useMutation({
     mutationFn: () => createOperationRun(workspaceId, operationId),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["operation-detail", workspaceId, operationId] });
+      void queryClient.invalidateQueries({
+        queryKey: ["operation-detail", workspaceId, operationId],
+      });
     },
   });
 }
@@ -224,7 +254,9 @@ export function useSendOperationMessage(workspaceId: string, operationId: string
     mutationFn: (input: { text: string; displayName: string; idempotencyKey: string }) =>
       sendOperationChatMessage(workspaceId, operationId, input),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["operation-thread", workspaceId, operationId] });
+      void queryClient.invalidateQueries({
+        queryKey: ["operation-thread", workspaceId, operationId],
+      });
     },
   });
 }

@@ -286,10 +286,16 @@ export class OperationsRepository {
    * table (single source of truth for membership), validated through the
    * contract. Null when the operation does not exist in THIS workspace.
    */
-  getOperation(workspaceId: string, operationId: string, exec?: DatabaseSync): OperationRecord | null {
+  getOperation(
+    workspaceId: string,
+    operationId: string,
+    exec?: DatabaseSync,
+  ): OperationRecord | null {
     const db = exec ?? this.tx.connection();
     const row = db
-      .prepare(`SELECT ${OPERATION_COLUMNS} FROM operations WHERE workspace_id = ? AND operation_id = ?`)
+      .prepare(
+        `SELECT ${OPERATION_COLUMNS} FROM operations WHERE workspace_id = ? AND operation_id = ?`,
+      )
       .get(workspaceId, operationId) as OperationSqlRow | undefined;
     if (row === undefined) {
       return null;
@@ -354,7 +360,10 @@ export class OperationsRepository {
           pack_version: row.pack_version,
           roster_agent_ids: rosterAgentIds,
           capabilities: parseJson(row.capabilities_json, "operation capabilities JSON"),
-          provider_snapshot: parseJson(row.provider_snapshot_json, "operation provider snapshot JSON"),
+          provider_snapshot: parseJson(
+            row.provider_snapshot_json,
+            "operation provider snapshot JSON",
+          ),
         },
         created_at: row.created_at,
         updated_at: row.updated_at,
@@ -372,7 +381,11 @@ export class OperationsRepository {
   // Roster (D36 — queryable membership; the pinning roster is derived)
   // -------------------------------------------------------------------------
 
-  listRoster(workspaceId: string, operationId: string, exec?: DatabaseSync): OperationRosterMemberRow[] {
+  listRoster(
+    workspaceId: string,
+    operationId: string,
+    exec?: DatabaseSync,
+  ): OperationRosterMemberRow[] {
     const db = exec ?? this.tx.connection();
     return db
       .prepare(
@@ -408,7 +421,12 @@ export class OperationsRepository {
   }
 
   /** Remove one roster member. True when a membership row was removed. */
-  removeRosterMember(workspaceId: string, operationId: string, agentId: string, exec?: DatabaseSync): boolean {
+  removeRosterMember(
+    workspaceId: string,
+    operationId: string,
+    agentId: string,
+    exec?: DatabaseSync,
+  ): boolean {
     const db = exec ?? this.tx.connection();
     const result = db
       .prepare(
@@ -462,7 +480,11 @@ export class OperationsRepository {
     };
   }
 
-  listRosterRefusals(workspaceId: string, operationId: string, exec?: DatabaseSync): OperationRosterRefusalRow[] {
+  listRosterRefusals(
+    workspaceId: string,
+    operationId: string,
+    exec?: DatabaseSync,
+  ): OperationRosterRefusalRow[] {
     const db = exec ?? this.tx.connection();
     return db
       .prepare(
@@ -530,7 +552,11 @@ export class OperationsRepository {
     };
   }
 
-  listCoordinatorEvents(workspaceId: string, operationId: string, exec?: DatabaseSync): OperationCoordinatorEventRow[] {
+  listCoordinatorEvents(
+    workspaceId: string,
+    operationId: string,
+    exec?: DatabaseSync,
+  ): OperationCoordinatorEventRow[] {
     const db = exec ?? this.tx.connection();
     return db
       .prepare(
@@ -591,7 +617,12 @@ export class OperationsRepository {
    */
   recordMessageRecipients(
     workspaceId: string,
-    input: { message_id: string; operation_id: string; addressed_to: string[]; recorded_at: string },
+    input: {
+      message_id: string;
+      operation_id: string;
+      addressed_to: string[];
+      recorded_at: string;
+    },
     exec?: DatabaseSync,
   ): void {
     const db = exec ?? this.tx.connection();
@@ -613,7 +644,11 @@ export class OperationsRepository {
    * or null when the message carries no addressing row (unaddressed → the
    * read model reports []).
    */
-  findMessageRecipients(workspaceId: string, messageId: string, exec?: DatabaseSync): string[] | null {
+  findMessageRecipients(
+    workspaceId: string,
+    messageId: string,
+    exec?: DatabaseSync,
+  ): string[] | null {
     const db = exec ?? this.tx.connection();
     const row = db
       .prepare(
@@ -670,7 +705,12 @@ export class OperationsRepository {
     );
   }
 
-  getRun(workspaceId: string, operationId: string, runId: string, exec?: DatabaseSync): OperationRun | null {
+  getRun(
+    workspaceId: string,
+    operationId: string,
+    runId: string,
+    exec?: DatabaseSync,
+  ): OperationRun | null {
     const db = exec ?? this.tx.connection();
     const row = db
       .prepare(
@@ -757,7 +797,13 @@ export class OperationsRepository {
     db.prepare(
       `UPDATE operation_runs SET artifacts_json = ?, updated_at = ?
        WHERE workspace_id = ? AND operation_id = ? AND run_id = ?`,
-    ).run(JSON.stringify([...run.artifacts, artifactId]), updatedAt, workspaceId, operationId, runId);
+    ).run(
+      JSON.stringify([...run.artifacts, artifactId]),
+      updatedAt,
+      workspaceId,
+      operationId,
+      runId,
+    );
   }
 
   /**
@@ -914,7 +960,11 @@ export class OperationsRepository {
   ): PersistedCollaborationEvent[] {
     const db = exec ?? this.tx.connection();
     const streamId =
-      options.runId === undefined ? null : options.runId === null ? operationChatStreamId(operationId) : options.runId;
+      options.runId === undefined
+        ? null
+        : options.runId === null
+          ? operationChatStreamId(operationId)
+          : options.runId;
 
     const clauses = ["workspace_id = ?", "operation_id = ?"];
     const params: Array<string | number> = [workspaceId, operationId];
@@ -978,7 +1028,9 @@ export class OperationsRepository {
       return Number(next);
     }
     if (typeof next !== "number") {
-      throw new OperationRecordCorruptError("failed to allocate the next collaboration stream sequence");
+      throw new OperationRecordCorruptError(
+        "failed to allocate the next collaboration stream sequence",
+      );
     }
     return next;
   }
@@ -992,7 +1044,10 @@ export class OperationsRepository {
         operation_id: row.operation_id,
         run_id: row.run_id,
         sender_agent_id: row.sender_agent_id,
-        recipient_agent_ids: parseJson(row.recipient_agent_ids_json, "collaboration recipients JSON"),
+        recipient_agent_ids: parseJson(
+          row.recipient_agent_ids_json,
+          "collaboration recipients JSON",
+        ),
         correlation_id: row.correlation_id,
         issued_at: row.issued_at,
         type: row.type,

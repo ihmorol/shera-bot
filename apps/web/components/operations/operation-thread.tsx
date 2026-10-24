@@ -44,12 +44,19 @@ const EVENT_VERBS: Record<keyof typeof OPERATION_EVENT_LABELS, string> = {
 /** "To Researcher:" — ids resolved via the roster; unresolved ids stay raw. */
 export function addressingLabel(addressedTo: string[], identities: AgentRosterSummary[]): string {
   const names = addressedTo.map(
-    (agentId) => identities.find((identity) => identity.agent_id === agentId)?.display_name ?? agentId,
+    (agentId) =>
+      identities.find((identity) => identity.agent_id === agentId)?.display_name ?? agentId,
   );
   return `To ${names.join(", ")}:`;
 }
 
-function AddressingChip({ addressedTo, identities }: { addressedTo: string[]; identities: AgentRosterSummary[] }) {
+function AddressingChip({
+  addressedTo,
+  identities,
+}: {
+  addressedTo: string[];
+  identities: AgentRosterSummary[];
+}) {
   if (addressedTo.length === 0) {
     // Operation-wide: no addressing chip at all (D7 empty = broadcast).
     return null;
@@ -64,7 +71,13 @@ function AddressingChip({ addressedTo, identities }: { addressedTo: string[]; id
   );
 }
 
-function CollaborationEventCard({ item, identities }: { item: Extract<OperationThreadItem, { kind: "collaboration_event" }>; identities: AgentRosterSummary[] }) {
+function CollaborationEventCard({
+  item,
+  identities,
+}: {
+  item: Extract<OperationThreadItem, { kind: "collaboration_event" }>;
+  identities: AgentRosterSummary[];
+}) {
   const { event } = item;
   const isProposal = event.type === "TaskProposed";
   const senderName =
@@ -100,7 +113,13 @@ function CollaborationEventCard({ item, identities }: { item: Extract<OperationT
   );
 }
 
-function ThreadMessage({ item, identities }: { item: Extract<OperationThreadItem, { kind: "message" }>; identities: AgentRosterSummary[] }) {
+function ThreadMessage({
+  item,
+  identities,
+}: {
+  item: Extract<OperationThreadItem, { kind: "message" }>;
+  identities: AgentRosterSummary[];
+}) {
   const sender = item.sender;
   const senderName =
     sender.kind === "user"
@@ -160,7 +179,11 @@ export function OperationThreadView({
     >
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 lg:px-6">
         {state === "loading" ? (
-          <div aria-busy="true" data-testid="operation-thread-skeleton" className="flex flex-col gap-4">
+          <div
+            aria-busy="true"
+            data-testid="operation-thread-skeleton"
+            className="flex flex-col gap-4"
+          >
             {Array.from({ length: 3 }, (_, index) => (
               <div key={index} className="flex flex-col gap-1.5">
                 <div className="animate-pulse rounded bg-surface-elevated h-3 w-24" />
@@ -183,7 +206,11 @@ export function OperationThreadView({
         ) : (
           <ul className="flex flex-col gap-5">
             {items.map((item) => (
-              <li key={item.kind === "message" ? item.message_id : `${item.stream_id}:${item.sequence}`}>
+              <li
+                key={
+                  item.kind === "message" ? item.message_id : `${item.stream_id}:${item.sequence}`
+                }
+              >
                 {item.kind === "message" ? (
                   <ThreadMessage item={item} identities={identities} />
                 ) : (
@@ -208,7 +235,9 @@ export function OperationThreadView({
                 type="button"
                 className="rounded-full bg-surface-elevated px-2 py-0.5 text-xs text-text hover:border-line-accent border border-line"
                 onClick={() =>
-                  onComposerChange(composerValue.replace(/@[A-Za-z0-9_-]*$/, `@${identity.agent_id} `))
+                  onComposerChange(
+                    composerValue.replace(/@[A-Za-z0-9_-]*$/, `@${identity.agent_id} `),
+                  )
                 }
               >
                 {identity.display_name}

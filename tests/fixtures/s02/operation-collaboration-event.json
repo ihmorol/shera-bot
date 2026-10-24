@@ -5,9 +5,7 @@
   "operation_id": "op_001",
   "run_id": null,
   "sender_agent_id": "agent_general_assistant",
-  "recipient_agent_ids": [
-    "agent_researcher"
-  ],
+  "recipient_agent_ids": ["agent_researcher"],
   "correlation_id": "corr_001",
   "issued_at": "2026-10-24T00:00:00.000Z",
   "payload": {

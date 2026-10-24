@@ -191,10 +191,7 @@ describe("S13 chunk 2 — v6 migration shape", () => {
       "operation_runs",
       "operation_collaboration_events",
     ]) {
-      expect(
-        sqliteTableExists(conn.db, table),
-        `table ${table} must exist`,
-      ).toBe(true);
+      expect(sqliteTableExists(conn.db, table), `table ${table} must exist`).toBe(true);
     }
   });
 });
@@ -416,9 +413,7 @@ describe("S13 chunk 2 — roster commands (D36)", () => {
       expect(first.operation.pinning.roster_agent_ids).toEqual([RESEARCHER, CITATION]);
     }
     expect(
-      repo
-        .listRoster(WORKSPACE, operation.operation_id)
-        .map((member) => member.agent_id),
+      repo.listRoster(WORKSPACE, operation.operation_id).map((member) => member.agent_id),
     ).toEqual([RESEARCHER, CITATION]);
 
     const second = service.addRosterAgent(
@@ -449,9 +444,7 @@ describe("S13 chunk 2 — roster commands (D36)", () => {
     expect(persisted[0]?.refusal_code).toBe("cost-increase-needs-approval");
     // The refused change must not have touched the roster or the pinning.
     expect(
-      repo
-        .listRoster(WORKSPACE, operation.operation_id)
-        .map((member) => member.agent_id),
+      repo.listRoster(WORKSPACE, operation.operation_id).map((member) => member.agent_id),
     ).toEqual([RESEARCHER]);
     expect(repo.getOperation(WORKSPACE, operation.operation_id)?.pinning.roster_agent_ids).toEqual([
       RESEARCHER,
@@ -480,9 +473,7 @@ describe("S13 chunk 2 — roster commands (D36)", () => {
     }
     expect(service.listRosterRefusals(WORKSPACE, operation.operation_id)).toHaveLength(1);
     expect(
-      repo
-        .listRoster(WORKSPACE, operation.operation_id)
-        .map((member) => member.agent_id),
+      repo.listRoster(WORKSPACE, operation.operation_id).map((member) => member.agent_id),
     ).toEqual([RESEARCHER]);
   });
 
@@ -514,9 +505,7 @@ describe("S13 chunk 2 — roster commands (D36)", () => {
       expect(removed.operation.pinning.roster_agent_ids).toEqual([RESEARCHER]);
     }
     expect(
-      repo
-        .listRoster(WORKSPACE, operation.operation_id)
-        .map((member) => member.agent_id),
+      repo.listRoster(WORKSPACE, operation.operation_id).map((member) => member.agent_id),
     ).toEqual([RESEARCHER]);
 
     try {
@@ -647,18 +636,13 @@ describe("S13 chunk 2 — delegation (D34/D46)", () => {
         payload: { task_description: "doomed subtask" },
       }),
     );
-    service.applyRunState(
-      WORKSPACE,
-      operation.operation_id,
-      delegation.child_run.run_id,
-      "FAILED",
-    );
+    service.applyRunState(WORKSPACE, operation.operation_id, delegation.child_run.run_id, "FAILED");
 
     const parentAfter = service.getRun(WORKSPACE, operation.operation_id, parent.run_id);
     expect(parentAfter.state).toBe("RUNNING");
-    expect(service.getRun(WORKSPACE, operation.operation_id, delegation.child_run.run_id).state).toBe(
-      "FAILED",
-    );
+    expect(
+      service.getRun(WORKSPACE, operation.operation_id, delegation.child_run.run_id).state,
+    ).toBe("FAILED");
   });
 });
 
@@ -730,8 +714,12 @@ describe("S13 chunk 2 — collaboration events (D7, D26)", () => {
     expect(afterFirst.map((persisted) => persisted.sequence)).toEqual([2]);
 
     // The run rows carry the advanced D26 cursor; other runs stay untouched.
-    expect(service.getRun(WORKSPACE, operation.operation_id, runA.run_id).events_seq_cursor).toBe(2);
-    expect(service.getRun(WORKSPACE, operation.operation_id, runB.run_id).events_seq_cursor).toBe(1);
+    expect(service.getRun(WORKSPACE, operation.operation_id, runA.run_id).events_seq_cursor).toBe(
+      2,
+    );
+    expect(service.getRun(WORKSPACE, operation.operation_id, runB.run_id).events_seq_cursor).toBe(
+      1,
+    );
 
     // Duplicate event_id is an idempotent no-op returning the ORIGINAL event.
     const duplicate = service.appendCollaborationEvent(

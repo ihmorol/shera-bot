@@ -126,24 +126,14 @@ const OperationEventsQuery = z.strictObject({
   workspace_id: WorkspaceId,
   /** Absent = every stream of the Operation; present = that run's stream. */
   run_id: z.string().min(1).max(256).optional(),
-  after_sequence: z.coerce
-    .number()
-    .int()
-    .min(0)
-    .max(Number.MAX_SAFE_INTEGER)
-    .default(0),
+  after_sequence: z.coerce.number().int().min(0).max(Number.MAX_SAFE_INTEGER).default(0),
 });
 
 /** GET /v1/operations/:id/thread — the merged thread read model. */
 const OperationThreadQuery = z.strictObject({
   workspace_id: WorkspaceId,
   /** Journal-sequence cursor for the MESSAGE leg (exclusive); events come in full. */
-  after: z.coerce
-    .number()
-    .int()
-    .min(0)
-    .max(Number.MAX_SAFE_INTEGER)
-    .default(0),
+  after: z.coerce.number().int().min(0).max(Number.MAX_SAFE_INTEGER).default(0),
 });
 
 /** POST /v1/operations/:id/thread/messages — one addressed chat message (D41). */
@@ -604,16 +594,18 @@ export function createLocalApi(deps: LocalApiDeps): Express {
     const agentNames = new Map(
       deps.agents.listAgents(workspaceId).map((agent) => [agent.agent_id, agent.display_name]),
     );
-    res.status(200).json(
-      operationDetail(
-        operation,
-        deps.operations.listRoster(workspaceId, operationId.data),
-        deps.operations.listRuns(workspaceId, operationId.data),
-        deps.operations.listRosterRefusals(workspaceId, operationId.data),
-        deps.operations.findChat(workspaceId, operationId.data),
-        agentNames,
-      ),
-    );
+    res
+      .status(200)
+      .json(
+        operationDetail(
+          operation,
+          deps.operations.listRoster(workspaceId, operationId.data),
+          deps.operations.listRuns(workspaceId, operationId.data),
+          deps.operations.listRosterRefusals(workspaceId, operationId.data),
+          deps.operations.findChat(workspaceId, operationId.data),
+          agentNames,
+        ),
+      );
   });
 
   /**
@@ -627,7 +619,9 @@ export function createLocalApi(deps: LocalApiDeps): Express {
   app.post(OPERATION_ROSTER_COMMANDS_PATH, (req, res) => {
     const operationId = Id.safeParse(req.params.operation_id);
     const raw =
-      typeof req.body === "object" && req.body !== null ? (req.body as Record<string, unknown>) : {};
+      typeof req.body === "object" && req.body !== null
+        ? (req.body as Record<string, unknown>)
+        : {};
     const envelopeWorkspace = typeof raw["workspace_id"] === "string" ? raw["workspace_id"] : null;
     const envelopeOperation = typeof raw["operation_id"] === "string" ? raw["operation_id"] : null;
     if (
@@ -675,18 +669,20 @@ export function createLocalApi(deps: LocalApiDeps): Express {
     const body = OperationCoordinatorBody.safeParse(req.body);
     if (!operationId.success || !body.success) {
       const { status, body: errorBody } = contractValidationResponse(
-        "The coordinator request is not valid: a workspace_id and a coordinator_agent_id (Agent id or \"none\") are required.",
+        'The coordinator request is not valid: a workspace_id and a coordinator_agent_id (Agent id or "none") are required.',
       );
       res.status(status).json(errorBody);
       return;
     }
-    res.status(200).json(
-      deps.operations.setCoordinator(
-        body.data.workspace_id,
-        operationId.data,
-        body.data.coordinator_agent_id,
-      ),
-    );
+    res
+      .status(200)
+      .json(
+        deps.operations.setCoordinator(
+          body.data.workspace_id,
+          operationId.data,
+          body.data.coordinator_agent_id,
+        ),
+      );
   });
 
   /**
@@ -724,7 +720,9 @@ export function createLocalApi(deps: LocalApiDeps): Express {
       res.status(status).json(body);
       return;
     }
-    res.status(200).json({ runs: deps.operations.listRuns(query.data.workspace_id, operationId.data) });
+    res
+      .status(200)
+      .json({ runs: deps.operations.listRuns(query.data.workspace_id, operationId.data) });
   });
 
   /** S13 — one run's detail, including its D26 events cursor. */

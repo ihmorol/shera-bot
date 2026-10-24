@@ -6,8 +6,9 @@ import type { Agent } from "@shera-bot/contracts";
 import type { ConversationSummary, ThreadItem } from "@/lib/fixtures";
 import { useContainerResolution, useSessionIdentity } from "@/lib/container-connection";
 import type { ContainerResolutionState } from "@/lib/container-resolution";
-import { useAgentDirectChat } from "@/lib/agent-data";
+import { useAgentDirectChat, useAgentSessionPresence } from "@/lib/agent-data";
 import { useLiveConversation, useSameOriginRuntimeSocketUrl } from "@/lib/runtime-live";
+import type { SessionPresenceChipState } from "@/lib/session-presence";
 
 /**
  * An Agent direct chat's data source (S11 chunk 4) — the General Assistant
@@ -73,6 +74,15 @@ function RuntimeAgentDirectChat({
   const session = useSessionIdentity();
   const real = useAgentDirectChat(workspaceId, agent.agent_id);
 
+  // S12 chunk 4: the Agent's session presence (D32) — a 5s poll of the agent
+  // detail read (no session-event WS fanout in this slice), paused while the
+  // tab is hidden. A failed read maps to "error", which SILENCES the chip in
+  // the header — a presence indicator never becomes an error surface (G4).
+  const presence = useAgentSessionPresence(workspaceId, agent.agent_id);
+  const sessionPresence: SessionPresenceChipState = presence.failed
+    ? "error"
+    : (presence.presence ?? "loading");
+
   // S09 chunk 2's live pipeline, reused against the direct chat id (§6.3).
   const wsUrl = useSameOriginRuntimeSocketUrl();
   const liveEnabled =
@@ -129,6 +139,7 @@ function RuntimeAgentDirectChat({
         }
         onRuntimeSend={live.sendMessage}
         onRuntimeRetry={live.retry}
+        sessionPresence={sessionPresence}
         surfaceState={live.error ? "error" : live.loading ? "loading" : "ready"}
         safeErrorMessage={live.error ?? real.safeErrorMessage}
         mode="runtime"
@@ -141,6 +152,7 @@ function RuntimeAgentDirectChat({
       agent={identity}
       conversation={summary}
       thread={real.items}
+      sessionPresence={sessionPresence}
       surfaceState={real.surfaceState}
       safeErrorMessage={real.safeErrorMessage}
       mode="runtime"

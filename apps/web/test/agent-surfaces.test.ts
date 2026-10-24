@@ -196,13 +196,15 @@ function renderChatView(props: Record<string, unknown> = {}): string {
 }
 
 describe("chat header identity (§S3)", () => {
-  it("runtime mode renders the presence PLACEHOLDER — session states arrive in S12", () => {
-    // G4: real sessions report no presence in this slice, and the fixture
-    // demo's derived presence must never leak onto real rows — the runtime
-    // header shows an explicit placeholder instead of nothing or a guess.
+  it("runtime mode renders NO presence before the S12 hook provides data", () => {
+    // S12 chunk 4 replaced the S11 placeholder with the real polled chip
+    // (session-presence.test.ts pins the per-state honesty rules). Without
+    // the hook's data the header renders no presence at all — never a guess,
+    // and the fixture demo's derived presence never leaks onto real rows (G4).
     const html = renderChatView({ mode: "runtime" });
-    expect(html).toContain("Presence arrives in S12");
-    expect(html).toContain("placeholder");
+    expect(html).not.toContain("Presence arrives in S12");
+    expect(html).not.toContain("data-session-presence");
+    expect(html).not.toContain("session active");
   });
 
   it("runtime header links to the Agent settings surface (§S3 overflow affordance)", () => {
@@ -467,12 +469,21 @@ afterEach(() => {
 
 describe("agent settings client (proxy paths)", () => {
   it("fetchAgentRoster GETs the workspace roster and parses the summaries", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { agents: ROSTER }));
+    // The wire payload carries the S12 session-presence read on every row.
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(200, {
+        agents: ROSTER.map((agent) => ({ ...agent, session: { presence: "none" } })),
+      }),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const agents = await fetchAgentRoster("ws_account-1");
     expect(agents).toHaveLength(6);
-    expect(agents[0]).toMatchObject({ agent_id: "agent_general_assistant", avatar_hue: 217 });
+    expect(agents[0]).toMatchObject({
+      agent_id: "agent_general_assistant",
+      avatar_hue: 217,
+      session: { presence: "none" },
+    });
 
     const [path] = fetchMock.mock.calls[0] as [string];
     expect(path).toBe("/api/runtime/v1/agents?workspace_id=ws_account-1");

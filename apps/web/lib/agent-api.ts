@@ -10,6 +10,7 @@ import {
 } from "@shera-bot/contracts";
 
 import { requestRuntime } from "@/lib/runtime-client";
+import { AGENT_SESSION_PRESENCE_VALUES } from "@/lib/session-presence";
 
 /**
  * Typed browser client for the S11 agent identity surfaces (chunk 4), reached
@@ -38,6 +39,16 @@ import { requestRuntime } from "@/lib/runtime-client";
  * deliberately not faked here (G4).
  */
 
+/**
+ * S12: the supervised session read the runtime reports on EVERY Agent row
+ * (roster and detail alike — the allowlisted payload proves it). Required:
+ * the backend always includes it, and a strict object that ignored it would
+ * throw on real responses.
+ */
+const AgentSessionStateSchema = z.strictObject({
+  presence: z.enum(AGENT_SESSION_PRESENCE_VALUES),
+});
+
 /** Loose roster summary — the local API's strictly allowlisted identity payload. */
 const AgentRosterSummarySchema = z.strictObject({
   agent_id: z.string().min(1),
@@ -46,6 +57,7 @@ const AgentRosterSummarySchema = z.strictObject({
   avatar_hue: z.number().int().min(0).max(360),
   initial_glyph: z.string().min(1),
   has_user_instructions: z.boolean(),
+  session: AgentSessionStateSchema,
 });
 export type AgentRosterSummary = z.infer<typeof AgentRosterSummarySchema>;
 

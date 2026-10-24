@@ -248,7 +248,7 @@ function detailBody(presence: AgentSessionPresence): Record<string, unknown> {
   return {
     ...rosterRow(presence),
     user_instructions: null,
-    default_provider: "provider_local",
+    default_provider: { provider_id: "provider_local", model: "qwen3-8b" },
     direct_chat_id: "conv_direct_01",
   };
 }

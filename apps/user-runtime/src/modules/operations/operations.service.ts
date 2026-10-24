@@ -1016,7 +1016,11 @@ export class OperationsService {
    * enforce the gapless per-stream sequence, persist the sender attribution
    * fields, advance the run cursor for run-scoped events — all in the
    * repository's one transaction. Malformed events are typed-rejected and
-   * nothing is persisted.
+   * nothing is persisted. A TaskDelegated event is refused here (defense in
+   * depth, D34/D46): delegation materializes its exactly-one child run ONLY
+   * through applyDelegation — the HTTP route routes the type there, and the
+   * plain append must never become an in-process bypass that persists the
+   * event without the child run.
    */
   appendCollaborationEvent(event: unknown): AppendedCollaborationEvent {
     const parsed = OperationCollaborationEvent.safeParse(event);
@@ -1028,6 +1032,13 @@ export class OperationsService {
       );
     }
     const validated = parsed.data;
+    if (validated.type === "TaskDelegated") {
+      throw new OperationsServiceError(
+        "OPERATION_EVENT_INVALID",
+        "validation",
+        "TaskDelegated events create delegated runs only through the delegation path (applyDelegation)",
+      );
+    }
     this.requireOperation(validated.workspace_id, validated.operation_id);
     if (validated.run_id !== null) {
       this.requireRunRow(validated.workspace_id, validated.operation_id, validated.run_id);

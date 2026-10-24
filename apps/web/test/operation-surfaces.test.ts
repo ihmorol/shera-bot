@@ -394,6 +394,19 @@ describe("Operation roster panel (§S4, D36/D42/D49)", () => {
     expect(liveWins).not.toContain("Persisted refusal");
   });
 
+  it("renders the peer-to-peer notice after coordinator removal (D49/AC2) while a run is active", () => {
+    // The coordinator was removed mid-run (the suite's DETAIL carries a
+    // RUNNING run): the page flips coordinatorAgentId to "none" and the
+    // prop-driven roster panel keeps the model honest — peer-to-peer
+    // coordination, runtime still authoritative. No chip carries the
+    // coordinator role anymore.
+    const html = renderRoster({ coordinatorAgentId: "none" });
+    expect(html).toContain(
+      "No coordinator right now — work continues peer-to-peer; the runtime stays authoritative.",
+    );
+    expect(html).not.toContain('aria-label="Remove the coordinator role"');
+  });
+
   it("loading state is a layout-matched skeleton; error state carries the safe message + retry", () => {
     const loading = renderRoster({ state: "loading", roster: [], candidates: [] });
     expect(loading).toContain("animate-pulse");

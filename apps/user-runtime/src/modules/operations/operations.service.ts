@@ -23,7 +23,9 @@
  *   contract cannot know. Same-pack low-risk additions proceed;
  *   approval-declared additions proceed with requires_approval recorded on
  *   the membership row (the real approval-artifact gate arrives with the
- *   approvals slice).
+ *   approvals slice). Removes are idempotent through a command receipt
+ *   (D23 rule 6): a replayed remove answers the original applied outcome and
+ *   an absent member is the no-op — never a 404 for an applied removal.
  * - Coordinator (D42/D49): set to an Agent or "none" at ANY time, including
  *   mid-run. Removal records a typed CoordinatorRemoved lifecycle event and
  *   NEVER cancels or pauses in-flight runs — the run continues peer-to-peer
@@ -576,8 +578,16 @@ export class OperationsService {
   }
 
   /**
-   * Apply an operation.remove_roster_agent envelope. Coordinator membership
-   * is unaffected: the coordinator role is not a roster assignment (D46).
+   * Apply an operation.remove_roster_agent envelope. Idempotent through a
+   * command receipt keyed `operation-remove-roster-agent:<command_id>`
+   * (workspace-scoped), written in the SAME transaction as the removal (D23
+   * rule 6 — the same seam applyDelegation and the message send use): a
+   * replayed command answers the original applied outcome (re-read from the
+   * CURRENT record), never a stale 404 for a removal that already committed.
+   * A remove whose member is absent is the idempotent no-op — the add/remove
+   * symmetry with the add's ON CONFLICT DO NOTHING — returning the current
+   * record. Coordinator membership is unaffected: the coordinator role is not
+   * a roster assignment (D46).
    */
   removeRosterAgent(command: unknown): ApplyRosterOutcome {
     const scope = this.commandScope(command);
@@ -592,17 +602,41 @@ export class OperationsService {
       );
     }
 
-    const roster = this.deps.operations.listRoster(scope.workspace_id, scope.operation_id);
-    if (!roster.some((member) => member.agent_id === parsed.data.agent_id)) {
-      throw new OperationsServiceError(
-        "OPERATION_ROSTER_AGENT_NOT_FOUND",
-        "state",
-        `agent ${parsed.data.agent_id} is not in the roster of operation ${scope.operation_id}`,
-      );
-    }
-
+    const receiptKey = `operation-remove-roster-agent:${parsed.data.command_id}`;
     return this.deps.tx.transaction((exec) => {
-      this.deps.operations.removeRosterMember(
+      const receipt = this.receipts.findById(scope.workspace_id, receiptKey, exec);
+      if (receipt !== null) {
+        if (receipt.command_type !== "operation.remove_roster_agent") {
+          throw new OperationRecordCorruptError("remove-roster receipt command type");
+        }
+        let stored: { removed?: unknown };
+        try {
+          stored = JSON.parse(receipt.result_json) as typeof stored;
+        } catch {
+          throw new OperationRecordCorruptError("remove-roster receipt result JSON");
+        }
+        if (typeof stored.removed !== "boolean") {
+          throw new OperationRecordCorruptError("remove-roster receipt result shape");
+        }
+        const operation = this.deps.operations.getOperation(
+          scope.workspace_id,
+          scope.operation_id,
+          exec,
+        );
+        if (operation === null) {
+          throw new OperationsServiceError(
+            "OPERATION_NOT_FOUND",
+            "state",
+            `operation ${scope.operation_id} not found in workspace ${scope.workspace_id}`,
+          );
+        }
+        return { outcome: "applied" as const, operation };
+      }
+
+      // Absent member: the idempotent no-op (the DELETE matches nothing and
+      // the roster is already the outcome). No receipt — the no-op is
+      // naturally replayable (it re-derives the same current record).
+      const removed = this.deps.operations.removeRosterMember(
         scope.workspace_id,
         scope.operation_id,
         parsed.data.agent_id,
@@ -618,6 +652,18 @@ export class OperationsService {
           "OPERATION_NOT_FOUND",
           "state",
           `operation ${scope.operation_id} not found in workspace ${scope.workspace_id}`,
+        );
+      }
+      if (removed) {
+        this.receipts.create(
+          {
+            workspace_id: scope.workspace_id,
+            idempotency_key: receiptKey,
+            command_type: "operation.remove_roster_agent",
+            result_json: JSON.stringify({ removed }),
+            created_at: this.now(),
+          },
+          exec,
         );
       }
       return { outcome: "applied" as const, operation };

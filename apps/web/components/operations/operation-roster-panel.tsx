@@ -36,6 +36,7 @@ export function OperationRosterPanel({
   confirmingAdd,
   pending,
   refusalMessage,
+  persistedRefusalMessage,
   onAddClick,
   onConfirmAdd,
   onCancelAdd,
@@ -56,6 +57,12 @@ export function OperationRosterPanel({
   pending: boolean;
   /** The refused command's fixed safe message, rendered verbatim (D36/G3). */
   refusalMessage: string | null;
+  /**
+   * The detail read model's most recent persisted refusal (the backend keeps
+   * the D36 "why" evidence). A live refusal from THIS session wins; the
+   * persisted one explains the latest refusal across reloads.
+   */
+  persistedRefusalMessage: string | null;
   onAddClick: (candidate: AgentRosterSummary) => void;
   onConfirmAdd: () => void;
   onCancelAdd: () => void;
@@ -86,6 +93,7 @@ export function OperationRosterPanel({
 
   const identityFor = (agentId: string): AgentRosterSummary | undefined =>
     identities.find((identity) => identity.agent_id === agentId);
+  const effectiveRefusalMessage = refusalMessage ?? persistedRefusalMessage;
 
   return (
     <section
@@ -98,12 +106,12 @@ export function OperationRosterPanel({
         <h2 className="font-mono text-xs uppercase tracking-[0.16em] text-muted">Roster</h2>
       </div>
 
-      {refusalMessage ? (
+      {effectiveRefusalMessage ? (
         <p
           role="alert"
           className="mt-2 rounded-lg border border-line bg-surface-elevated px-3 py-2 text-sm text-text"
         >
-          {refusalMessage}
+          {effectiveRefusalMessage}
         </p>
       ) : null}
 

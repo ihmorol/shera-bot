@@ -230,6 +230,7 @@ function renderRoster(props: Record<string, unknown> = {}): string {
       confirmingAdd: null,
       pending: false,
       refusalMessage: null,
+      persistedRefusalMessage: null,
       onAddClick: () => undefined,
       onConfirmAdd: () => undefined,
       onCancelAdd: () => undefined,
@@ -349,6 +350,26 @@ describe("Operation roster panel (§S4, D36/D42/D49)", () => {
     });
     expect(html).toContain('role="alert"');
     expect(html).toContain("Adding this Agent increases cost or access and needs your approval first.");
+  });
+
+  it("falls back to the detail read model's most recent persisted refusal (the UI's why)", () => {
+    // The backend persists every D36 refusal; across reloads the latest one
+    // still explains itself. A live refusal from this session wins.
+    const persisted = renderRoster({
+      persistedRefusalMessage:
+        "Adding this Agent increases cost or access and needs your approval first.",
+    });
+    expect(persisted).toContain('role="alert"');
+    expect(persisted).toContain(
+      "Adding this Agent increases cost or access and needs your approval first.",
+    );
+
+    const liveWins = renderRoster({
+      refusalMessage: "Live refusal",
+      persistedRefusalMessage: "Persisted refusal",
+    });
+    expect(liveWins).toContain("Live refusal");
+    expect(liveWins).not.toContain("Persisted refusal");
   });
 
   it("loading state is a layout-matched skeleton; error state carries the safe message + retry", () => {

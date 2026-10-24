@@ -25,6 +25,7 @@ import {
   type OperationRosterMember,
 } from "@/lib/operation-api";
 import {
+  safeOperationMessage,
   useCoordinatorCommand,
   useCreateOperation,
   useCreateRun,
@@ -165,6 +166,7 @@ function RuntimeOperationChat({
               confirmingAdd={null}
               pending={false}
               refusalMessage={null}
+              persistedRefusalMessage={null}
               onAddClick={() => undefined}
               onConfirmAdd={() => undefined}
               onCancelAdd={() => undefined}
@@ -207,6 +209,7 @@ function RuntimeOperationChat({
         confirmingAdd={confirmingAdd}
         pending={pending}
         refusalMessage={refusalMessage}
+        persistedRefusalMessage={detail.detail?.recent_refusals[0]?.message ?? null}
         onAddClick={(candidate) => {
           setRefusalMessage(null);
           setConfirmingAdd(candidate);
@@ -230,6 +233,12 @@ function RuntimeOperationChat({
                   setRefusalMessage(outcome.refusal.message);
                 }
               },
+              onError: (error) =>
+                // A typed failure (e.g. a raced removal) surfaces its safe
+                // message — never silently swallowed, never raw internals.
+                setRefusalMessage(
+                  safeOperationMessage(error, "The roster command was not accepted."),
+                ),
             },
           );
         }}
@@ -244,6 +253,10 @@ function RuntimeOperationChat({
                   setRefusalMessage(outcome.refusal.message);
                 }
               },
+              onError: (error) =>
+                setRefusalMessage(
+                  safeOperationMessage(error, "The roster command was not accepted."),
+                ),
             },
           );
         }}

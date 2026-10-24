@@ -1,8 +1,12 @@
+#!/usr/bin/env -S node --experimental-transform-types
 /**
  * Demo reply child (S12 chunk 4 browser evidence) — TEST-INFRASTRUCTURE ONLY,
  * never referenced by production code. It runs ONLY when an operator points
  * the session harness command at it (SHERA_SESSION_HARNESS_COMMAND) for the
- * impeccable gate's real-browser captures.
+ * impeccable gate's real-browser captures. The shebang (+ exec bit) lets the
+ * spawn adapter launch this file directly as the configured harness command —
+ * the composition uses non-erasable TS elsewhere, so the transform flag rides
+ * the interpreter line.
  *
  * It speaks the SAME versioned JSONL D14 protocol as the fake-Pi child
  * (fake-pi-child.ts: hello → ready → heartbeats → token/completed on prompt),

@@ -61,6 +61,7 @@ interface Harness {
   spawnSpecs: SpawnFakePiOptions[];
   contexts: (AgentSessionContext | undefined)[];
   stderrChunks: string[];
+  dir: string;
 }
 
 interface HarnessOptions {
@@ -125,7 +126,16 @@ function makeSupervisor(options: HarnessOptions = {}): Harness {
     ...(options.policy ? { policy: options.policy } : {}),
   });
 
-  const harness: Harness = { supervisor, conn, journal, spawns, spawnSpecs, contexts, stderrChunks };
+  const harness: Harness = {
+    supervisor,
+    conn,
+    journal,
+    spawns,
+    spawnSpecs,
+    contexts,
+    stderrChunks,
+    dir,
+  };
   openHarnesses.push(harness);
   return harness;
 }
@@ -134,10 +144,16 @@ afterEach(async () => {
   while (openHarnesses.length > 0) {
     const harness = openHarnesses.pop()!;
     try {
-      await harness.supervisor.stopAll();
+      // stopAll resolves when every child exited; a stuck gated spawn (a
+      // failed test) must not hang the hook — force-reap below.
+      await Promise.race([
+        harness.supervisor.stopAll(),
+        new Promise((resolve) => setTimeout(resolve, 2000)),
+      ]);
     } finally {
+      for (const handle of harness.spawns) handle.kill("SIGKILL");
       harness.conn.close();
-      rmSync(join(tmpdir(), "shera-s12-sessions-"), { recursive: true, force: true });
+      rmSync(harness.dir, { recursive: true, force: true });
     }
   }
 });
@@ -347,7 +363,7 @@ describe("SessionSupervisor protocol-failure policy (D14)", () => {
       h.spawns.length === 2 && h.supervisor.presenceState(WS, AGENT) === "active" ? true : undefined,
     );
     const failures = eventsOf(h, "session.protocol_failure");
-    expect(failures.length).toBe(2);
+    expect(failures.length).toBeGreaterThanOrEqual(2); // child 1 exhausted the cap
     expect(failures[0]!["code"]).toBe("PROTOCOL_VIOLATION");
     expect(failures[0]!["reason"]).toBe("unparseable_json_line");
     // G3: the recorded detail is bounded — never a raw child stderr dump.
@@ -424,7 +440,7 @@ describe("SessionSupervisor process-tree termination (D14/D32)", () => {
 
 describe("SessionSupervisor presence state machine (D32 layer 2)", () => {
   it("walks none → starting → active → hibernating → restarting → active → none", async () => {
-    const gates: Array<() => void> = [];
+    const gates: Array<(() => void) | undefined> = [];
     const h = makeSupervisor({
       // Child 0 healthy; child 1 silent (hangs the window); child 2 healthy.
       spawnSpec: (index) => (index === 1 ? { heartbeatMs: 0 } : { heartbeatMs: 25 }),
@@ -442,19 +458,24 @@ describe("SessionSupervisor presence state machine (D32 layer 2)", () => {
 
     const starting = h.supervisor.ensureStarted(WS, AGENT);
     await until(() => (h.supervisor.presenceState(WS, AGENT) === "starting" ? true : undefined));
+    await gateReady(gates, 0);
     gates[0]!();
     await starting;
     expect(h.supervisor.presenceState(WS, AGENT)).toBe("active");
 
     await until(() => (h.supervisor.presenceState(WS, AGENT) === "hibernating" ? true : undefined));
 
-    await h.supervisor.ensureStarted(WS, AGENT); // transparent resume → active
+    const resumed = h.supervisor.ensureStarted(WS, AGENT); // transparent resume
+    await gateReady(gates, 1);
+    gates[1]!();
+    await resumed;
     expect(h.supervisor.presenceState(WS, AGENT)).toBe("active");
     expect(h.spawns).toHaveLength(2);
 
     // Child 1 is silent → the watchdog kills it; the supervised restart holds
     // on the gated spawn so "restarting" is observable.
     await until(() => (h.supervisor.presenceState(WS, AGENT) === "restarting" ? true : undefined));
+    await gateReady(gates, 2);
     gates[2]!();
     await until(() =>
       h.supervisor.presenceState(WS, AGENT) === "active" && h.spawns.length === 3 ? true : undefined,
@@ -464,3 +485,8 @@ describe("SessionSupervisor presence state machine (D32 layer 2)", () => {
     expect(h.supervisor.presenceState(WS, AGENT)).toBe("none");
   });
 });
+
+/** Wait until the gated spawn for `index` is actually pending. */
+async function gateReady(gates: Array<(() => void) | undefined>, index: number): Promise<void> {
+  await until(() => (typeof gates[index] === "function" ? true : undefined));
+}

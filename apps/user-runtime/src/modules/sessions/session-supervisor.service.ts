@@ -22,7 +22,7 @@
  * killed and restarted ONCE, and any further violation is terminal `failed`.
  *
  * Child processes are reached ONLY through the injected spawnChild seam
- * (boundary guard: child_process stays in adapters/process) and terminated
+ * (boundary guard: process spawning stays in adapters/process) and terminated
  * through the chunk-1 escalation: shutdown frame → SIGTERM after
  * shutdownGraceMs → SIGKILL after killGraceMs more. Child stderr is
  * forwarded to the injected bounded sink (the sink owns redaction — G3:
@@ -43,7 +43,6 @@ import {
   PiProtocolError,
   isPiChildFrame,
   parseFrame,
-  type PiChildFrame,
   type PiFrame,
   type PiParentFrame,
 } from "@shera-bot/pi-protocol";
@@ -164,7 +163,7 @@ export const DEFAULT_SESSION_POLICY: SessionSupervisorPolicy = {
 export interface SessionSupervisorDeps {
   /** The ONLY journal seam (no second journal): session events append here. */
   events: EventsService;
-  /** The process seam (child_process stays in adapters/process). */
+  /** The process seam (process spawning stays in adapters/process). */
   spawnChild: (request: SessionSpawnRequest) => SessionChild | Promise<SessionChild>;
   /**
    * The D15 context source — re-fetched on EVERY (re)start. compose.ts wires
@@ -471,8 +470,15 @@ export class SessionSupervisor {
 
       const failure = await this.awaitHandshake(record, incarnation);
       if (failure === null) {
-        record.presence = "active";
-        this.markActivity(record);
+        // A violating line can arrive in the SAME stdout burst as ready and
+        // drive the session terminal (cap policy) before this continuation
+        // runs — never resurrect a failed/detached session to `active`.
+        // (presence is re-read un-narrowed: policy paths mutate it mid-await.)
+        const presenceNow = this.presenceState(record.workspace_id, record.agent_id);
+        if (record.current === incarnation && presenceNow !== "failed") {
+          record.presence = "active";
+          this.markActivity(record);
+        }
         return;
       }
 

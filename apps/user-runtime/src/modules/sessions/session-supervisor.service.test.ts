@@ -26,6 +26,8 @@ import { spawnFakePi, type FakePiHandle, type SpawnFakePiOptions } from "@shera-
 
 import { openDatabase, type SqliteConnection } from "../../adapters/sqlite/connection.ts";
 import { applyMigrations } from "../../adapters/sqlite/migrations.ts";
+import { AgentsRepository } from "../../adapters/sqlite/agents-repository.ts";
+import { ConversationsRepository } from "../../adapters/sqlite/conversations-repository.ts";
 import { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
 import { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import { EventsService } from "../events/events.service.ts";
@@ -166,16 +168,19 @@ function eventsOf(harness: Harness, type: string): Array<Record<string, unknown>
     .map((row) => JSON.parse(row.payload) as Record<string, unknown>);
 }
 
-/** Row counts of the durable product tables the supervisor must never write. */
-function durableCounts(harness: Harness): Record<string, number> {
-  const counts: Record<string, number> = {};
-  for (const table of ["agents", "agent_settings", "agent_direct_chats", "conversations"]) {
-    const row = harness.conn.db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as {
-      n: number;
-    };
-    counts[table] = Number(row.n);
-  }
-  return counts;
+/**
+ * Durable product-table state read through the repositories (boundary guard:
+ * SQL stays in adapters/sqlite) — the supervisor must never write any of it.
+ */
+function durableCounts(harness: Harness): Record<string, unknown> {
+  const agents = new AgentsRepository(new SqliteTransactions(harness.conn.db));
+  const conversations = new ConversationsRepository(new SqliteTransactions(harness.conn.db));
+  return {
+    agents: agents.listAgents(WS).length,
+    agent_settings_blob: JSON.stringify(agents.getSettings(WS, AGENT)),
+    agent_direct_chat: agents.findDirectChat(WS, AGENT),
+    conversations: conversations.list(WS).length,
+  };
 }
 
 describe("SessionSupervisor on-demand start (D32 layer 2)", () => {
@@ -359,9 +364,16 @@ describe("SessionSupervisor protocol-failure policy (D14)", () => {
     });
     await h.supervisor.ensureStarted(WS, AGENT);
 
-    await until(() =>
-      h.spawns.length === 2 && h.supervisor.presenceState(WS, AGENT) === "active" ? true : undefined,
-    );
+    // The post-cap restart child (index 1) may briefly be `active` (its
+    // violating line arriving in a separate burst) or skip straight from
+    // `restarting` to `failed` (violation in the same stdout burst as its
+    // ready frame) — both orders are legal; wait for either.
+    await until(() => {
+      const presence = h.supervisor.presenceState(WS, AGENT);
+      return h.spawns.length === 2 && (presence === "active" || presence === "failed")
+        ? true
+        : undefined;
+    });
     const failures = eventsOf(h, "session.protocol_failure");
     expect(failures.length).toBeGreaterThanOrEqual(2); // child 1 exhausted the cap
     expect(failures[0]!["code"]).toBe("PROTOCOL_VIOLATION");

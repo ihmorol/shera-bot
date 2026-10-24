@@ -55,9 +55,7 @@ import {
   type AgentsRepository,
   type PackAgentSeed,
 } from "../../adapters/sqlite/agents-repository.ts";
-import type {
-  ConversationsRepository,
-} from "../../adapters/sqlite/conversations-repository.ts";
+import type { ConversationsRepository } from "../../adapters/sqlite/conversations-repository.ts";
 import type { SqliteExec, SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import type { EventsService } from "../events/events.service.ts";
 import {
@@ -82,9 +80,7 @@ export class AgentSettingsResetUnavailableError extends Error {
   readonly category = "state" as const;
 
   constructor(workspaceId: string, agentId: string) {
-    super(
-      `no pack-supplied recommended default for agent ${agentId} in workspace ${workspaceId}`,
-    );
+    super(`no pack-supplied recommended default for agent ${agentId} in workspace ${workspaceId}`);
     this.name = "AgentSettingsResetUnavailableError";
   }
 }
@@ -151,7 +147,10 @@ export class AgentsService {
    * semantics — the first call creates and journals the chat, every later
    * call resolves the SAME conversation.
    */
-  getAgentWithDirectChat(workspaceId: string, agentId: string): {
+  getAgentWithDirectChat(
+    workspaceId: string,
+    agentId: string,
+  ): {
     agent: AgentRow;
     conversation_id: string;
   } {
@@ -271,11 +270,7 @@ export class AgentsService {
     }
   }
 
-  private resetProviderToRecommended(
-    workspaceId: string,
-    agentId: string,
-    exec: SqliteExec,
-  ): void {
+  private resetProviderToRecommended(workspaceId: string, agentId: string, exec: SqliteExec): void {
     const seed = this.packSeed(agentId);
     if (seed === undefined) {
       throw new AgentSettingsResetUnavailableError(workspaceId, agentId);

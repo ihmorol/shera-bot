@@ -103,8 +103,7 @@ export function AgentRosterSection({
         </div>
       ) : state === "empty" ? (
         <p className="px-3 py-2 text-sm text-muted" role="status">
-          No Agents are seeded in this workspace yet. Restart your workspace to re-run pack
-          seeding.
+          No Agents are seeded in this workspace yet. Restart your workspace to re-run pack seeding.
         </p>
       ) : (
         <ul>

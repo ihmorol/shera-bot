@@ -2,10 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import {
-  RuntimeApiError,
-  fetchConversationEvents,
-} from "@/lib/runtime-client";
+import { RuntimeApiError, fetchConversationEvents } from "@/lib/runtime-client";
 import {
   agentSettingsCommand,
   fetchAgentDetail,
@@ -29,10 +26,12 @@ import { threadItemsFromEvents } from "@/lib/runtime-thread";
  */
 
 const GENERIC_RUNTIME_ERROR_MESSAGE = "The Agent data could not be loaded.";
-export const AGENT_SNAPSHOT_REQUIRED_MESSAGE =
-  "This Agent's data could not be read right now.";
+export const AGENT_SNAPSHOT_REQUIRED_MESSAGE = "This Agent's data could not be read right now.";
 
-export function safeRuntimeMessage(error: unknown, fallback = GENERIC_RUNTIME_ERROR_MESSAGE): string {
+export function safeRuntimeMessage(
+  error: unknown,
+  fallback = GENERIC_RUNTIME_ERROR_MESSAGE,
+): string {
   if (error instanceof RuntimeApiError) {
     return error.sheraError.safe_message;
   }
@@ -43,9 +42,7 @@ export function safeRuntimeMessage(error: unknown, fallback = GENERIC_RUNTIME_ER
 // Sidebar roster (GET /v1/agents)
 // ---------------------------------------------------------------------------
 
-export function useAgentRoster(
-  workspaceId: string,
-): {
+export function useAgentRoster(workspaceId: string): {
   state: "loading" | "ready" | "error";
   agents: AgentRosterSummary[];
   safeErrorMessage: string | undefined;
@@ -66,7 +63,10 @@ export function useAgentRoster(
     return {
       state: "error",
       agents: [],
-      safeErrorMessage: safeRuntimeMessage(rosterQuery.error, "The Agent roster could not be loaded."),
+      safeErrorMessage: safeRuntimeMessage(
+        rosterQuery.error,
+        "The Agent roster could not be loaded.",
+      ),
       refetch: () => void rosterQuery.refetch(),
     };
   }
@@ -209,7 +209,11 @@ export function useAgentSettings(workspaceId: string, agentId: string) {
 
   const commandMutation = useMutation({
     mutationFn: (action: AgentSettingsAction) =>
-      submitAgentSettingsCommand(workspaceId, agentId, agentSettingsCommand(workspaceId, agentId, action)),
+      submitAgentSettingsCommand(
+        workspaceId,
+        agentId,
+        agentSettingsCommand(workspaceId, agentId, action),
+      ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["agent-settings", workspaceId, agentId] });
       void queryClient.invalidateQueries({ queryKey: ["agent-detail", workspaceId, agentId] });

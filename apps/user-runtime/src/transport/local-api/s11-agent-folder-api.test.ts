@@ -11,7 +11,6 @@
  * resolution is workspace-scoped). The tests run the REAL composed stack —
  * real SQLite, real pack seeding, real HTTP — per house convention.
  */
-import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -50,11 +49,7 @@ async function composeOn(dbPath: string): Promise<RunningRuntime> {
   };
 }
 
-async function folderAccess(
-  origin: string,
-  actingAgentId: string,
-  query: string,
-) {
+async function folderAccess(origin: string, actingAgentId: string, query: string) {
   const response = await fetch(
     `${origin}/v1/agents/${actingAgentId}/folder?workspace_id=${DEFAULT_WORKSPACE_ID}&${query}`,
   );
@@ -100,10 +95,7 @@ describe("S11 agent folder access API (private-folder isolation guard)", () => {
     const dir = makeTempDir("shera-runtime-s11-folder-deny-");
     const running = await composeOn(join(dir, "runtime.db"));
     try {
-      for (const path of [
-        `agent://${RESEARCHER}/`,
-        `agent://${RESEARCHER}/notes/private.txt`,
-      ]) {
+      for (const path of [`agent://${RESEARCHER}/`, `agent://${RESEARCHER}/notes/private.txt`]) {
         const denied = await folderAccess(running.origin, GENERAL, `path=${path}`);
         expect(denied.status).toBe(403);
         expect(denied.body).toMatchObject({
@@ -167,11 +159,7 @@ describe("S11 agent folder access API (private-folder isolation guard)", () => {
       expect(shared.body).toMatchObject({ code: "AGENT_FOLDER_URI_INVALID" });
 
       // Host outside the AgentFolderUri charset.
-      const badHost = await folderAccess(
-        running.origin,
-        GENERAL,
-        "path=agent://Agent_X/notes.txt",
-      );
+      const badHost = await folderAccess(running.origin, GENERAL, "path=agent://Agent_X/notes.txt");
       expect(badHost.status).toBe(400);
       expect(badHost.body).toMatchObject({ code: "AGENT_FOLDER_URI_INVALID" });
 
@@ -216,9 +204,7 @@ describe("S11 agent folder access API (private-folder isolation guard)", () => {
         `${running.origin}/v1/agents/${GENERAL}/folder?workspace_id=ws-s11-foreign&path=agent://${GENERAL}/`,
       );
       expect(foreign.status).toBe(404);
-      expect(((await foreign.json()) as Record<string, unknown>)["code"]).toBe(
-        "AGENT_NOT_FOUND",
-      );
+      expect(((await foreign.json()) as Record<string, unknown>)["code"]).toBe("AGENT_NOT_FOUND");
     } finally {
       await running.close();
     }

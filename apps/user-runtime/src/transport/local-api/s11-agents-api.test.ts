@@ -210,11 +210,10 @@ describe("S11 agent API (typed local API routes)", () => {
     const dir = makeTempDir("shera-runtime-s11-patch-");
     const running = await composeOn(join(dir, "runtime.db"));
     try {
-      const instructions = await patchJson(
-        running.origin,
-        `/v1/agents/${GENERAL}/instructions`,
-        { workspace_id: DEFAULT_WORKSPACE_ID, user_instructions: "Always answer in Bangla." },
-      );
+      const instructions = await patchJson(running.origin, `/v1/agents/${GENERAL}/instructions`, {
+        workspace_id: DEFAULT_WORKSPACE_ID,
+        user_instructions: "Always answer in Bangla.",
+      });
       expect(instructions.status).toBe(200);
       expect(instructions.body).toMatchObject({
         agent_id: GENERAL,
@@ -256,11 +255,10 @@ describe("S11 agent API (typed local API routes)", () => {
       );
       expect(missing.status).toBe(404);
       expect(missing.body).toMatchObject({ code: "AGENT_NOT_FOUND", category: "state" });
-      const missingPatch = await patchJson(
-        running.origin,
-        "/v1/agents/agent_nobody/instructions",
-        { workspace_id: DEFAULT_WORKSPACE_ID, user_instructions: "x" },
-      );
+      const missingPatch = await patchJson(running.origin, "/v1/agents/agent_nobody/instructions", {
+        workspace_id: DEFAULT_WORKSPACE_ID,
+        user_instructions: "x",
+      });
       expect(missingPatch.status).toBe(404);
       expect(missingPatch.body).toMatchObject({ code: "AGENT_NOT_FOUND" });
 
@@ -274,11 +272,10 @@ describe("S11 agent API (typed local API routes)", () => {
         `/v1/agents/${GENERAL}?workspace_id=ws-s11-foreign`,
       );
       expect(foreignDetail.status).toBe(404);
-      const foreignPatch = await patchJson(
-        running.origin,
-        `/v1/agents/${GENERAL}/instructions`,
-        { workspace_id: "ws-s11-foreign", user_instructions: "x" },
-      );
+      const foreignPatch = await patchJson(running.origin, `/v1/agents/${GENERAL}/instructions`, {
+        workspace_id: "ws-s11-foreign",
+        user_instructions: "x",
+      });
       expect(foreignPatch.status).toBe(404);
 
       // Malformed body → the contract's typed 400.
@@ -474,10 +471,13 @@ describe("S11 agent settings API (D16 read model + command surface)", () => {
       const missingCommand = await postJson(
         running.origin,
         "/v1/agents/agent_nobody/settings/commands",
-        commandBody({
-          type: "agent_settings.update_instructions",
-          user_instructions: "x",
-        }, "agent_nobody"),
+        commandBody(
+          {
+            type: "agent_settings.update_instructions",
+            user_instructions: "x",
+          },
+          "agent_nobody",
+        ),
       );
       expect(missingCommand.status).toBe(404);
       expect(missingCommand.body).toMatchObject({ code: "AGENT_NOT_FOUND" });
@@ -590,9 +590,7 @@ describe("S11 restart persistence (issue #12 AC: history and identity survive a 
         }),
       );
       expect(edited.status).toBe(200);
-      expect(entryOf(edited.body, "user_instructions").value).toBe(
-        "Survive the restart verbatim.",
-      );
+      expect(entryOf(edited.body, "user_instructions").value).toBe("Survive the restart verbatim.");
     } finally {
       await first.close(); // EVERYTHING closes — server, gateway, SQLite.
     }
@@ -704,9 +702,9 @@ describe("S11 direct-chat binding (one chat per workspace+agent, journaled)", ()
       expect(oneAgain.conversation_id).toBe(firstChatId);
 
       // An unknown Agent is a typed failure, not a chat.
-      expect(() =>
-        second.runtime.agents.getOrCreateDirectChat(WS_TWO, "agent_nobody"),
-      ).toThrow(/not found/);
+      expect(() => second.runtime.agents.getOrCreateDirectChat(WS_TWO, "agent_nobody")).toThrow(
+        /not found/,
+      );
 
       // Direct-chat creation is journaled like every other conversation
       // creation — the S07 replay route reads the durable event back.

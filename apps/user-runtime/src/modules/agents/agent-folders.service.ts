@@ -97,6 +97,8 @@ export class AgentFolderAccessDeniedError extends Error {
  */
 export function parseAgentFolderUri(uri: string): ParsedAgentFolderUri {
   if (!uri.startsWith("agent://")) throw new AgentFolderUriInvalidError();
+  // The control-character REJECTION test — this pattern IS the check.
+  // eslint-disable-next-line no-control-regex
   if (/[\u0000-\u001f\u007f]/.test(uri)) throw new AgentFolderUriInvalidError();
 
   const afterScheme = uri.slice("agent://".length);
@@ -130,6 +132,8 @@ export function parseAgentFolderUri(uri: string): ParsedAgentFolderUri {
     if (value.includes("/") || value.includes("\\")) {
       throw new AgentFolderUriInvalidError();
     }
+    // The control-character REJECTION test — this pattern IS the check.
+    // eslint-disable-next-line no-control-regex
     if (/[\u0000-\u001f\u007f]/.test(value)) throw new AgentFolderUriInvalidError();
     decoded.push(value);
   }
@@ -250,12 +254,7 @@ export class AgentFoldersService {
   }
 
   /** Guarded write: same rules as readFolder — own subtree only. */
-  writeFolder(
-    workspaceId: string,
-    actorAgentId: string,
-    uri: string,
-    content: string,
-  ): void {
+  writeFolder(workspaceId: string, actorAgentId: string, uri: string, content: string): void {
     const target = this.guard(workspaceId, actorAgentId, uri);
     this.#store.write(workspaceId, target.agent_id, target.path, content);
   }
@@ -286,11 +285,7 @@ export class AgentFoldersService {
     return target;
   }
 
-  private guard(
-    workspaceId: string,
-    actorAgentId: string,
-    uri: string,
-  ): ParsedAgentFolderUri {
+  private guard(workspaceId: string, actorAgentId: string, uri: string): ParsedAgentFolderUri {
     const target = this.resolveWithinWorkspace(workspaceId, actorAgentId, uri);
     const decision = decideAgentFolderAccess(actorAgentId, target);
     if (!decision.allowed) {

@@ -28,7 +28,10 @@ import type { ErrorRequestHandler, RequestHandler } from "express";
 
 import type { SheraError } from "@shera-bot/contracts";
 
-import { AgentNotFoundError, AgentSettingsValidationError } from "../../adapters/sqlite/agents-repository.ts";
+import {
+  AgentNotFoundError,
+  AgentSettingsValidationError,
+} from "../../adapters/sqlite/agents-repository.ts";
 import {
   AgentFolderAccessDeniedError,
   AgentFolderUriInvalidError,

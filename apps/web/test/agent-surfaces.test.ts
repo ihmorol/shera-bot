@@ -4,17 +4,11 @@ import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  AgentSettingsCommand,
-  AgentSettingsSnapshot,
-} from "@shera-bot/contracts";
+import { AgentSettingsCommand, AgentSettingsSnapshot } from "@shera-bot/contracts";
 
 import { AgentChatView } from "../components/chat/agent-chat-view";
 import { AgentRosterSection, type AgentRosterEntry } from "../components/shell/agent-roster";
-import {
-  AgentSettingsView,
-  settingsEditorKey,
-} from "../components/settings/agent-settings";
+import { AgentSettingsView, settingsEditorKey } from "../components/settings/agent-settings";
 import {
   buildAgentSettingsCommand,
   fetchAgentRoster,
@@ -298,7 +292,9 @@ describe("agent settings view (§S9 + D16)", () => {
     for (const key of ["role", "memory_link", "capabilities", "ui_identity"]) {
       const card = cardFor(html, key);
       expect(card, `${key} read-only badge`).toContain("Read-only");
-      expect(card, `${key} must have no editable control`).not.toMatch(/<(textarea|input|button)\b/);
+      expect(card, `${key} must have no editable control`).not.toMatch(
+        /<(textarea|input|button)\b/,
+      );
     }
   });
 
@@ -383,8 +379,7 @@ describe("agent settings view (§S9 + D16)", () => {
     // the refetched snapshot — the key is derived from the entry VALUE, so it
     // changes exactly when the server value changes.
     const before = SNAPSHOT.entries.find((entry) => entry.key === "user_instructions")!;
-    const keyWith = (value: unknown) =>
-      settingsEditorKey({ ...before, value } as typeof before);
+    const keyWith = (value: unknown) => settingsEditorKey({ ...before, value } as typeof before);
 
     expect(keyWith(before.value)).toBe(keyWith(before.value)); // stable across refetches
     expect(keyWith(before.value)).not.toBe(keyWith(null)); // reset → remount

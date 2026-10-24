@@ -81,8 +81,7 @@ function RuntimeAgentDirectChat({
 
   // S09 chunk 2's live pipeline, reused against the direct chat id (§6.3).
   const wsUrl = process.env.NEXT_PUBLIC_RUNTIME_WS_URL ?? null;
-  const liveEnabled =
-    wsUrl !== null && real.directChatId !== null && real.surfaceState === "ready";
+  const liveEnabled = wsUrl !== null && real.directChatId !== null && real.surfaceState === "ready";
   const live = useLiveConversation({
     wsUrl,
     workspaceId,

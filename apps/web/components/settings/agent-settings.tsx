@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, Check, RotateCcw, Settings2 } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import type {
   AgentSettingEntry,
@@ -200,7 +200,8 @@ function EntryCard({
         {/* Only the editable keys are command targets (D16) — the runtime
             guard mirrors EDITABLE_AGENT_SETTING_KEYS so TS and the contract
             agree that a pack-owned key never reaches a reset control. */}
-        {entry.editable && (EDITABLE_AGENT_SETTING_KEYS as readonly string[]).includes(entry.key) ? (
+        {entry.editable &&
+        (EDITABLE_AGENT_SETTING_KEYS as readonly string[]).includes(entry.key) ? (
           <ResetControls
             entryKey={entry.key as EditableAgentSettingKey}
             resettable={entry.resettable}
@@ -285,7 +286,10 @@ function EntryValue({
       return <p className="text-sm text-text">{entry.value}</p>;
     case "memory_link":
       return (
-        <p className="break-all font-mono text-xs text-text" title="The Agent's private folder root">
+        <p
+          className="break-all font-mono text-xs text-text"
+          title="The Agent's private folder root"
+        >
           {entry.value}
         </p>
       );
@@ -377,10 +381,7 @@ function UserInstructionsEditor({
         className="w-full resize-y rounded-lg border border-line bg-surface-elevated px-3 py-2 text-sm text-text placeholder:text-muted"
       />
       <div className="flex items-center gap-2">
-        <Button
-          size="sm"
-          onClick={() => onUpdateInstructions(draft.trim() ? draft.trim() : null)}
-        >
+        <Button size="sm" onClick={() => onUpdateInstructions(draft.trim() ? draft.trim() : null)}>
           Save
         </Button>
         <Button
@@ -471,9 +472,7 @@ function ToolDefaultsEditor({
         return;
       }
       setParseError(null);
-      onUpdateToolDefaults(
-        parsed as AgentToolDefault[],
-      );
+      onUpdateToolDefaults(parsed as AgentToolDefault[]);
     } catch {
       setParseError("That is not valid JSON — nothing was sent.");
     }
@@ -675,7 +674,12 @@ export function AgentSettingsView(props: AgentSettingsViewProps) {
             </Button>
           </span>
         ) : (
-          <Button variant="outline" size="sm" className="shrink-0" onClick={() => onResetClick("all")}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            onClick={() => onResetClick("all")}
+          >
             <RotateCcw aria-hidden="true" />
             Reset all settings
           </Button>
@@ -720,7 +724,10 @@ export function AgentSettingsView(props: AgentSettingsViewProps) {
 /** Honest configuration state: the D16 surface reads REAL rows, so it needs the container. */
 function ContainerUnavailableState() {
   return (
-    <div role="status" className="mx-auto my-8 flex max-w-md flex-col items-center gap-3 rounded-xl border border-line bg-surface p-6 text-center">
+    <div
+      role="status"
+      className="mx-auto my-8 flex max-w-md flex-col items-center gap-3 rounded-xl border border-line bg-surface p-6 text-center"
+    >
       <p className="text-sm text-text">
         Agent settings read your workspace's real Agent rows, so the workspace container must be
         running. Start your workspace and come back.
@@ -734,9 +741,7 @@ export function AgentSettingsSurface({ agentId }: { agentId: string }) {
   if (resolution.data?.kind !== "ready") {
     return <ContainerUnavailableState />;
   }
-  return (
-    <RuntimeAgentSettings workspaceId={resolution.data.workspace_id} agentId={agentId} />
-  );
+  return <RuntimeAgentSettings workspaceId={resolution.data.workspace_id} agentId={agentId} />;
 }
 
 /** The setting keys a settled command affected — the inline "Saved" targets. */
@@ -760,33 +765,34 @@ function RuntimeAgentSettings({ workspaceId, agentId }: { workspaceId: string; a
   const [pendingResetKey, setPendingResetKey] = useState<PendingResetKey>(null);
   // §6.3 visible command feedback: the cards a settled command affected show a
   // brief "Saved" confirmation, cleared after a moment (and immediately when a
-  // new command starts).
+  // new command starts). The confirmation is driven by the SUBMIT handler and
+  // the command's own settle callback — never by an effect — so a settled
+  // command raises it once, and the next submit drops it.
   const [savedKeys, setSavedKeys] = useState<readonly string[]>([]);
+  const savedTimerRef = useRef<number | null>(null);
 
-  useEffect(() => {
-    if (commandMutation.isPending) {
-      setSavedKeys([]);
-      return;
+  const clearSavedConfirmation = () => {
+    if (savedTimerRef.current !== null) {
+      window.clearTimeout(savedTimerRef.current);
+      savedTimerRef.current = null;
     }
-    if (!commandMutation.isSuccess) {
-      return;
-    }
-    const action = commandMutation.variables;
-    if (!action) {
-      return;
-    }
-    setSavedKeys(commandTargetKeys(action));
-    const timer = window.setTimeout(() => setSavedKeys([]), 2500);
-    return () => window.clearTimeout(timer);
-  }, [commandMutation.isSuccess, commandMutation.isPending, commandMutation.variables]);
+    setSavedKeys([]);
+  };
+
+  // Unmount cleanup ONLY (no state update in the effect body): the pending
+  // confirmation timer must not outlive the surface.
+  useEffect(
+    () => () => {
+      if (savedTimerRef.current !== null) {
+        window.clearTimeout(savedTimerRef.current);
+      }
+    },
+    [],
+  );
 
   const pending = detailQuery.isPending || settingsQuery.isPending;
   const failed = detailQuery.isError || settingsQuery.isError;
-  const surfaceState: AgentSettingsSurfaceState = pending
-    ? "loading"
-    : failed
-      ? "error"
-      : "ready";
+  const surfaceState: AgentSettingsSurfaceState = pending ? "loading" : failed ? "error" : "ready";
   const safeErrorMessage = failed
     ? safeRuntimeMessage(
         detailQuery.error ?? settingsQuery.error,
@@ -800,7 +806,22 @@ function RuntimeAgentSettings({ workspaceId, agentId }: { workspaceId: string; a
   };
 
   const submit = (action: Parameters<typeof commandMutation.mutate>[0]) => {
-    commandMutation.mutate(action);
+    // A new command starts: the previous confirmation goes away immediately.
+    clearSavedConfirmation();
+    commandMutation.mutate(action, {
+      onSuccess: () => {
+        // The command SETTLED successfully — show the confirmation on the cards
+        // it affected, for a moment.
+        setSavedKeys(commandTargetKeys(action));
+        if (savedTimerRef.current !== null) {
+          window.clearTimeout(savedTimerRef.current);
+        }
+        savedTimerRef.current = window.setTimeout(() => {
+          savedTimerRef.current = null;
+          setSavedKeys([]);
+        }, 2500);
+      },
+    });
   };
 
   return (

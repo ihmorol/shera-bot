@@ -41,10 +41,7 @@ interface ManifestAgent {
 }
 
 const here = dirname(fileURLToPath(import.meta.url));
-const studentManifestPath = resolve(
-  here,
-  "../../../../../agent-packs/student/v1/manifest.json",
-);
+const studentManifestPath = resolve(here, "../../../../../agent-packs/student/v1/manifest.json");
 const studentManifest = JSON.parse(readFileSync(studentManifestPath, "utf8")) as {
   agents: ManifestAgent[];
 };
@@ -151,9 +148,7 @@ describe("agent identities (S11 migration v4)", () => {
       ...studentManifest.agents,
       studentManifest.agents[0]!, // the SAME agent_id twice
     ];
-    expect(() => repo.upsertFromPack("ws-prim-dup", duplicated)).toThrow(
-      AgentSeedConflictError,
-    );
+    expect(() => repo.upsertFromPack("ws-prim-dup", duplicated)).toThrow(AgentSeedConflictError);
     try {
       repo.upsertFromPack("ws-prim-dup", duplicated);
     } catch (error) {
@@ -239,9 +234,7 @@ describe("agent identities (S11 migration v4)", () => {
     );
 
     const mutated: ManifestAgent[] = structuredClone(studentManifest.agents);
-    const general = mutated.find(
-      (agent) => agent.agent_id === "agent_general_assistant",
-    );
+    const general = mutated.find((agent) => agent.agent_id === "agent_general_assistant");
     expect(general).toBeDefined();
     general!.display_name = "Renamed Assistant";
     general!.role_description = "Renamed role description";
@@ -309,19 +302,17 @@ describe("agent identities (S11 migration v4)", () => {
       "agent_general_assistant",
       "Never send drafts without review.",
     );
-    expect(
-      repo.getAgent("ws-primary", "agent_general_assistant")?.user_instructions,
-    ).toBe("Never send drafts without review.");
+    expect(repo.getAgent("ws-primary", "agent_general_assistant")?.user_instructions).toBe(
+      "Never send drafts without review.",
+    );
 
     // Clearing is allowed (null).
     repo.updateUserInstructions("ws-primary", "agent_general_assistant", null);
-    expect(
-      repo.getAgent("ws-primary", "agent_general_assistant")?.user_instructions,
-    ).toBeNull();
+    expect(repo.getAgent("ws-primary", "agent_general_assistant")?.user_instructions).toBeNull();
 
-    expect(() =>
-      repo.updateUserInstructions("ws-primary", "agent_missing", "nope"),
-    ).toThrow(AgentNotFoundError);
+    expect(() => repo.updateUserInstructions("ws-primary", "agent_missing", "nope")).toThrow(
+      AgentNotFoundError,
+    );
   });
 
   it("updates the default provider for an agent", () => {
@@ -337,9 +328,9 @@ describe("agent identities (S11 migration v4)", () => {
     expect(general?.default_provider_id).toBe("provider_platform");
     expect(general?.default_provider_model).toBe("platform-large");
 
-    expect(() =>
-      repo.updateDefaultProvider("ws-primary", "agent_missing", "a", "b"),
-    ).toThrow(AgentNotFoundError);
+    expect(() => repo.updateDefaultProvider("ws-primary", "agent_missing", "a", "b")).toThrow(
+      AgentNotFoundError,
+    );
   });
 
   it("stores and returns validated per-agent settings overrides (the typed writer)", () => {
@@ -364,12 +355,12 @@ describe("agent identities (S11 migration v4)", () => {
     expect(repo.getSettings("ws-primary", agentId)).toEqual({ tool_defaults: [] });
 
     // Non-conforming payloads are the typed rejection — never stored.
-    expect(() =>
-      repo.updateSettings("ws-primary", agentId, { temperature: 0.2 }),
-    ).toThrow(AgentSettingsValidationError);
-    expect(() =>
-      repo.updateSettings("ws-primary", agentId, { tone: "warm" }),
-    ).toThrow(AgentSettingsValidationError);
+    expect(() => repo.updateSettings("ws-primary", agentId, { temperature: 0.2 })).toThrow(
+      AgentSettingsValidationError,
+    );
+    expect(() => repo.updateSettings("ws-primary", agentId, { tone: "warm" })).toThrow(
+      AgentSettingsValidationError,
+    );
     const thrown = (() => {
       try {
         repo.updateSettings("ws-primary", agentId, { temperature: 0.2 });
@@ -457,12 +448,12 @@ describe("agent identities (S11 migration v4)", () => {
     repo.addMemoryEntry("ws-beta", "agent_general_assistant", "beta memory");
     repo.addTaskHistoryEntry("ws-beta", "agent_general_assistant", "task-beta");
 
-    expect(
-      repo.listAgents("ws-alpha").every((agent) => agent.workspace_id === "ws-alpha"),
-    ).toBe(true);
-    expect(
-      repo.listAgents("ws-beta").every((agent) => agent.workspace_id === "ws-beta"),
-    ).toBe(true);
+    expect(repo.listAgents("ws-alpha").every((agent) => agent.workspace_id === "ws-alpha")).toBe(
+      true,
+    );
+    expect(repo.listAgents("ws-beta").every((agent) => agent.workspace_id === "ws-beta")).toBe(
+      true,
+    );
     expect(repo.listAgents("ws-alpha")).toHaveLength(6);
     expect(repo.listAgents("ws-beta")).toHaveLength(6);
 
@@ -582,10 +573,9 @@ describe("isDirectChatConflict (B5 race classification — real driver errors)",
     // A real-driver-code error on a DIFFERENT table is not the binding race.
     expect(
       isDirectChatConflict(
-        Object.assign(
-          new Error("UNIQUE constraint failed: agents.workspace_id, agents.agent_id"),
-          { code: "ERR_SQLITE_ERROR" },
-        ),
+        Object.assign(new Error("UNIQUE constraint failed: agents.workspace_id, agents.agent_id"), {
+          code: "ERR_SQLITE_ERROR",
+        }),
       ),
     ).toBe(false);
     expect(isDirectChatConflict(undefined)).toBe(false);

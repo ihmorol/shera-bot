@@ -231,13 +231,8 @@ export class AgentsRepository {
    * never touched, and roster removals are reported — not deleted. Runs in
    * one short transaction; a call inside an open transaction joins it.
    */
-  upsertFromPack(
-    workspaceId: string,
-    packAgents: readonly PackAgentSeed[],
-  ): UpsertFromPackResult {
-    return this.tx.transaction((db) =>
-      this.upsertFromPackWithin(workspaceId, packAgents, db),
-    );
+  upsertFromPack(workspaceId: string, packAgents: readonly PackAgentSeed[]): UpsertFromPackResult {
+    return this.tx.transaction((db) => this.upsertFromPackWithin(workspaceId, packAgents, db));
   }
 
   private upsertFromPackWithin(
@@ -245,9 +240,7 @@ export class AgentsRepository {
     packAgents: readonly PackAgentSeed[],
     db: DatabaseSync,
   ): UpsertFromPackResult {
-    const existing = new Map(
-      this.listAgents(workspaceId, db).map((row) => [row.agent_id, row]),
-    );
+    const existing = new Map(this.listAgents(workspaceId, db).map((row) => [row.agent_id, row]));
     const inserted: string[] = [];
     const updated: string[] = [];
     const incoming = new Set<string>();
@@ -438,12 +431,7 @@ export class AgentsRepository {
        ON CONFLICT (workspace_id, agent_id) DO UPDATE SET
          settings_json = excluded.settings_json,
          updated_at = excluded.updated_at`,
-    ).run(
-      workspaceId,
-      agentId,
-      JSON.stringify(parsed.data),
-      new Date().toISOString(),
-    );
+    ).run(workspaceId, agentId, JSON.stringify(parsed.data), new Date().toISOString());
   }
 
   /**
@@ -597,9 +585,7 @@ export class AgentsRepository {
 
   private requireAgent(workspaceId: string, agentId: string, db: DatabaseSync): void {
     const row = db
-      .prepare(
-        `SELECT 1 AS present FROM agents WHERE workspace_id = ? AND agent_id = ?`,
-      )
+      .prepare(`SELECT 1 AS present FROM agents WHERE workspace_id = ? AND agent_id = ?`)
       .get(workspaceId, agentId) as { present: number } | undefined;
     if (row === undefined) {
       throw new AgentNotFoundError(workspaceId, agentId);

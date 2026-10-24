@@ -281,10 +281,7 @@ describe("S11 agent settings read model (D16 metadata: default, why-it-matters, 
     expect(
       AgentSettingsSnapshot.safeParse({
         ...stripped,
-        entries: [
-          ...stripped.entries,
-          { ...stripped.entries[0], key: "temperature" },
-        ],
+        entries: [...stripped.entries, { ...stripped.entries[0], key: "temperature" }],
       }).success,
     ).toBe(false);
   });

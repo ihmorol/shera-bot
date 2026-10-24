@@ -137,8 +137,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const model = sidebarModel();
   const linkProps = onNavigate ? { onClick: onNavigate } : {};
   const resolution = useContainerResolution();
-  const readyWorkspaceId =
-    resolution.data?.kind === "ready" ? resolution.data.workspace_id : null;
+  const readyWorkspaceId = resolution.data?.kind === "ready" ? resolution.data.workspace_id : null;
 
   return (
     <div className="flex h-full min-h-0 flex-col">

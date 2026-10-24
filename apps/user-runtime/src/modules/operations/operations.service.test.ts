@@ -34,7 +34,13 @@ import {
 } from "../../adapters/sqlite/migrations.ts";
 import { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import { CommandReceiptsRepository } from "../../adapters/sqlite/command-receipts-repository.ts";
-import { OperationsRepository } from "../../adapters/sqlite/operations-repository.ts";
+import { ConversationsRepository } from "../../adapters/sqlite/conversations-repository.ts";
+import { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
+import {
+  OperationRecordCorruptError,
+  OperationsRepository,
+} from "../../adapters/sqlite/operations-repository.ts";
+import { EventsService } from "../events/events.service.ts";
 import {
   OperationsService,
   OperationsServiceError,
@@ -849,6 +855,52 @@ describe("S13 chunk 2 — collaboration events (D7, D26)", () => {
 
     // Nothing malformed was persisted.
     expect(service.listCollaborationEvents(WORKSPACE, operation.operation_id, {})).toEqual([]);
+  });
+});
+
+describe("S13 chunk 3 — thread read model corruption defense (D41)", () => {
+  it("typed-corrupts a thread read when a journaled message sender is malformed", () => {
+    // The chat-composed service (the same wiring composeRuntime uses): a real
+    // conversation row, real journal appends, real stream reads.
+    const conversations = new ConversationsRepository(tx);
+    const journal = new EventJournalRepository(tx);
+    const chat = new OperationsService({
+      operations: repo,
+      packCatalog: catalog,
+      tx,
+      conversations,
+      events: new EventsService(journal, tx),
+      journal,
+    });
+
+    const operation = createDefaultOperation();
+    const sent = chat.sendOperationMessage(WORKSPACE, operation.operation_id, {
+      idempotency_key: "idem_corrupt_sender_1",
+      sender: { kind: "user", display_name: "Emon" },
+      text: "read me before the corruption",
+    });
+    expect(sent.kind).toBe("message_sent");
+
+    // Corrupt the journaled sender behind the runtime's back: a payload that
+    // no longer conforms to the MessageSender union must surface as typed
+    // corruption on the thread read — never a silently cast thread item.
+    const original = journal.findById(WORKSPACE, sent.event_id);
+    expect(original).not.toBeNull();
+    const payload = JSON.parse(original!.payload) as Record<string, unknown>;
+    conn.db
+      .prepare("UPDATE event_journal SET payload = ? WHERE workspace_id = ? AND event_id = ?")
+      .run(
+        JSON.stringify({ ...payload, sender: { kind: "telepathy", target: "everyone" } }),
+        WORKSPACE,
+        sent.event_id,
+      );
+
+    try {
+      chat.getThread(WORKSPACE, operation.operation_id);
+      expect.unreachable("a malformed journaled sender must surface as typed corruption");
+    } catch (error) {
+      expect(error).toBeInstanceOf(OperationRecordCorruptError);
+    }
   });
 });
 

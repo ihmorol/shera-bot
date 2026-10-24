@@ -60,6 +60,40 @@
  * created in the SAME transaction as the binding), so no FOREIGN KEY is
  * declared — matching the v4 agent tables. The same agent_id in two
  * workspaces binds two independent chats (E12).
+ *
+ * v6 — Operation chat records (S13 chunk 2; D31, D34, D36, D46, D49): the
+ * persisted Operation chat (the S02 `Operation` stays the conversation-summary
+ * wire shape — this is the D31 workspace/chat OBJECT), its queryable roster,
+ * its runs, the D7 collaboration events, persisted D36 roster refusals, and
+ * the D49 coordinator lifecycle events.
+ *
+ * Normalization taste: the D29 pinning snapshot is stored WITHOUT the roster —
+ * pack_id/pack_version/capabilities/provider_snapshot live on the operations
+ * row, while roster membership is its own operation_roster table keyed
+ * (workspace_id, operation_id, agent_id). The roster is the single source of
+ * truth for membership (queryable at the storage layer, E12) and the read
+ * model assembles pinning.roster_agent_ids from it — the JSON can never drift
+ * from the table. operation_roster_refusals persists every refused roster
+ * change (D36) so the UI can show WHY; operation_coordinator_events records
+ * D49's CoordinatorSet/CoordinatorRemoved lifecycle events.
+ *
+ * operation_runs: one D31 run per row — its own D8 state (the same vocabulary
+ * as TaskRun, never a second state machine), its own D26 events_seq_cursor
+ * (last applied stream sequence; 0 = none yet), credits placeholder, and
+ * artifact ids. parent_task_id is the D34/D46 delegation link (the parent
+ * RUN's id); no FOREIGN KEY is declared — the writer validates the parent in
+ * the same workspace, matching the v4/v5 discipline. Run ids that begin with
+ * "operation:" are rejected by the writer: that prefix is reserved for the
+ * Operation-chat event stream sentinel below.
+ *
+ * operation_collaboration_events (D7): the STREAM DESIGN CHOICE — a D7 event
+ * is streamed per RUN when run_id is set (stream_id = run_id, mirroring
+ * OperationRun.events_seq_cursor), and on the Operation chat itself when
+ * run_id is null (stream_id = "operation:<operation_id>", the sentinel run ids
+ * can never take). Both stream kinds are 1-based, gapless per stream (D26),
+ * with PRIMARY KEY (workspace_id, stream_id, sequence) and workspace-scoped
+ * event_id uniqueness — the same shape as the v1 journal. The run cursor and
+ * the event row commit in the SAME transaction.
  */
 import type { DatabaseSync } from "node:sqlite";
 
@@ -204,6 +238,106 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
         PRIMARY KEY (workspace_id, agent_id),
         UNIQUE (workspace_id, conversation_id)
       ) STRICT;
+    `,
+  },
+  {
+    version: 6,
+    name: "operation-chat-records",
+    sql: `
+      CREATE TABLE IF NOT EXISTS operations (
+        operation_id           TEXT    NOT NULL,
+        workspace_id           TEXT    NOT NULL,
+        definition_ref         TEXT,
+        name                   TEXT    NOT NULL,
+        status                 TEXT    NOT NULL CHECK (status IN ('active', 'completed', 'failed')),
+        coordinator_agent_id   TEXT    NOT NULL,
+        pack_id                TEXT    NOT NULL,
+        pack_version           TEXT    NOT NULL,
+        capabilities_json      TEXT    NOT NULL CHECK (json_valid(capabilities_json)),
+        provider_snapshot_json TEXT    NOT NULL CHECK (json_valid(provider_snapshot_json)),
+        created_at             TEXT    NOT NULL,
+        updated_at             TEXT    NOT NULL,
+        PRIMARY KEY (workspace_id, operation_id)
+      ) STRICT;
+
+      CREATE TABLE IF NOT EXISTS operation_roster (
+        workspace_id      TEXT    NOT NULL,
+        operation_id      TEXT    NOT NULL,
+        agent_id          TEXT    NOT NULL,
+        pack_id           TEXT    NOT NULL,
+        pack_version      TEXT    NOT NULL,
+        requires_approval INTEGER NOT NULL CHECK (requires_approval IN (0, 1)),
+        added_at          TEXT    NOT NULL,
+        PRIMARY KEY (workspace_id, operation_id, agent_id)
+      ) STRICT;
+
+      CREATE TABLE IF NOT EXISTS operation_roster_refusals (
+        id           INTEGER PRIMARY KEY,
+        workspace_id TEXT    NOT NULL,
+        operation_id TEXT    NOT NULL,
+        agent_id     TEXT,
+        pack_id      TEXT,
+        refusal_code TEXT    NOT NULL,
+        message      TEXT    NOT NULL,
+        command_json TEXT    NOT NULL CHECK (json_valid(command_json)),
+        created_at   TEXT    NOT NULL
+      ) STRICT;
+
+      CREATE TABLE IF NOT EXISTS operation_coordinator_events (
+        id           INTEGER PRIMARY KEY,
+        workspace_id TEXT    NOT NULL,
+        operation_id TEXT    NOT NULL,
+        event_id     TEXT    NOT NULL,
+        event_type   TEXT    NOT NULL CHECK (event_type IN ('CoordinatorSet', 'CoordinatorRemoved')),
+        agent_id     TEXT,
+        created_at   TEXT    NOT NULL,
+        UNIQUE (workspace_id, event_id)
+      ) STRICT;
+
+      CREATE TABLE IF NOT EXISTS operation_runs (
+        run_id                 TEXT    NOT NULL,
+        workspace_id           TEXT    NOT NULL,
+        operation_id           TEXT    NOT NULL,
+        parent_task_id         TEXT,
+        state                  TEXT    NOT NULL CHECK (state IN (
+          'CREATED', 'PLANNED', 'QUEUED', 'RUNNING',
+          'WAITING_FOR_AGENT', 'WAITING_FOR_APPROVAL', 'WAITING_FOR_RESOURCE',
+          'RETRYING', 'CANCELLING', 'CANCELLED', 'SUCCEEDED', 'FAILED',
+          'PAUSED', 'RECOVERY_REQUIRED')),
+        events_seq_cursor      INTEGER NOT NULL CHECK (events_seq_cursor >= 0),
+        provider_snapshot_json TEXT,
+        credits_json           TEXT    NOT NULL CHECK (json_valid(credits_json)),
+        artifacts_json         TEXT    NOT NULL CHECK (json_valid(artifacts_json)),
+        created_at             TEXT    NOT NULL,
+        updated_at             TEXT    NOT NULL,
+        PRIMARY KEY (workspace_id, run_id)
+      ) STRICT;
+
+      CREATE INDEX IF NOT EXISTS operation_runs_by_operation_idx
+        ON operation_runs (workspace_id, operation_id);
+
+      CREATE INDEX IF NOT EXISTS operation_runs_by_parent_idx
+        ON operation_runs (workspace_id, parent_task_id);
+
+      CREATE TABLE IF NOT EXISTS operation_collaboration_events (
+        workspace_id             TEXT    NOT NULL,
+        stream_id                TEXT    NOT NULL,
+        sequence                 INTEGER NOT NULL CHECK (sequence >= 1),
+        event_id                 TEXT    NOT NULL,
+        operation_id             TEXT    NOT NULL,
+        run_id                   TEXT,
+        type                     TEXT    NOT NULL,
+        sender_agent_id          TEXT    NOT NULL,
+        recipient_agent_ids_json TEXT    NOT NULL CHECK (json_valid(recipient_agent_ids_json)),
+        correlation_id           TEXT    NOT NULL,
+        payload_json             TEXT    NOT NULL CHECK (json_valid(payload_json)),
+        issued_at                TEXT    NOT NULL,
+        PRIMARY KEY (workspace_id, stream_id, sequence),
+        UNIQUE (workspace_id, event_id)
+      ) STRICT;
+
+      CREATE INDEX IF NOT EXISTS operation_collaboration_events_by_operation_idx
+        ON operation_collaboration_events (workspace_id, operation_id);
     `,
   },
 ];

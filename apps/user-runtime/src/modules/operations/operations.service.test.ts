@@ -375,7 +375,7 @@ describe("S13 chunk 2 — coordinator lifecycle (D42/D49)", () => {
     // D49: removal is RECORDED as an event ...
     const events = service.listCoordinatorEvents(WORKSPACE, operation.operation_id);
     expect(events).toHaveLength(1);
-    expect(events[0]?.type).toBe("CoordinatorRemoved");
+    expect(events[0]?.event_type).toBe("CoordinatorRemoved");
     expect(events[0]?.agent_id).toBe(GENERAL);
 
     // ... and the in-flight run is NOT cancelled or paused: it still advances.
@@ -392,7 +392,7 @@ describe("S13 chunk 2 — coordinator lifecycle (D42/D49)", () => {
     expect(reassigned.coordinator_agent_id).toBe(RESEARCHER);
     const eventsAfter = service.listCoordinatorEvents(WORKSPACE, operation.operation_id);
     expect(eventsAfter).toHaveLength(2);
-    expect(eventsAfter[1]?.type).toBe("CoordinatorSet");
+    expect(eventsAfter[1]?.event_type).toBe("CoordinatorSet");
     expect(eventsAfter[1]?.agent_id).toBe(RESEARCHER);
 
     // Setting the SAME coordinator again changes nothing and records nothing.

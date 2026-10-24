@@ -74,13 +74,16 @@ export function Composer({
           onKeyDown={handleKeyDown}
           rows={1}
           disabled={disabled}
-          placeholder={disabled ? disabledReason : `Message ${agentName}`}
-          className="max-h-40 min-h-11 min-w-0 flex-1 resize-none rounded-xl border border-line bg-surface-elevated px-3 py-2.5 text-base text-text placeholder:text-muted"
+          placeholder={`Message ${agentName}`}
+          className="max-h-40 min-h-11 min-w-0 flex-1 resize-none rounded-xl border border-line bg-surface-elevated px-3 py-2.5 text-base text-text placeholder:text-muted disabled:opacity-60 disabled:cursor-not-allowed"
         />
         <Button type="submit" size="icon" disabled={!canSend} aria-label="Send message">
           <Send className="size-4" aria-hidden="true" />
         </Button>
       </form>
+      {/* The hint is the ONE place the disabled reason renders (D17): the
+          placeholder stays the neutral prompt, so the explanation never
+          appears twice on the same surface. */}
       <p className="mt-1.5 px-1 font-mono text-[11px] text-muted" role="status">
         {disabled
           ? disabledReason

@@ -132,6 +132,14 @@ describe("gate states", () => {
     expect(terminal).not.toMatch(/stack|correlation/i);
   });
 
+  it("failed centers the panel in the surface (§2.4, like every gate state)", () => {
+    const html = render({ kind: "failed", workspace_id: WORKSPACE, error: typedError() });
+    // The ErrorState is the child of a full-height centered flex wrapper — it
+    // never hugs the top edge.
+    expect(html).toMatch(/class="[^"]*flex h-full items-center justify-center[^"]*"/);
+    expect(html).toContain("Your workspace could not be prepared.");
+  });
+
   it("a ready container renders the dashboard children unchanged", () => {
     const html = render({ kind: "ready", workspace_id: WORKSPACE, runtime: READY_RUNTIME });
     expect(html).toContain("DASHBOARD-CONTENT");

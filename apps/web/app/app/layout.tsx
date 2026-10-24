@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { AppShell } from "@/components/shell/app-shell";
 import { Providers } from "@/components/providers";
+import { ContainerGate } from "@/components/shell/container-gate";
 
 export const metadata: Metadata = {
   title: "Dashboard",
@@ -12,7 +13,9 @@ export const metadata: Metadata = {
 export default function AppLayout({ children }: { children: ReactNode }) {
   return (
     <Providers>
-      <AppShell>{children}</AppShell>
+      <AppShell>
+        <ContainerGate>{children}</ContainerGate>
+      </AppShell>
     </Providers>
   );
 }

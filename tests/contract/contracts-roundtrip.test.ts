@@ -67,6 +67,17 @@ const ROUND_TRIP_CASES: ReadonlyArray<{ schema: ContractName; fixture: string }>
   },
   { schema: "RuntimeCredentialCommitRequest", fixture: "runtime-credential-commit-request.json" },
   { schema: "RuntimeCredentialCommitResponse", fixture: "runtime-credential-commit-response.json" },
+  // S11 (D16 agent settings command surface; one case per union member).
+  { schema: "AgentSettingsCommand", fixture: "agent-settings-command-update-instructions.json" },
+  {
+    schema: "AgentSettingsCommand",
+    fixture: "agent-settings-command-update-default-provider.json",
+  },
+  { schema: "AgentSettingsCommand", fixture: "agent-settings-command-update-tool-defaults.json" },
+  { schema: "AgentSettingsCommand", fixture: "agent-settings-command-reset-setting.json" },
+  { schema: "AgentSettingsCommand", fixture: "agent-settings-command-reset-all.json" },
+  { schema: "AgentSettingsSnapshot", fixture: "agent-settings-snapshot.json" },
+  { schema: "AgentSettingsOverrides", fixture: "agent-settings-overrides.json" },
 ];
 
 describe.each(ROUND_TRIP_CASES)("$schema round-trip ($fixture)", ({ schema, fixture }) => {

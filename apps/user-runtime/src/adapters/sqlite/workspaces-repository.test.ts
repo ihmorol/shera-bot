@@ -37,9 +37,9 @@ const PIN = {
 };
 
 describe("workspace pack pinning (S10 migration v3)", () => {
-  it("appends v3 to the committed migration chain", () => {
-    expect(MIGRATIONS.at(-1)?.version).toBe(3);
-    expect(MIGRATIONS.at(-1)?.name).toBe("workspace-pack-pinning");
+  it("contains v3 in the committed migration chain", () => {
+    const v3 = MIGRATIONS.find((migration) => migration.version === 3);
+    expect(v3?.name).toBe("workspace-pack-pinning");
   });
 
   it("creates an unpinned workspace row and reads it back workspace-scoped", () => {

@@ -4,9 +4,12 @@ import { Layers, Loader2, Settings2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { AgentRosterSection } from "@/components/shell/agent-roster";
 import { AgentAvatar } from "@/components/chat/agent-avatar";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { useAgentRoster } from "@/lib/agent-data";
+import { useContainerResolution } from "@/lib/container-connection";
 import {
   entitySlug,
   sessionPresenceFor,
@@ -26,14 +29,41 @@ import { Wordmark } from "./wordmark";
  * the pack footer label. Two sections only (D41); no workspace switcher, no
  * pack switcher (D40, D19).
  *
- * All rows and states come from the §9 fixture model: unread (count pill),
- * running (spinner), approval_required (amber dot + count — a pending
- * proposal, never a granted state, G2), failed (red dot for genuinely
+ * The Agents section has two honest data sources (S11): when the container is
+ * ready it renders the REAL workspace roster from GET /v1/agents (the seeded
+ * pack identities, quiet rows — no fabricated states, G4); in every other
+ * resolution state it keeps the §9 fixture demo rows, honestly labeled demo
+ * data. All rows and states come from the §9 fixture model otherwise: unread
+ * (count pill), running (spinner), approval_required (amber dot + count — a
+ * pending proposal, never a granted state, G2), failed (red dot for genuinely
  * FAILED runs; amber "needs your review" for PAUSED/RECOVERY_REQUIRED per
  * the §2.1 palette — red means error only), quiet (no marker). Color is
  * never the only signal — every dot pairs with a glyph, count, or
  * screen-reader label (§2.1).
  */
+
+/** The live Agents section once the container is ready (S11 roster read). */
+function LiveAgentRosterSection({
+  workspaceId,
+  pathname,
+  onNavigate,
+}: {
+  workspaceId: string;
+  pathname: string;
+  onNavigate?: (() => void) | undefined;
+}) {
+  const roster = useAgentRoster(workspaceId);
+  return (
+    <AgentRosterSection
+      entries={roster.agents}
+      state={roster.state === "ready" && roster.agents.length === 0 ? "empty" : roster.state}
+      safeErrorMessage={roster.safeErrorMessage}
+      onRetry={roster.refetch}
+      pathname={pathname}
+      onNavigate={onNavigate}
+    />
+  );
+}
 
 /** Screen-reader label per sidebar state (color is never the only signal). */
 const STATE_LABELS: Record<ConversationState, string> = {
@@ -106,6 +136,8 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const model = sidebarModel();
   const linkProps = onNavigate ? { onClick: onNavigate } : {};
+  const resolution = useContainerResolution();
+  const readyWorkspaceId = resolution.data?.kind === "ready" ? resolution.data.workspace_id : null;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -122,41 +154,52 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       <Separator />
 
       <nav className="min-h-0 flex-1 overflow-y-auto px-2 py-4" aria-label="Primary">
-        {/* Agents — six pack Agents as persistent direct chats (AC3, §3.2) */}
+        {/* Agents — the REAL workspace roster once the container is ready
+            (S11); the fixture demo rows otherwise (§3.2, AC3). */}
         <section>
-          <SidebarSectionLabel>Agents</SidebarSectionLabel>
-          <ul>
-            {model.agents.map(({ agent, conversation, state, approvalCount, attention }) => {
-              const href = routes.agent(entitySlug(agent.agent_id));
-              const active = pathname === href || pathname.startsWith(`${href}/`);
-              const presence = sessionPresenceFor(conversation.conversation_id);
-              return (
-                <li key={agent.agent_id}>
-                  <Link
-                    href={href}
-                    aria-current={active ? "page" : undefined}
-                    title={agent.role_description}
-                    className={cn(ITEM_BASE, active ? ITEM_ACTIVE : ITEM_IDLE)}
-                    {...linkProps}
-                  >
-                    <AgentAvatar agent={agent} size="sm" presence={presence} />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-text">{agent.display_name}</span>
-                      <span className="block truncate text-xs text-muted">
-                        {agent.role_description}
-                      </span>
-                    </span>
-                    <StateTrail
-                      state={state}
-                      unreadCount={conversation.unread_count}
-                      approvalCount={approvalCount}
-                      attention={attention}
-                    />
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+          {readyWorkspaceId ? (
+            <LiveAgentRosterSection
+              workspaceId={readyWorkspaceId}
+              pathname={pathname}
+              onNavigate={onNavigate}
+            />
+          ) : (
+            <>
+              <SidebarSectionLabel>Agents</SidebarSectionLabel>
+              <ul>
+                {model.agents.map(({ agent, conversation, state, approvalCount, attention }) => {
+                  const href = routes.agent(entitySlug(agent.agent_id));
+                  const active = pathname === href || pathname.startsWith(`${href}/`);
+                  const presence = sessionPresenceFor(conversation.conversation_id);
+                  return (
+                    <li key={agent.agent_id}>
+                      <Link
+                        href={href}
+                        aria-current={active ? "page" : undefined}
+                        title={agent.role_description}
+                        className={cn(ITEM_BASE, active ? ITEM_ACTIVE : ITEM_IDLE)}
+                        {...linkProps}
+                      >
+                        <AgentAvatar agent={agent} size="sm" presence={presence} />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-text">{agent.display_name}</span>
+                          <span className="block truncate text-xs text-muted">
+                            {agent.role_description}
+                          </span>
+                        </span>
+                        <StateTrail
+                          state={state}
+                          unreadCount={conversation.unread_count}
+                          approvalCount={approvalCount}
+                          attention={attention}
+                        />
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
         </section>
 
         <Separator className="my-4" />
@@ -223,9 +266,11 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         </section>
       </nav>
 
-      {/* Footer: pinned pack shown once as a label, not a control (D40) */}
+      {/* Footer: pinned pack shown once as a label, not a control (D40).
+          pb-4 keeps the label inside the shell's 16px edge rhythm — it never
+          rides the viewport's bottom edge. */}
       <Separator />
-      <div className="px-4 py-3">
+      <div className="px-4 pb-4 pt-3">
         <p className="font-mono text-xs uppercase tracking-[0.16em] text-muted">student pack v1</p>
       </div>
     </div>

@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import Link from "next/link";
 
+import { AgentSettingsSurface } from "@/components/settings/agent-settings";
 import { SurfaceFrame } from "@/components/shell/surface-frame";
+import { findAgent } from "@/lib/navigation";
 import { routes } from "@/lib/routes";
 
 interface SettingsPageProps {
@@ -13,13 +16,31 @@ export const metadata: Metadata = {
 };
 
 /**
- * S9 settings shell. Sections are named here as pending labels, not links —
- * each section (profile, providers, tools, git, memory, credits, workspace)
- * becomes a real route with its own slice, so the shell never links to a
- * section that cannot render yet (G4).
+ * S9 settings shell. The Agents section is REAL (S11): /app/settings/agents/
+ * <agent> renders the D16 per-Agent settings surface (display label, current
+ * value, recommended default, why it matters, risk note, reset-to-default,
+ * read-only pack-owned entries — through the ONE D16 commands endpoint).
+ * Other sections are named here as pending labels, not links — each becomes a
+ * real route with its own slice, so the shell never links to a section that
+ * cannot render yet (G4).
  */
 export default async function SettingsPage({ params }: SettingsPageProps) {
   const { section } = await params;
+
+  if (section?.length === 2 && section[0] === "agents") {
+    const slug = section[1]!;
+    // Unknown Agents 404 — the six pack Agents are the enumerable roster
+    // (same discipline as the Agent chat route).
+    if (!findAgent(slug)) {
+      notFound();
+    }
+    return (
+      <SurfaceFrame title="Settings" meta="Agents">
+        <AgentSettingsSurface agentId={`agent_${slug.replace(/-/g, "_")}`} />
+      </SurfaceFrame>
+    );
+  }
+
   const sectionLabel = section?.length ? section.join(" / ") : "Overview";
 
   return (

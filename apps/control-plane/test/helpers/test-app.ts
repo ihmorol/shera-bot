@@ -24,7 +24,11 @@ export interface ControlPlaneFixture {
 }
 
 /** Generate a throwaway self-signed cert and serve the app over HTTPS. */
-async function listenHttps(app: Express, port: number): Promise<{ close(): Promise<void> }> {
+async function listenHttps(
+  app: Express,
+  port: number,
+  attach?: (server: Server) => void,
+): Promise<{ close(): Promise<void> }> {
   const dir = mkdtempSync(join(tmpdir(), "shera-cp-tls-"));
   const keyPath = join(dir, "key.pem");
   const certPath = join(dir, "cert.pem");
@@ -53,6 +57,7 @@ async function listenHttps(app: Express, port: number): Promise<{ close(): Promi
     { key: readFileSync(keyPath), cert: readFileSync(certPath) },
     app,
   );
+  attach?.(server);
   await new Promise<void>((resolve, reject) => {
     server.listen(port, "127.0.0.1", () => resolve());
     server.on("error", reject);
@@ -104,7 +109,9 @@ export async function startControlPlaneFixture(
     await controlPlane.close();
     throw new Error("fixture requires an explicit port so AUTH_URL matches the origin");
   }
-  const https = await listenHttps(controlPlane.app, port);
+  const https = await listenHttps(controlPlane.app, port, (server) =>
+    controlPlane.liveTransport.attach(server),
+  );
   return {
     controlPlane,
     origin: `https://127.0.0.1:${port}`,

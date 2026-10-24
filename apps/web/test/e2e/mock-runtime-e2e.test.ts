@@ -16,7 +16,7 @@
  *   wire client (RuntimeSocket) feeding the web app's OWN reducer
  *   (advanceLiveThread) — the same dispatches the React hook performs.
  * - "Login" is asserted honestly: the S01 sign-in surface renders with its
- *   visibly disabled provider button (OAuth is a later slice, G4) and the
+ *   control-plane provider link (real OAuth remains outside this mock test) and the
  *   prototype session is the fixture user the sends are attributed to (Emon).
  *
  * DETERMINISM: the scripted reply streams one delta per 15ms and commits its
@@ -69,9 +69,49 @@ async function startHarness(): Promise<E2eHarness> {
   const mock = await startE2eMockRuntime();
   tempDirs.push(join(mock.dbPath, ".."));
   // The proxy reads its upstream from the deployment env — the harness IS the
-  // deployment here, so the mock origin is the local API URL.
-  const previousUpstream = process.env["RUNTIME_LOCAL_API_URL"];
-  process.env["RUNTIME_LOCAL_API_URL"] = mock.origin;
+  // deployment here. Its explicit mock identity service is test-only; there
+  // is no production authentication bypass.
+  const previousUpstream = process.env["CONTROL_PLANE_URL"];
+  const control = createServer((req, res) => {
+    void (async () => {
+      if (req.url === "/api/session") {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(
+          JSON.stringify({
+            workspace_id: mock.workspace_id,
+            google_sub: "e8-user",
+            email: "e8@example.com",
+            display_name: SESSION_USER,
+            tier: "balanced",
+            is_admin: false,
+            created_at: "2026-10-01T00:00:00Z",
+            last_active_at: "2026-10-01T00:00:00Z",
+          }),
+        );
+        return;
+      }
+      if (!req.url?.startsWith("/api/runtime/local/")) {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
+      const chunks: Buffer[] = [];
+      for await (const chunk of req) chunks.push(chunk as Buffer);
+      const response = await fetch(mock.origin + req.url.slice("/api/runtime/local".length), {
+        method: req.method ?? "GET",
+        headers: { "content-type": "application/json" },
+        ...(chunks.length ? { body: Buffer.concat(chunks) } : {}),
+      });
+      res.writeHead(response.status, { "content-type": "application/json" });
+      res.end(await response.text());
+    })().catch(() => {
+      res.writeHead(500);
+      res.end();
+    });
+  });
+  await new Promise<void>((resolve) => control.listen(0, "127.0.0.1", resolve));
+  process.env["CONTROL_PLANE_URL"] =
+    `http://127.0.0.1:${(control.address() as { port: number }).port}`;
 
   const proxy: HTTPServer = createServer((req, res) => {
     void (async () => {
@@ -113,11 +153,12 @@ async function startHarness(): Promise<E2eHarness> {
       await new Promise<void>((resolve, reject) =>
         proxy.close((error) => (error ? reject(error) : resolve())),
       );
+      await new Promise<void>((resolve) => control.close(() => resolve()));
       await mock.stop();
       if (previousUpstream === undefined) {
-        delete process.env["RUNTIME_LOCAL_API_URL"];
+        delete process.env["CONTROL_PLANE_URL"];
       } else {
-        process.env["RUNTIME_LOCAL_API_URL"] = previousUpstream;
+        process.env["CONTROL_PLANE_URL"] = previousUpstream;
       }
     },
   };
@@ -227,7 +268,7 @@ describe("S09 mock-runtime E2E (E8): login → chat → send → stream → refr
     // -- Phase 0: LOGIN — the honest S01 surface, no fake provider success ----
     const loginMarkup = renderToStaticMarkup(createElement(LoginPage));
     expect(loginMarkup).toContain("Sign in");
-    expect(loginMarkup).toContain("disabled");
+    expect(loginMarkup).toContain('href="/api/control/api/auth/signin/google"');
     expect(loginMarkup).not.toContain("Signed in");
 
     const harness = await startHarness();

@@ -9,6 +9,16 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   transpilePackages: ["@shera-bot/contracts"],
+  async rewrites() {
+    const base = process.env["CONTROL_PLANE_URL"]?.replace(/\/$/, "");
+    return {
+      beforeFiles: base
+        ? [{ source: "/api/runtime/live", destination: `${base}/api/runtime/live` }]
+        : [],
+      afterFiles: [],
+      fallback: [],
+    };
+  },
 };
 
 export default nextConfig;

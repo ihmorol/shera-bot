@@ -8,6 +8,7 @@
  */
 import { createControlPlaneApp } from "./index.ts";
 import { readEnv } from "./config.ts";
+import { createServer } from "node:http";
 
 async function main(): Promise<void> {
   const env = readEnv();
@@ -25,7 +26,9 @@ async function main(): Promise<void> {
 
   const controlPlane = await createControlPlaneApp({ env: process.env });
   const port = Number(env.PORT ?? 3000);
-  const server = controlPlane.app.listen(port, () => {
+  const server = createServer(controlPlane.app);
+  controlPlane.liveTransport.attach(server);
+  server.listen(port, () => {
     controlPlane.logger.info("control_plane_listening", {
       port,
       auth_configured: controlPlane.authConfigured,
@@ -34,6 +37,7 @@ async function main(): Promise<void> {
 
   const shutdown = (signal: string): void => {
     controlPlane.logger.info("control_plane_shutdown", { signal });
+    controlPlane.liveTransport.close();
     server.close(() => {
       void controlPlane.close().then(() => process.exit(0));
     });

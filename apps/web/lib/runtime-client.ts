@@ -4,7 +4,7 @@ import { TypedHttpError, UNREACHABLE_ERROR, typedErrorFromPayload } from "@/lib/
 
 /**
  * Typed browser client for the container's local API (S09 chunk 1), reached
- * through the same-origin proxy (/api/runtime/* → RUNTIME_LOCAL_API_URL,
+ * through the same-origin proxy (/api/runtime/* → CONTROL_PLANE_URL,
  * strict two-path allowlist). This is the REAL conversation backing: the
  * General Assistant direct chat reads and writes real container-local SQLite
  * rows through exactly the two S07 surfaces —
@@ -114,7 +114,14 @@ const ReplaySnapshotResult = z.strictObject({
 
 const ReplayResult = z.discriminatedUnion("kind", [ReplayEventsResult, ReplaySnapshotResult]);
 
-async function requestRuntime<T>(
+/**
+ * The single transport idiom for the container's local API through the
+ * same-origin proxy: typed parse, typed failures (SheraError bodies through
+ * the shared typed-error parser), and a server drift on a 2xx that breaks its
+ * contract. Shared with the S11 agent client (lib/agent-api.ts) so every
+ * surface fails the same honest way.
+ */
+export async function requestRuntime<T>(
   path: string,
   parse: (payload: unknown) => T,
   init: RequestInit = {},

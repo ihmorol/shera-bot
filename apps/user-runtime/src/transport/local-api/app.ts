@@ -16,9 +16,12 @@
 import express, { type Express } from "express";
 import { z } from "zod";
 
-import { Id, WorkspaceId } from "@shera-bot/contracts";
+import { AgentSettingsCommand, Id, WorkspaceId } from "@shera-bot/contracts";
 
+import type { AgentRow } from "../../adapters/sqlite/agents-repository.ts";
 import { conversationStreamFor } from "../../modules/conversations/conversations.events.ts";
+import type { AgentFoldersService } from "../../modules/agents/agent-folders.service.ts";
+import type { AgentsService } from "../../modules/agents/agents.service.ts";
 import type { ConversationsService } from "../../modules/conversations/conversations.service.ts";
 import { ConversationCommand } from "../../modules/conversations/conversations.types.ts";
 import type { ReplayService } from "../../modules/events/replay.service.ts";
@@ -31,6 +34,13 @@ import {
 
 export const SUBMIT_CONVERSATION_COMMAND_PATH = "/v1/conversations/commands" as const;
 export const LIST_CONVERSATION_EVENTS_PATH = "/v1/conversations/:conversation_id/events" as const;
+export const LIST_AGENTS_PATH = "/v1/agents" as const;
+export const GET_AGENT_PATH = "/v1/agents/:agent_id" as const;
+export const PATCH_AGENT_INSTRUCTIONS_PATH = "/v1/agents/:agent_id/instructions" as const;
+export const PATCH_AGENT_PROVIDER_PATH = "/v1/agents/:agent_id/provider" as const;
+export const GET_AGENT_SETTINGS_PATH = "/v1/agents/:agent_id/settings" as const;
+export const SUBMIT_AGENT_SETTINGS_COMMAND_PATH = "/v1/agents/:agent_id/settings/commands" as const;
+export const GET_AGENT_FOLDER_ACCESS_PATH = "/v1/agents/:agent_id/folder" as const;
 
 /**
  * Replay query (D26): the client's last acknowledged sequence drives exactly
@@ -48,11 +58,99 @@ const ConversationEventsQuery = z.strictObject({
     .default(0),
 });
 
+/** S11: every agent route is workspace-scoped (E12) — by query on reads. */
+const AgentWorkspaceQuery = z.strictObject({ workspace_id: WorkspaceId });
+
+/**
+ * S11 private-folder access check: the target is an `agent://<agent_id>/<path>`
+ * URI (the shape the memory_link setting surfaces); the acting Agent is the
+ * path identity. Only agent:// URIs are governed here — shared workspace
+ * paths are S17's permission model, not this route's guess.
+ */
+const AgentFolderAccessQuery = z.strictObject({
+  workspace_id: WorkspaceId,
+  path: z.string().min(1).max(2048),
+});
+
+/**
+ * S11 PATCH bodies. The user_instructions cap mirrors the message size class
+ * (it is prose, not a document; typed D16 settings schemas refine this later).
+ * `null` clears the instructions back to pack-only behavior.
+ */
+const AgentInstructionsPatchBody = z.strictObject({
+  workspace_id: WorkspaceId,
+  user_instructions: z.string().min(1).max(8000).nullable(),
+});
+
+/** Placeholder provider values until the providers slice owns real catalogs. */
+const AgentProviderPatchBody = z.strictObject({
+  workspace_id: WorkspaceId,
+  default_provider: z.strictObject({
+    provider_id: z.string().min(1).max(200),
+    model: z.string().min(1).max(200),
+  }),
+});
+
+/** The allowlisted Agent summary payload — identity fields only, no memory. */
+interface AgentSummaryPayload {
+  agent_id: string;
+  display_name: string;
+  role_description: string;
+  avatar_hue: number;
+  initial_glyph: string;
+  has_user_instructions: boolean;
+}
+
+function agentSummary(row: AgentRow): AgentSummaryPayload {
+  return {
+    agent_id: row.agent_id,
+    display_name: row.display_name,
+    role_description: row.role_description,
+    avatar_hue: row.avatar_hue,
+    initial_glyph: row.initial_glyph,
+    has_user_instructions: row.user_instructions !== null,
+  };
+}
+
+/** The detail payload: the summary plus what the settings UI edits and the direct chat id. */
+function agentDetail(row: AgentRow, directChatId: string) {
+  return {
+    ...agentSummary(row),
+    user_instructions: row.user_instructions,
+    default_provider: {
+      provider_id: row.default_provider_id,
+      model: row.default_provider_model,
+    },
+    direct_chat_id: directChatId,
+  };
+}
+
 export interface LocalApiDeps {
   /** The only mutation path (D26) — the conversations module's command gate. */
   conversations: Pick<ConversationsService, "executeCommand">;
   /** AC4 replay resolution — always the journal's ReplayService, never re-implemented here. */
   replay: Pick<ReplayService, "resolve">;
+  /**
+   * S11: the agents seam. Identity reads, the user-owned field updates, and
+   * the D16 settings surface go through the agents module's service — the
+   * transport never touches SQL and never validates settings itself.
+   */
+  agents: Pick<
+    AgentsService,
+    | "listAgents"
+    | "getAgentWithDirectChat"
+    | "updateUserInstructions"
+    | "updateDefaultProvider"
+    | "getSettings"
+    | "applySettingsCommand"
+  >;
+  /**
+   * S11: the private-folder guard seam. The transport only relays the access
+   * decision — resolution, the isolation rule, and traversal safety live in
+   * the agents module; the future file/terminal slices call the SAME service
+   * (never a second guard).
+   */
+  folders: Pick<AgentFoldersService, "resolveAccess">;
   /**
    * B-1: the redacted sink untyped HTTP faults are recorded to — the generic
    * INTERNAL_ERROR's correlation_id is logged with it, so "The failure has
@@ -106,6 +204,163 @@ export function createLocalApi(deps: LocalApiDeps): Express {
       query.data.last_acknowledged_sequence,
     );
     res.status(200).json(result);
+  });
+
+  /**
+   * S11: the workspace's Agent identities (Pack → Operations → Agents). The
+   * summary payload is strictly allowlisted — identity fields only; no other
+   * agent's memory, capabilities blobs, or provider internals (G3).
+   */
+  app.get(LIST_AGENTS_PATH, (req, res) => {
+    const query = AgentWorkspaceQuery.safeParse(req.query);
+    if (!query.success) {
+      const { status, body } = contractValidationResponse(
+        "The agent list request is not valid: a workspace_id is required.",
+      );
+      res.status(status).json(body);
+      return;
+    }
+    res.status(200).json({
+      agents: deps.agents.listAgents(query.data.workspace_id).map(agentSummary),
+    });
+  });
+
+  /**
+   * S11: one Agent plus its direct chat id — the id the UI opens the chat
+   * with. The binding is get-or-create: the first read creates the chat with
+   * full conversation-creation discipline (journaled, published after
+   * commit) and every later read resolves the SAME conversation (D39). An
+   * unknown Agent (or another workspace's) throws the typed 404.
+   */
+  app.get(GET_AGENT_PATH, (req, res) => {
+    const agentId = Id.safeParse(req.params.agent_id);
+    const query = AgentWorkspaceQuery.safeParse(req.query);
+    if (!agentId.success || !query.success) {
+      const { status, body } = contractValidationResponse(
+        "The agent request is not valid: a workspace_id is required.",
+      );
+      res.status(status).json(body);
+      return;
+    }
+    const { agent, conversation_id } = deps.agents.getAgentWithDirectChat(
+      query.data.workspace_id,
+      agentId.data,
+    );
+    res.status(200).json(agentDetail(agent, conversation_id));
+  });
+
+  /**
+   * S11: update the user-owned instructions layer (PATCH, not PUT — only
+   * this field moves). Unknown Agent → typed 404; schema mismatch → the
+   * contract's typed 400. `null` clears back to pack-only behavior.
+   */
+  app.patch(PATCH_AGENT_INSTRUCTIONS_PATH, (req, res) => {
+    const agentId = Id.safeParse(req.params.agent_id);
+    const body = AgentInstructionsPatchBody.safeParse(req.body);
+    if (!agentId.success || !body.success) {
+      const { status, body: errorBody } = contractValidationResponse(
+        "The instructions request is not valid: a workspace_id and user_instructions are required.",
+      );
+      res.status(status).json(errorBody);
+      return;
+    }
+    const agent = deps.agents.updateUserInstructions(
+      body.data.workspace_id,
+      agentId.data,
+      body.data.user_instructions,
+    );
+    res.status(200).json(agentSummary(agent));
+  });
+
+  /**
+   * S11: update the user-owned default provider pair (placeholder values
+   * until the providers slice). Unknown Agent → typed 404.
+   */
+  app.patch(PATCH_AGENT_PROVIDER_PATH, (req, res) => {
+    const agentId = Id.safeParse(req.params.agent_id);
+    const body = AgentProviderPatchBody.safeParse(req.body);
+    if (!agentId.success || !body.success) {
+      const { status, body: errorBody } = contractValidationResponse(
+        "The provider request is not valid: a workspace_id and a default_provider pair are required.",
+      );
+      res.status(status).json(errorBody);
+      return;
+    }
+    const agent = deps.agents.updateDefaultProvider(
+      body.data.workspace_id,
+      agentId.data,
+      body.data.default_provider.provider_id,
+      body.data.default_provider.model,
+    );
+    res.status(200).json(agentSummary(agent));
+  });
+
+  /**
+   * S11 chunk 3: the D16 settings read model — every setting with its
+   * recommended default, current value, why it matters, risk/cost note,
+   * editability, and reset command (D16's settings-editor contract). Unknown
+   * Agent → the typed 404; the snapshot is validated through the contracts
+   * schema inside the service.
+   */
+  app.get(GET_AGENT_SETTINGS_PATH, (req, res) => {
+    const agentId = Id.safeParse(req.params.agent_id);
+    const query = AgentWorkspaceQuery.safeParse(req.query);
+    if (!agentId.success || !query.success) {
+      const { status, body } = contractValidationResponse(
+        "The settings request is not valid: a workspace_id is required.",
+      );
+      res.status(status).json(body);
+      return;
+    }
+    res.status(200).json(deps.agents.getSettings(query.data.workspace_id, agentId.data));
+  });
+
+  /**
+   * S11 chunk 3: submit one D16 settings command — the SAME contracts command
+   * union S30 onboarding will submit (D16: one configuration command surface).
+   * The body's agent_id must agree with the path (a mismatch is the typed 400,
+   * not a silent retarget). Commands are naturally idempotent (validated
+   * last-write-wins) and are NOT journaled in this slice — consistent with the
+   * existing agent field mutations, which predate any agent-domain event
+   * stream. Unknown Agent → typed 404; schema mismatch → typed 400.
+   */
+  app.post(SUBMIT_AGENT_SETTINGS_COMMAND_PATH, (req, res) => {
+    const agentId = Id.safeParse(req.params.agent_id);
+    const parsed = AgentSettingsCommand.safeParse(req.body);
+    if (!agentId.success || !parsed.success || parsed.data.agent_id !== agentId.data) {
+      const { status, body } = contractValidationResponse(
+        "The settings command is not valid: the command body must be an agent settings command whose agent_id matches the path.",
+      );
+      res.status(status).json(body);
+      return;
+    }
+    res.status(200).json(deps.agents.applySettingsCommand(parsed.data));
+  });
+
+  /**
+   * S11: the private-folder access decision — the guard proven end-to-end.
+   * The path identity is the ACTING Agent; the query's `path` is the target
+   * `agent://<agent_id>/<path>` URI. An Agent's OWN subtree answers 200 with
+   * the resolved decision (both verbs granted); ANY other Agent's private
+   * subtree is the typed 403 (AGENT_FOLDER_ACCESS_DENIED); a traversal-shaped
+   * or non-agent:// URI is the typed 400 (AGENT_FOLDER_URI_INVALID); unknown
+   * actor/owner/workspace is the typed 404 (AGENT_NOT_FOUND). No storage is
+   * touched — the file/terminal slices (S17/S22) go through the same guard
+   * service with a real store behind the identical seam.
+   */
+  app.get(GET_AGENT_FOLDER_ACCESS_PATH, (req, res) => {
+    const agentId = Id.safeParse(req.params.agent_id);
+    const query = AgentFolderAccessQuery.safeParse(req.query);
+    if (!agentId.success || !query.success) {
+      const { status, body } = contractValidationResponse(
+        "The folder access request is not valid: a workspace_id and an agent:// path are required.",
+      );
+      res.status(status).json(body);
+      return;
+    }
+    res
+      .status(200)
+      .json(deps.folders.resolveAccess(query.data.workspace_id, agentId.data, query.data.path));
   });
 
   /**

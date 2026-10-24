@@ -46,6 +46,7 @@ export interface LocalContainerSpec {
   Env: string[];
   Labels: Record<string, string>;
   HostConfig: {
+    Mounts: Array<{ Type: "volume"; Source: string; Target: string }>;
     NanoCpus: number;
     Memory: number;
     /** Memory limit without swap headroom: no swap beyond the tier limit. */
@@ -90,6 +91,9 @@ export function buildLocalContainerSpec(input: LocalContainerSpecInput): LocalCo
       `SHERA_ACCOUNT_ID=${input.account_id}`,
       `SHERA_TIER=${input.tier}`,
       `SHERA_INTERNAL_PORT=${input.internal_port}`,
+      "RUNTIME_PORT=0",
+      "RUNTIME_DB_PATH=/app/data/runtime.db",
+      `RUNTIME_DEFAULT_WORKSPACE_ID=ws_${input.account_id}`,
     ],
     Labels: {
       "shera.managed": "control-plane",
@@ -100,6 +104,9 @@ export function buildLocalContainerSpec(input: LocalContainerSpecInput): LocalCo
       "shera.tier_memory_bytes": String(limits.memory_bytes),
     },
     HostConfig: {
+      Mounts: [
+        { Type: "volume", Source: `shera-rt-data-${input.account_id}`, Target: "/app/data" },
+      ],
       NanoCpus: limits.cpu_vcpus * 1_000_000_000,
       Memory: limits.memory_bytes,
       MemorySwap: limits.memory_bytes,

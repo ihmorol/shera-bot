@@ -123,11 +123,15 @@ export function ContainerGateSurface({
         />
       );
     case "failed":
+      // §2.4: the failure panel sits in the vertical center of the surface,
+      // like every other gate state — never hugging the top edge.
       return (
-        <ErrorState
-          safeMessage={state.error.safe_message}
-          onRetry={state.error.retryable ? onRetry : undefined}
-        />
+        <div className="flex h-full items-center justify-center px-4">
+          <ErrorState
+            safeMessage={state.error.safe_message}
+            onRetry={state.error.retryable ? onRetry : undefined}
+          />
+        </div>
       );
     case "ready":
       return <>{children}</>;

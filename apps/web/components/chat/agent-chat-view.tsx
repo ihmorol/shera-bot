@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { Agent } from "@shera-bot/contracts";
+import { Settings2 } from "lucide-react";
+import Link from "next/link";
 
 import { AgentAvatar } from "@/components/chat/agent-avatar";
 import { Composer, NO_PROVIDER_COMPOSER_COPY } from "@/components/chat/composer";
@@ -13,6 +15,7 @@ import { ErrorState } from "@/components/shell/states";
 import {
   ChatMessage,
   DEMO_STREAM,
+  entitySlug,
   sessionPresenceFor,
   type ConversationSummary,
   type FixtureStream,
@@ -28,6 +31,7 @@ import {
   INITIAL_CONNECTION,
   type ConnectionState,
 } from "@/lib/connection";
+import { routes } from "@/lib/routes";
 import { STREAM_THROTTLE_MS, streamFrameAt } from "@/lib/streaming";
 import {
   firstUnreadMessageId,
@@ -132,6 +136,30 @@ function PresencePill({ presence }: { presence: SessionPresence }) {
   );
 }
 
+/**
+ * Runtime-mode presence PLACEHOLDER (S11, §S3): real sessions report no
+ * presence in this slice — session states arrive in S12 — and the fixture
+ * demo's derived presence must never leak onto real rows (G4). The header
+ * shows an explicit placeholder instead of nothing or a guess.
+ */
+function PresencePlaceholder() {
+  return (
+    <span
+      className="flex shrink-0 items-center gap-1.5 rounded-full border border-line px-2.5 py-1 text-[11px] text-muted"
+      title="A placeholder — live session states (active / hibernating) arrive in S12; nothing is fabricated here."
+    >
+      <span aria-hidden="true" className="size-1.5 rounded-full bg-muted" />
+      <span className="sr-only md:not-sr-only">Presence arrives in S12</span>
+    </span>
+  );
+}
+
+/** The identity the header renders: the pack fields the header actually shows. */
+export type AgentChatIdentity = Pick<
+  Agent,
+  "agent_id" | "display_name" | "role_description" | "ui_identity"
+>;
+
 export function AgentChatView({
   agent,
   conversation,
@@ -147,7 +175,8 @@ export function AgentChatView({
   onRuntimeSend,
   onRuntimeRetry,
 }: {
-  agent: Agent;
+  /** The identity fields the header (and avatar) render — full Agent or the live row. */
+  agent: AgentChatIdentity;
   conversation: ConversationSummary;
   thread: ThreadItem[];
   /** §2.4 surface state; the demo runs "ready", the others are wired + tested. */
@@ -360,6 +389,7 @@ export function AgentChatView({
           <p className="truncate text-xs text-muted">{agent.role_description}</p>
         </div>
         {presence ? <PresencePill presence={presence} /> : null}
+        {runtimeMode ? <PresencePlaceholder /> : null}
         {/* Model placeholder collapses away below md — the identity (name +
             role) keeps width priority at the 360px min breakpoint (§2.2). */}
         <button
@@ -374,6 +404,15 @@ export function AgentChatView({
         >
           Platform default
         </button>
+        {/* §S3: Agent settings one affordance away (the D16 commands surface). */}
+        <Link
+          href={routes.settings(`agents/${entitySlug(agent.agent_id)}`)}
+          aria-label={`Open ${agent.display_name} settings`}
+          title={`Open ${agent.display_name} settings`}
+          className="shrink-0 rounded-lg p-2 text-muted transition-colors hover:bg-surface-elevated hover:text-text"
+        >
+          <Settings2 className="size-4" aria-hidden="true" />
+        </Link>
       </header>
 
       {/* §6.4 banner: a strip above the thread — reading stays possible while
@@ -385,7 +424,11 @@ export function AgentChatView({
       {surfaceState === "loading" ? (
         <ThreadSkeleton />
       ) : surfaceState === "error" ? (
-        <ErrorState safeMessage={safeErrorMessage} onRetry={() => undefined} />
+        // §2.4: the error panel centers in the thread area, like every other
+        // full-surface state — it never hugs the top edge.
+        <div className="flex min-h-0 flex-1 items-center justify-center px-4">
+          <ErrorState safeMessage={safeErrorMessage} onRetry={() => undefined} />
+        </div>
       ) : renderedTimeline.length === 0 ? (
         <EmptyThread agentName={agent.display_name} />
       ) : (

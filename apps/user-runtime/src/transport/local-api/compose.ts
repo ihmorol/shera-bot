@@ -19,6 +19,8 @@
  * the hook fires strictly AFTER the committing transaction, whichever
  * subscriber(s) are bound by then.
  */
+import { dirname, join } from "node:path";
+import { FileAgentFolderStore } from "../../adapters/fs/agent-folder-store.ts";
 import { createServer, type Server as HTTPServer } from "node:http";
 
 import type { Express } from "express";
@@ -26,6 +28,7 @@ import type { PackSnapshot } from "@shera-bot/contracts";
 
 import { openDatabase, type SqliteConnection } from "../../adapters/sqlite/connection.ts";
 import { applyMigrations } from "../../adapters/sqlite/migrations.ts";
+import { AgentsRepository } from "../../adapters/sqlite/agents-repository.ts";
 import { CommandReceiptsRepository } from "../../adapters/sqlite/command-receipts-repository.ts";
 import { ConversationsRepository } from "../../adapters/sqlite/conversations-repository.ts";
 import { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
@@ -35,6 +38,8 @@ import { FakeHarnessAdapter } from "../../adapters/process/fake-harness-adapter.
 import { EventsService } from "../../modules/events/events.service.ts";
 import { ReplayService } from "../../modules/events/replay.service.ts";
 import type { EventEnvelope } from "../../modules/events/events.types.ts";
+import { AgentsService } from "../../modules/agents/agents.service.ts";
+import { AgentFoldersService } from "../../modules/agents/agent-folders.service.ts";
 import {
   ConversationsService,
   type ConversationPublisher,
@@ -45,6 +50,7 @@ import {
 } from "../../modules/conversations/reply-streamer.ts";
 import { HarnessRunService } from "../../modules/runtime/harness-run-service.ts";
 import { loadWorkspacePack, type WorkspacePack } from "../../modules/runtime/pack-pin.ts";
+import { seedAgentsFromPack } from "../../adapters/sqlite/agents-repository.ts";
 import { WorkspacesRepository } from "../../adapters/sqlite/workspaces-repository.ts";
 import { createLocalApi } from "./app.ts";
 import { consoleRedactedLogger, type RedactedLogger } from "../http/typed-errors.ts";
@@ -134,6 +140,14 @@ export interface RuntimeHandle {
   harness: HarnessRunService;
   /** S10: the loaded workspace pack when `packsRoot` was given; undefined otherwise. */
   pack: WorkspacePack | undefined;
+  /**
+   * S11: the agents seam — direct-chat resolution and the user-owned field
+   * updates. The identities themselves are seeded at composition time from
+   * the pinned pack; the agent API routes sit on top of this service.
+   */
+  agents: AgentsService;
+  /** S11: durable private-folder storage behind the Agent access guard. */
+  folders: AgentFoldersService;
   /** The scripted reply producer when enabled; undefined otherwise (G4). */
   replyStreamer: ScriptedReplyStreamer | undefined;
   /** Closes the gateway (and with it the HTTP server), then SQLite. */
@@ -148,6 +162,8 @@ interface Wired {
   journal: EventJournalRepository;
   events: EventsService;
   conversations: ConversationsService;
+  agents: AgentsService;
+  folders: AgentFoldersService;
   setPublisher(publisher: ConversationPublisher): void;
 }
 
@@ -202,6 +218,23 @@ function wire(options: ComposeLocalApiOptions): Wired {
     publish: containFanout((event) => publisher(event), logFault),
   });
 
+  // S11: the agents seam shares the SAME late-bound post-commit fanout — a
+  // newly created direct chat publishes its conversation.created event through
+  // the identical containment (B4) as every other conversation creation.
+  const agentsRepository = new AgentsRepository(tx);
+  const agents = new AgentsService({
+    agents: agentsRepository,
+    conversations: conversationsRepository,
+    journal: events,
+    tx,
+    publish: containFanout((event) => publisher(event), logFault),
+  });
+
+  const folders = new AgentFoldersService({
+    agents: agentsRepository,
+    store: new FileAgentFolderStore(join(dirname(options.dbPath), "agent-files")),
+  });
+
   const replay = new ReplayService({
     journal,
     loadSnapshot: (workspaceId, streamId) => {
@@ -228,6 +261,8 @@ function wire(options: ComposeLocalApiOptions): Wired {
   const app = createLocalApi({
     conversations,
     replay,
+    agents,
+    folders,
     ...(options.logUntypedFault ? { logUntypedFault: options.logUntypedFault } : {}),
   });
   return {
@@ -238,6 +273,8 @@ function wire(options: ComposeLocalApiOptions): Wired {
     journal,
     events,
     conversations,
+    agents,
+    folders,
     setPublisher(next) {
       publisher = next;
     },
@@ -257,9 +294,11 @@ export function composeLocalApi(options: ComposeLocalApiOptions): LocalApiHandle
  */
 export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
   const wired = wire(options);
+  const workspaceId = options.workspaceId ?? DEFAULT_WORKSPACE_ID;
   const httpServer = createServer(wired.app);
   const gateway = attachWebSocketGateway(httpServer, {
     replay: wired.replay,
+    ...(options.workspaceId ? { authorizedWorkspaceId: workspaceId } : {}),
     ...(options.pingIntervalMs ? { pingIntervalMs: options.pingIntervalMs } : {}),
     ...(options.pingTimeoutMs ? { pingTimeoutMs: options.pingTimeoutMs } : {}),
   });
@@ -269,7 +308,6 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
   // task can use it) and pinned on the workspace (first install or upgrade;
   // the pin upgrade affects NEW tasks only, D19 — existing task snapshots
   // live in their task.created journal payloads).
-  const workspaceId = options.workspaceId ?? DEFAULT_WORKSPACE_ID;
   const pack: WorkspacePack | undefined = options.packsRoot
     ? loadWorkspacePack({
         packsRoot: options.packsRoot,
@@ -280,6 +318,18 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
         ...(options.now ? { now: options.now() } : {}),
       })
     : undefined;
+  // S11 (D32/D39): seed the workspace's Agents from the loaded pack's roster —
+  // the startup composition step, so the identities exist before anything can
+  // address them. Idempotent on EVERY startup: new agents insert, pack-owned
+  // fields refresh on change, and the user-owned fields (user_instructions,
+  // default provider pair) are never clobbered by a re-seed. A seeding failure
+  // is a typed startup failure like the pack load above it (G4). The loaded
+  // seeds are ALSO the D16 recommended-default source for the settings
+  // surface (S11 chunk 3) — late-bound onto the service like the publish hook.
+  if (pack) {
+    seedAgentsFromPack(wired.tx, workspaceId, pack.manifest);
+    wired.agents.setPackAgents(pack.manifest.agents);
+  }
   // Every fanout route (conversation commands AND harness runs) flows through
   // the same containment (B4): a broadcast failure is recorded, never fatal.
   const logFault = options.logUntypedFault ?? consoleRedactedLogger;
@@ -336,6 +386,8 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     gateway,
     harness,
     pack,
+    agents: wired.agents,
+    folders: wired.folders,
     replyStreamer,
     close: async () => {
       replyStreamer?.stopAll();

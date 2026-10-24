@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer, useRef } from "react";
+import { useEffect, useMemo, useReducer, useRef, useSyncExternalStore } from "react";
 
 import { compareThreadItems, ChatMessage, type ThreadItem } from "@/lib/fixtures";
 import type { RuntimeEvent } from "@/lib/runtime-client";
@@ -441,6 +441,23 @@ export function conversationStreamId(conversationId: string): string {
   return `conversation:${conversationId}`;
 }
 
+/** The managed live endpoint always shares the page's browser origin. */
+export function sameOriginRuntimeSocketUrl(location: { protocol: string; host: string }): string {
+  const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${location.host}/api/runtime/live?EIO=4&transport=websocket`;
+}
+
+const subscribeToStaticBrowserLocation = (): (() => void) => () => undefined;
+const browserRuntimeSocketUrl = (): string => sameOriginRuntimeSocketUrl(window.location);
+
+export function useSameOriginRuntimeSocketUrl(): string | null {
+  return useSyncExternalStore(
+    subscribeToStaticBrowserLocation,
+    browserRuntimeSocketUrl,
+    () => null,
+  );
+}
+
 /** Map the live phase onto the §6.4 banner states (connecting shows no banner). */
 export function connectionStateOf(phase: LivePhase): "connected" | "disconnected" | "reconnecting" {
   switch (phase) {
@@ -454,7 +471,7 @@ export function connectionStateOf(phase: LivePhase): "connected" | "disconnected
 }
 
 export interface UseLiveConversationArgs {
-  /** The runtime WS base URL (NEXT_PUBLIC_RUNTIME_WS_URL); null disables live. */
+  /** The same-origin managed runtime websocket URL; null disables live. */
   wsUrl: string | null;
   workspaceId: string;
   conversationId: string;

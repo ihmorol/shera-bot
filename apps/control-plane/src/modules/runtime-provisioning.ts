@@ -27,7 +27,7 @@
  * re-established (a real recovery — the handle changes).
  */
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import {
   type ProvisionRuntimeResult,
@@ -116,24 +116,30 @@ export class ProvisioningService {
     accountId: string,
     correlationId?: string,
   ): Promise<ProvisionRuntimeResult> {
+    // A transaction-scoped database lock survives awaits and releases on crash.
+    // Holding it makes a leftover "provisioning" row recoverable without stealing
+    // an active request's credential or relying on an arbitrary stale timeout.
+    return this.deps.db.transaction(async (tx) => {
+      const lock = await tx.execute(
+        sql`select pg_try_advisory_xact_lock(hashtextextended(${accountId}, 0)) as acquired`,
+      );
+      if (lock.rows[0]?.["acquired"] !== true) throw runtimeProvisionInProgressError(correlationId);
+      return this.ensureProvisionedLocked(accountId, correlationId);
+    });
+  }
+
+  private async ensureProvisionedLocked(
+    accountId: string,
+    correlationId?: string,
+  ): Promise<ProvisionRuntimeResult> {
     const mapping = await this.loadOrCreateMapping(accountId);
 
-    if (mapping.provisioningStatus === "provisioning") {
-      // KNOWN WEDGE (S06, documented posture — review finding, 2026-09-20): a
-      // control-plane crash between setStatus("provisioning") below and
-      // recordProvisioned leaves the mapping at status "provisioning" with
-      // runtimeHandle=null forever; every later ensureProvisioned lands here
-      // and throws RUNTIME_PROVISION_IN_PROGRESS. This is safe-but-stuck, not
-      // unsafe: the error is truthful (no fake success, G4), nothing is
-      // half-provisioned behind the wedge, and the name-keyed container means
-      // no second container can exist. Bounded recovery (staleness rule /
-      // lease / reaper) is owned by S07/S12 runtime supervision through the
-      // E17 seam and is deliberately NOT built in this slice.
-      throw runtimeProvisionInProgressError(correlationId);
-    }
-
     const existing = mapping.runtimeHandle ? await this.tryStatus(mapping, correlationId) : null;
-    if (existing && existing.provisioning_status === "running") {
+    if (
+      existing &&
+      existing.provisioning_status === "running" &&
+      this.channelSecrets.get(accountId)?.sha256 === mapping.internalChannelTokenHash
+    ) {
       return this.provisionResultFrom(existing);
     }
 
@@ -334,6 +340,21 @@ export class ProvisioningService {
       redactionClass: "internal",
     });
     return { runtime_handle: mapping.runtimeHandle, rotated_at: new Date().toISOString() };
+  }
+
+  /** Server-internal channel target; never serialize this to a browser. */
+  async getChannelTarget(accountId: string): Promise<{ endpoint: string; bearer: string }> {
+    const mapping = await this.requireMapping(accountId);
+    const credential = this.channelSecrets.get(accountId);
+    if (
+      mapping.provisioningStatus !== "running" ||
+      !mapping.runtimeEndpoint ||
+      !credential ||
+      credential.sha256 !== mapping.internalChannelTokenHash
+    ) {
+      throw runtimeUnavailableError();
+    }
+    return { endpoint: mapping.runtimeEndpoint, bearer: credential.raw };
   }
 
   // --- internals ------------------------------------------------------------

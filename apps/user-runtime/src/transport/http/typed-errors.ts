@@ -28,6 +28,15 @@ import type { ErrorRequestHandler, RequestHandler } from "express";
 
 import type { SheraError } from "@shera-bot/contracts";
 
+import {
+  AgentNotFoundError,
+  AgentSettingsValidationError,
+} from "../../adapters/sqlite/agents-repository.ts";
+import {
+  AgentFolderAccessDeniedError,
+  AgentFolderUriInvalidError,
+} from "../../modules/agents/agent-folders.service.ts";
+import { AgentSettingsResetUnavailableError } from "../../modules/agents/agents.service.ts";
 import { ConversationsServiceError } from "../../modules/conversations/conversations.types.ts";
 import { EventsServiceError } from "../../modules/events/events.service.ts";
 
@@ -97,6 +106,18 @@ const JOURNAL_REJECTIONS: Record<
   },
 };
 
+/** S11: the agents boundary rejections (the repository's typed error class). */
+const AGENTS_REJECTIONS: Record<
+  AgentNotFoundError["code"],
+  { status: number; safe_message: string; user_action: string | null }
+> = {
+  AGENT_NOT_FOUND: {
+    status: 404,
+    safe_message: "The agent does not exist in this workspace.",
+    user_action: null,
+  },
+};
+
 function bodyParserType(error: unknown): string | null {
   if (typeof error === "object" && error !== null && "type" in error) {
     const type = (error as { type?: unknown }).type;
@@ -135,6 +156,81 @@ export function toSheraErrorResponse(error: unknown, correlationId?: string): Ht
         code: error.code,
         category: error.category,
         safe_message: mapping.safe_message,
+        retryable: false,
+        user_action: null,
+        internal_details: null,
+        correlation_id,
+      },
+    };
+  }
+
+  if (error instanceof AgentNotFoundError) {
+    const mapping = AGENTS_REJECTIONS[error.code];
+    return {
+      status: mapping.status,
+      body: {
+        code: error.code,
+        category: error.category,
+        safe_message: mapping.safe_message,
+        retryable: false,
+        user_action: mapping.user_action,
+        internal_details: null,
+        correlation_id,
+      },
+    };
+  }
+
+  // S11 chunk 3: settings that do not conform to the contracts overrides
+  // schema answer with the contract's standard validation failure — the
+  // thrown message (which names internal shapes) is never echoed (G3).
+  if (error instanceof AgentSettingsValidationError) {
+    return contractValidationResponse("The agent settings payload is not valid.");
+  }
+
+  // Reset-to-default needs the pinned pack's recommendation (D16 forbids
+  // inventing provider picks); without it the reset is a typed conflict.
+  if (error instanceof AgentSettingsResetUnavailableError) {
+    return {
+      status: 409,
+      body: {
+        code: error.code,
+        category: error.category,
+        safe_message:
+          "Resetting this setting needs the pinned pack's recommended default, which is not loaded.",
+        retryable: false,
+        user_action: "Start the runtime with the pinned pack configured.",
+        internal_details: null,
+        correlation_id,
+      },
+    };
+  }
+
+  // S11: private-folder isolation — the guard's two rejections. A foreign
+  // Agent's private subtree is forbidden (403): the actor was identified but
+  // the access is not theirs. A traversal-shaped or non-agent:// URI never
+  // resolves into an escape — it is malformed input (400), rejected before
+  // any permission question is even asked.
+  if (error instanceof AgentFolderAccessDeniedError) {
+    return {
+      status: 403,
+      body: {
+        code: error.code,
+        category: error.category,
+        safe_message: "This private folder belongs to another Agent.",
+        retryable: false,
+        user_action: null,
+        internal_details: null,
+        correlation_id,
+      },
+    };
+  }
+  if (error instanceof AgentFolderUriInvalidError) {
+    return {
+      status: 400,
+      body: {
+        code: error.code,
+        category: error.category,
+        safe_message: "The folder path is not a safe agent:// URI.",
         retryable: false,
         user_action: null,
         internal_details: null,
@@ -205,6 +301,11 @@ function isUntypedFault(error: unknown): boolean {
   return (
     !(error instanceof ConversationsServiceError) &&
     !(error instanceof EventsServiceError) &&
+    !(error instanceof AgentNotFoundError) &&
+    !(error instanceof AgentSettingsValidationError) &&
+    !(error instanceof AgentSettingsResetUnavailableError) &&
+    !(error instanceof AgentFolderAccessDeniedError) &&
+    !(error instanceof AgentFolderUriInvalidError) &&
     bodyParserType(error) === null
   );
 }

@@ -92,6 +92,8 @@ export function streamRoom(workspaceId: string, streamId: string): string {
 export interface WebSocketGatewayDeps {
   /** AC4 durability — the ONLY replay authority (never an in-memory buffer). */
   replay: Pick<ReplayService, "resolve">;
+  /** Managed runtimes expose exactly their account-derived workspace. */
+  authorizedWorkspaceId?: string;
   /** B3: the redacted sink a contained handler fault is recorded to. Default: console.error JSON line. */
   logHandlerFault?: RedactedLogger;
   pingIntervalMs?: number;
@@ -134,6 +136,15 @@ export function attachWebSocketGateway(
   deps: WebSocketGatewayDeps,
 ): WebSocketGatewayHandle {
   const logHandlerFault = deps.logHandlerFault ?? consoleRedactedLogger;
+  const workspaceMismatch = () => ({
+    code: "RUNTIME_TENANT_MISMATCH",
+    category: "unauthorized",
+    safe_message: "This workspace does not belong to this runtime.",
+    retryable: false,
+    user_action: null,
+    internal_details: null,
+    correlation_id: crypto.randomUUID(),
+  });
   const io = new SocketIOServer(server, {
     // Transport-level heartbeats (engine.io ping/pong) — NOT business events.
     pingInterval: deps.pingIntervalMs ?? DEFAULT_PING_INTERVAL_MS,
@@ -178,6 +189,13 @@ export function attachWebSocketGateway(
             );
             return;
           }
+          if (
+            deps.authorizedWorkspaceId !== undefined &&
+            parsed.data.workspace_id !== deps.authorizedWorkspaceId
+          ) {
+            ack?.(workspaceMismatch());
+            return;
+          }
           socket.join(streamRoom(parsed.data.workspace_id, parsed.data.stream_id));
           ack?.(subscribeAck(parsed.data.workspace_id, parsed.data.stream_id));
         },
@@ -202,6 +220,13 @@ export function attachWebSocketGateway(
                 "The replay request is not valid: workspace_id, stream_id and last_acknowledged_sequence are required.",
               ).body,
             );
+            return;
+          }
+          if (
+            deps.authorizedWorkspaceId !== undefined &&
+            parsed.data.workspace_id !== deps.authorizedWorkspaceId
+          ) {
+            ack?.(workspaceMismatch());
             return;
           }
           const result = deps.replay.resolve(

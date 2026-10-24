@@ -15,6 +15,16 @@ import { proxyToControlPlane, proxyToLocalApi } from "../lib/server/proxies";
 
 const CONTROL_BASE = "http://control-plane.test";
 const RUNTIME_BASE = "http://runtime-local.test";
+const SESSION_BODY = {
+  workspace_id: "ws_account-1",
+  google_sub: "google-account-1",
+  email: "user@example.com",
+  display_name: "User",
+  tier: "balanced",
+  is_admin: false,
+  created_at: "2026-09-19T00:00:00.000Z",
+  last_active_at: "2026-10-20T00:00:00.000Z",
+};
 
 /** The stubbed fetch's captured calls (input URL + the forwarded init). */
 interface FetchCall {
@@ -23,13 +33,16 @@ interface FetchCall {
 }
 
 /** A fetch stub that records every call and answers with the given response. */
-function stubFetch(respond: () => Response): { calls: FetchCall[] } {
+function stubFetch(
+  respond: () => Response,
+  session: () => Response = () => Response.json({ ...SESSION_BODY, workspace_id: "ws_1" }),
+): { calls: FetchCall[] } {
   const calls: FetchCall[] = [];
   vi.stubGlobal(
     "fetch",
     vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       calls.push({ input, init });
-      return Promise.resolve(respond());
+      return Promise.resolve(String(input).endsWith("/api/session") ? session() : respond());
     }),
   );
   return { calls };
@@ -50,6 +63,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   delete process.env["CONTROL_PLANE_URL"];
   delete process.env["RUNTIME_LOCAL_API_URL"];
+  delete process.env["SHERA_WEB_ORIGIN"];
 });
 
 describe("control-plane proxy — redirect passthrough (sign-in 302)", () => {
@@ -79,7 +93,123 @@ describe("control-plane proxy — redirect passthrough (sign-in 302)", () => {
 });
 
 describe("runtime proxy — allowlist + passthrough", () => {
+  it("accepts the configured public origin when the internal request URL differs", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["SHERA_WEB_ORIGIN"] = "https://public.shera.test";
+    const { calls } = stubFetch(() => Response.json({ ok: true }));
+    const request = new Request("http://internal-next:3000/api/runtime/v1/conversations/commands", {
+      method: "POST",
+      body: JSON.stringify({
+        type: "conversation.create",
+        workspace_id: "ws_1",
+        idempotency_key: "public-origin",
+        payload: { title: "Public origin" },
+      }),
+      headers: {
+        "content-type": "application/json",
+        origin: "https://public.shera.test",
+      },
+    });
+
+    const response = await proxyToLocalApi(request, "/v1/conversations/commands");
+
+    expect(response.status).toBe(200);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("rejects a foreign browser origin before forwarding a command", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["SHERA_WEB_ORIGIN"] = "https://public.shera.test";
+    const { calls } = stubFetch(() => Response.json({ ok: true }));
+    const request = new Request("http://internal-next:3000/api/runtime/v1/conversations/commands", {
+      method: "POST",
+      body: JSON.stringify({ workspace_id: "ws_1" }),
+      headers: {
+        "content-type": "application/json",
+        origin: "https://foreign.test",
+      },
+    });
+
+    const response = await proxyToLocalApi(request, "/v1/conversations/commands");
+
+    expect(response.status).toBe(403);
+    expect(calls).toHaveLength(1);
+    expect(String(calls[0]!.input)).toBe(`${CONTROL_BASE}/api/session`);
+  });
+
+  it("rejects an anonymous command before the runtime can be reached", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const { calls } = stubFetch(
+      () => new Response(null, { status: 500 }),
+      () =>
+        Response.json(
+          {
+            code: "UNAUTHENTICATED",
+            category: "authentication",
+            safe_message: "Sign in to continue.",
+            retryable: false,
+            user_action: "Sign in with Google.",
+            internal_details: null,
+            correlation_id: "corr-unauthenticated",
+          },
+          { status: 401 },
+        ),
+    );
+
+    const request = new Request("http://web.test/api/runtime/v1/conversations/commands", {
+      method: "POST",
+      body: JSON.stringify({
+        type: "conversation.create",
+        workspace_id: "ws_victim",
+        idempotency_key: "anonymous-forgery",
+        payload: { title: "Victim workspace" },
+      }),
+      headers: { "content-type": "application/json" },
+    });
+    const response = await proxyToLocalApi(request, "/v1/conversations/commands");
+
+    expect(response.status).toBe(401);
+    expect((await response.json()) as { code: string }).toMatchObject({ code: "UNAUTHENTICATED" });
+    expect(calls).toHaveLength(1);
+    expect(String(calls[0]!.input)).toBe(`${CONTROL_BASE}/api/session`);
+  });
+
+  it("rejects a caller-chosen workspace that differs from the authenticated session", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const { calls } = stubFetch(
+      () => Response.json(SESSION_BODY),
+      () => Response.json(SESSION_BODY),
+    );
+
+    const request = new Request("http://web.test/api/runtime/v1/conversations/commands", {
+      method: "POST",
+      body: JSON.stringify({
+        type: "conversation.create",
+        workspace_id: "ws_victim",
+        idempotency_key: "authenticated-forgery",
+        payload: { title: "Victim workspace" },
+      }),
+      headers: {
+        "content-type": "application/json",
+        cookie: "shera.session=authenticated",
+      },
+    });
+    const response = await proxyToLocalApi(request, "/v1/conversations/commands");
+
+    expect(response.status).toBe(403);
+    expect((await response.json()) as { code: string }).toMatchObject({
+      code: "RUNTIME_TENANT_MISMATCH",
+    });
+    expect(calls).toHaveLength(1);
+    expect(String(calls[0]!.input)).toBe(`${CONTROL_BASE}/api/session`);
+  });
+
   it("an allowed GET keeps transparent headers — cache-control reaches the client", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
     process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
     stubFetch(
       () =>
@@ -89,9 +219,12 @@ describe("runtime proxy — allowlist + passthrough", () => {
         }),
     );
 
-    const request = new Request("http://web.test/api/runtime/v1/conversations/conv-1/events", {
-      method: "GET",
-    });
+    const request = new Request(
+      "http://web.test/api/runtime/v1/conversations/conv-1/events?workspace_id=ws_1",
+      {
+        method: "GET",
+      },
+    );
     const response = await proxyToLocalApi(request, "/v1/conversations/conv-1/events");
 
     expect(response.status).toBe(200);
@@ -120,6 +253,7 @@ describe("runtime proxy — allowlist + passthrough", () => {
   });
 
   it("the strict allowlist still refuses non-conversation paths", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
     process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
     const calls: FetchCall[] = [];
     vi.stubGlobal(
@@ -137,5 +271,163 @@ describe("runtime proxy — allowlist + passthrough", () => {
 
     expect(response.status).toBe(404);
     expect(calls).toHaveLength(0);
+  });
+});
+
+describe("runtime proxy — S11 agent surfaces (allowlist additions)", () => {
+  /** The stubbed fetch answer for a forwarded agent call. */
+  function agentResponse(): Response {
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }
+
+  it("forwards the workspace roster read", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const { calls } = stubFetch(agentResponse);
+
+    const request = new Request("http://web.test/api/runtime/v1/agents?workspace_id=ws_1");
+    const response = await proxyToLocalApi(request, "/v1/agents");
+
+    expect(response.status).toBe(200);
+    expect(calls.at(-1)?.input).toBe(
+      `${CONTROL_BASE}/api/runtime/local/v1/agents?workspace_id=ws_1`,
+    );
+  });
+
+  it("forwards the agent detail read (the get-or-create direct chat binding)", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const { calls } = stubFetch(agentResponse);
+
+    const request = new Request(
+      "http://web.test/api/runtime/v1/agents/agent_general_assistant?workspace_id=ws_1",
+    );
+    const response = await proxyToLocalApi(request, "/v1/agents/agent_general_assistant");
+
+    expect(response.status).toBe(200);
+    expect(calls.at(-1)?.input).toBe(
+      `${CONTROL_BASE}/api/runtime/local/v1/agents/agent_general_assistant?workspace_id=ws_1`,
+    );
+  });
+
+  it("forwards the settings snapshot read", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const { calls } = stubFetch(agentResponse);
+
+    const request = new Request(
+      "http://web.test/api/runtime/v1/agents/agent_general_assistant/settings?workspace_id=ws_1",
+    );
+    const response = await proxyToLocalApi(request, "/v1/agents/agent_general_assistant/settings");
+
+    expect(response.status).toBe(200);
+    expect(calls.at(-1)?.input).toBe(
+      `${CONTROL_BASE}/api/runtime/local/v1/agents/agent_general_assistant/settings?workspace_id=ws_1`,
+    );
+  });
+
+  it("forwards the D16 settings command POST with its body (the one mutation surface)", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const { calls } = stubFetch(agentResponse);
+
+    const request = new Request(
+      "http://web.test/api/runtime/v1/agents/agent_general_assistant/settings/commands",
+      {
+        method: "POST",
+        body: JSON.stringify({ type: "agent_settings.reset_all", workspace_id: "ws_1" }),
+        headers: { "content-type": "application/json" },
+      },
+    );
+    const response = await proxyToLocalApi(
+      request,
+      "/v1/agents/agent_general_assistant/settings/commands",
+    );
+
+    expect(response.status).toBe(200);
+    const call = calls.at(-1)!;
+    expect(String(call.input)).toBe(
+      `${CONTROL_BASE}/api/runtime/local/v1/agents/agent_general_assistant/settings/commands`,
+    );
+    expect(call.init?.body).toBe(
+      JSON.stringify({ type: "agent_settings.reset_all", workspace_id: "ws_1" }),
+    );
+  });
+
+  it("still refuses the chunk-2 PATCH routes — the commands endpoint is the only agent mutation", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const calls: FetchCall[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({ input, init });
+        return Promise.resolve(new Response(null, { status: 500 }));
+      }),
+    );
+
+    for (const path of [
+      "/v1/agents/agent_general_assistant/instructions",
+      "/v1/agents/agent_general_assistant/provider",
+    ]) {
+      const request = new Request(`http://web.test/api/runtime${path}`, {
+        method: "PATCH",
+        body: JSON.stringify({ workspace_id: "ws_1" }),
+        headers: { "content-type": "application/json" },
+      });
+      const response = await proxyToLocalApi(request, path);
+      expect(response.status, path).toBe(404);
+    }
+    expect(calls).toHaveLength(0);
+  });
+
+  it("still refuses agent sub-paths outside the four surfaces (detail must not swallow settings)", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const calls: FetchCall[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({ input, init });
+        return Promise.resolve(new Response(null, { status: 500 }));
+      }),
+    );
+
+    const request = new Request(
+      "http://web.test/api/runtime/v1/agents/agent_general_assistant/memory",
+    );
+    const response = await proxyToLocalApi(request, "/v1/agents/agent_general_assistant/memory");
+
+    expect(response.status).toBe(404);
+    expect(calls).toHaveLength(0);
+  });
+});
+
+describe("runtime request boundaries", () => {
+  it("rejects oversized bodies before forwarding commands", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    const { calls } = stubFetch(() => Response.json({ ok: true }));
+    const response = await proxyToLocalApi(
+      new Request("http://web.test/api/runtime/v1/conversations/commands", {
+        method: "POST",
+        body: JSON.stringify({ workspace_id: "ws_1", text: "a".repeat(65536) }),
+      }),
+      "/v1/conversations/commands",
+    );
+    expect(response.status).toBe(413);
+    expect(calls).toHaveLength(1);
+  });
+  it("preserves empty upstream responses", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    stubFetch(() => new Response(null, { status: 204 }));
+    const response = await proxyToControlPlane(
+      new Request("http://web.test/logout", { method: "POST" }),
+      "/logout",
+    );
+    expect(response.status).toBe(204);
+    expect(await response.text()).toBe("");
   });
 });

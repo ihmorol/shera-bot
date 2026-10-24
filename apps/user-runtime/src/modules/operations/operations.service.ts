@@ -1399,6 +1399,13 @@ export class OperationsService {
       ) {
         throw new OperationRecordCorruptError("message.appended journal payload");
       }
+      // Re-validate the sender through the contracts union (the send path
+      // validated it at write time; a journal row that no longer conforms is
+      // corruption — never a silently cast thread item).
+      const sender = MessageSender.safeParse(payload.sender);
+      if (!sender.success) {
+        throw new OperationRecordCorruptError("message.appended journal sender");
+      }
       const recipients = this.deps.operations.findMessageRecipients(
         workspaceId,
         payload.message_id,
@@ -1408,7 +1415,7 @@ export class OperationsService {
         message_id: payload.message_id,
         conversation_id: payload.conversation_id,
         sequence: row.sequence,
-        sender: payload.sender as OperationMessageSender,
+        sender: sender.data,
         text: payload.text,
         addressed_to: recipients ?? [],
         occurred_at: row.occurred_at,

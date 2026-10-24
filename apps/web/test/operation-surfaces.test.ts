@@ -290,6 +290,22 @@ describe("Operation roster panel (§S4, D36/D42/D49)", () => {
     expect(html).toContain(`--agent-hue:${RESEARCHER.avatar_hue}`);
   });
 
+  it("renders the coordinator BY ROLE even when the coordinating Agent holds no membership (D46)", () => {
+    // The creation flow allows a roster without the coordinating Agent; the
+    // chip still shows (identity from the workspace roster), with ONLY the
+    // coordinator-remove action — nothing to remove from a roster it is not on.
+    const html = renderRoster({
+      roster: [ROSTER_MEMBER(RESEARCHER)],
+      coordinatorAgentId: GA.agent_id,
+      candidates: [],
+    });
+    expect(html).toContain("Coordinator");
+    expect(html).toContain(GA.display_name);
+    expect(html).not.toContain(`Remove ${GA.display_name} from this Operation`);
+    const coordinatorRemove = html.split('aria-label="Remove the coordinator role"').length - 1;
+    expect(coordinatorRemove).toBe(1);
+  });
+
   it("renders a roster member without any resolvable identity by its id — never a fabricated name", () => {
     const html = renderRoster({
       roster: [{ ...ROSTER_MEMBER(GA), agent_id: "agent_unknown_member", display_name: null }],

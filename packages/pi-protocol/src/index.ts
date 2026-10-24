@@ -1,8 +1,14 @@
 /**
  * @shera-bot/pi-protocol — versioned JSON Lines protocol for the Pi adapter, plus the fake Pi used by tests.
  *
- * Placeholder only: this package ships empty in S01 so the workspace graph and the
- * pipeline are real from the first slice. It is filled by S03 (supervision spike) and S07 (runtime gateway).
- * Governing records: D13, D14, G2, G7.
+ * S12 chunk 1 ships the protocol frames (D13, D14; shapes ported from the S03
+ * spike, variant A — E17), the typed protocol errors, the JSONL framing
+ * helpers, and the fake Pi test double. The supervision core (watchdog,
+ * bounded queue, restart policy) lands in a later S12 chunk.
+ *
+ * Governing records: D13, D14, E17, G2, G7.
  */
-export {};
+export * from "./errors.ts";
+export * from "./fake-pi.ts";
+export * from "./framing.ts";
+export * from "./protocol.ts";

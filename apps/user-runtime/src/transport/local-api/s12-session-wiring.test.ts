@@ -4,12 +4,12 @@
  * Chunk 2 proved the SessionSupervisor lifecycle against the fake Pi through
  * the injected spawn seam; THIS suite proves the WIRING: the composed runtime
  * spawns real fake-Pi harness children through the production process adapter
- * (adapters/process — the only production file allowed to import
- * node:child_process), the direct-chat send path addresses sessions on demand
- * (NEVER at boot), replies land as durable conversation messages the replay
- * machinery returns after a refresh, the agent API exposes session presence,
- * and kill/restart persistence holds end-to-end through compose → close →
- * fresh compose on the same data directory.
+ * (adapters/process — the only production file inside the process boundary),
+ * the direct-chat send path addresses sessions on demand (NEVER at boot),
+ * replies land as durable conversation messages the replay machinery returns
+ * after a refresh, the agent API exposes session presence, and kill/restart
+ * persistence holds end-to-end through compose → close → fresh compose on the
+ * same data directory.
  *
  * The disabled-supervisor compose (no harness command configured) must behave
  * exactly like the S09 baseline: presence "none" everywhere and the scripted

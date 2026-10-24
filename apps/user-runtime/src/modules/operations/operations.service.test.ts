@@ -764,6 +764,50 @@ describe("S13 chunk 2 — collaboration events (D7, D26)", () => {
     ).toHaveLength(2);
   });
 
+  it("refuses a bare TaskDelegated append — delegation goes only through applyDelegation (D34/D46)", () => {
+    const operation = createDefaultOperation();
+    const parent = service.createRun(WORKSPACE, operation.operation_id, {});
+
+    try {
+      service.appendCollaborationEvent(
+        collaborationEvent({
+          operation_id: operation.operation_id,
+          run_id: parent.run_id,
+          event_id: "evt_bare_delegate",
+          type: "TaskDelegated",
+          payload: { task_description: "in-process bypass" },
+        }),
+      );
+      expect.unreachable("a bare TaskDelegated append must be rejected");
+    } catch (error) {
+      expect(error).toBeInstanceOf(OperationsServiceError);
+      const typed = error as OperationsServiceError;
+      expect(typed.code).toBe("OPERATION_EVENT_INVALID");
+      expect(typed.category).toBe("validation");
+    }
+
+    // Nothing persisted: no event row, no child run (exactly-one-child holds
+    // — only applyDelegation may materialize a TaskDelegated's child run).
+    expect(service.listCollaborationEvents(WORKSPACE, operation.operation_id, {})).toEqual([]);
+    expect(service.listRuns(WORKSPACE, operation.operation_id)).toHaveLength(1);
+    // The delegation path itself still works (exactly one child run).
+    const delegated = service.applyDelegation(
+      collaborationEvent({
+        operation_id: operation.operation_id,
+        run_id: parent.run_id,
+        event_id: "evt_via_delegation",
+        type: "TaskDelegated",
+        payload: { task_description: "the sanctioned path" },
+      }),
+    );
+    expect(delegated.created).toBe(true);
+    expect(
+      service
+        .listRuns(WORKSPACE, operation.operation_id)
+        .filter((run) => run.parent_task_id === parent.run_id),
+    ).toHaveLength(1);
+  });
+
   it("typed-rejects malformed collaboration events instead of silently dropping them", () => {
     const operation = createDefaultOperation();
 

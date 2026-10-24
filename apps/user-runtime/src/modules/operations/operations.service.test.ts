@@ -12,7 +12,9 @@
  * The suite pins the service contract chunk 3 will expose over HTTP:
  * createOperation runtime-validates the roster against the PINNED pack
  * catalog (typed refusals), roster commands persist RosterRefusals so the UI
- * can show why, runs are isolated per run, delegation is idempotent on the
+ * can show why, remove-roster commands replay through their command receipts
+ * (D23 rule 6) and answer an absent member as an idempotent no-op, runs are
+ * isolated per run, delegation is idempotent on the
  * TaskDelegated event_id, collaboration events enforce gapless per-stream
  * sequences with sender attribution, and malformed input is typed-rejected —
  * never silently dropped.
@@ -31,6 +33,7 @@ import {
   sqliteTableExists,
 } from "../../adapters/sqlite/migrations.ts";
 import { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
+import { CommandReceiptsRepository } from "../../adapters/sqlite/command-receipts-repository.ts";
 import { OperationsRepository } from "../../adapters/sqlite/operations-repository.ts";
 import {
   OperationsService,
@@ -493,13 +496,12 @@ describe("S13 chunk 2 — roster commands (D36)", () => {
     expect(service.listRosterRefusals(WORKSPACE, operation.operation_id)).toHaveLength(1);
   });
 
-  it("removes a roster member, updates the pinning, and answers a non-member with a typed 404-class error", () => {
+  it("removes a roster member, updates the pinning, and replays the SAME command through its receipt (D23 rule 6)", () => {
     const operation = createDefaultOperation();
     service.addRosterAgent(addRosterCommand({ operation_id: operation.operation_id }));
 
-    const removed = service.removeRosterAgent(
-      removeRosterCommand({ operation_id: operation.operation_id }),
-    );
+    const command = removeRosterCommand({ operation_id: operation.operation_id });
+    const removed = service.removeRosterAgent(command);
     expect(removed.outcome).toBe("applied");
     if (removed.outcome === "applied") {
       expect(removed.operation.pinning.roster_agent_ids).toEqual([RESEARCHER]);
@@ -508,15 +510,41 @@ describe("S13 chunk 2 — roster commands (D36)", () => {
       repo.listRoster(WORKSPACE, operation.operation_id).map((member) => member.agent_id),
     ).toEqual([RESEARCHER]);
 
-    try {
-      service.removeRosterAgent(removeRosterCommand({ operation_id: operation.operation_id }));
-      expect.unreachable("removing a non-member must be rejected");
-    } catch (error) {
-      expect(error).toBeInstanceOf(OperationsServiceError);
-      const typed = error as OperationsServiceError;
-      expect(typed.code).toBe("OPERATION_ROSTER_AGENT_NOT_FOUND");
-      expect(typed.category).toBe("state");
+    // Replay: the SAME command answers the original applied outcome through
+    // its receipt — a committed removal is never re-answered with a 404
+    // (D23 rule 6, the same receipts seam applyDelegation and the message
+    // send use). Exactly one removal, one receipt row.
+    const replay = service.removeRosterAgent(command);
+    expect(replay.outcome).toBe("applied");
+    if (replay.outcome === "applied") {
+      expect(replay.operation.pinning.roster_agent_ids).toEqual([RESEARCHER]);
     }
+    expect(repo.listRoster(WORKSPACE, operation.operation_id)).toHaveLength(1);
+    const receipts = new CommandReceiptsRepository(tx);
+    expect(receipts.countInWorkspace(WORKSPACE)).toBe(1);
+  });
+
+  it("answers a remove whose member is already gone as an applied no-op, not a 404", () => {
+    // Add/remove symmetry (D23 rule 6): the add is naturally idempotent (the
+    // membership primary key's DO NOTHING returns the current record), so a
+    // remove of an absent member is the same idempotent no-op — the CURRENT
+    // record, never a replayed-remove 404.
+    const operation = createDefaultOperation();
+    const result = service.removeRosterAgent(
+      removeRosterCommand({
+        operation_id: operation.operation_id,
+        command_id: "cmd_remove_fresh",
+        idempotency_key: "idem_remove_fresh_1",
+        agent_id: CITATION,
+      }),
+    );
+    expect(result.outcome).toBe("applied");
+    if (result.outcome === "applied") {
+      expect(result.operation.pinning.roster_agent_ids).toEqual([RESEARCHER]);
+    }
+    expect(
+      repo.listRoster(WORKSPACE, operation.operation_id).map((member) => member.agent_id),
+    ).toEqual([RESEARCHER]);
   });
 
   it("answers an unknown operation for roster commands with a typed 404-class error", () => {

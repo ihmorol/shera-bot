@@ -350,7 +350,9 @@ describe("S13 roster commands over HTTP (D36)", () => {
         [RESEARCHER, CITATION, DEVELOPER].sort(),
       );
 
-      // Removal applies; removing a non-member is the typed 404-class.
+      // Removal applies; the SAME command replayed returns the original
+      // applied outcome through its receipt (D23 rule 6) — a committed
+      // removal is never re-answered with a 404.
       const removed = await postJson(
         running.origin,
         commandsPath,
@@ -358,6 +360,17 @@ describe("S13 roster commands over HTTP (D36)", () => {
       );
       expect(removed.status).toBe(200);
       expect(removed.body).toMatchObject({ outcome: "applied" });
+      const replayed = await postJson(
+        running.origin,
+        commandsPath,
+        removeRosterCommand(running.operationId),
+      );
+      expect(replayed.status).toBe(200);
+      expect(replayed.body).toMatchObject({ outcome: "applied" });
+
+      // A remove whose member is already gone is the idempotent no-op
+      // (add/remove symmetry, D23 rule 6): applied with the CURRENT record —
+      // never a replayed-remove 404.
       const missing = await postJson(
         running.origin,
         commandsPath,
@@ -366,8 +379,8 @@ describe("S13 roster commands over HTTP (D36)", () => {
           idempotency_key: "idem_route_remove_again",
         }),
       );
-      expect(missing.status).toBe(404);
-      expect(missing.body).toMatchObject({ code: "OPERATION_ROSTER_AGENT_NOT_FOUND" });
+      expect(missing.status).toBe(200);
+      expect(missing.body).toMatchObject({ outcome: "applied" });
 
       // Not a roster command at all → the contract's typed 400.
       const malformed = await postJson(running.origin, commandsPath, {

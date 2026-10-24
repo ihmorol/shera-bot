@@ -480,6 +480,12 @@ export class OperationsRepository {
     };
   }
 
+  /**
+   * The operation's 20 MOST RECENT persisted refusals, newest first — the
+   * detail read model's bounded "recent" window (an append-only evidence
+   * table is never read back in full; a covering index for this read is a
+   * recorded follow-up).
+   */
   listRosterRefusals(
     workspaceId: string,
     operationId: string,
@@ -492,7 +498,8 @@ export class OperationsRepository {
                 message, command_json, created_at
          FROM operation_roster_refusals
          WHERE workspace_id = ? AND operation_id = ?
-         ORDER BY id`,
+         ORDER BY id DESC
+         LIMIT 20`,
       )
       .all(workspaceId, operationId) as unknown as OperationRosterRefusalRow[];
   }

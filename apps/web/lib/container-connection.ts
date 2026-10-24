@@ -164,3 +164,13 @@ export function useRetryResolution() {
     void queryClient.refetchQueries({ queryKey: CONTAINER_RESOLUTION_QUERY_KEY });
   };
 }
+
+/** The signed-in name for live messages; optimistic attribution uses real identity. */
+export function useSessionIdentity() {
+  return useQuery({
+    queryKey: ["session-identity"],
+    queryFn: fetchSession,
+    retry: false,
+    staleTime: 0,
+  });
+}

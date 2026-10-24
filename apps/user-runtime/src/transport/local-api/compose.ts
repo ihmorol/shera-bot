@@ -19,6 +19,8 @@
  * the hook fires strictly AFTER the committing transaction, whichever
  * subscriber(s) are bound by then.
  */
+import { dirname, join } from "node:path";
+import { FileAgentFolderStore } from "../../adapters/fs/agent-folder-store.ts";
 import { createServer, type Server as HTTPServer } from "node:http";
 
 import type { Express } from "express";
@@ -144,7 +146,7 @@ export interface RuntimeHandle {
    * the pinned pack; the agent API routes sit on top of this service.
    */
   agents: AgentsService;
-  /** S11: the private-folder guard seam (same Agent records, one in-memory store). */
+  /** S11: durable private-folder storage behind the Agent access guard. */
   folders: AgentFoldersService;
   /** The scripted reply producer when enabled; undefined otherwise (G4). */
   replyStreamer: ScriptedReplyStreamer | undefined;
@@ -228,11 +230,10 @@ function wire(options: ComposeLocalApiOptions): Wired {
     publish: containFanout((event) => publisher(event), logFault),
   });
 
-  // S11: the private-folder guard shares the SAME workspace-scoped Agent
-  // records — resolution, isolation, and traversal safety live in the agents
-  // module; the store is the module's in-memory placeholder until the file
-  // slice swaps the implementation behind the identical seam.
-  const folders = new AgentFoldersService({ agents: agentsRepository });
+  const folders = new AgentFoldersService({
+    agents: agentsRepository,
+    store: new FileAgentFolderStore(join(dirname(options.dbPath), "agent-files")),
+  });
 
   const replay = new ReplayService({
     journal,
@@ -293,9 +294,11 @@ export function composeLocalApi(options: ComposeLocalApiOptions): LocalApiHandle
  */
 export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
   const wired = wire(options);
+  const workspaceId = options.workspaceId ?? DEFAULT_WORKSPACE_ID;
   const httpServer = createServer(wired.app);
   const gateway = attachWebSocketGateway(httpServer, {
     replay: wired.replay,
+    ...(options.workspaceId ? { authorizedWorkspaceId: workspaceId } : {}),
     ...(options.pingIntervalMs ? { pingIntervalMs: options.pingIntervalMs } : {}),
     ...(options.pingTimeoutMs ? { pingTimeoutMs: options.pingTimeoutMs } : {}),
   });
@@ -305,7 +308,6 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
   // task can use it) and pinned on the workspace (first install or upgrade;
   // the pin upgrade affects NEW tasks only, D19 — existing task snapshots
   // live in their task.created journal payloads).
-  const workspaceId = options.workspaceId ?? DEFAULT_WORKSPACE_ID;
   const pack: WorkspacePack | undefined = options.packsRoot
     ? loadWorkspacePack({
         packsRoot: options.packsRoot,

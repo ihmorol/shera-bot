@@ -1,30 +1,8 @@
 import { randomUUID } from "node:crypto";
+import { Session, isBrowserRuntimePath, runtimeWorkspaceMatches } from "@shera-bot/contracts";
 
-/**
- * Web server-side proxies (S09 chunk 1).
- *
- * The browser talks to THIS origin only; the Next server forwards two scoped
- * surfaces deployment-internally:
- *
- * 1. control-plane proxy → S05 auth/session + S06 runtime lifecycle at
- *    CONTROL_PLANE_URL (session resolution, provisioning status, the explicit
- *    provision trigger). Auth.js session cookies flow through on both legs.
- * 2. runtime proxy → the container-local S07 local API at
- *    RUNTIME_LOCAL_API_URL, with a STRICT path allowlist (only the surfaces
- *    the client uses: the two conversation surfaces and the four S11 agent
- *    surfaces — never /internal/*, never the chunk-2 agent PATCH routes). The
- *    local API stays loopback-only; the proxy is the prototype's deployment seam
- *    and carries NO authentication in this slice — the principal-to-workspace
- *    binding arrives with the authenticated transport wiring (recorded S07
- *    posture). Documented honestly here rather than hidden (G4).
- *
- * Both are transport-only: typed SheraError bodies the services already
- * redacted pass through verbatim (D23 rule 4), as do response redirects
- * (location) and cache-control directives; nothing is logged or rewritten
- * (G3). An unconfigured deployment is a first-class honest state, never a
- * fake success.
- */
-
+/** Browser requests pass through the authenticated control plane, which owns
+ * per-account runtime routing. No browser request selects an internal endpoint. */
 interface TypedFailure {
   code: string;
   category: string;
@@ -73,21 +51,7 @@ export async function proxyToControlPlane(
  * channel under /internal/* — is refused here, typed 404.
  */
 export async function proxyToLocalApi(request: Request, upstreamPath: string): Promise<Response> {
-  const allowed =
-    request.method === "POST" && upstreamPath === "/v1/conversations/commands"
-      ? true
-      : request.method === "GET" && /^\/v1\/conversations\/[^/]+\/events$/.test(upstreamPath)
-        ? true
-        : request.method === "GET" && upstreamPath === "/v1/agents"
-          ? true
-          : request.method === "GET" && /^\/v1\/agents\/[^/]+$/.test(upstreamPath)
-            ? true
-            : request.method === "GET" && /^\/v1\/agents\/[^/]+\/settings$/.test(upstreamPath)
-              ? true
-              : request.method === "POST" &&
-                  /^\/v1\/agents\/[^/]+\/settings\/commands$/.test(upstreamPath)
-                ? true
-                : false;
+  const allowed = isBrowserRuntimePath(request.method, upstreamPath);
   if (!allowed) {
     return Response.json(
       {
@@ -102,7 +66,93 @@ export async function proxyToLocalApi(request: Request, upstreamPath: string): P
       { status: 404 },
     );
   }
-  return forward(request, process.env["RUNTIME_LOCAL_API_URL"], upstreamPath);
+  const base = process.env["CONTROL_PLANE_URL"];
+  const sessionResponse = await forward(
+    new Request(new URL("/api/session", request.url), { headers: request.headers }),
+    base,
+    "/api/session",
+  );
+  if (!sessionResponse.ok) return sessionResponse;
+  const session = Session.safeParse(await sessionResponse.json().catch(() => null));
+  if (!session.success) return typedFailure(PROXY_UNCONFIGURED, 503);
+  const url = new URL(request.url);
+  if (
+    request.method === "POST" &&
+    request.headers.has("origin") &&
+    request.headers.get("origin") !== process.env["SHERA_WEB_ORIGIN"]
+  ) {
+    return tenantMismatch();
+  }
+  let body: unknown = null;
+  if (request.method === "POST") {
+    try {
+      const reader = request.body?.getReader();
+      const chunks: Uint8Array[] = [];
+      let size = 0;
+      if (reader) {
+        try {
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            size += value.byteLength;
+            if (size > 64 * 1024) {
+              await reader.cancel();
+              return typedFailure(
+                {
+                  code: "CONTRACT_VALIDATION_FAILED",
+                  category: "validation",
+                  safe_message: "The request body is too large.",
+                  retryable: false,
+                  user_action: null,
+                  internal_details: null,
+                },
+                413,
+              );
+            }
+            chunks.push(value);
+          }
+        } finally {
+          reader.releaseLock();
+        }
+      }
+      const raw = Buffer.concat(chunks).toString("utf8");
+      body = JSON.parse(raw);
+      request = new Request(request.url, {
+        method: request.method,
+        headers: request.headers,
+        body: raw,
+      });
+    } catch {
+      return typedFailure(
+        {
+          code: "CONTRACT_VALIDATION_FAILED",
+          category: "validation",
+          safe_message: "The request body must be valid JSON.",
+          retryable: false,
+          user_action: null,
+          internal_details: null,
+        },
+        400,
+      );
+    }
+  }
+  if (!runtimeWorkspaceMatches(request.method, url.searchParams, body, session.data.workspace_id))
+    return tenantMismatch();
+  return forward(request, base, `/api/runtime/local${upstreamPath}`);
+}
+
+function tenantMismatch(): Response {
+  return typedFailure(
+    {
+      code: "RUNTIME_TENANT_MISMATCH",
+      category: "unauthorized",
+      safe_message: "This workspace is not available to your account.",
+      retryable: false,
+      user_action: null,
+      internal_details: null,
+    },
+    403,
+  );
 }
 
 async function forward(
@@ -137,6 +187,9 @@ async function forward(
   try {
     response = await fetch(upstream, {
       method: request.method,
+      redirect: "manual",
+      signal: AbortSignal.timeout(15_000),
+      cache: "no-store",
       headers,
       ...(body === undefined ? {} : { body }),
     });
@@ -144,7 +197,10 @@ async function forward(
     return typedFailure(PROXY_UNREACHABLE, 503);
   }
 
-  const payload = await response.text();
+  const payload =
+    request.method === "HEAD" || [204, 205, 304].includes(response.status)
+      ? null
+      : await response.text();
   const downstream = new Response(payload, {
     status: response.status,
     headers: { "content-type": response.headers.get("content-type") ?? "application/json" },

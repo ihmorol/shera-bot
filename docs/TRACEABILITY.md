@@ -103,6 +103,10 @@ On 2026-09-19 the owner directed dual harness support — "i want pi as a defaul
 | E19 | Delegated engineering (pending owner review) | Issue #11 (S10); `agent-packs/student/v1/manifest.json`; D46, D29, D19 | Resolves the D46 subagent sub-item at the engineering level: subordinate execution = a typed task run through the gateway; one subordinate run per (workspace, Agent) placeholder for S16; no private-memory inheritance (S29) | §5, §13 | Pack manifest validation + workspace pack-pinning tests; `pack-pin.test.ts` |
 | E20 | Delegated engineering (pending owner review) | Review of stacked PRs #46–#49 on `fix/s10-windows-portability-gates` (`48c1f00`, `aaf2be7`); fresh-context adversarial review + verification pass with negative controls | Records two cross-platform test-harness defects found by review — a hardcoded POSIX PostgreSQL path (`SHERA_PG_BIN` resolver replaces it) and SQLite temp dirs deleted with open handles (connection registry + bounded retry). Records the correction that the first fix missed two suites. **No product behavior, schema, contract, or acceptance criterion changed** | §22 (verification evidence only; no PRD text change) | `pnpm test` on Windows: 15 failed files / 604 passed → 9 failed files / 609 passed. **Not verified:** the 9 PostgreSQL-dependent suites against a real PostgreSQL 16 install (needs Linux CI or `SHERA_PG_BIN`) |
 
+## E22 implementation evidence, 2026-10-20
+
+[Engineering record E22](decisions/engineering-record-e22-runtime-integration-2026-10-20.md) records the runtime integration repair batch. Tests, build, type checking, source lint and boundary checks support bounded HTTP-routing, management-startup and persistence claims. PostgreSQL, Docker and browser QA remain unverified. Existing acceptance statuses below are unchanged. Implementation owner: coding agent; release verification owner: maintainer. Evidence: output/implementation-2026-10-20/ in this checkout.
+
 ## D45 acceptance traceability (criteria 22–27)
 
 | Criterion | Source decision | Implementation boundary | Verification target | Status |
@@ -163,3 +167,12 @@ Each remaining item needs an owner, evidence target, and decision record before 
 ## Related-but-out-of-scope artifacts
 
 - **`business-landing-portfolio/`** — the marketing/waitlist site (Next.js). Its copy was synchronized to the final decisions on 2026-09-11 (six Agents, Pack → Operations → Agents vocabulary, Operation-based demo). It is a marketing surface that intentionally simplifies the product model and sells the long-term vision; it is out of scope for the prototype's acceptance criteria (PRD §19) and its waitlist is UI-only until a backend provider is connected. Its README records these boundaries.
+
+## PostgreSQL verification follow-up, 2026-10-20
+
+The earlier E20/E22 local PostgreSQL verification gap is resolved: the executor and parent independently passed 834 tests in 84 files using real PostgreSQL 16.15. See the dated follow-ups in E20 and E22 and `output/sequential-coding-2026-10-20/task-3/parent-full-suite.log`. Acceptance statuses are unchanged; Docker, real OAuth/provider integration and browser acceptance still need their recorded checks.
+
+
+## E23 live transport follow-up, 2026-10-20
+
+[Engineering record E23](decisions/engineering-record-e23-authenticated-live-transport-2026-10-20.md) completes E22's deferred authenticated live-routing implementation. Parent browser evidence covers a seeded real session, account-bound runtime, live user message, refresh/reconnect and actual Auth.js signout; this does not prove real Google login, model execution, Docker replacement or full browser acceptance. Full integration checks and exact commit are pending the sequential review ledger. Existing acceptance statuses and product decisions are unchanged.

@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { ContainerGate } from "@/components/shell/container-gate";
 import { EmptyState, SurfaceFrame } from "@/components/shell/surface-frame";
 import { Button } from "@/components/ui/button";
 import { PACK_AGENTS } from "@/lib/navigation";
@@ -29,17 +28,15 @@ export default function DashboardPage() {
   }
 
   return (
-    <ContainerGate>
-      <SurfaceFrame title="Pick a conversation">
-        <EmptyState
-          explanation="Pick an Agent to start a conversation, or launch a pack-defined Operation from the sidebar."
-          action={
-            <Button asChild>
-              <Link href={routes.agent(firstAgent.slug)}>Chat with {firstAgent.name}</Link>
-            </Button>
-          }
-        />
-      </SurfaceFrame>
-    </ContainerGate>
+    <SurfaceFrame title="Pick a conversation">
+      <EmptyState
+        explanation="Pick an Agent to start a conversation, or launch a pack-defined Operation from the sidebar."
+        action={
+          <Button asChild>
+            <Link href={routes.agent(firstAgent.slug)}>Chat with {firstAgent.name}</Link>
+          </Button>
+        }
+      />
+    </SurfaceFrame>
   );
 }

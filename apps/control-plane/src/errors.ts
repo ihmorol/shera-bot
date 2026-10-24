@@ -17,6 +17,7 @@ export const AUTH_ERROR_CODES = [
   "AUTH_SIGNIN_FAILED",
   "ROUTE_NOT_FOUND",
   "INTERNAL_ERROR",
+  "CONTRACT_VALIDATION_FAILED",
 ] as const;
 
 /** S06 runtime-provisioning error codes (also registered in contracts KNOWN_ERROR_CODES). */
@@ -107,6 +108,17 @@ export function routeNotFoundError(correlationId?: string): SheraError {
     code: "ROUTE_NOT_FOUND",
     category: "validation",
     safe_message: "The requested resource does not exist.",
+    retryable: false,
+    user_action: null,
+    correlation_id: correlationId,
+  });
+}
+
+export function contractValidationError(safeMessage: string, correlationId?: string): SheraError {
+  return makeSheraError({
+    code: "CONTRACT_VALIDATION_FAILED",
+    category: "validation",
+    safe_message: safeMessage,
     retryable: false,
     user_action: null,
     correlation_id: correlationId,

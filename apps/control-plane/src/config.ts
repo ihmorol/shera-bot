@@ -22,6 +22,7 @@ export interface ControlPlaneEnv {
   GOOGLE_CLIENT_SECRET: string | undefined;
   DATABASE_URL: string | undefined;
   PORT: string | undefined;
+  SHERA_WEB_ORIGIN: string | undefined;
 }
 
 export function readEnv(env: NodeJS.ProcessEnv = process.env): ControlPlaneEnv {
@@ -33,6 +34,7 @@ export function readEnv(env: NodeJS.ProcessEnv = process.env): ControlPlaneEnv {
     GOOGLE_CLIENT_SECRET: env.GOOGLE_CLIENT_SECRET,
     DATABASE_URL: env.DATABASE_URL,
     PORT: env.PORT,
+    SHERA_WEB_ORIGIN: env.SHERA_WEB_ORIGIN,
   };
 }
 

@@ -2,15 +2,12 @@ import type { Metadata } from "next";
 
 import { Wordmark } from "@/components/shell/wordmark";
 import { Button } from "@/components/ui/button";
+import { routes } from "@/lib/routes";
 
 export const metadata: Metadata = {
   title: "Sign in",
 };
 
-/**
- * S1 login surface. OAuth wiring is a later slice — the primary action is
- * visibly disabled rather than pretending to work (G4 honest states).
- */
 export default function LoginPage() {
   return (
     <main className="flex min-h-dvh items-center justify-center px-4 py-8">
@@ -22,12 +19,11 @@ export default function LoginPage() {
         <p className="mt-2 text-sm text-muted">
           Your Agents, Operations, and workspace in one private place.
         </p>
-        <Button className="mt-8 w-full" disabled>
-          Sign in with Google
+        <Button className="mt-8 w-full" asChild>
+          <a href={routes.controlPlaneSignIn()}>Sign in with Google</a>
         </Button>
         <p className="mt-4 text-xs text-muted">
-          Google sign-in is not wired into this prototype build yet. When it goes live, access is
-          capped at five accounts.
+          Sign in with your Google account. Private prototype access is capped at five accounts.
         </p>
       </div>
     </main>

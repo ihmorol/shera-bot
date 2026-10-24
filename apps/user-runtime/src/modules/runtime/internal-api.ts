@@ -16,6 +16,8 @@
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 
 import {
+  isBrowserRuntimePath,
+  runtimeWorkspaceMatches,
   RuntimeCredentialCommitRequest,
   RuntimeCredentialCommitResponse,
   RuntimeCredentialRotationRequest,
@@ -43,12 +45,12 @@ export { ChannelCredentialStore, InMemorySecurityEventRecorder };
 export type { RuntimeRegistration } from "./runtime-registration.ts";
 
 function internalChannelError(
-  code: "INTERNAL_CHANNEL_UNAUTHORIZED" | "CONTRACT_VALIDATION_FAILED",
+  code: "INTERNAL_CHANNEL_UNAUTHORIZED" | "CONTRACT_VALIDATION_FAILED" | "RUNTIME_TENANT_MISMATCH",
   safe_message: string,
 ): SheraError {
   return {
     code,
-    category: code === "INTERNAL_CHANNEL_UNAUTHORIZED" ? "unauthorized" : "validation",
+    category: code === "CONTRACT_VALIDATION_FAILED" ? "validation" : "unauthorized",
     safe_message,
     retryable: false,
     user_action: null,
@@ -68,6 +70,8 @@ function bearerOf(
 
 export interface InternalApiDeps {
   credentials: ChannelCredentialStore;
+  accountId?: string;
+  localApi?: Express;
   securityEvents?: InternalSecurityEventRecorder;
   registrations?: RuntimeRegistrationRegistry;
 }
@@ -147,6 +151,17 @@ export function createInternalApi(deps: InternalApiDeps): InternalApi {
         );
       return;
     }
+    if (deps.accountId !== undefined && parsed.data.account_id !== deps.accountId) {
+      res
+        .status(403)
+        .json(
+          internalChannelError(
+            "RUNTIME_TENANT_MISMATCH",
+            "This runtime belongs to another account.",
+          ),
+        );
+      return;
+    }
     const registration = registrations.register(parsed.data);
     const response: RuntimeRegistrationResponse = {
       registered: true,
@@ -221,6 +236,31 @@ export function createInternalApi(deps: InternalApiDeps): InternalApi {
   // Typed error middleware (closes the S06 review NOTE): every thrown failure
   // and every unknown route answers with the SheraError taxonomy — never an
   // Express default page, a stack trace, or raw internals (D23 rule 4, G3).
+  if (deps.localApi && deps.accountId) {
+    const localApi = deps.localApi;
+    const workspaceId = `ws_${deps.accountId}`;
+    app.use("/internal/v1/local", requireChannelCredential, (req, res, next) => {
+      if (!isBrowserRuntimePath(req.method, req.path)) {
+        notFoundRequestHandler(req, res, next);
+        return;
+      }
+      const query = new URL(req.url, "http://runtime.invalid").searchParams;
+      if (!runtimeWorkspaceMatches(req.method, query, req.body, workspaceId)) {
+        res
+          .status(403)
+          .json(
+            internalChannelError(
+              "RUNTIME_TENANT_MISMATCH",
+              "This workspace does not belong to this runtime.",
+            ),
+          );
+        return;
+      }
+      delete req.headers.authorization;
+      localApi(req, res, next);
+    });
+  }
+
   app.use(notFoundRequestHandler);
   app.use(typedErrorRequestHandler);
 

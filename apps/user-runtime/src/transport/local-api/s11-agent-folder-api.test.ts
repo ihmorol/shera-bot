@@ -210,3 +210,25 @@ describe("S11 agent folder access API (private-folder isolation guard)", () => {
     }
   });
 });
+
+describe("private-folder persistence in the real composition", () => {
+  it("retains guarded file content after closing and reopening the runtime", async () => {
+    const dir = makeTempDir("shera-durable-agent-folder-");
+    const dbPath = join(dir, "runtime.db");
+    const uri = `agent://${GENERAL}/notes/restart.txt`;
+    const first = await composeOn(dbPath);
+    first.runtime.folders.writeFolder(DEFAULT_WORKSPACE_ID, GENERAL, uri, "durable note");
+    await first.close();
+    const reopened = await composeOn(dbPath);
+    try {
+      expect(reopened.runtime.folders.readFolder(DEFAULT_WORKSPACE_ID, GENERAL, uri)).toBe(
+        "durable note",
+      );
+      expect(() =>
+        reopened.runtime.folders.readFolder(DEFAULT_WORKSPACE_ID, RESEARCHER, uri),
+      ).toThrow();
+    } finally {
+      await reopened.close();
+    }
+  });
+});

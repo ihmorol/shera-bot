@@ -35,6 +35,8 @@ function digestOfHex(hex: string): Buffer {
 export class ChannelCredentialStore {
   private readonly digests: Buffer[] = [];
 
+  constructor(private readonly changed?: (digests: string[]) => void) {}
+
   /** Admit the provisioned credential; the raw value is hashed and discarded. */
   admit(rawToken: string): void {
     this.insert(digestOfRaw(rawToken));
@@ -56,6 +58,7 @@ export class ChannelCredentialStore {
   /** Keep only the committed digest; every other staged/old digest is pruned. */
   commitTo(credentialSha256: Buffer): void {
     if (this.digests.some((digest) => digest.equals(credentialSha256))) {
+      this.changed?.([credentialSha256.toString("hex")]);
       this.digests.length = 0;
       this.digests.push(Buffer.from(credentialSha256));
     }
@@ -87,6 +90,7 @@ export class ChannelCredentialStore {
       // stage is accepted (bounded credential state, observable failure).
       throw new Error("credential rotation bound reached: commit the staged digest first");
     }
+    this.changed?.([...this.digests, digest].map((value) => value.toString("hex")));
     this.digests.push(digest);
   }
 }

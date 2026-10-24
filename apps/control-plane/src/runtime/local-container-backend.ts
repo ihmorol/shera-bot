@@ -19,7 +19,7 @@
  *   container that does not have one; a missing/unmanaged label is a typed
  *   failure). An owned container whose stored credential digest does NOT
  *   match this call's token is REMOVED and RECREATED under the same
- *   deterministic name with the new spec: recreation of an owned, volume-less
+ *   deterministic name with the new spec: recreation of an owned, persistently backed
  *   container is the credential-recovery mechanism (the old digest is
  *   unreachable, e.g. after a control-plane restart lost the in-memory raw
  *   token), and the deterministic name keeps "one container per user" true.
@@ -298,7 +298,7 @@ export class LocalContainerBackend implements RuntimeBackend {
    *   must be returned — a handle is never minted for a container that does
    *   not carry one, and a missing/unmanaged label is a typed failure.
    * - An owned container whose credential digest does not match is REMOVED
-   *   and the caller recreates it: recreation of an owned, volume-less
+   *   and the caller recreates it: recreation of an owned, persistently backed
    *   container is the credential-recovery mechanism (the old digest is
    *   unreachable, e.g. after a control-plane restart lost the in-memory raw
    *   token).

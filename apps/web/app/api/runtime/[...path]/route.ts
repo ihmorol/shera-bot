@@ -3,7 +3,7 @@ import { proxyToLocalApi } from "@/lib/server/proxies";
 /**
  * Web → runtime local API proxy route (S09 chunk 1, extended in S11): forwards
  * the surfaces the client uses to the container-local local API
- * (RUNTIME_LOCAL_API_URL):
+ * through the authenticated control plane (CONTROL_PLANE_URL):
  *
  *   POST /api/runtime/v1/conversations/commands        (D26 mutation path)
  *   GET  /api/runtime/v1/conversations/:id/events      (cursor replay)

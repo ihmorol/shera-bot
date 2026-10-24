@@ -174,7 +174,9 @@ export async function startTestCluster(label: string): Promise<TestCluster> {
           `-p ${port} -k ${socketDir} -c listen_addresses=127.0.0.1`,
           "start",
         ],
-        { stdio: "pipe" },
+        // On Windows, the server process can inherit pg_ctl's captured pipe
+        // handles, so execFileSync waits for EOF until PostgreSQL exits.
+        { stdio: "ignore" },
       );
       return {
         connectionString: `postgres://${superuser}@127.0.0.1:${port}/postgres`,

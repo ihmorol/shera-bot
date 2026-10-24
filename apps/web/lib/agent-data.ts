@@ -15,10 +15,7 @@ import {
 } from "@/lib/agent-api";
 import type { ThreadItem } from "@/lib/fixtures";
 import { threadItemsFromEvents } from "@/lib/runtime-thread";
-import {
-  presenceRefetchInterval,
-  type AgentSessionPresence,
-} from "@/lib/session-presence";
+import { presenceRefetchInterval, type AgentSessionPresence } from "@/lib/session-presence";
 
 /**
  * Real agent data hooks (S11 chunk 4) — the workspace's Agent identities

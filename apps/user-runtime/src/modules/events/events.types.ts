@@ -56,12 +56,12 @@ export const MessageAppendedPayload = z.strictObject({
 export type MessageAppendedPayload = z.infer<typeof MessageAppendedPayload>;
 
 /**
- * Agent session supervision events (S12 chunk 2; D32 layer 2, D14). Journaled
- * on `session:<workspace_id>:<agent_id>` streams: crashes, supervised
- * restarts, protocol failures, idle hibernations, and the terminal failed
- * state. G3: payloads carry the typed error code and a BOUNDED detail string
- * — never secrets and never raw child stderr dumps (stderr goes to the
- * supervisor's redacted, bounded sink).
+ * Agent session supervision events (S12; D32 layer 2, D14). Journaled on
+ * `session:<workspace_id>:<agent_id>` streams: on-demand starts (with the
+ * measured start latency), crashes, supervised restarts, protocol failures,
+ * idle hibernations, and the terminal failed state. G3: payloads carry the
+ * typed error code and a BOUNDED detail string — never secrets and never raw
+ * child stderr dumps (stderr goes to the supervisor's redacted, bounded sink).
  */
 export const SessionCrashCause = z.enum(["unexpected_exit", "fatal_frame", "hang"]);
 export type SessionCrashCause = z.infer<typeof SessionCrashCause>;
@@ -71,6 +71,19 @@ export type SessionRestartReason = z.infer<typeof SessionRestartReason>;
 
 export const SessionFailedReason = z.enum(["restart_limit", "protocol_violation_limit"]);
 export type SessionFailedReason = z.infer<typeof SessionFailedReason>;
+
+export const SessionStartedPayload = z.strictObject({
+  session_id: z.string().min(1),
+  workspace_id: z.string().min(1),
+  agent_id: z.string().min(1),
+  /**
+   * Measured on-demand start latency (ms) — from the address that began the
+   * start attempt (context fetch + spawn + handshake) to the child's ready.
+   * A duration integer; carries no child internals (G3).
+   */
+  start_latency_ms: z.number().int().nonnegative(),
+});
+export type SessionStartedPayload = z.infer<typeof SessionStartedPayload>;
 
 export const SessionHibernatePayload = z.strictObject({
   session_id: z.string().min(1),
@@ -150,6 +163,7 @@ export const EVENT_TYPES = {
   "conversation.created": { schema_version: 1, payload: ConversationCreatedPayload },
   "conversation.renamed": { schema_version: 1, payload: ConversationRenamedPayload },
   "message.appended": { schema_version: 1, payload: MessageAppendedPayload },
+  "session.started": { schema_version: 1, payload: SessionStartedPayload },
   "session.hibernate": { schema_version: 1, payload: SessionHibernatePayload },
   "session.crashed": { schema_version: 1, payload: SessionCrashedPayload },
   "session.restarted": { schema_version: 1, payload: SessionRestartedPayload },

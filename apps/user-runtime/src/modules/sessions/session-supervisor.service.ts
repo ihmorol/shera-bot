@@ -438,6 +438,10 @@ export class SessionSupervisor {
    */
   private async startAttempt(record: SessionRecord, origin: "address" | "supervised"): Promise<void> {
     for (;;) {
+      // The measured start latency covers THIS attempt end to end: context
+      // fetch (D15), spawn, and handshake — the honest "how long until this
+      // Agent could answer" number, journaled on activation (AC).
+      const attemptStartedAt = this.now();
       record.presence = origin === "address" ? "starting" : "restarting";
       let context: AgentSessionContext;
       try {
@@ -478,6 +482,16 @@ export class SessionSupervisor {
         if (record.current === incarnation && presenceNow !== "failed") {
           record.presence = "active";
           this.markActivity(record);
+          // The incarnation is live: journal the measured on-demand start
+          // (AC — start latency measured and recorded) before anything else
+          // can detach it. Paired with the restart/hibernate events so the
+          // session stream reads as a complete lifecycle history.
+          this.recordEvent(record, "session.started", {
+            session_id: incarnation.session_id,
+            workspace_id: record.workspace_id,
+            agent_id: record.agent_id,
+            start_latency_ms: Math.max(0, Math.round(this.now() - attemptStartedAt)),
+          });
         }
         return;
       }
@@ -1106,7 +1120,7 @@ export class SessionSupervisor {
    * A journal failure is contained (the fault is logged, supervision
    * continues) — a child crashing must never take the runtime down with it.
    */
-  private recordEvent<T extends "session.hibernate" | "session.crashed" | "session.restarted" | "session.protocol_failure" | "session.failed">(
+  private recordEvent<T extends "session.started" | "session.hibernate" | "session.crashed" | "session.restarted" | "session.protocol_failure" | "session.failed">(
     record: SessionRecord,
     type: T,
     payload: Record<string, unknown>,

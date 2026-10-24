@@ -11,6 +11,7 @@
  */
 import type { EventEnvelope } from "../events/events.types.ts";
 
+export type SessionStartedEvent = EventEnvelope<"session.started">;
 export type SessionHibernateEvent = EventEnvelope<"session.hibernate">;
 export type SessionCrashedEvent = EventEnvelope<"session.crashed">;
 export type SessionRestartedEvent = EventEnvelope<"session.restarted">;
@@ -18,6 +19,7 @@ export type SessionProtocolFailureEvent = EventEnvelope<"session.protocol_failur
 export type SessionFailedEvent = EventEnvelope<"session.failed">;
 
 export type SessionEvent =
+  | SessionStartedEvent
   | SessionHibernateEvent
   | SessionCrashedEvent
   | SessionRestartedEvent

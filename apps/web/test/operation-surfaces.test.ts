@@ -79,6 +79,9 @@ const IDENTITIES: AgentRosterSummary[] = STUDENT_MANIFEST.agents.map((agent) => 
   avatar_hue: agent.ui_identity.avatar_hue,
   initial_glyph: agent.ui_identity.initial_glyph,
   has_user_instructions: false,
+  // S12: the roster summary carries the supervised session's presence; the
+  // supervisor is not configured in these fixtures, so every Agent is "none".
+  session: { presence: "none" },
 }));
 
 const GA = IDENTITIES[0]!;

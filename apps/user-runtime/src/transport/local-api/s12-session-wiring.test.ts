@@ -471,8 +471,7 @@ describe("S12 session wiring — full runtime restart persistence", () => {
       // default, so these get generous explicit deadlines.
       await sendUserMessage(second.origin, chatId, "idem-s12-restart-2", "after the restart");
       await until(
-        () =>
-          sessionPresence(second.origin, GENERAL).then((p) => (p === "active" ? p : undefined)),
+        () => sessionPresence(second.origin, GENERAL).then((p) => (p === "active" ? p : undefined)),
         30_000,
       );
       const after = await until(async () => {

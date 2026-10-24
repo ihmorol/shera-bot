@@ -41,6 +41,7 @@ import {
   OperationsRepository,
 } from "../../adapters/sqlite/operations-repository.ts";
 import { EventsService } from "../events/events.service.ts";
+import { conversationStreamFor } from "../conversations/conversations.events.ts";
 import {
   OperationsService,
   OperationsServiceError,
@@ -599,9 +600,8 @@ describe("S13 chunk 2 — roster commands (D36)", () => {
     expect(member?.requires_approval).toBe(1);
     // The service's roster read (the read model's source) exposes it too.
     expect(
-      service
-        .listRoster(WORKSPACE, operation.operation_id)
-        .find((row) => row.agent_id === CITATION)?.requires_approval,
+      service.listRoster(WORKSPACE, operation.operation_id).find((row) => row.agent_id === CITATION)
+        ?.requires_approval,
     ).toBe(1);
     // A low-risk add records NO approval flag.
     service.addRosterAgent(
@@ -613,9 +613,8 @@ describe("S13 chunk 2 — roster commands (D36)", () => {
       }),
     );
     expect(
-      repo
-        .listRoster(WORKSPACE, operation.operation_id)
-        .find((row) => row.agent_id === GENERAL)?.requires_approval,
+      repo.listRoster(WORKSPACE, operation.operation_id).find((row) => row.agent_id === GENERAL)
+        ?.requires_approval,
     ).toBe(0);
   });
 
@@ -940,26 +939,32 @@ describe("S13 chunk 3 — thread read model corruption defense (D41)", () => {
     });
 
     const operation = createDefaultOperation();
-    const sent = chat.sendOperationMessage(WORKSPACE, operation.operation_id, {
-      idempotency_key: "idem_corrupt_sender_1",
-      sender: { kind: "user", display_name: "Emon" },
-      text: "read me before the corruption",
-    });
-    expect(sent.kind).toBe("message_sent");
+    const chatBinding = chat.getOrCreateChat(WORKSPACE, operation.operation_id);
+    expect(chatBinding.created).toBe(true);
 
-    // Corrupt the journaled sender behind the runtime's back: a payload that
-    // no longer conforms to the MessageSender union must surface as typed
-    // corruption on the thread read — never a silently cast thread item.
-    const original = journal.findById(WORKSPACE, sent.event_id);
-    expect(original).not.toBeNull();
-    const payload = JSON.parse(original!.payload) as Record<string, unknown>;
-    conn.db
-      .prepare("UPDATE event_journal SET payload = ? WHERE workspace_id = ? AND event_id = ?")
-      .run(
-        JSON.stringify({ ...payload, sender: { kind: "telepathy", target: "everyone" } }),
-        WORKSPACE,
-        sent.event_id,
-      );
+    // Seed a message.appended journal row whose sender has drifted out of the
+    // MessageSender union — constructed through the journal seam (the journal
+    // is schema-agnostic storage; the read model re-validates). Such a row
+    // must surface as typed corruption on the thread read — never a silently
+    // cast thread item.
+    const streamId = conversationStreamFor(chatBinding.conversation_id);
+    journal.append({
+      stream_id: streamId,
+      sequence: journal.nextSequence(streamId, WORKSPACE),
+      event_id: "evt_corrupt_sender_1",
+      event_type: "message.appended",
+      schema_version: 1,
+      payload: JSON.stringify({
+        conversation_id: chatBinding.conversation_id,
+        workspace_id: WORKSPACE,
+        message_id: "msg_corrupt_sender_1",
+        sender: { kind: "telepathy", target: "everyone" },
+        text: "read me through the corruption",
+      }),
+      workspace_id: WORKSPACE,
+      occurred_at: "2026-10-24T10:00:00.000Z",
+      correlation_id: "corr_corrupt_sender_1",
+    });
 
     try {
       chat.getThread(WORKSPACE, operation.operation_id);

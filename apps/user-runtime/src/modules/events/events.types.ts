@@ -56,6 +56,86 @@ export const MessageAppendedPayload = z.strictObject({
 export type MessageAppendedPayload = z.infer<typeof MessageAppendedPayload>;
 
 /**
+ * Agent session supervision events (S12; D32 layer 2, D14). Journaled on
+ * `session:<workspace_id>:<agent_id>` streams: on-demand starts (with the
+ * measured start latency), crashes, supervised restarts, protocol failures,
+ * idle hibernations, and the terminal failed state. G3: payloads carry the
+ * typed error code and a BOUNDED detail string — never secrets and never raw
+ * child stderr dumps (stderr goes to the supervisor's redacted, bounded sink).
+ */
+export const SessionCrashCause = z.enum(["unexpected_exit", "fatal_frame", "hang"]);
+export type SessionCrashCause = z.infer<typeof SessionCrashCause>;
+
+export const SessionRestartReason = z.enum(["crash", "hang", "protocol_violation", "idle_resume"]);
+export type SessionRestartReason = z.infer<typeof SessionRestartReason>;
+
+export const SessionFailedReason = z.enum(["restart_limit", "protocol_violation_limit"]);
+export type SessionFailedReason = z.infer<typeof SessionFailedReason>;
+
+export const SessionStartedPayload = z.strictObject({
+  session_id: z.string().min(1),
+  workspace_id: z.string().min(1),
+  agent_id: z.string().min(1),
+  /**
+   * Measured on-demand start latency (ms) — from the address that began the
+   * start attempt (context fetch + spawn + handshake) to the child's ready.
+   * A duration integer; carries no child internals (G3).
+   */
+  start_latency_ms: z.number().int().nonnegative(),
+});
+export type SessionStartedPayload = z.infer<typeof SessionStartedPayload>;
+
+export const SessionHibernatePayload = z.strictObject({
+  session_id: z.string().min(1),
+  workspace_id: z.string().min(1),
+  agent_id: z.string().min(1),
+  /** How long the session had been idle when it hibernated. */
+  idle_ms: z.number().int().nonnegative(),
+});
+export type SessionHibernatePayload = z.infer<typeof SessionHibernatePayload>;
+
+export const SessionCrashedPayload = z.strictObject({
+  session_id: z.string().min(1),
+  workspace_id: z.string().min(1),
+  agent_id: z.string().min(1),
+  cause: SessionCrashCause,
+  exit_code: z.number().int().nullable(),
+  signal: z.string().nullable(),
+});
+export type SessionCrashedPayload = z.infer<typeof SessionCrashedPayload>;
+
+export const SessionRestartedPayload = z.strictObject({
+  session_id: z.string().min(1),
+  workspace_id: z.string().min(1),
+  agent_id: z.string().min(1),
+  reason: SessionRestartReason,
+  /** The child incarnation this restart replaced, when there was one. */
+  previous_session_id: z.string().nullable(),
+});
+export type SessionRestartedPayload = z.infer<typeof SessionRestartedPayload>;
+
+export const SessionProtocolFailurePayload = z.strictObject({
+  session_id: z.string().min(1),
+  workspace_id: z.string().min(1),
+  agent_id: z.string().min(1),
+  /** The typed PiProtocolError code (e.g. PROTOCOL_VIOLATION). */
+  code: z.string().min(1),
+  /** The violation reason for ProtocolViolationError; null otherwise. */
+  reason: z.string().nullable(),
+  /** Bounded typed detail (max 200 chars); never raw child output. */
+  detail: z.string().max(200).nullable(),
+});
+export type SessionProtocolFailurePayload = z.infer<typeof SessionProtocolFailurePayload>;
+
+export const SessionFailedPayload = z.strictObject({
+  session_id: z.string().min(1),
+  workspace_id: z.string().min(1),
+  agent_id: z.string().min(1),
+  reason: SessionFailedReason,
+});
+export type SessionFailedPayload = z.infer<typeof SessionFailedPayload>;
+
+/**
  * The D26 task-execution vocabulary (S07; D51 seam) journaled on `task:<id>`
  * streams. The journal row stores the FULL contract envelope as its payload —
  * the envelope IS the durable D26 event — so each registry entry validates the
@@ -83,6 +163,12 @@ export const EVENT_TYPES = {
   "conversation.created": { schema_version: 1, payload: ConversationCreatedPayload },
   "conversation.renamed": { schema_version: 1, payload: ConversationRenamedPayload },
   "message.appended": { schema_version: 1, payload: MessageAppendedPayload },
+  "session.started": { schema_version: 1, payload: SessionStartedPayload },
+  "session.hibernate": { schema_version: 1, payload: SessionHibernatePayload },
+  "session.crashed": { schema_version: 1, payload: SessionCrashedPayload },
+  "session.restarted": { schema_version: 1, payload: SessionRestartedPayload },
+  "session.protocol_failure": { schema_version: 1, payload: SessionProtocolFailurePayload },
+  "session.failed": { schema_version: 1, payload: SessionFailedPayload },
   ...TASK_EVENT_REGISTRY,
 } as const;
 

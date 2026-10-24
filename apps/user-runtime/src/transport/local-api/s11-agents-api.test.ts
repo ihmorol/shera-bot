@@ -170,7 +170,8 @@ describe("S11 agent API (typed local API routes)", () => {
         STUDENT_MANIFEST.agents.map((agent) => agent.agent_id).sort(),
       );
       // Summary payloads are exactly the allowlisted fields — no capabilities,
-      // no memory, no provider internals, nothing beyond one Agent's identity.
+      // no memory, no provider internals, nothing beyond one Agent's identity
+      // plus the S12 session-presence read (supervisor disabled here → "none").
       for (const agent of agents) {
         expect(Object.keys(agent).sort()).toEqual([
           "agent_id",
@@ -179,8 +180,10 @@ describe("S11 agent API (typed local API routes)", () => {
           "has_user_instructions",
           "initial_glyph",
           "role_description",
+          "session",
         ]);
         expect(agent["has_user_instructions"]).toBe(false);
+        expect(agent["session"]).toEqual({ presence: "none" });
       }
 
       const detail = await getJson(

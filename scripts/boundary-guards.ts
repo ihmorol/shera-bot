@@ -41,6 +41,11 @@ const PROCESS_EXCEPTIONS = new Set([
   // so the probe can SIGKILL it mid-stream and verify restart recovery on the
   // same SQLite file (test-only; the runtime never spawns processes itself).
   "apps/user-runtime/test/helpers/mock-runtime-process.ts",
+  // The D14 fake Pi test double: spawning a REAL child process is its purpose
+  // — supervision suites must exercise true heartbeat silence, kill
+  // escalation and crash semantics. The production Pi adapter will live in
+  // the adapters/process/ seam (chunk 3 wires the spawn dependency there).
+  "packages/pi-protocol/src/fake-pi.ts",
 ]);
 
 /** The only place SQL (and sqlite itself) may live in the runtime. */

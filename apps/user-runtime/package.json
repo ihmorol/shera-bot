@@ -16,6 +16,7 @@
   "dependencies": {
     "@shera-bot/agent-pack-sdk": "workspace:*",
     "@shera-bot/contracts": "workspace:*",
+    "@shera-bot/pi-protocol": "workspace:*",
     "express": "5.2.1",
     "socket.io": "4.8.4",
     "zod": "4.6.5"

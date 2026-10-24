@@ -15,6 +15,7 @@ import {
 } from "@/lib/agent-api";
 import type { ThreadItem } from "@/lib/fixtures";
 import { threadItemsFromEvents } from "@/lib/runtime-thread";
+import { presenceRefetchInterval, type AgentSessionPresence } from "@/lib/session-presence";
 
 /**
  * Real agent data hooks (S11 chunk 4) — the workspace's Agent identities
@@ -172,6 +173,55 @@ export function useAgentDirectChat(workspaceId: string, agentId: string): AgentD
     directChatId,
     agentDetail: detailQuery.data,
   };
+}
+
+// ---------------------------------------------------------------------------
+// S12 chunk 4: the Agent's session presence (polled agent detail read)
+// ---------------------------------------------------------------------------
+
+export interface AgentSessionPresenceState {
+  /** The runtime-reported presence, or null while nothing is known yet. */
+  presence: AgentSessionPresence | null;
+  /**
+   * True when the presence read failed — the header SILENCES the chip (a
+   * presence indicator never becomes an error surface, G4); the chat's own
+   * surfaces keep their §2.4 error states.
+   */
+  failed: boolean;
+}
+
+/**
+ * One Agent's session presence (D32), polled through the agent detail read —
+ * the runtime has NO session-event WebSocket fanout in this slice, so polling
+ * IS the honest mechanism. The detail endpoint get-or-creates the direct chat
+ * binding (journaled, idempotent), so the poll adds no new side effect to the
+ * surface the user is already in. Failures are states, never retries behind
+ * the user's back — and they only ever silence the chip.
+ */
+export function useAgentSessionPresence(
+  workspaceId: string,
+  agentId: string,
+): AgentSessionPresenceState {
+  const query = useQuery({
+    // SAME cache entry as useAgentDirectChat (["agent-detail"]) — one
+    // request stream per mounted surface, one cache truth. The presence
+    // observer contributes only its select + cadence.
+    queryKey: ["agent-detail", workspaceId, agentId],
+    queryFn: () => fetchAgentDetail(workspaceId, agentId),
+    select: (detail) => detail.session.presence,
+    retry: false,
+    refetchOnWindowFocus: false,
+    staleTime: 0,
+    // 5s cadence, paused entirely while the tab is hidden (the decision is
+    // pinned in lib/session-presence.ts).
+    refetchInterval: () => presenceRefetchInterval(),
+    refetchIntervalInBackground: false,
+  });
+
+  if (query.isError) {
+    return { presence: null, failed: true };
+  }
+  return { presence: query.data ?? null, failed: false };
 }
 
 // ---------------------------------------------------------------------------

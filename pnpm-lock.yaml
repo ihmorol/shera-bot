@@ -263,6 +263,9 @@ importers:
       '@shera-bot/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@shera-bot/pi-protocol':
+        specifier: workspace:*
+        version: link:../../packages/pi-protocol
       express:
         specifier: 5.2.1
         version: 5.2.1

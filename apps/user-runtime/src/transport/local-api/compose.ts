@@ -18,6 +18,14 @@
  * conversations service is constructed, but the D26/AC8 discipline holds —
  * the hook fires strictly AFTER the committing transaction, whichever
  * subscriber(s) are bound by then.
+ *
+ * S12 (D32 layer 2): when a session harness command is configured, the
+ * composition ALSO wires the SessionSupervisor (spawn seam in
+ * adapters/process) and the SessionReplyBridge on the same post-commit
+ * fanout — Agent direct-chat messages address warm sessions on demand and
+ * session replies land as durable conversation messages. Without a harness
+ * command the supervisor is disabled and the composition behaves exactly as
+ * before (G4).
  */
 import { dirname, join } from "node:path";
 import { FileAgentFolderStore } from "../../adapters/fs/agent-folder-store.ts";
@@ -35,6 +43,10 @@ import { EventJournalRepository } from "../../adapters/sqlite/event-journal-repo
 import { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import type { HarnessAdapter } from "../../adapters/process/harness-adapter.ts";
 import { FakeHarnessAdapter } from "../../adapters/process/fake-harness-adapter.ts";
+import {
+  createSessionProcessSpawn,
+  type SessionHarnessConfig,
+} from "../../adapters/process/session-process-spawn.ts";
 import { EventsService } from "../../modules/events/events.service.ts";
 import { ReplayService } from "../../modules/events/replay.service.ts";
 import type { EventEnvelope } from "../../modules/events/events.types.ts";
@@ -52,6 +64,11 @@ import { HarnessRunService } from "../../modules/runtime/harness-run-service.ts"
 import { loadWorkspacePack, type WorkspacePack } from "../../modules/runtime/pack-pin.ts";
 import { seedAgentsFromPack } from "../../adapters/sqlite/agents-repository.ts";
 import { WorkspacesRepository } from "../../adapters/sqlite/workspaces-repository.ts";
+import {
+  SessionSupervisor,
+  type SessionSupervisorPolicy,
+} from "../../modules/sessions/session-supervisor.service.ts";
+import { SessionReplyBridge } from "../../modules/sessions/session-reply-bridge.ts";
 import { createLocalApi } from "./app.ts";
 import { consoleRedactedLogger, type RedactedLogger } from "../http/typed-errors.ts";
 import { attachWebSocketGateway, type WebSocketGatewayHandle } from "../websocket/gateway.ts";
@@ -129,6 +146,25 @@ export interface ComposeRuntimeOptions extends ComposeLocalApiOptions {
    * produced (G4: nothing fabricates a response without configuration).
    */
   scriptedReplies?: ScriptedReplyOptions;
+  /**
+   * S12 (D32 layer 2): the configured session harness command. When set, the
+   * runtime composes the supervised warm Agent session — on-demand starts on
+   * the FIRST direct-chat message, presence on the agent API, and session
+   * replies landed as durable conversation messages. When it is NOT set (the
+   * default), the runtime composes with the supervisor DISABLED: presence
+   * reads "none" everywhere, no process ever spawns, and the send path
+   * behaves exactly as before this slice (G4 — the same optional-seam shape
+   * as the ScriptedReplyStreamer; the S09 E2E keeps running on the scripted
+   * streamer, never through the supervisor).
+   */
+  sessionHarness?: SessionHarnessConfig;
+  /**
+   * S12: ms-scale overrides for the supervisor's documented policy defaults
+   * (idle hibernation, heartbeat window, handshake timeout, restart and
+   * protocol caps). The composition passes them through verbatim — the
+   * policy semantics live in the supervisor.
+   */
+  sessionPolicy?: Partial<SessionSupervisorPolicy>;
 }
 
 export interface RuntimeHandle {
@@ -150,6 +186,12 @@ export interface RuntimeHandle {
   folders: AgentFoldersService;
   /** The scripted reply producer when enabled; undefined otherwise (G4). */
   replyStreamer: ScriptedReplyStreamer | undefined;
+  /**
+   * S12: the supervised warm Agent session seam when a harness command is
+   * configured; undefined otherwise (G4) — presence reads "none" everywhere
+   * and no session process ever spawns.
+   */
+  sessions: SessionSupervisor | undefined;
   /** Closes the gateway (and with it the HTTP server), then SQLite. */
   close(): Promise<void>;
 }
@@ -164,6 +206,8 @@ interface Wired {
   conversations: ConversationsService;
   agents: AgentsService;
   folders: AgentFoldersService;
+  sessions: SessionSupervisor | undefined;
+  sessionBridge: SessionReplyBridge | undefined;
   setPublisher(publisher: ConversationPublisher): void;
 }
 
@@ -195,7 +239,12 @@ function containFanout<E extends EventEnvelope>(
   };
 }
 
-function wire(options: ComposeLocalApiOptions): Wired {
+function wire(
+  options: ComposeLocalApiOptions & {
+    sessionHarness?: SessionHarnessConfig | undefined;
+    sessionPolicy?: Partial<SessionSupervisorPolicy> | undefined;
+  },
+): Wired {
   const logFault = options.logUntypedFault ?? consoleRedactedLogger;
   const conn = openDatabase(options.dbPath);
   applyMigrations(conn.db);
@@ -230,6 +279,70 @@ function wire(options: ComposeLocalApiOptions): Wired {
     publish: containFanout((event) => publisher(event), logFault),
   });
 
+  // S12 (D32 layer 2): the supervised warm Agent session when a harness
+  // command IS configured; when it is NOT, the runtime composes with the
+  // supervisor DISABLED — presence "none" everywhere, no process ever spawns,
+  // and the send path behaves exactly as today (G4). The D15 context is
+  // re-fetched through the agents module's public read on EVERY (re)start;
+  // the supervisor never caches it.
+  const sessions = options.sessionHarness
+    ? new SessionSupervisor({
+        events,
+        spawnChild: createSessionProcessSpawn(options.sessionHarness),
+        contextProvider: (workspaceId, agentId) => {
+          const agent = agents.getAgent(workspaceId, agentId);
+          return {
+            workspace_id: workspaceId,
+            agent_id: agentId,
+            display_name: agent.display_name,
+            instructions: agent.user_instructions,
+            pack_profile: agent.role_description,
+          };
+        },
+        stderrSink: {
+          // G3: child stderr is diagnostic — bounded per incarnation by the
+          // supervisor, and reduced HERE to a classified digest (byte count
+          // plus a conservative message-like first-line shape) so raw
+          // harness bytes never reach the operator log even though the
+          // conduit itself is redaction-based. Never journaled, never in
+          // any API response; anything that does not read as a plain
+          // message is summarized, not quoted.
+          write: (chunk) => {
+            const bytes = Buffer.byteLength(chunk, "utf8");
+            const firstLine = chunk.split("\n", 1)[0] ?? "";
+            const shape = /^[A-Za-z0-9 .:'-]{1,60}$/.test(firstLine)
+              ? firstLine
+              : `${firstLine.length} chars, non-message`;
+            logFault("agent_session_stderr", { bytes, shape });
+          },
+        },
+        logFault: (event, fields) => logFault(event, fields),
+        ...(options.sessionPolicy ? { policy: options.sessionPolicy } : {}),
+      })
+    : undefined;
+
+  // S12: the send-path bridge — a user message in an Agent direct chat
+  // addresses the session on demand and lands the reply as a durable
+  // conversation message through the SAME command path (D26). Direct-chat
+  // resolution reads the agents repository (the binding's owner); plain
+  // conversations never spawn a session.
+  const sessionBridge =
+    sessions !== undefined
+      ? new SessionReplyBridge({
+          supervisor: sessions,
+          conversations,
+          resolveDirectChatAgent: (workspaceId, conversationId) => {
+            for (const agent of agentsRepository.listAgents(workspaceId)) {
+              if (agentsRepository.findDirectChat(workspaceId, agent.agent_id) === conversationId) {
+                return agent.agent_id;
+              }
+            }
+            return null;
+          },
+          onFault: (event, fields) => logFault(event, fields),
+        })
+      : undefined;
+
   const folders = new AgentFoldersService({
     agents: agentsRepository,
     store: new FileAgentFolderStore(join(dirname(options.dbPath), "agent-files")),
@@ -263,6 +376,14 @@ function wire(options: ComposeLocalApiOptions): Wired {
     replay,
     agents,
     folders,
+    // S12: the presence read model — live when the supervisor is enabled,
+    // absent (→ every agent reports "none") when it is disabled (G4).
+    ...(sessions
+      ? {
+          sessionPresence: (workspaceId: string, agentId: string) =>
+            sessions.presenceState(workspaceId, agentId),
+        }
+      : {}),
     ...(options.logUntypedFault ? { logUntypedFault: options.logUntypedFault } : {}),
   });
   return {
@@ -275,6 +396,8 @@ function wire(options: ComposeLocalApiOptions): Wired {
     conversations,
     agents,
     folders,
+    sessions,
+    sessionBridge,
     setPublisher(next) {
       publisher = next;
     },
@@ -352,6 +475,11 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
   const broadcast = containFanout((event) => {
     gateway.broadcastStreamEvent(event);
     replyStreamer?.handleCommittedEvent(event);
+    // S12: the session bridge rides the same post-commit fanout as the
+    // scripted producer — an Agent direct-chat turn addresses the supervised
+    // session and lands its reply durably. Contained twice over: the bridge
+    // catches its own failures AND this wrapper would (B4).
+    wired.sessionBridge?.handleCommittedEvent(event);
   }, logFault);
   wired.setPublisher(broadcast);
 
@@ -389,8 +517,12 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     agents: wired.agents,
     folders: wired.folders,
     replyStreamer,
+    sessions: wired.sessions,
     close: async () => {
       replyStreamer?.stopAll();
+      // S12: drain every live session child through the escalation BEFORE the
+      // transport goes down — a stopped runtime never leaves an orphan.
+      await wired.sessions?.stopAll();
       // io.close() also closes the attached HTTP server (socket.io v4).
       await gateway.close();
       wired.conn.close();

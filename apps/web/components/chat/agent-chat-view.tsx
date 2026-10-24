@@ -32,6 +32,14 @@ import {
   type ConnectionState,
 } from "@/lib/connection";
 import { routes } from "@/lib/routes";
+import {
+  SESSION_NOTE_AUTO_DISMISS_MS,
+  SESSION_NOTE_TEXT,
+  browserSessionStorage,
+  markSessionNoteSeen,
+  shouldShowFirstTimeNote,
+  type SessionPresenceChipState,
+} from "@/lib/session-presence";
 import { STREAM_THROTTLE_MS, streamFrameAt } from "@/lib/streaming";
 import {
   firstUnreadMessageId,
@@ -137,20 +145,95 @@ function PresencePill({ presence }: { presence: SessionPresence }) {
 }
 
 /**
- * Runtime-mode presence PLACEHOLDER (S11, §S3): real sessions report no
- * presence in this slice — session states arrive in S12 — and the fixture
- * demo's derived presence must never leak onto real rows (G4). The header
- * shows an explicit placeholder instead of nothing or a guess.
+ * Runtime-mode presence chip (S12 chunk 4, §S3 + D32): the REAL states the
+ * supervisor reports, polled by the caller. Honesty rules (G4): presence
+ * "none" renders NOTHING (a supervised-off runtime is not decorated) and a
+ * failed presence read renders NOTHING scary (a presence chip never becomes
+ * an error surface — the chat's own surfaces keep their §2.4 error states).
+ * The demo's derived pill is a separate component; real presence never leaks
+ * onto demo rows.
  */
-function PresencePlaceholder() {
+const SESSION_CHIP_COPY = {
+  starting: {
+    label: "Starting…",
+    dotClass: "bg-live",
+    pulsing: true,
+    title: "The Agent's session is starting on demand (D32).",
+  },
+  active: {
+    label: "Session active",
+    dotClass: "bg-live",
+    pulsing: false,
+    title: "The Agent's session is running — it hibernates when idle (D32).",
+  },
+  hibernating: {
+    label: "Hibernating",
+    dotClass: "bg-muted",
+    pulsing: false,
+    title: "The session hibernates while idle — it wakes on your next message (D32).",
+  },
+  restarting: {
+    label: "Reconnecting",
+    dotClass: "bg-approval",
+    pulsing: true,
+    title: "The session is reconnecting — replies continue on the restarted session.",
+  },
+  failed: {
+    label: "Session failed",
+    dotClass: "bg-failed",
+    pulsing: false,
+    title: "The session could not be kept alive — addressing the Agent retries it.",
+  },
+} as const;
+
+export function SessionPresenceChip({ state }: { state: SessionPresenceChipState }) {
+  if (state === "none" || state === "error") {
+    return null;
+  }
+  const view = state === "loading" ? null : SESSION_CHIP_COPY[state];
   return (
     <span
+      data-session-presence={state}
+      title={view?.title ?? "Checking the session state…"}
       className="flex shrink-0 items-center gap-1.5 rounded-full border border-line px-2.5 py-1 text-[11px] text-muted"
-      title="A placeholder — live session states (active / hibernating) arrive in S12; nothing is fabricated here."
     >
-      <span aria-hidden="true" className="size-1.5 rounded-full bg-muted" />
-      <span className="sr-only md:not-sr-only">Presence arrives in S12</span>
+      <span
+        aria-hidden="true"
+        className={cn(
+          "size-1.5 rounded-full",
+          view ? view.dotClass : "bg-muted",
+          (view === null || view.pulsing) && "animate-pulse motion-reduce:animate-none",
+        )}
+      />
+      {/* Below md the chip collapses to the dot + screen-reader label so the
+          Agent name keeps width priority at 360px (§2.2 min breakpoint). */}
+      <span className="sr-only md:not-sr-only">{view ? view.label : "Session state loading"}</span>
     </span>
+  );
+}
+
+/**
+ * The first-time session note (S12 chunk 4, issue requirement): the FIRST
+ * time an Agent's session goes live in this browser session, a one-line muted
+ * explainer appears between the header and the thread. The aria-live region
+ * stays mounted in runtime mode so screen readers hear the note when it
+ * appears; dismissal is instant (there is no animation to reduce), and the
+ * note carries no error language — it is a quiet explainer, not an alert.
+ */
+export function FirstTimeSessionNote({ visible }: { visible: boolean }) {
+  return (
+    <p
+      aria-live="polite"
+      data-session-note={visible ? "visible" : "dismissed"}
+      className={cn(
+        "shrink-0 text-xs text-muted",
+        // Dismissed keeps the live region mounted (sr-only, not display:none)
+        // so it never disappears from the accessibility tree mid-announcement.
+        visible ? "border-b border-line bg-surface px-4 py-2 lg:px-6" : "sr-only",
+      )}
+    >
+      {visible ? SESSION_NOTE_TEXT : ""}
+    </p>
   );
 }
 
@@ -174,6 +257,7 @@ export function AgentChatView({
   liveStream,
   onRuntimeSend,
   onRuntimeRetry,
+  sessionPresence,
 }: {
   /** The identity fields the header (and avatar) render — full Agent or the live row. */
   agent: AgentChatIdentity;
@@ -228,9 +312,44 @@ export function AgentChatView({
   onRuntimeSend?: ((text: string) => void) | undefined;
   /** Retry a failed real send with the SAME idempotency key (receipt replay). */
   onRuntimeRetry?: ((messageId: string) => void) | undefined;
+  /**
+   * S12 chunk 4: the runtime-reported session presence (D32), polled by the
+   * caller (useAgentSessionPresence). Undefined when the presence hook is not
+   * wired (demo mode, S11 callers) — the header then renders no presence at
+   * all. "loading" is a quiet skeleton chip; "error" (failed read) and "none"
+   * (supervisor disabled) render no chip — never a scary or fabricated state
+   * for a presence indicator (G4).
+   */
+  sessionPresence?: SessionPresenceChipState | undefined;
 }) {
   const [localMessages, setLocalMessages] = useState<ChatMessage[]>([]);
   const timersRef = useRef<number[]>([]);
+
+  // S12 chunk 4: the first-time session note — shown once per browser session
+  // the first time THIS Agent's session goes live (starting/active), then
+  // marked seen. Arming is React's documented render-phase adjustment (a
+  // one-way latch on the polled presence transition, never taken during SSR
+  // where presence is always undefined): the alternative effect-shaped sync
+  // is exactly the setState-in-effect the hooks rules reject. Dismissal is
+  // event-driven (auto after a few seconds, or on the next message).
+  const [noteVisible, setNoteVisible] = useState(false);
+  const [noteArmed, setNoteArmed] = useState(false);
+  const liveNow = sessionPresence === "starting" || sessionPresence === "active";
+  if (mode === "runtime" && liveNow && !noteArmed) {
+    setNoteArmed(true);
+    const storage = browserSessionStorage();
+    if (shouldShowFirstTimeNote(sessionPresence, storage)) {
+      markSessionNoteSeen(storage);
+      setNoteVisible(true);
+    }
+  }
+  useEffect(() => {
+    if (!noteVisible) {
+      return;
+    }
+    const timer = window.setTimeout(() => setNoteVisible(false), SESSION_NOTE_AUTO_DISMISS_MS);
+    return () => window.clearTimeout(timer);
+  }, [noteVisible]);
 
   useEffect(
     () => () => {
@@ -245,9 +364,9 @@ export function AgentChatView({
   /** The runtime surface with the live send path wired (chunk 2). */
   const runtimeLive = runtimeMode && onRuntimeSend !== undefined;
 
-  // D32 session presence is not reported by the runtime in this slice — the
-  // demo derives it from run fixtures, which would fabricate presence on real
-  // data. Runtime mode therefore shows no presence pill (G4).
+  // D32 presence: the DEMO derives it from run fixtures — which must never
+  // leak onto real rows, so runtime mode takes its presence exclusively from
+  // the polled sessionPresence prop (G4).
   const presence = runtimeMode ? undefined : sessionPresenceFor(conversation.conversation_id);
 
   // §6.1 demo streaming: the scripted stream runs only in its own conversation
@@ -342,6 +461,8 @@ export function AgentChatView({
     // live conversation (§6.3). Without the live send prop the composer stays
     // disabled and this guard keeps demo-only appends out of real data (G4).
     if (runtimeMode) {
+      // S12 chunk 4: the first-time note also dismisses on the next message.
+      setNoteVisible(false);
       onRuntimeSend?.(text);
       return;
     }
@@ -389,7 +510,7 @@ export function AgentChatView({
           <p className="truncate text-xs text-muted">{agent.role_description}</p>
         </div>
         {presence ? <PresencePill presence={presence} /> : null}
-        {runtimeMode ? <PresencePlaceholder /> : null}
+        {runtimeMode ? <SessionPresenceChip state={sessionPresence ?? "none"} /> : null}
         {/* Model placeholder collapses away below md — the identity (name +
             role) keeps width priority at the 360px min breakpoint (§2.2). */}
         <button
@@ -414,6 +535,11 @@ export function AgentChatView({
           <Settings2 className="size-4" aria-hidden="true" />
         </Link>
       </header>
+
+      {/* S12 chunk 4: the once-per-browser-session session explainer (runtime
+          only) — appears the first time a session goes live, dismisses itself
+          after a few seconds or on the next message. */}
+      {runtimeMode ? <FirstTimeSessionNote visible={noteVisible} /> : null}
 
       {/* §6.4 banner: a strip above the thread — reading stays possible while
           disconnected; it never blocks or overlays the conversation. */}

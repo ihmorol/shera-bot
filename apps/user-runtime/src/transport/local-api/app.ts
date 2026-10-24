@@ -16,9 +16,21 @@
 import express, { type Express } from "express";
 import { z } from "zod";
 
-import { AgentSettingsCommand, Id, WorkspaceId } from "@shera-bot/contracts";
+import {
+  AgentSettingsCommand,
+  Id,
+  OperationCollaborationEvent,
+  OperationCoordinatorRef,
+  type OperationRecord,
+  type OperationRun,
+  WorkspaceId,
+} from "@shera-bot/contracts";
 
 import type { AgentRow } from "../../adapters/sqlite/agents-repository.ts";
+import type {
+  OperationRosterMemberRow,
+  OperationRosterRefusalRow,
+} from "../../adapters/sqlite/operations-repository.ts";
 import { conversationStreamFor } from "../../modules/conversations/conversations.events.ts";
 import type { AgentFoldersService } from "../../modules/agents/agent-folders.service.ts";
 import type { AgentsService } from "../../modules/agents/agents.service.ts";
@@ -26,6 +38,8 @@ import type { ConversationsService } from "../../modules/conversations/conversat
 import { ConversationCommand } from "../../modules/conversations/conversations.types.ts";
 import type { AgentSessionPresence } from "../../modules/sessions/session-supervisor.service.ts";
 import type { ReplayService } from "../../modules/events/replay.service.ts";
+import { MessageSender } from "../../modules/events/events.types.ts";
+import type { OperationsService } from "../../modules/operations/operations.service.ts";
 import {
   contractValidationResponse,
   createTypedErrorRequestHandler,
@@ -42,6 +56,19 @@ export const PATCH_AGENT_PROVIDER_PATH = "/v1/agents/:agent_id/provider" as cons
 export const GET_AGENT_SETTINGS_PATH = "/v1/agents/:agent_id/settings" as const;
 export const SUBMIT_AGENT_SETTINGS_COMMAND_PATH = "/v1/agents/:agent_id/settings/commands" as const;
 export const GET_AGENT_FOLDER_ACCESS_PATH = "/v1/agents/:agent_id/folder" as const;
+// S13 — the Operation chat surface (D31, D36, D34/D46, D7, D41).
+export const CREATE_OPERATION_PATH = "/v1/operations" as const;
+export const LIST_OPERATIONS_PATH = "/v1/operations" as const;
+export const GET_OPERATION_PATH = "/v1/operations/:operation_id" as const;
+export const OPERATION_ROSTER_COMMANDS_PATH =
+  "/v1/operations/:operation_id/roster/commands" as const;
+export const OPERATION_COORDINATOR_PATH = "/v1/operations/:operation_id/coordinator" as const;
+export const OPERATION_RUNS_PATH = "/v1/operations/:operation_id/runs" as const;
+export const OPERATION_RUN_PATH = "/v1/operations/:operation_id/runs/:run_id" as const;
+export const OPERATION_EVENTS_PATH = "/v1/operations/:operation_id/events" as const;
+export const OPERATION_THREAD_PATH = "/v1/operations/:operation_id/thread" as const;
+export const OPERATION_THREAD_MESSAGES_PATH =
+  "/v1/operations/:operation_id/thread/messages" as const;
 
 /**
  * Replay query (D26): the client's last acknowledged sequence drives exactly
@@ -61,6 +88,71 @@ const ConversationEventsQuery = z.strictObject({
 
 /** S11: every agent route is workspace-scoped (E12) — by query on reads. */
 const AgentWorkspaceQuery = z.strictObject({ workspace_id: WorkspaceId });
+
+/**
+ * S13: every operation route is workspace-scoped the SAME way (E12) — the
+ * loopback local API accepts the workspace from the query (reads) or the
+ * command envelope (commands); the browser-facing surface is the web client
+ * proxy's concern and keeps this same trust boundary.
+ */
+const OperationWorkspaceQuery = z.strictObject({ workspace_id: WorkspaceId });
+
+/** POST /v1/operations — create one Operation chat record (D31, D29 pinning). */
+const CreateOperationBody = z.strictObject({
+  workspace_id: WorkspaceId,
+  /** Null for ad-hoc Operations (D41, D29). */
+  definition_ref: z.string().min(1).max(512).nullable(),
+  name: z.string().min(1).max(200),
+  roster_agent_ids: z.array(z.string().min(1).max(256)).min(1).max(50),
+  coordinator_agent_id: OperationCoordinatorRef,
+});
+
+/** POST /v1/operations/:id/coordinator — set an Agent or "none" (D42/D49). */
+const OperationCoordinatorBody = z.strictObject({
+  workspace_id: WorkspaceId,
+  coordinator_agent_id: OperationCoordinatorRef,
+});
+
+/** POST /v1/operations/:id/runs — create one run (D31; typed creation, D34). */
+const OperationRunCreateBody = z.strictObject({
+  workspace_id: WorkspaceId,
+  run_id: z.string().min(1).max(256).optional(),
+  /** The D34/D46 delegation link: the parent RUN's id. */
+  parent_task_id: z.string().min(1).max(256).optional(),
+});
+
+/** GET /v1/operations/:id/events — the D26 cursor read for the runs panel. */
+const OperationEventsQuery = z.strictObject({
+  workspace_id: WorkspaceId,
+  /** Absent = every stream of the Operation; present = that run's stream. */
+  run_id: z.string().min(1).max(256).optional(),
+  after_sequence: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(Number.MAX_SAFE_INTEGER)
+    .default(0),
+});
+
+/** GET /v1/operations/:id/thread — the merged thread read model. */
+const OperationThreadQuery = z.strictObject({
+  workspace_id: WorkspaceId,
+  /** Journal-sequence cursor for the MESSAGE leg (exclusive); events come in full. */
+  after: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(Number.MAX_SAFE_INTEGER)
+    .default(0),
+});
+
+/** POST /v1/operations/:id/thread/messages — one addressed chat message (D41). */
+const OperationThreadMessageBody = z.strictObject({
+  workspace_id: WorkspaceId,
+  idempotency_key: z.string().min(8).max(200),
+  sender: MessageSender,
+  text: z.string().min(1).max(4000),
+});
 
 /**
  * S11 private-folder access check: the target is an `agent://<agent_id>/<path>`
@@ -134,6 +226,43 @@ function agentDetail(row: AgentRow, directChatId: string, presence: AgentSession
   };
 }
 
+/**
+ * S13 — the Operation detail read model: the record, the roster with its
+ * requires_approval flags and display names, the runs summary, and the
+ * recent persisted D36 refusals (the UI's "why"). The chat binding id is
+ * reported WITHOUT creating it — the binding is created lazily on first
+ * thread access (D41), never by a detail read.
+ */
+function operationDetail(
+  operation: OperationRecord,
+  roster: OperationRosterMemberRow[],
+  runs: OperationRun[],
+  refusals: OperationRosterRefusalRow[],
+  chatConversationId: string | null,
+  agentNames: ReadonlyMap<string, string>,
+) {
+  return {
+    operation,
+    roster: roster.map((member) => ({
+      agent_id: member.agent_id,
+      display_name: agentNames.get(member.agent_id) ?? null,
+      requires_approval: member.requires_approval === 1,
+      pack_id: member.pack_id,
+      pack_version: member.pack_version,
+      added_at: member.added_at,
+    })),
+    runs,
+    recent_refusals: refusals.map((refusal) => ({
+      refusal_code: refusal.refusal_code,
+      agent_id: refusal.agent_id,
+      pack_id: refusal.pack_id,
+      message: refusal.message,
+      created_at: refusal.created_at,
+    })),
+    chat_conversation_id: chatConversationId,
+  };
+}
+
 export interface LocalApiDeps {
   /** The only mutation path (D26) — the conversations module's command gate. */
   conversations: Pick<ConversationsService, "executeCommand">;
@@ -167,6 +296,33 @@ export interface LocalApiDeps {
    * reports "none" (G4 — the transport never guesses a presence).
    */
   sessionPresence?: (workspaceId: string, agentId: string) => AgentSessionPresence;
+  /**
+   * S13: the operations seam — the whole Operation chat surface goes through
+   * the operations module's service (records, roster commands, coordinator,
+   * runs, D7 events, chat binding, addressed messages, thread read model).
+   * The transport never touches SQL and never validates Operation shapes
+   * itself beyond the route schemas below.
+   */
+  operations: Pick<
+    OperationsService,
+    | "createOperation"
+    | "getOperation"
+    | "listOperations"
+    | "listRoster"
+    | "listRosterRefusals"
+    | "findChat"
+    | "addRosterAgent"
+    | "removeRosterAgent"
+    | "setCoordinator"
+    | "createRun"
+    | "getRun"
+    | "listRuns"
+    | "appendCollaborationEvent"
+    | "applyDelegation"
+    | "listCollaborationEvents"
+    | "getThread"
+    | "sendOperationMessage"
+  >;
   /**
    * B-1: the redacted sink untyped HTTP faults are recorded to — the generic
    * INTERNAL_ERROR's correlation_id is logged with it, so "The failure has
@@ -385,6 +541,326 @@ export function createLocalApi(deps: LocalApiDeps): Express {
     res
       .status(200)
       .json(deps.folders.resolveAccess(query.data.workspace_id, agentId.data, query.data.path));
+  });
+
+  /**
+   * S13 — create one Operation chat record (D31): the service runtime-validates
+   * the roster against the PINNED pack catalog (D36) and builds the D29
+   * pinning snapshot. A refused roster is the typed 403
+   * (OPERATION_ROSTER_REFUSED, the RosterRefusal in the body) and leaves
+   * NOTHING behind. The chat binding is created lazily on first thread
+   * access (D41), never here.
+   */
+  app.post(CREATE_OPERATION_PATH, (req, res) => {
+    const body = CreateOperationBody.safeParse(req.body);
+    if (!body.success) {
+      const { status, body: errorBody } = contractValidationResponse(
+        "The create request is not valid: a workspace_id, a name, a roster, and a coordinator are required.",
+      );
+      res.status(status).json(errorBody);
+      return;
+    }
+    res.status(201).json(
+      deps.operations.createOperation(body.data.workspace_id, {
+        definition_ref: body.data.definition_ref,
+        name: body.data.name,
+        roster_agent_ids: body.data.roster_agent_ids,
+        coordinator_agent_id: body.data.coordinator_agent_id,
+      }),
+    );
+  });
+
+  /** S13 — the workspace's Operations (E12). */
+  app.get(LIST_OPERATIONS_PATH, (req, res) => {
+    const query = OperationWorkspaceQuery.safeParse(req.query);
+    if (!query.success) {
+      const { status, body } = contractValidationResponse(
+        "The operation list request is not valid: a workspace_id is required.",
+      );
+      res.status(status).json(body);
+      return;
+    }
+    res.status(200).json({ operations: deps.operations.listOperations(query.data.workspace_id) });
+  });
+
+  /**
+   * S13 — one Operation's detail: record + roster (requires_approval flags) +
+   * runs summary + recent refusals + the chat binding id when one exists.
+   */
+  app.get(GET_OPERATION_PATH, (req, res) => {
+    const operationId = Id.safeParse(req.params.operation_id);
+    const query = OperationWorkspaceQuery.safeParse(req.query);
+    if (!operationId.success || !query.success) {
+      const { status, body } = contractValidationResponse(
+        "The operation request is not valid: a workspace_id is required.",
+      );
+      res.status(status).json(body);
+      return;
+    }
+    const workspaceId = query.data.workspace_id;
+    const operation = deps.operations.getOperation(workspaceId, operationId.data);
+    // Display names resolve from the seeded Agent identities; a roster member
+    // without a seeded identity renders its id (never a fabricated name).
+    const agentNames = new Map(
+      deps.agents.listAgents(workspaceId).map((agent) => [agent.agent_id, agent.display_name]),
+    );
+    res.status(200).json(
+      operationDetail(
+        operation,
+        deps.operations.listRoster(workspaceId, operationId.data),
+        deps.operations.listRuns(workspaceId, operationId.data),
+        deps.operations.listRosterRefusals(workspaceId, operationId.data),
+        deps.operations.findChat(workspaceId, operationId.data),
+        agentNames,
+      ),
+    );
+  });
+
+  /**
+   * S13 — apply one D36 roster command (the contracts envelope, validated):
+   * applied → 200 with the updated Operation; refused → 403 with the typed
+   * RosterRefusal (the refusal is PERSISTED so the UI can show WHY). The
+   * envelope's workspace_id scopes the command (E12) and its operation_id
+   * must agree with the path — a mismatch is the typed 400, never a silent
+   * retarget.
+   */
+  app.post(OPERATION_ROSTER_COMMANDS_PATH, (req, res) => {
+    const operationId = Id.safeParse(req.params.operation_id);
+    const raw =
+      typeof req.body === "object" && req.body !== null ? (req.body as Record<string, unknown>) : {};
+    const envelopeWorkspace = typeof raw["workspace_id"] === "string" ? raw["workspace_id"] : null;
+    const envelopeOperation = typeof raw["operation_id"] === "string" ? raw["operation_id"] : null;
+    if (
+      !operationId.success ||
+      envelopeWorkspace === null ||
+      envelopeOperation !== operationId.data
+    ) {
+      const { status, body } = contractValidationResponse(
+        "The roster command is not valid: the envelope must carry a workspace_id and the operation_id of the path.",
+      );
+      res.status(status).json(body);
+      return;
+    }
+    const type = raw["type"];
+    if (type === "operation.add_roster_agent") {
+      const outcome = deps.operations.addRosterAgent(raw);
+      if (outcome.outcome === "applied") {
+        res.status(200).json({ outcome: "applied", operation: outcome.operation });
+      } else {
+        res.status(403).json({ outcome: "refused", refusal: outcome.refusal });
+      }
+      return;
+    }
+    if (type === "operation.remove_roster_agent") {
+      const outcome = deps.operations.removeRosterAgent(raw);
+      if (outcome.outcome === "applied") {
+        res.status(200).json({ outcome: "applied", operation: outcome.operation });
+      } else {
+        res.status(403).json({ outcome: "refused", refusal: outcome.refusal });
+      }
+      return;
+    }
+    const { status, body } = contractValidationResponse(
+      "The roster command type is not accepted by this API.",
+    );
+    res.status(status).json(body);
+  });
+
+  /**
+   * S13 — set the coordinator to an Agent or "none" (D42/D49): allowed at ANY
+   * time including mid-run; in-flight runs are never cancelled or paused.
+   */
+  app.post(OPERATION_COORDINATOR_PATH, (req, res) => {
+    const operationId = Id.safeParse(req.params.operation_id);
+    const body = OperationCoordinatorBody.safeParse(req.body);
+    if (!operationId.success || !body.success) {
+      const { status, body: errorBody } = contractValidationResponse(
+        "The coordinator request is not valid: a workspace_id and a coordinator_agent_id (Agent id or \"none\") are required.",
+      );
+      res.status(status).json(errorBody);
+      return;
+    }
+    res.status(200).json(
+      deps.operations.setCoordinator(
+        body.data.workspace_id,
+        operationId.data,
+        body.data.coordinator_agent_id,
+      ),
+    );
+  });
+
+  /**
+   * S13 — create one run (D31/AC24): D8 state CREATED, D26 cursor 0, empty
+   * credits, no artifacts. Runs are created only by typed creation (D34).
+   */
+  app.post(OPERATION_RUNS_PATH, (req, res) => {
+    const operationId = Id.safeParse(req.params.operation_id);
+    const body = OperationRunCreateBody.safeParse(req.body);
+    if (!operationId.success || !body.success) {
+      const { status, body: errorBody } = contractValidationResponse(
+        "The run request is not valid: a workspace_id is required.",
+      );
+      res.status(status).json(errorBody);
+      return;
+    }
+    res.status(201).json(
+      deps.operations.createRun(body.data.workspace_id, operationId.data, {
+        ...(body.data.run_id !== undefined ? { run_id: body.data.run_id } : {}),
+        ...(body.data.parent_task_id !== undefined
+          ? { parent_task_id: body.data.parent_task_id }
+          : {}),
+      }),
+    );
+  });
+
+  /** S13 — the Operation's runs (the runs summary leg of the read model). */
+  app.get(OPERATION_RUNS_PATH, (req, res) => {
+    const operationId = Id.safeParse(req.params.operation_id);
+    const query = OperationWorkspaceQuery.safeParse(req.query);
+    if (!operationId.success || !query.success) {
+      const { status, body } = contractValidationResponse(
+        "The runs request is not valid: a workspace_id is required.",
+      );
+      res.status(status).json(body);
+      return;
+    }
+    res.status(200).json({ runs: deps.operations.listRuns(query.data.workspace_id, operationId.data) });
+  });
+
+  /** S13 — one run's detail, including its D26 events cursor. */
+  app.get(OPERATION_RUN_PATH, (req, res) => {
+    const operationId = Id.safeParse(req.params.operation_id);
+    const runId = Id.safeParse(req.params.run_id);
+    const query = OperationWorkspaceQuery.safeParse(req.query);
+    if (!operationId.success || !runId.success || !query.success) {
+      const { status, body } = contractValidationResponse(
+        "The run request is not valid: a workspace_id is required.",
+      );
+      res.status(status).json(body);
+      return;
+    }
+    res
+      .status(200)
+      .json(deps.operations.getRun(query.data.workspace_id, operationId.data, runId.data));
+  });
+
+  /**
+   * S13 — append one D7 collaboration event (validated through the contracts
+   * union; the body's operation_id must agree with the path). A TaskDelegated
+   * event additionally triggers applyDelegation's EXACTLY-ONE-CHILD-RUN
+   * semantics (D34/D46): the event is appended AND one child run is created
+   * with parent_task_id = the delegating run's id, idempotent on the
+   * event_id, in ONE transaction — a replay returns the original child run.
+   */
+  app.post(OPERATION_EVENTS_PATH, (req, res) => {
+    const operationId = Id.safeParse(req.params.operation_id);
+    const parsed = OperationCollaborationEvent.safeParse(req.body);
+    if (!operationId.success || !parsed.success || parsed.data.operation_id !== operationId.data) {
+      const { status, body } = contractValidationResponse(
+        "The collaboration event is not valid: the event body must be a D7 operation event whose operation_id matches the path.",
+      );
+      res.status(status).json(body);
+      return;
+    }
+    const event = parsed.data;
+    if (event.type === "TaskDelegated") {
+      const result = deps.operations.applyDelegation(event);
+      res.status(201).json({
+        sequence: result.sequence,
+        stream_id: result.stream_id,
+        event_id: event.event_id,
+        created: result.created,
+        operation_id: event.operation_id,
+        run_id: event.run_id,
+        type: event.type,
+        child_run_id: result.child_run.run_id,
+      });
+      return;
+    }
+    const appended = deps.operations.appendCollaborationEvent(event);
+    res.status(201).json({
+      sequence: appended.sequence,
+      stream_id: appended.stream_id,
+      event_id: appended.event.event_id,
+      created: appended.created,
+      operation_id: appended.event.operation_id,
+      run_id: appended.event.run_id,
+      type: appended.event.type,
+    });
+  });
+
+  /**
+   * S13 — the D26 cursor read for the runs panel/timelines: the Operation's
+   * collaboration events, narrowed with run_id (present = that run's stream,
+   * absent = every stream) and after_sequence (exclusive).
+   */
+  app.get(OPERATION_EVENTS_PATH, (req, res) => {
+    const operationId = Id.safeParse(req.params.operation_id);
+    const query = OperationEventsQuery.safeParse(req.query);
+    if (!operationId.success || !query.success) {
+      const { status, body } = contractValidationResponse(
+        "The events request is not valid: a workspace_id is required.",
+      );
+      res.status(status).json(body);
+      return;
+    }
+    res.status(200).json({
+      events: deps.operations.listCollaborationEvents(query.data.workspace_id, operationId.data, {
+        after_sequence: query.data.after_sequence,
+        ...(query.data.run_id !== undefined ? { run_id: query.data.run_id } : {}),
+      }),
+    });
+  });
+
+  /**
+   * S13 — the merged Operation-chat thread (D41): durable conversation
+   * messages with sender attribution and their resolved @-addressing, plus
+   * every D7 collaboration event as a typed item. The `after` cursor pages
+   * the message leg (journal sequence, exclusive). First access get-or-creates
+   * the chat binding (lazy, journaled).
+   */
+  app.get(OPERATION_THREAD_PATH, (req, res) => {
+    const operationId = Id.safeParse(req.params.operation_id);
+    const query = OperationThreadQuery.safeParse(req.query);
+    if (!operationId.success || !query.success) {
+      const { status, body } = contractValidationResponse(
+        "The thread request is not valid: a workspace_id is required.",
+      );
+      res.status(status).json(body);
+      return;
+    }
+    res.status(200).json(
+      deps.operations.getThread(query.data.workspace_id, operationId.data, {
+        after_sequence: query.data.after,
+      }),
+    );
+  });
+
+  /**
+   * S13 — send one message INTO the Operation chat (D41) with @-addressing:
+   * @mentions resolve against the Operation roster at send time and the
+   * resolved recipient Agent ids are stored with the message (D7 recipient
+   * semantics); an unresolvable mention keeps its literal text and resolves
+   * to [] — the send never fails on it. Unaddressed messages are
+   * Operation-wide ([]).
+   */
+  app.post(OPERATION_THREAD_MESSAGES_PATH, (req, res) => {
+    const operationId = Id.safeParse(req.params.operation_id);
+    const body = OperationThreadMessageBody.safeParse(req.body);
+    if (!operationId.success || !body.success) {
+      const { status, body: errorBody } = contractValidationResponse(
+        "The message request is not valid: a workspace_id, an idempotency_key, a sender, and text are required.",
+      );
+      res.status(status).json(errorBody);
+      return;
+    }
+    res.status(201).json(
+      deps.operations.sendOperationMessage(body.data.workspace_id, operationId.data, {
+        idempotency_key: body.data.idempotency_key,
+        sender: body.data.sender,
+        text: body.data.text,
+      }),
+    );
   });
 
   /**

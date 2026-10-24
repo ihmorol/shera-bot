@@ -197,7 +197,9 @@ describe("S13 Operation API — create, list, detail (D31, D29, D36, D41)", () =
         pinning: {
           pack_id: STUDENT_MANIFEST.pack_id,
           pack_version: STUDENT_MANIFEST.version,
-          roster_agent_ids: [RESEARCHER, CITATION],
+          // Membership is the roster table's order (added_at, agent_id) —
+          // assert as a set, never an insertion order.
+          roster_agent_ids: expect.arrayContaining([RESEARCHER, CITATION]),
           provider_snapshot: {},
         },
       });

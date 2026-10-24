@@ -37,9 +37,11 @@ import type { PackSnapshot } from "@shera-bot/contracts";
 import { openDatabase, type SqliteConnection } from "../../adapters/sqlite/connection.ts";
 import { applyMigrations } from "../../adapters/sqlite/migrations.ts";
 import { AgentsRepository } from "../../adapters/sqlite/agents-repository.ts";
+import type { PackAgentSeed } from "../../adapters/sqlite/agents-repository.ts";
 import { CommandReceiptsRepository } from "../../adapters/sqlite/command-receipts-repository.ts";
 import { ConversationsRepository } from "../../adapters/sqlite/conversations-repository.ts";
 import { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
+import { OperationsRepository } from "../../adapters/sqlite/operations-repository.ts";
 import { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import type { HarnessAdapter } from "../../adapters/process/harness-adapter.ts";
 import { FakeHarnessAdapter } from "../../adapters/process/fake-harness-adapter.ts";
@@ -60,6 +62,10 @@ import {
   ScriptedReplyStreamer,
   type ScriptedReplyOptions,
 } from "../../modules/conversations/reply-streamer.ts";
+import {
+  OperationsService,
+  type OperationPackCatalog,
+} from "../../modules/operations/operations.service.ts";
 import { HarnessRunService } from "../../modules/runtime/harness-run-service.ts";
 import { loadWorkspacePack, type WorkspacePack } from "../../modules/runtime/pack-pin.ts";
 import { seedAgentsFromPack } from "../../adapters/sqlite/agents-repository.ts";
@@ -184,6 +190,12 @@ export interface RuntimeHandle {
   agents: AgentsService;
   /** S11: durable private-folder storage behind the Agent access guard. */
   folders: AgentFoldersService;
+  /**
+   * S13: the operations seam — the Operation chat record, roster commands,
+   * coordinator lifecycle, runs, D7 events, the journaled chat binding, the
+   * addressed message send, and the merged thread read model.
+   */
+  operations: OperationsService;
   /** The scripted reply producer when enabled; undefined otherwise (G4). */
   replyStreamer: ScriptedReplyStreamer | undefined;
   /**
@@ -208,7 +220,27 @@ interface Wired {
   folders: AgentFoldersService;
   sessions: SessionSupervisor | undefined;
   sessionBridge: SessionReplyBridge | undefined;
+  operations: OperationsService;
   setPublisher(publisher: ConversationPublisher): void;
+}
+
+/**
+ * S13 (D36): the pack catalog the operations service validates against — the
+ * SAME loaded workspace pack the agents seeding consumes (one pinned pack,
+ * D28). `locateAgentPack` lets the runtime tell a foreign pack's Agent
+ * (`foreign-pack-refused`) from an id no installed pack claims
+ * (`agent-not-in-pack`).
+ */
+function operationPackCatalog(pack: WorkspacePack): OperationPackCatalog {
+  const agents = pack.manifest.agents as readonly PackAgentSeed[];
+  return {
+    pack_id: pack.manifest.pack_id,
+    pack_version: pack.manifest.version,
+    agents,
+    locateAgentPack(agentId: string): string | null {
+      return agents.some((agent) => agent.agent_id === agentId) ? pack.manifest.pack_id : null;
+    },
+  };
 }
 
 /**
@@ -348,6 +380,23 @@ function wire(
     store: new FileAgentFolderStore(join(dirname(options.dbPath), "agent-files")),
   });
 
+  // S13: the operations seam shares the SAME late-bound post-commit fanout —
+  // the chat binding's conversation.created and a thread message.appended
+  // publish through the identical containment (B4) as every other stream.
+  // The pack catalog is late-bound by composeRuntime after the pack loads
+  // (the agents-seed discipline); without a pack every roster validation is
+  // refused typed and nothing Operation-shaped can be created.
+  const operationsRepository = new OperationsRepository(tx);
+  const operations = new OperationsService({
+    operations: operationsRepository,
+    conversations: conversationsRepository,
+    events,
+    journal,
+    agents: agentsRepository,
+    tx,
+    publish: containFanout((event) => publisher(event), logFault),
+  });
+
   const replay = new ReplayService({
     journal,
     loadSnapshot: (workspaceId, streamId) => {
@@ -384,6 +433,7 @@ function wire(
             sessions.presenceState(workspaceId, agentId),
         }
       : {}),
+    operations,
     ...(options.logUntypedFault ? { logUntypedFault: options.logUntypedFault } : {}),
   });
   return {
@@ -398,6 +448,7 @@ function wire(
     folders,
     sessions,
     sessionBridge,
+    operations,
     setPublisher(next) {
       publisher = next;
     },
@@ -452,6 +503,10 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
   if (pack) {
     seedAgentsFromPack(wired.tx, workspaceId, pack.manifest);
     wired.agents.setPackAgents(pack.manifest.agents);
+    // S13 (D36): the operations service validates rosters and coordinators
+    // against the SAME loaded pack — late-bound here, after the load, before
+    // any request can reach the operations routes.
+    wired.operations.setPackCatalog(operationPackCatalog(pack));
   }
   // Every fanout route (conversation commands AND harness runs) flows through
   // the same containment (B4): a broadcast failure is recorded, never fatal.
@@ -516,6 +571,7 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     pack,
     agents: wired.agents,
     folders: wired.folders,
+    operations: wired.operations,
     replyStreamer,
     sessions: wired.sessions,
     close: async () => {

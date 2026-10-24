@@ -468,6 +468,18 @@ export class OperationsService {
     return this.deps.operations.listOperations(workspaceId);
   }
 
+  /** The D36 membership rows (requires_approval flags included) of one operation. */
+  listRoster(workspaceId: string, operationId: string): ReturnType<OperationsRepository["listRoster"]> {
+    this.requireOperation(workspaceId, operationId);
+    return this.deps.operations.listRoster(workspaceId, operationId);
+  }
+
+  /** The chat binding WITHOUT creating it (detail reads stay side-effect free). */
+  findChat(workspaceId: string, operationId: string): string | null {
+    this.requireOperation(workspaceId, operationId);
+    return this.deps.operations.findChat(workspaceId, operationId);
+  }
+
   // -------------------------------------------------------------------------
   // Roster commands (D36)
   // -------------------------------------------------------------------------

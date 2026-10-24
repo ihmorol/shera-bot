@@ -34,13 +34,14 @@ function expectTypedIssue(result: AnyResult, expectedPath: string, expectedCode:
   if (result.success) {
     return;
   }
-  const issue = result.error.issues.find(
+  const issues = result.error?.issues ?? [];
+  const issue = issues.find(
     (candidate) =>
       candidate.code === expectedCode && candidate.path.map(String).join(".") === expectedPath,
   );
   expect(
     issue,
-    `expected a ${expectedCode} issue at ${expectedPath}, got ${JSON.stringify(result.error.issues)}`,
+    `expected a ${expectedCode} issue at ${expectedPath}, got ${JSON.stringify(issues)}`,
   ).toBeDefined();
 }
 

@@ -26,7 +26,16 @@ import { CreditRelease, CreditReservation, CreditSettlement } from "./credits.ts
 import { SheraError } from "./errors.ts";
 import { EVENT_ENVELOPES, TypedExecutionEvent, TriggerWebhookPayload } from "./events.ts";
 import { MemoryEntry } from "./memory.ts";
-import { Operation, OperationDefinition } from "./operation.ts";
+import {
+  AddRosterAgentCommand,
+  Operation,
+  OperationCollaborationEvent,
+  OperationDefinition,
+  OperationRecord,
+  OperationRun,
+  RemoveRosterAgentCommand,
+  RosterRefusal,
+} from "./operation.ts";
 import { Pack } from "./pack.ts";
 import {
   GetRuntimeStatusInput,
@@ -95,6 +104,14 @@ export const CONTRACT_REGISTRY = {
   AgentSettingsCommand,
   AgentSettingsSnapshot,
   AgentSettingsOverrides,
+  // S13 chunk 1 (Operation chat: persisted record, D36 roster commands,
+  // operation runs, D7 collaboration event union).
+  OperationRecord,
+  OperationRun,
+  AddRosterAgentCommand,
+  RemoveRosterAgentCommand,
+  RosterRefusal,
+  OperationCollaborationEvent,
 } as const;
 
 export type ContractName = keyof typeof CONTRACT_REGISTRY;

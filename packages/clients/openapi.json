@@ -13,6 +13,114 @@
   ],
   "components": {
     "schemas": {
+      "AddRosterAgentCommand": {
+        "type": "object",
+        "properties": {
+          "command_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "idempotency_key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "workspace_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "operation_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "actor": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "user",
+                  "agent",
+                  "runtime",
+                  "admin",
+                  "system"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              }
+            },
+            "required": [
+              "type",
+              "id"
+            ],
+            "additionalProperties": false
+          },
+          "issued_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "operation.add_roster_agent"
+            ]
+          },
+          "agent_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "pack_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "pack_version": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+$"
+          },
+          "risk": {
+            "type": "object",
+            "properties": {
+              "same_pack": {
+                "type": "boolean"
+              },
+              "cost_or_access_increasing": {
+                "type": "boolean"
+              },
+              "requires_approval": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "same_pack",
+              "cost_or_access_increasing",
+              "requires_approval"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "command_id",
+          "idempotency_key",
+          "workspace_id",
+          "operation_id",
+          "actor",
+          "issued_at",
+          "type",
+          "agent_id",
+          "pack_id",
+          "pack_version",
+          "risk"
+        ],
+        "additionalProperties": false
+      },
       "Agent": {
         "type": "object",
         "properties": {
@@ -6774,6 +6882,940 @@
         ],
         "additionalProperties": false
       },
+      "OperationCollaborationEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "event_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "workspace_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "operation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "run_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "sender_agent_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "recipient_agent_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "maxItems": 50
+              },
+              "correlation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "TaskProposed"
+                ]
+              },
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "task_description": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  },
+                  "proposed_assignee_agent_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                },
+                "required": [
+                  "task_description",
+                  "proposed_assignee_agent_id"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "event_id",
+              "workspace_id",
+              "operation_id",
+              "run_id",
+              "sender_agent_id",
+              "recipient_agent_ids",
+              "correlation_id",
+              "issued_at",
+              "type",
+              "payload"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "event_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "workspace_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "operation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "run_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "sender_agent_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "recipient_agent_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "maxItems": 50
+              },
+              "correlation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "TaskAccepted"
+                ]
+              },
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "proposal_event_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                },
+                "required": [
+                  "proposal_event_id"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "event_id",
+              "workspace_id",
+              "operation_id",
+              "run_id",
+              "sender_agent_id",
+              "recipient_agent_ids",
+              "correlation_id",
+              "issued_at",
+              "type",
+              "payload"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "event_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "workspace_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "operation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "run_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "sender_agent_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "recipient_agent_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "maxItems": 50
+              },
+              "correlation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "TaskDelegated"
+                ]
+              },
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "task_description": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  }
+                },
+                "required": [
+                  "task_description"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "event_id",
+              "workspace_id",
+              "operation_id",
+              "run_id",
+              "sender_agent_id",
+              "recipient_agent_ids",
+              "correlation_id",
+              "issued_at",
+              "type",
+              "payload"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "event_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "workspace_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "operation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "run_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "sender_agent_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "recipient_agent_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "maxItems": 50
+              },
+              "correlation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "ProgressReported"
+                ]
+              },
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "progress_text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  }
+                },
+                "required": [
+                  "progress_text"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "event_id",
+              "workspace_id",
+              "operation_id",
+              "run_id",
+              "sender_agent_id",
+              "recipient_agent_ids",
+              "correlation_id",
+              "issued_at",
+              "type",
+              "payload"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "event_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "workspace_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "operation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "run_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "sender_agent_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "recipient_agent_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "maxItems": 50
+              },
+              "correlation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "ArtifactPublished"
+                ]
+              },
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "artifact_ref": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                },
+                "required": [
+                  "artifact_ref"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "event_id",
+              "workspace_id",
+              "operation_id",
+              "run_id",
+              "sender_agent_id",
+              "recipient_agent_ids",
+              "correlation_id",
+              "issued_at",
+              "type",
+              "payload"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "event_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "workspace_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "operation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "run_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "sender_agent_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "recipient_agent_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "maxItems": 50
+              },
+              "correlation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "ApprovalRequested"
+                ]
+              },
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "approval_request_ref": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                },
+                "required": [
+                  "approval_request_ref"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "event_id",
+              "workspace_id",
+              "operation_id",
+              "run_id",
+              "sender_agent_id",
+              "recipient_agent_ids",
+              "correlation_id",
+              "issued_at",
+              "type",
+              "payload"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "event_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "workspace_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "operation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "run_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "sender_agent_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "recipient_agent_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "maxItems": 50
+              },
+              "correlation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "QuestionRaised"
+                ]
+              },
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "question_text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  }
+                },
+                "required": [
+                  "question_text"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "event_id",
+              "workspace_id",
+              "operation_id",
+              "run_id",
+              "sender_agent_id",
+              "recipient_agent_ids",
+              "correlation_id",
+              "issued_at",
+              "type",
+              "payload"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "event_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "workspace_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "operation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "run_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "sender_agent_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "recipient_agent_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "maxItems": 50
+              },
+              "correlation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "TaskBlocked"
+                ]
+              },
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "blocked_reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  }
+                },
+                "required": [
+                  "blocked_reason"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "event_id",
+              "workspace_id",
+              "operation_id",
+              "run_id",
+              "sender_agent_id",
+              "recipient_agent_ids",
+              "correlation_id",
+              "issued_at",
+              "type",
+              "payload"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "event_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "workspace_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "operation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "run_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "sender_agent_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "recipient_agent_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "maxItems": 50
+              },
+              "correlation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "TaskFailed"
+                ]
+              },
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "failure_class": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  }
+                },
+                "required": [
+                  "failure_class"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "event_id",
+              "workspace_id",
+              "operation_id",
+              "run_id",
+              "sender_agent_id",
+              "recipient_agent_ids",
+              "correlation_id",
+              "issued_at",
+              "type",
+              "payload"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "event_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "workspace_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "operation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "run_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "sender_agent_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "recipient_agent_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "maxItems": 50
+              },
+              "correlation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "TaskCompleted"
+                ]
+              },
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "completion_summary": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  }
+                },
+                "required": [
+                  "completion_summary"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "event_id",
+              "workspace_id",
+              "operation_id",
+              "run_id",
+              "sender_agent_id",
+              "recipient_agent_ids",
+              "correlation_id",
+              "issued_at",
+              "type",
+              "payload"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "event_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "workspace_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "operation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "run_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "sender_agent_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "recipient_agent_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "maxItems": 50
+              },
+              "correlation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "HandoffRequested"
+                ]
+              },
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "handoff_reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  }
+                },
+                "required": [
+                  "handoff_reason"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "event_id",
+              "workspace_id",
+              "operation_id",
+              "run_id",
+              "sender_agent_id",
+              "recipient_agent_ids",
+              "correlation_id",
+              "issued_at",
+              "type",
+              "payload"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
       "OperationDefinition": {
         "type": "object",
         "properties": {
@@ -6853,6 +7895,226 @@
           "skills",
           "connectors",
           "content_hash"
+        ],
+        "additionalProperties": false
+      },
+      "OperationRecord": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "workspace_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "definition_ref": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "completed",
+              "failed"
+            ]
+          },
+          "coordinator_agent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "none"
+                ]
+              }
+            ]
+          },
+          "pinning": {
+            "type": "object",
+            "properties": {
+              "pack_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "pack_version": {
+                "type": "string",
+                "pattern": "^\\d+\\.\\d+\\.\\d+$"
+              },
+              "roster_agent_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "maxItems": 50
+              },
+              "capabilities": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "maxItems": 200
+              },
+              "provider_snapshot": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "required": [
+              "pack_id",
+              "pack_version",
+              "roster_agent_ids",
+              "capabilities",
+              "provider_snapshot"
+            ],
+            "additionalProperties": false
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "operation_id",
+          "workspace_id",
+          "definition_ref",
+          "name",
+          "status",
+          "coordinator_agent_id",
+          "pinning",
+          "created_at",
+          "updated_at"
+        ],
+        "additionalProperties": false
+      },
+      "OperationRun": {
+        "type": "object",
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "workspace_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "operation_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "parent_task_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "CREATED",
+              "PLANNED",
+              "QUEUED",
+              "RUNNING",
+              "WAITING_FOR_AGENT",
+              "WAITING_FOR_APPROVAL",
+              "WAITING_FOR_RESOURCE",
+              "RETRYING",
+              "CANCELLING",
+              "CANCELLED",
+              "SUCCEEDED",
+              "FAILED",
+              "PAUSED",
+              "RECOVERY_REQUIRED"
+            ]
+          },
+          "events_seq_cursor": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "provider_snapshot": {
+            "type": "object",
+            "properties": {
+              "provider_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "model": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              }
+            },
+            "required": [
+              "provider_id",
+              "model"
+            ],
+            "additionalProperties": false
+          },
+          "credits": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "artifacts": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "maxItems": 100
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "run_id",
+          "workspace_id",
+          "operation_id",
+          "parent_task_id",
+          "state",
+          "events_seq_cursor",
+          "credits",
+          "artifacts",
+          "created_at",
+          "updated_at"
         ],
         "additionalProperties": false
       },
@@ -7235,6 +8497,82 @@
         ],
         "additionalProperties": false
       },
+      "RemoveRosterAgentCommand": {
+        "type": "object",
+        "properties": {
+          "command_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "idempotency_key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "workspace_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "operation_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "actor": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "user",
+                  "agent",
+                  "runtime",
+                  "admin",
+                  "system"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              }
+            },
+            "required": [
+              "type",
+              "id"
+            ],
+            "additionalProperties": false
+          },
+          "issued_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "operation.remove_roster_agent"
+            ]
+          },
+          "agent_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "command_id",
+          "idempotency_key",
+          "workspace_id",
+          "operation_id",
+          "actor",
+          "issued_at",
+          "type",
+          "agent_id"
+        ],
+        "additionalProperties": false
+      },
       "ResourceSummary": {
         "type": "object",
         "properties": {
@@ -7326,6 +8664,39 @@
           "provisioning_status",
           "health",
           "checked_at"
+        ],
+        "additionalProperties": false
+      },
+      "RosterRefusal": {
+        "type": "object",
+        "properties": {
+          "refusal_code": {
+            "type": "string",
+            "enum": [
+              "agent-not-in-pack",
+              "foreign-pack-refused",
+              "cost-increase-needs-approval"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "agent_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "pack_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "refusal_code",
+          "message"
         ],
         "additionalProperties": false
       },

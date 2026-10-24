@@ -1,0 +1,27 @@
+{
+  "operation_id": "op_001",
+  "workspace_id": "ws_default_01",
+  "definition_ref": "agent-packs/student/v1/operations/research-paper@1.0.0",
+  "name": "Research Paper",
+  "status": "active",
+  "coordinator_agent_id": "agent_general_assistant",
+  "pinning": {
+    "pack_id": "agent-packs/student/v1",
+    "pack_version": "1.0.0",
+    "roster_agent_ids": [
+      "agent_general_assistant",
+      "agent_researcher",
+      "agent_citation_manager"
+    ],
+    "capabilities": [
+      "skill_planning_core",
+      "skill_source_search"
+    ],
+    "provider_snapshot": {
+      "provider_id": "provider_platform",
+      "model": "platform-default"
+    }
+  },
+  "created_at": "2026-10-24T00:00:00.000Z",
+  "updated_at": "2026-10-24T00:00:00.000Z"
+}

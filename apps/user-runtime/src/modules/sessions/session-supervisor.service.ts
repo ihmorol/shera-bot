@@ -52,12 +52,7 @@ import { sessionStreamFor } from "./sessions.events.ts";
 
 /** Presence of the (workspace, agent) session as the UI reads it (chunk 4). */
 export type AgentSessionPresence =
-  | "none"
-  | "starting"
-  | "active"
-  | "hibernating"
-  | "restarting"
-  | "failed";
+  "none" | "starting" | "active" | "hibernating" | "restarting" | "failed";
 
 /** The compact context a session needs to reconstruct itself (D15, for now). */
 export interface AgentSessionContext {
@@ -261,9 +256,7 @@ interface Incarnation {
 }
 
 type StartFailure =
-  | { kind: "exit"; exit: SessionChildExit }
-  | { kind: "handshake_timeout" }
-  | { kind: "protocol" };
+  { kind: "exit"; exit: SessionChildExit } | { kind: "handshake_timeout" } | { kind: "protocol" };
 
 interface SessionRecord {
   workspace_id: string;
@@ -436,7 +429,10 @@ export class SessionSupervisor {
    * ready) go through the CONSECUTIVE-RESTART policy; the loop retries while
    * policy allows. Never throws for supervised origins.
    */
-  private async startAttempt(record: SessionRecord, origin: "address" | "supervised"): Promise<void> {
+  private async startAttempt(
+    record: SessionRecord,
+    origin: "address" | "supervised",
+  ): Promise<void> {
     for (;;) {
       // The measured start latency covers THIS attempt end to end: context
       // fetch (D15), spawn, and handshake — the honest "how long until this
@@ -466,7 +462,8 @@ export class SessionSupervisor {
         // Spawn itself failed — the same policy as a child crash.
         if (!this.registerCrashRestart(record)) {
           this.markTerminal(record, "restart_limit", null);
-          if (origin === "address") throw new AgentSessionFailedError(record.workspace_id, record.agent_id);
+          if (origin === "address")
+            throw new AgentSessionFailedError(record.workspace_id, record.agent_id);
           return;
         }
         continue;
@@ -502,7 +499,8 @@ export class SessionSupervisor {
       // policy below is the only handler for every start failure kind.
       if (!this.registerCrashRestart(record)) {
         this.markTerminal(record, "restart_limit", incarnation.session_id);
-        if (origin === "address") throw new AgentSessionFailedError(record.workspace_id, record.agent_id);
+        if (origin === "address")
+          throw new AgentSessionFailedError(record.workspace_id, record.agent_id);
         return;
       }
       // Loop: another supervised incarnation (presence stays `restarting`).
@@ -737,7 +735,11 @@ export class SessionSupervisor {
    * arrive while the child is LIVE (post-ready). Handshake-breaking
    * failures fall through to the start pipeline's restart policy.
    */
-  private onProtocolError(record: SessionRecord, incarnation: Incarnation, error: PiProtocolError): void {
+  private onProtocolError(
+    record: SessionRecord,
+    incarnation: Incarnation,
+    error: PiProtocolError,
+  ): void {
     this.recordEvent(record, "session.protocol_failure", {
       session_id: incarnation.session_id,
       workspace_id: record.workspace_id,
@@ -750,7 +752,10 @@ export class SessionSupervisor {
     if (incarnation.ready) {
       if (record.protocolRestartUsed) {
         // The one post-cap restart was already spent — terminal.
-        this.rejectPrompts(incarnation, new AgentSessionInterruptedError(record.workspace_id, record.agent_id));
+        this.rejectPrompts(
+          incarnation,
+          new AgentSessionInterruptedError(record.workspace_id, record.agent_id),
+        );
         this.markTerminal(record, "protocol_violation_limit", incarnation.session_id);
         void this.killTerminal(record, incarnation);
         return;
@@ -772,8 +777,14 @@ export class SessionSupervisor {
   }
 
   /** Cap action: terminate through the escalation, then one supervised restart. */
-  private async restartAfterProtocolCap(record: SessionRecord, incarnation: Incarnation): Promise<void> {
-    this.rejectPrompts(incarnation, new AgentSessionInterruptedError(record.workspace_id, record.agent_id));
+  private async restartAfterProtocolCap(
+    record: SessionRecord,
+    incarnation: Incarnation,
+  ): Promise<void> {
+    this.rejectPrompts(
+      incarnation,
+      new AgentSessionInterruptedError(record.workspace_id, record.agent_id),
+    );
     await this.terminateAndAwaitExit(record, incarnation);
     this.detachCurrent(record, incarnation);
     if (record.presence === "failed") return;
@@ -784,7 +795,10 @@ export class SessionSupervisor {
     if (incarnation.terminating) return;
     incarnation.terminating = true;
     incarnation.fatalFrameSeen = true;
-    this.rejectPrompts(incarnation, new AgentSessionInterruptedError(record.workspace_id, record.agent_id));
+    this.rejectPrompts(
+      incarnation,
+      new AgentSessionInterruptedError(record.workspace_id, record.agent_id),
+    );
     void (async () => {
       // The child announced an unrecoverable failure (D14 fatal): record it
       // as a crash and run the supervised restart policy.
@@ -849,7 +863,10 @@ export class SessionSupervisor {
 
   /** Hung child: kill, record the event, supervised restart. */
   private async handleHang(record: SessionRecord, incarnation: Incarnation): Promise<void> {
-    this.rejectPrompts(incarnation, new AgentSessionInterruptedError(record.workspace_id, record.agent_id));
+    this.rejectPrompts(
+      incarnation,
+      new AgentSessionInterruptedError(record.workspace_id, record.agent_id),
+    );
     incarnation.child.kill("SIGKILL");
     const exit = await incarnation.child.waitForExit();
     await this.teardownIncarnation(record, incarnation);
@@ -866,9 +883,15 @@ export class SessionSupervisor {
   }
 
   /** Idle timeout: graceful shutdown frame → escalation → `hibernating`. */
-  private async handleIdleHibernate(record: SessionRecord, incarnation: Incarnation): Promise<void> {
+  private async handleIdleHibernate(
+    record: SessionRecord,
+    incarnation: Incarnation,
+  ): Promise<void> {
     const idleMs = Math.max(0, this.now() - record.lastActivityAt);
-    this.rejectPrompts(incarnation, new AgentSessionInterruptedError(record.workspace_id, record.agent_id));
+    this.rejectPrompts(
+      incarnation,
+      new AgentSessionInterruptedError(record.workspace_id, record.agent_id),
+    );
     await this.terminateAndAwaitExit(record, incarnation);
     this.detachCurrent(record, incarnation);
     record.presence = "hibernating";
@@ -884,7 +907,11 @@ export class SessionSupervisor {
 
   // ── Crash handling ────────────────────────────────────────────────────────
 
-  private onChildExit(record: SessionRecord, incarnation: Incarnation, exit: SessionChildExit): void {
+  private onChildExit(
+    record: SessionRecord,
+    incarnation: Incarnation,
+    exit: SessionChildExit,
+  ): void {
     for (const timer of incarnation.escalationTimers) clearTimeout(timer);
     incarnation.escalationTimers = [];
     for (const unsubscribe of incarnation.unsubscribers) unsubscribe();
@@ -909,7 +936,10 @@ export class SessionSupervisor {
       incarnation.settleHandshake({ kind: "exit", exit });
       return;
     }
-    this.rejectPrompts(incarnation, new AgentSessionInterruptedError(record.workspace_id, record.agent_id));
+    this.rejectPrompts(
+      incarnation,
+      new AgentSessionInterruptedError(record.workspace_id, record.agent_id),
+    );
     this.recordEvent(record, "session.crashed", {
       session_id: incarnation.session_id,
       workspace_id: record.workspace_id,
@@ -1037,7 +1067,10 @@ export class SessionSupervisor {
     return exit;
   }
 
-  private async teardownIncarnation(record: SessionRecord, incarnation: Incarnation): Promise<void> {
+  private async teardownIncarnation(
+    record: SessionRecord,
+    incarnation: Incarnation,
+  ): Promise<void> {
     for (const timer of incarnation.escalationTimers) clearTimeout(timer);
     incarnation.escalationTimers = [];
     for (const unsubscribe of incarnation.unsubscribers) unsubscribe();
@@ -1120,11 +1153,15 @@ export class SessionSupervisor {
    * A journal failure is contained (the fault is logged, supervision
    * continues) — a child crashing must never take the runtime down with it.
    */
-  private recordEvent<T extends "session.started" | "session.hibernate" | "session.crashed" | "session.restarted" | "session.protocol_failure" | "session.failed">(
-    record: SessionRecord,
-    type: T,
-    payload: Record<string, unknown>,
-  ): void {
+  private recordEvent<
+    T extends
+      | "session.started"
+      | "session.hibernate"
+      | "session.crashed"
+      | "session.restarted"
+      | "session.protocol_failure"
+      | "session.failed",
+  >(record: SessionRecord, type: T, payload: Record<string, unknown>): void {
     try {
       this.deps.events.appendEvent({
         event_id: randomUUID(),

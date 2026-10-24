@@ -14,11 +14,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-import {
-  PiProtocolError,
-  ProtocolVersionError,
-  ProtocolViolationError,
-} from "./errors.ts";
+import { PiProtocolError, ProtocolVersionError, ProtocolViolationError } from "./errors.ts";
 import { JsonLineParser, encodeFrame, parseFrame } from "./framing.ts";
 import {
   PROTOCOL_VERSION,
@@ -158,7 +154,14 @@ export class FakePiHandle {
   /** Send one prompt; returns its correlation id. */
   prompt(text: string, fromSeq = 0): string {
     const id = `cmd-${++this.promptCount}`;
-    this.send({ v: PROTOCOL_VERSION, type: "prompt", id, session_id: this.sessionId, text, from_seq: fromSeq });
+    this.send({
+      v: PROTOCOL_VERSION,
+      type: "prompt",
+      id,
+      session_id: this.sessionId,
+      text,
+      from_seq: fromSeq,
+    });
     return id;
   }
 

@@ -95,7 +95,10 @@ export class SessionReplyBridge {
           agent_id: agentId,
           trigger_event_id: event.event_id,
           name: error instanceof Error ? error.name : "Error",
-          code: error instanceof Error && "code" in error ? String((error as { code: unknown }).code) : null,
+          code:
+            error instanceof Error && "code" in error
+              ? String((error as { code: unknown }).code)
+              : null,
         });
       })
       .finally(() => {

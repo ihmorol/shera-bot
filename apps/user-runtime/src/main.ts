@@ -124,10 +124,7 @@ function sessionHarnessFromEnv(
     return null;
   }
   const rawArgs = env["SHERA_SESSION_HARNESS_ARGS"];
-  const args =
-    rawArgs === undefined || rawArgs.trim() === ""
-      ? []
-      : rawArgs.trim().split(/\s+/);
+  const args = rawArgs === undefined || rawArgs.trim() === "" ? [] : rawArgs.trim().split(/\s+/);
   return { command, args };
 }
 

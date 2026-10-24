@@ -11,10 +11,7 @@
 export const PI_PROTOCOL_ERROR_CATEGORIES = ["validation"] as const;
 export type PiProtocolErrorCategory = (typeof PI_PROTOCOL_ERROR_CATEGORIES)[number];
 
-export const PI_PROTOCOL_ERROR_CODES = [
-  "PROTOCOL_VERSION_MISMATCH",
-  "PROTOCOL_VIOLATION",
-] as const;
+export const PI_PROTOCOL_ERROR_CODES = ["PROTOCOL_VERSION_MISMATCH", "PROTOCOL_VIOLATION"] as const;
 export type PiProtocolErrorCode = (typeof PI_PROTOCOL_ERROR_CODES)[number];
 
 /**
@@ -42,7 +39,11 @@ export class PiProtocolError extends Error {
    */
   readonly reason: ProtocolViolationReason | undefined;
 
-  constructor(code: PiProtocolErrorCode, message: string, details?: { reason?: ProtocolViolationReason }) {
+  constructor(
+    code: PiProtocolErrorCode,
+    message: string,
+    details?: { reason?: ProtocolViolationReason },
+  ) {
     super(message);
     this.name = "PiProtocolError";
     this.code = code;

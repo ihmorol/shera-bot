@@ -84,16 +84,19 @@ describe("validateFrame", () => {
 
   it("rejects missing required fields per frame type", () => {
     expect(
-      violationOf(() => validateFrame({ v: 1, type: "token", id: "c1", session_id: "s1", text: "t" }))
-        .field,
+      violationOf(() =>
+        validateFrame({ v: 1, type: "token", id: "c1", session_id: "s1", text: "t" }),
+      ).field,
     ).toBe("seq");
     expect(
-      violationOf(() => validateFrame({ v: 1, type: "prompt", id: "c1", session_id: "s1", from_seq: 0 }))
-        .field,
+      violationOf(() =>
+        validateFrame({ v: 1, type: "prompt", id: "c1", session_id: "s1", from_seq: 0 }),
+      ).field,
     ).toBe("text");
     expect(
-      violationOf(() => validateFrame({ v: 1, type: "ready", proto_version: 1, session_id: "s1", pid: 1 }))
-        .field,
+      violationOf(() =>
+        validateFrame({ v: 1, type: "ready", proto_version: 1, session_id: "s1", pid: 1 }),
+      ).field,
     ).toBe("resumed");
   });
 

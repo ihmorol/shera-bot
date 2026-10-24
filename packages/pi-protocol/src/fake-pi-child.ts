@@ -72,7 +72,9 @@ if (args["invalid-json-line"] !== undefined) {
   process.stdout.write("this line is not json\n");
 }
 if (args["unknown-frame-type"] === "true") {
-  process.stdout.write(`${JSON.stringify({ v: protocolVersion, type: "vanish", session_id: sessionId })}\n`);
+  process.stdout.write(
+    `${JSON.stringify({ v: protocolVersion, type: "vanish", session_id: sessionId })}\n`,
+  );
 }
 
 let heartbeatTimer: NodeJS.Timeout | null = null;
@@ -112,7 +114,14 @@ function streamTokens(cmd: PromptFrame): void {
       });
       return;
     }
-    emit({ v: protocolVersion, type: "token", id: cmd.id, session_id: cmd.session_id, seq, text: `t${seq}` });
+    emit({
+      v: protocolVersion,
+      type: "token",
+      id: cmd.id,
+      session_id: cmd.session_id,
+      seq,
+      text: `t${seq}`,
+    });
     if (hangAfterFirstToken) {
       // Hang misbehavior: stop tokens AND heartbeats, keep the process alive.
       hangBegun = true;
@@ -141,7 +150,9 @@ process.stdin.on("data", (chunk: string) => {
     try {
       frame = parseFrame(line);
     } catch (error) {
-      process.stderr.write(`protocol_violation: ${error instanceof Error ? error.message : line.slice(0, 120)}\n`);
+      process.stderr.write(
+        `protocol_violation: ${error instanceof Error ? error.message : line.slice(0, 120)}\n`,
+      );
       return;
     }
     if (frame.type === "prompt") {

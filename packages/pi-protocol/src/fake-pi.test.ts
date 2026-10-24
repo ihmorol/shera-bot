@@ -19,7 +19,9 @@ import {
 } from "./protocol.ts";
 
 function tokenFrames(handle: FakePiHandle): TokenFrame[] {
-  return handle.frames.flatMap((entry) => (entry.ok && entry.frame.type === "token" ? [entry.frame] : []));
+  return handle.frames.flatMap((entry) =>
+    entry.ok && entry.frame.type === "token" ? [entry.frame] : [],
+  );
 }
 
 function heartbeatFrames(handle: FakePiHandle): HeartbeatFrame[] {
@@ -122,7 +124,12 @@ describe("fake Pi heartbeats", () => {
 
 describe("fake Pi reply token streams", () => {
   it("streams supervised token deltas ({seq, text}) then a completed frame per prompt", async () => {
-    const handle = spawnFakePi({ sessionId: "s-tokens", tokens: 3, tokenDelayMs: 10, heartbeatMs: 0 });
+    const handle = spawnFakePi({
+      sessionId: "s-tokens",
+      tokens: 3,
+      tokenDelayMs: 10,
+      heartbeatMs: 0,
+    });
     try {
       const id = handle.prompt("write a haiku");
       const tokens = await until(() => {
@@ -156,7 +163,12 @@ describe("fake Pi reply token streams", () => {
   });
 
   it("resumes the token sequence from the prompt's from_seq cursor", async () => {
-    const handle = spawnFakePi({ sessionId: "s-resume", tokens: 2, tokenDelayMs: 5, heartbeatMs: 0 });
+    const handle = spawnFakePi({
+      sessionId: "s-resume",
+      tokens: 2,
+      tokenDelayMs: 5,
+      heartbeatMs: 0,
+    });
     try {
       const id = handle.prompt("continue", 3);
       const tokens = await until(() => {

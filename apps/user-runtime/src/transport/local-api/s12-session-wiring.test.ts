@@ -138,7 +138,10 @@ async function until<T>(read: () => Promise<T | undefined>, timeoutMs = 10_000):
 
 /** The session presence an agent detail response reports ("MISSING" = no field, red). */
 async function sessionPresence(origin: string, agentId: string): Promise<string> {
-  const detail = await getJson(origin, `/v1/agents/${agentId}?workspace_id=${DEFAULT_WORKSPACE_ID}`);
+  const detail = await getJson(
+    origin,
+    `/v1/agents/${agentId}?workspace_id=${DEFAULT_WORKSPACE_ID}`,
+  );
   expect(detail.status).toBe(200);
   const session = detail.body["session"] as { presence?: string } | undefined;
   return session?.presence ?? "MISSING";
@@ -191,13 +194,18 @@ async function sendUserMessage(
 }
 
 /** The Agent's session journal stream, read straight off the committed rows. */
-function readSessionEvents(dbPath: string): Array<{ type: string; payload: Record<string, unknown> }> {
+function readSessionEvents(
+  dbPath: string,
+): Array<{ type: string; payload: Record<string, unknown> }> {
   const conn = openDatabase(dbPath);
   try {
     const journal = new EventJournalRepository(new SqliteTransactions(conn.db));
     return journal
       .listStream(sessionStreamFor(DEFAULT_WORKSPACE_ID, GENERAL), DEFAULT_WORKSPACE_ID)
-      .map((row) => ({ type: row.event_type, payload: JSON.parse(row.payload) as Record<string, unknown> }));
+      .map((row) => ({
+        type: row.event_type,
+        payload: JSON.parse(row.payload) as Record<string, unknown>,
+      }));
   } finally {
     conn.close();
   }
@@ -396,7 +404,9 @@ describe("S12 session wiring — crash persistence (kill mid-conversation)", () 
       agent_id: GENERAL,
       exit_code: 137,
     });
-    expect(events.filter((row) => row.type === "session.restarted").length).toBeGreaterThanOrEqual(1);
+    expect(events.filter((row) => row.type === "session.restarted").length).toBeGreaterThanOrEqual(
+      1,
+    );
   });
 });
 

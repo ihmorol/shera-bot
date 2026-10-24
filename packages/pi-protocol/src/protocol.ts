@@ -95,13 +95,7 @@ export interface ShutdownFrame extends PiFrameBase {
 }
 
 export type PiChildFrame =
-  | HelloFrame
-  | ReadyFrame
-  | HeartbeatFrame
-  | TokenFrame
-  | CompletedFrame
-  | FatalFrame
-  | ErrorFrame;
+  HelloFrame | ReadyFrame | HeartbeatFrame | TokenFrame | CompletedFrame | FatalFrame | ErrorFrame;
 
 export type PiParentFrame = PromptFrame | ShutdownFrame;
 

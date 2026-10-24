@@ -260,7 +260,9 @@ describe("SessionSupervisor heartbeat health (D14)", () => {
     const startedAt = Date.now();
 
     await until(() =>
-      h.spawns.length === 2 && h.supervisor.presenceState(WS, AGENT) === "active" ? true : undefined,
+      h.spawns.length === 2 && h.supervisor.presenceState(WS, AGENT) === "active"
+        ? true
+        : undefined,
     );
     const detectedAfterMs = Date.now() - startedAt;
     expect(detectedAfterMs).toBeLessThan(2000); // window is 120ms; generous CI bound
@@ -296,7 +298,8 @@ describe("SessionSupervisor heartbeat health (D14)", () => {
 describe("SessionSupervisor crash restarts (D32 layer 2)", () => {
   it("records the crash, restarts supervised, and the conversation continues", async () => {
     const h = makeSupervisor({
-      spawnSpec: (index) => (index === 0 ? { crashAfterTokens: 1, heartbeatMs: 25 } : { heartbeatMs: 25 }),
+      spawnSpec: (index) =>
+        index === 0 ? { crashAfterTokens: 1, heartbeatMs: 25 } : { heartbeatMs: 25 },
     });
     await h.supervisor.ensureStarted(WS, AGENT);
 
@@ -307,7 +310,9 @@ describe("SessionSupervisor crash restarts (D32 layer 2)", () => {
     expect(exit.code).toBe(137); // crashed child is reaped, never orphaned
 
     await until(() =>
-      h.spawns.length === 2 && h.supervisor.presenceState(WS, AGENT) === "active" ? true : undefined,
+      h.spawns.length === 2 && h.supervisor.presenceState(WS, AGENT) === "active"
+        ? true
+        : undefined,
     );
     const crashed = eventsOf(h, "session.crashed");
     expect(crashed[0]!["cause"]).toBe("unexpected_exit");
@@ -332,7 +337,9 @@ describe("SessionSupervisor crash restarts (D32 layer 2)", () => {
       AgentSessionInterruptedError,
     );
     await until(() =>
-      h.spawns.length === 2 && h.supervisor.presenceState(WS, AGENT) === "active" ? true : undefined,
+      h.spawns.length === 2 && h.supervisor.presenceState(WS, AGENT) === "active"
+        ? true
+        : undefined,
     );
     // Second crash: past the policy limit → terminal failed.
     await expect(h.supervisor.prompt(WS, AGENT, "two")).rejects.toBeInstanceOf(
@@ -344,7 +351,9 @@ describe("SessionSupervisor crash restarts (D32 layer 2)", () => {
     expect(failed).toHaveLength(1);
     expect(failed[0]!["reason"]).toBe("restart_limit");
     expect(h.spawns).toHaveLength(2); // terminal: no further spawns
-    await expect(h.supervisor.ensureStarted(WS, AGENT)).rejects.toBeInstanceOf(AgentSessionFailedError);
+    await expect(h.supervisor.ensureStarted(WS, AGENT)).rejects.toBeInstanceOf(
+      AgentSessionFailedError,
+    );
     await expect(h.supervisor.prompt(WS, AGENT, "anything")).rejects.toBeInstanceOf(
       AgentSessionFailedError,
     );
@@ -396,14 +405,17 @@ describe("SessionSupervisor protocol-failure policy (D14)", () => {
 describe("SessionSupervisor context reconstruction (D15/D32)", () => {
   it("re-fetches the compact context from the provider on every restart; no durable session state", async () => {
     const h = makeSupervisor({
-      spawnSpec: (index) => (index === 0 ? { crashAfterTokens: 1, heartbeatMs: 25 } : { heartbeatMs: 25 }),
+      spawnSpec: (index) =>
+        index === 0 ? { crashAfterTokens: 1, heartbeatMs: 25 } : { heartbeatMs: 25 },
     });
     await h.supervisor.ensureStarted(WS, AGENT);
     await expect(h.supervisor.prompt(WS, AGENT, "crash me")).rejects.toBeInstanceOf(
       AgentSessionInterruptedError,
     );
     await until(() =>
-      h.spawns.length === 2 && h.supervisor.presenceState(WS, AGENT) === "active" ? true : undefined,
+      h.spawns.length === 2 && h.supervisor.presenceState(WS, AGENT) === "active"
+        ? true
+        : undefined,
     );
 
     // The previous context object is discarded; the restart rebuilt a fresh
@@ -490,7 +502,9 @@ describe("SessionSupervisor presence state machine (D32 layer 2)", () => {
     await gateReady(gates, 2);
     gates[2]!();
     await until(() =>
-      h.supervisor.presenceState(WS, AGENT) === "active" && h.spawns.length === 3 ? true : undefined,
+      h.supervisor.presenceState(WS, AGENT) === "active" && h.spawns.length === 3
+        ? true
+        : undefined,
     );
 
     await h.supervisor.stop(WS, AGENT);

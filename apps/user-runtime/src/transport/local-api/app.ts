@@ -293,9 +293,7 @@ export function createLocalApi(deps: LocalApiDeps): Express {
       agentId.data,
       body.data.user_instructions,
     );
-    res
-      .status(200)
-      .json(agentSummary(agent, presenceOf(body.data.workspace_id, agentId.data)));
+    res.status(200).json(agentSummary(agent, presenceOf(body.data.workspace_id, agentId.data)));
   });
 
   /**
@@ -318,9 +316,7 @@ export function createLocalApi(deps: LocalApiDeps): Express {
       body.data.default_provider.provider_id,
       body.data.default_provider.model,
     );
-    res
-      .status(200)
-      .json(agentSummary(agent, presenceOf(body.data.workspace_id, agentId.data)));
+    res.status(200).json(agentSummary(agent, presenceOf(body.data.workspace_id, agentId.data)));
   });
 
   /**

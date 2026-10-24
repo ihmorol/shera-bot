@@ -276,10 +276,6 @@ describe("agent client session-presence parsing", () => {
     );
 
     const agents = await fetchAgentRoster("ws_account-1");
-    expect(agents.map((agent) => agent.session.presence)).toEqual([
-      "none",
-      "starting",
-      "failed",
-    ]);
+    expect(agents.map((agent) => agent.session.presence)).toEqual(["none", "starting", "failed"]);
   });
 });

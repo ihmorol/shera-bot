@@ -207,9 +207,7 @@ export function SessionPresenceChip({ state }: { state: SessionPresenceChipState
       />
       {/* Below md the chip collapses to the dot + screen-reader label so the
           Agent name keeps width priority at 360px (§2.2 min breakpoint). */}
-      <span className="sr-only md:not-sr-only">
-        {view ? view.label : "Session state loading"}
-      </span>
+      <span className="sr-only md:not-sr-only">{view ? view.label : "Session state loading"}</span>
     </span>
   );
 }

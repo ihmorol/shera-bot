@@ -205,7 +205,12 @@ describe("session supervisor policy env knobs (S12 chunk 4)", () => {
         SHERA_SESSION_MISSED_HEARTBEAT_LIMIT: "1",
         SHERA_SESSION_HANDSHAKE_TIMEOUT_MS: "1000",
       }).sessionPolicy,
-    ).toEqual({ idleHibernateMs: 1000, heartbeatIntervalMs: 250, missedHeartbeatLimit: 1, handshakeTimeoutMs: 1000 });
+    ).toEqual({
+      idleHibernateMs: 1000,
+      heartbeatIntervalMs: 250,
+      missedHeartbeatLimit: 1,
+      handshakeTimeoutMs: 1000,
+    });
   });
 
   it.each([
@@ -224,8 +229,10 @@ describe("session supervisor policy env knobs (S12 chunk 4)", () => {
 
   it("an explicit programmatic sessionPolicy wins over the environment", () => {
     expect(
-      runtimeConfigFromEnv({ SHERA_SESSION_IDLE_HIBERNATE_MS: "15000" }, { sessionPolicy: { idleHibernateMs: 9000 } })
-        .sessionPolicy,
+      runtimeConfigFromEnv(
+        { SHERA_SESSION_IDLE_HIBERNATE_MS: "15000" },
+        { sessionPolicy: { idleHibernateMs: 9000 } },
+      ).sessionPolicy,
     ).toEqual({ idleHibernateMs: 9000 });
   });
 });

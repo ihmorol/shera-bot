@@ -393,6 +393,44 @@ describe("S13 roster commands over HTTP (D36)", () => {
       await running.close();
     }
   });
+
+  it("records the approval-declared flag on an applied cost-increasing add and exposes it on the detail read (D36/AC3)", async () => {
+    const dir = makeTempDir("shera-runtime-s13-approval-flag-");
+    const running = await composeWithOperation(join(dir, "runtime.db"));
+    const commandsPath = `/v1/operations/${running.operationId}/roster/commands`;
+    try {
+      // Cost-increasing WITH the approval flag declared: applied (the
+      // approval-ARTIFACT gate is the approvals slice's; the flag recording
+      // is this slice's contract).
+      const applied = await postJson(running.origin, commandsPath, {
+        ...addRosterCommand(running.operationId, {
+          command_id: "cmd_route_add_approved",
+          idempotency_key: "idem_route_add_approved",
+          agent_id: DEVELOPER,
+        }),
+        risk: { same_pack: true, cost_or_access_increasing: true, requires_approval: true },
+      });
+      expect(applied.status).toBe(200);
+      expect(applied.body).toMatchObject({ outcome: "applied" });
+
+      // The detail read model exposes the flag on the roster member.
+      const detail = await getJson(
+        running.origin,
+        `/v1/operations/${running.operationId}?workspace_id=${WORKSPACE}`,
+      );
+      const member = (detail.body["roster"] as Array<Record<string, unknown>>).find(
+        (row) => row["agent_id"] === DEVELOPER,
+      );
+      expect(member).toMatchObject({ requires_approval: true });
+      // The other members carry no approval flag.
+      const clean = (detail.body["roster"] as Array<Record<string, unknown>>).find(
+        (row) => row["agent_id"] === RESEARCHER,
+      );
+      expect(clean).toMatchObject({ requires_approval: false });
+    } finally {
+      await running.close();
+    }
+  });
 });
 
 describe("S13 coordinator lifecycle over HTTP (D42/D49)", () => {

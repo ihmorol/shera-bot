@@ -574,6 +574,51 @@ describe("S13 chunk 2 — roster commands (D36)", () => {
     expect(refusals[19]?.message).toBe("refusal 2");
   });
 
+  it("records requires_approval on the membership row for an approval-declared cost-increasing add (D36/AC3)", () => {
+    const operation = createDefaultOperation();
+
+    // Cost-increasing WITH the approval flag declared: the contract's
+    // superRefine passes, the runtime applies the add, and the membership
+    // row carries the declared approval (the approval-ARTIFACT gate is the
+    // approvals slice's; the flag recording is THIS slice's contract).
+    const result = service.addRosterAgent(
+      addRosterCommand({
+        operation_id: operation.operation_id,
+        agent_id: CITATION,
+        risk: { same_pack: true, cost_or_access_increasing: true, requires_approval: true },
+      }),
+    );
+    expect(result.outcome).toBe("applied");
+    if (result.outcome === "applied") {
+      expect(result.operation.pinning.roster_agent_ids).toEqual([RESEARCHER, CITATION]);
+    }
+
+    const member = repo
+      .listRoster(WORKSPACE, operation.operation_id)
+      .find((row) => row.agent_id === CITATION);
+    expect(member?.requires_approval).toBe(1);
+    // The service's roster read (the read model's source) exposes it too.
+    expect(
+      service
+        .listRoster(WORKSPACE, operation.operation_id)
+        .find((row) => row.agent_id === CITATION)?.requires_approval,
+    ).toBe(1);
+    // A low-risk add records NO approval flag.
+    service.addRosterAgent(
+      addRosterCommand({
+        operation_id: operation.operation_id,
+        command_id: "cmd_add_lowrisk",
+        idempotency_key: "idem_add_lowrisk_1",
+        agent_id: GENERAL,
+      }),
+    );
+    expect(
+      repo
+        .listRoster(WORKSPACE, operation.operation_id)
+        .find((row) => row.agent_id === GENERAL)?.requires_approval,
+    ).toBe(0);
+  });
+
   it("answers an unknown operation for roster commands with a typed 404-class error", () => {
     try {
       service.addRosterAgent(addRosterCommand({ operation_id: "op_missing" }));

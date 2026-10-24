@@ -66,6 +66,8 @@ describe("runtime node config from environment (no secrets cross this path, G3)"
       defaultWorkspaceId: "ws-local-default",
       // S10: the default packs root is the repository's own agent-packs tree.
       packsRoot: join(import.meta.dirname, "../../../agent-packs"),
+      // S12: no harness command configured → the supervisor is disabled (G4).
+      sessionHarness: null,
     });
     expect(
       runtimeConfigFromEnv(
@@ -83,6 +85,7 @@ describe("runtime node config from environment (no secrets cross this path, G3)"
       dbPath: "/tmp/runtime.db",
       defaultWorkspaceId: "ws-local-default",
       packsRoot: "/tmp/packs",
+      sessionHarness: null,
     });
   });
 

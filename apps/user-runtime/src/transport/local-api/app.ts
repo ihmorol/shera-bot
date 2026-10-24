@@ -24,6 +24,7 @@ import type { AgentFoldersService } from "../../modules/agents/agent-folders.ser
 import type { AgentsService } from "../../modules/agents/agents.service.ts";
 import type { ConversationsService } from "../../modules/conversations/conversations.service.ts";
 import { ConversationCommand } from "../../modules/conversations/conversations.types.ts";
+import type { AgentSessionPresence } from "../../modules/sessions/session-supervisor.service.ts";
 import type { ReplayService } from "../../modules/events/replay.service.ts";
 import {
   contractValidationResponse,
@@ -91,7 +92,13 @@ const AgentProviderPatchBody = z.strictObject({
   }),
 });
 
-/** The allowlisted Agent summary payload — identity fields only, no memory. */
+/**
+ * The allowlisted Agent summary payload — identity fields only, no memory.
+ * `session` is the S12 presence read: the supervised session's state for this
+ * Agent, read live from the supervisor ("none" when the supervisor is
+ * disabled). Presence is NOT identity — it never reveals memory, provider
+ * internals, or child process details (G3).
+ */
 interface AgentSummaryPayload {
   agent_id: string;
   display_name: string;
@@ -99,9 +106,10 @@ interface AgentSummaryPayload {
   avatar_hue: number;
   initial_glyph: string;
   has_user_instructions: boolean;
+  session: { presence: AgentSessionPresence };
 }
 
-function agentSummary(row: AgentRow): AgentSummaryPayload {
+function agentSummary(row: AgentRow, presence: AgentSessionPresence): AgentSummaryPayload {
   return {
     agent_id: row.agent_id,
     display_name: row.display_name,
@@ -109,13 +117,14 @@ function agentSummary(row: AgentRow): AgentSummaryPayload {
     avatar_hue: row.avatar_hue,
     initial_glyph: row.initial_glyph,
     has_user_instructions: row.user_instructions !== null,
+    session: { presence },
   };
 }
 
 /** The detail payload: the summary plus what the settings UI edits and the direct chat id. */
-function agentDetail(row: AgentRow, directChatId: string) {
+function agentDetail(row: AgentRow, directChatId: string, presence: AgentSessionPresence) {
   return {
-    ...agentSummary(row),
+    ...agentSummary(row, presence),
     user_instructions: row.user_instructions,
     default_provider: {
       provider_id: row.default_provider_id,
@@ -152,6 +161,13 @@ export interface LocalApiDeps {
    */
   folders: Pick<AgentFoldersService, "resolveAccess">;
   /**
+   * S12: the session presence read model — the supervised session's live
+   * presence for one (workspace, agent). Absent when the composition has no
+   * session harness configured (supervisor disabled): every agent then
+   * reports "none" (G4 — the transport never guesses a presence).
+   */
+  sessionPresence?: (workspaceId: string, agentId: string) => AgentSessionPresence;
+  /**
    * B-1: the redacted sink untyped HTTP faults are recorded to — the generic
    * INTERNAL_ERROR's correlation_id is logged with it, so "The failure has
    * been recorded." is true. Default: a single JSON line on console.error.
@@ -163,6 +179,10 @@ export function createLocalApi(deps: LocalApiDeps): Express {
   const app = express();
   app.disable("x-powered-by");
   app.use(express.json({ limit: "64kb" }));
+
+  // S12: with the supervisor disabled every agent reports "none" — the same
+  // field shape either way, so clients never branch on the configuration.
+  const presenceOf = deps.sessionPresence ?? ((): AgentSessionPresence => "none");
 
   /**
    * Submit one command. Transport-level schema mismatches are the contract's
@@ -221,7 +241,9 @@ export function createLocalApi(deps: LocalApiDeps): Express {
       return;
     }
     res.status(200).json({
-      agents: deps.agents.listAgents(query.data.workspace_id).map(agentSummary),
+      agents: deps.agents
+        .listAgents(query.data.workspace_id)
+        .map((row) => agentSummary(row, presenceOf(query.data.workspace_id, row.agent_id))),
     });
   });
 
@@ -246,7 +268,9 @@ export function createLocalApi(deps: LocalApiDeps): Express {
       query.data.workspace_id,
       agentId.data,
     );
-    res.status(200).json(agentDetail(agent, conversation_id));
+    res
+      .status(200)
+      .json(agentDetail(agent, conversation_id, presenceOf(query.data.workspace_id, agentId.data)));
   });
 
   /**
@@ -269,7 +293,9 @@ export function createLocalApi(deps: LocalApiDeps): Express {
       agentId.data,
       body.data.user_instructions,
     );
-    res.status(200).json(agentSummary(agent));
+    res
+      .status(200)
+      .json(agentSummary(agent, presenceOf(body.data.workspace_id, agentId.data)));
   });
 
   /**
@@ -292,7 +318,9 @@ export function createLocalApi(deps: LocalApiDeps): Express {
       body.data.default_provider.provider_id,
       body.data.default_provider.model,
     );
-    res.status(200).json(agentSummary(agent));
+    res
+      .status(200)
+      .json(agentSummary(agent, presenceOf(body.data.workspace_id, agentId.data)));
   });
 
   /**

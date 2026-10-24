@@ -15,11 +15,14 @@
  * stops accepting connections, closes the WebSocket gateway (Socket.IO closes
  * the HTTP server it is mounted on), then closes SQLite. SIGINT/SIGTERM are
  * wired only when `signals: true` is passed — the real entrypoint opts in;
- * tests drive stop() directly. Process supervision is a later slice's concern.
+ * tests drive stop() directly. S12: stop() drains the supervised Agent
+ * session children (when a harness command is configured) before the
+ * transport goes down.
  */
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 
+import type { SessionHarnessConfig } from "./adapters/process/session-process-spawn.ts";
 import {
   DEFAULT_WORKSPACE_ID,
   composeRuntime,
@@ -57,6 +60,14 @@ export interface RuntimeNodeConfig {
    * the default workspace (typed failure on mismatch — G4).
    */
   packsRoot?: string;
+  /**
+   * S12 (D32 layer 2): the configured session harness command. When set, the
+   * composed runtime supervises warm Agent sessions (on-demand starts on the
+   * first direct-chat message). Default: SHERA_SESSION_HARNESS_COMMAND, else
+   * unset — the supervisor is DISABLED (G4: no harness command, no process
+   * ever spawns, presence "none" everywhere, send path unchanged).
+   */
+  sessionHarness?: SessionHarnessConfig;
   /** Install SIGINT/SIGTERM handlers that drain and stop the node. Default false. */
   signals?: boolean;
 }
@@ -78,6 +89,11 @@ export interface RuntimeNodeEnvConfig {
   defaultWorkspaceId: string;
   /** S10: the resolved agent-packs root (env, override, or the repo default). */
   packsRoot: string;
+  /**
+   * S12: the resolved session harness command, or null when none is
+   * configured (supervisor disabled — G4).
+   */
+  sessionHarness: SessionHarnessConfig | null;
 }
 
 const DEFAULT_HOST = "127.0.0.1";
@@ -87,6 +103,32 @@ const DEFAULT_DB_PATH = join("data", "runtime.db");
 /** Loopback hosts: localhost, the 127.0.0.0/8 range, and ::1. Anything else needs the opt-in. */
 function isLoopbackHost(host: string): boolean {
   return host === "localhost" || host === "::1" || host.startsWith("127.");
+}
+
+/**
+ * S12: the session harness command from the environment. The command is one
+ * executable path; SHERA_SESSION_HARNESS_ARGS is a whitespace-split argument
+ * list (no shell, no quoting layer — G3/G4: nothing is interpolated, and the
+ * documented `{session_id}` / `{heartbeat_interval_ms}` placeholders are
+ * substituted per spawn by the adapter). Empty/absent → null (disabled).
+ */
+function sessionHarnessFromEnv(
+  env: Record<string, string | undefined>,
+  overrides: RuntimeNodeConfig,
+): SessionHarnessConfig | null {
+  if (overrides.sessionHarness !== undefined) {
+    return overrides.sessionHarness;
+  }
+  const command = env["SHERA_SESSION_HARNESS_COMMAND"];
+  if (command === undefined || command.trim() === "") {
+    return null;
+  }
+  const rawArgs = env["SHERA_SESSION_HARNESS_ARGS"];
+  const args =
+    rawArgs === undefined || rawArgs.trim() === ""
+      ? []
+      : rawArgs.trim().split(/\s+/);
+  return { command, args };
 }
 
 /** Parse the environment into a node config; explicit values win. Pure (G3). */
@@ -122,7 +164,8 @@ export function runtimeConfigFromEnv(
     overrides.defaultWorkspaceId ?? env["RUNTIME_DEFAULT_WORKSPACE_ID"] ?? DEFAULT_WORKSPACE_ID;
   const packsRoot =
     overrides.packsRoot ?? env["RUNTIME_PACKS_ROOT"] ?? defaultPacksRoot(import.meta.dirname);
-  return { host, port, dbPath, defaultWorkspaceId, packsRoot };
+  const sessionHarness = sessionHarnessFromEnv(env, overrides);
+  return { host, port, dbPath, defaultWorkspaceId, packsRoot, sessionHarness };
 }
 
 /** Start the runtime node: compose, bind, (optionally) wire shutdown signals. */
@@ -134,6 +177,7 @@ export async function startRuntimeNode(config: RuntimeNodeConfig = {}): Promise<
     dbPath,
     defaultWorkspaceId: configuredWorkspace,
     packsRoot,
+    sessionHarness,
   } = runtimeConfigFromEnv(process.env, config);
   const defaultWorkspaceId = management ? `ws_${management.accountId}` : configuredWorkspace;
   if (management && !isLoopbackHost(host))
@@ -151,6 +195,9 @@ export async function startRuntimeNode(config: RuntimeNodeConfig = {}): Promise<
     dbPath,
     workspaceId: defaultWorkspaceId,
     packsRoot,
+    // S12 (D32 layer 2): the supervised warm Agent session when a harness
+    // command is configured; absent otherwise (supervisor disabled, G4).
+    ...(sessionHarness ? { sessionHarness } : {}),
   });
   let managementServer: ReturnType<typeof createManagementServer> | undefined;
   let managementPort: number | null = null;

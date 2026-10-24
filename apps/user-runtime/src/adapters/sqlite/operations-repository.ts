@@ -951,6 +951,19 @@ export class OperationsRepository {
     return row === undefined ? null : this.collaborationFromRow(row);
   }
 
+  /**
+   * One persisted collaboration event by its workspace-scoped event_id, or
+   * null. Service-level readback (delegation replays report the ORIGINAL
+   * event's gapless position without re-appending).
+   */
+  findCollaborationEventById(
+    workspaceId: string,
+    eventId: string,
+    exec?: DatabaseSync,
+  ): PersistedCollaborationEvent | null {
+    return this.findCollaborationEvent(workspaceId, eventId, exec ?? this.tx.connection());
+  }
+
   /** Same allocation discipline as the v1 journal: MAX(sequence) + 1, in-transaction. */
   private nextStreamSequence(workspaceId: string, streamId: string, db: DatabaseSync): number {
     const row = db

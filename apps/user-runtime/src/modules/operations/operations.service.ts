@@ -1,8 +1,10 @@
 /**
- * Operations module service (S13 chunk 2; D31, D34, D36, D46, D49) — pure
- * orchestration over the operations repository, the command receipts, and the
- * injected pack catalog. No HTTP routes and no compose wiring in this chunk
- * (chunk 3 owns routes, wiring, and the @-addressing read model).
+ * Operations module service (S13 chunks 2–3; D31, D34, D36, D46, D49, D41,
+ * D7) — pure orchestration over the operations repository, the command
+ * receipts, and the injected pack catalog. Chunk 3 adds the Operation chat
+ * surface: the journaled chat binding (getOrCreateChat, D41), the addressed
+ * message send (sendOperationMessage), and the merged thread read model
+ * (getThread) — no HTTP routes here (the transport owns them).
  *
  * Agents propose; the runtime validates and executes (D4/D36). THIS service is
  * the runtime's validation point for the Operation chat:
@@ -63,15 +65,26 @@ import {
 } from "@shera-bot/contracts";
 
 import type { PackAgentSeed } from "../../adapters/sqlite/agents-repository.ts";
-import { CommandReceiptsRepository } from "../../adapters/sqlite/command-receipts-repository.ts";
+import { CommandReceiptsRepository, isReceiptKeyConflict } from "../../adapters/sqlite/command-receipts-repository.ts";
+import type { ConversationsRepository } from "../../adapters/sqlite/conversations-repository.ts";
+import type { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
 import {
   OPERATION_CHAT_STREAM_PREFIX,
   OperationRecordCorruptError,
   OperationsRepository,
+  isOperationChatConflict,
   type OperationCoordinatorEventRow,
   type OperationRosterRefusalRow,
 } from "../../adapters/sqlite/operations-repository.ts";
 import type { SqliteExec, SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
+import type { AgentsRepository } from "../../adapters/sqlite/agents-repository.ts";
+import type { EventsService } from "../events/events.service.ts";
+import { MessageSender } from "../events/events.types.ts";
+import {
+  conversationStreamFor,
+  type ConversationCreatedEvent,
+  type MessageAppendedEvent,
+} from "../conversations/conversations.events.ts";
 
 /** Stable failure codes for the operations boundary (SCREAMING_SNAKE). */
 export type OperationsServiceFailureCode =
@@ -158,14 +171,139 @@ export interface DelegationResult {
   child_run: OperationRun;
   /** False when the event_id already applied (idempotent replay of the original child). */
   created: boolean;
+  /** The appended event's gapless position on its stream (the run's stream). */
+  sequence: number;
+  stream_id: string;
 }
 
 export interface OperationsServiceDeps {
   operations: OperationsRepository;
-  packCatalog: OperationPackCatalog;
+  /**
+   * The pack catalog. Optional at construction so chunk-2 compositions keep
+   * working: without one, the EMPTY catalog refuses every roster/coordinator
+   * validation (typed, nothing persists). composeRuntime late-binds the real
+   * loaded pack through setPackCatalog right after the pack loads — the same
+   * late-binding discipline as the agents service's pack seeds.
+   */
+  packCatalog?: OperationPackCatalog;
   tx: SqliteTransactions;
   /** Injected clock (ISO strings); defaults to the system clock. */
   clock?: () => string;
+  /**
+   * S13 chunk 3 — the Operation chat is a REAL conversation (D41): these deps
+   * compose the conversation row, the journal appends, the read stream, and
+   * the seeded Agent identities (thread display names). Compositions that
+   * never touch the thread may omit them; a thread access without them is a
+   * typed composition fault, never a silent fallback.
+   */
+  conversations?: Pick<ConversationsRepository, "create" | "findById">;
+  events?: Pick<EventsService, "appendEvent">;
+  journal?: Pick<EventJournalRepository, "listStream">;
+  agents?: Pick<AgentsRepository, "getAgent">;
+  /** Post-commit live fanout for chat creation and message appends; optional. */
+  publish?: OperationChatPublisher;
+}
+
+/**
+ * Post-commit live fanout for the Operation chat (the WebSocket layer
+ * implements it; the same containment rules as every other stream).
+ */
+export type OperationChatPublisher = (event: ConversationCreatedEvent | MessageAppendedEvent) => void;
+
+/**
+ * The packless default: no pack claims any agent, so every roster/coordinator
+ * validation is refused typed (nothing can be created against an empty pack).
+ * composeRuntime replaces this with the real loaded pack via setPackCatalog.
+ */
+const EMPTY_PACK_CATALOG: OperationPackCatalog = {
+  pack_id: "",
+  pack_version: "",
+  agents: [],
+  locateAgentPack: () => null,
+};
+
+/**
+ * Resolve @mentions in one message text against the Operation roster (D7
+ * recipient semantics): a token of the form `@<agent_id>` resolves when it
+ * exactly matches a roster Agent's id; resolved ids are returned deduped in
+ * first-appearance order. An unresolvable mention resolves to NOTHING — the
+ * literal text is never rewritten and the send never fails.
+ */
+export function resolveMentions(text: string, rosterAgentIds: readonly string[]): string[] {
+  const resolved: string[] = [];
+  for (const match of text.matchAll(/@([A-Za-z0-9_-]+)/g)) {
+    const token = match[1]!;
+    if (rosterAgentIds.includes(token) && !resolved.includes(token)) {
+      resolved.push(token);
+    }
+  }
+  return resolved;
+}
+
+/** The chat binding of one Operation (D41 — lazy get-or-create). */
+export interface OperationChatResolution {
+  operation_id: string;
+  conversation_id: string;
+  /** True when THIS call created the chat; false when a binding resolved. */
+  created: boolean;
+}
+
+export interface SendOperationMessageInput {
+  idempotency_key: string;
+  /** MessageSender (events.types): a user display name or an agent id. */
+  sender: MessageSender;
+  /** 1-4000 characters; @mentions resolve against the roster (never rewritten). */
+  text: string;
+}
+
+export interface OperationMessageSendResult {
+  kind: "message_sent";
+  conversation_id: string;
+  message_id: string;
+  /** The resolved recipient Agent ids; [] = unaddressed (Operation-wide). */
+  addressed_to: string[];
+  event_id: string;
+  /** False when the idempotency key replayed the original message. */
+  created: boolean;
+}
+
+/** Sender attribution on a thread item: user display name or Agent id. */
+export type OperationMessageSender =
+  | { kind: "user"; display_name: string }
+  | { kind: "agent"; agent_id: string };
+
+/**
+ * One merged Operation-chat thread item (the runs panel/timeline read model):
+ * (a) conversation messages with sender attribution and the resolved
+ * addressing, and (b) D7 collaboration events as typed items.
+ */
+export type OperationThreadItem =
+  | {
+      kind: "message";
+      message_id: string;
+      conversation_id: string;
+      /** The journal sequence on the conversation stream (the `after` cursor). */
+      sequence: number;
+      sender: OperationMessageSender;
+      text: string;
+      addressed_to: string[];
+      occurred_at: string;
+    }
+  | {
+      kind: "collaboration_event";
+      /** The event's gapless sequence on its stream (run stream or chat sentinel). */
+      sequence: number;
+      stream_id: string;
+      sender: { kind: "agent"; agent_id: string; display_name: string | null };
+      event: OperationCollaborationEvent;
+      issued_at: string;
+    };
+
+export interface OperationThread {
+  operation_id: string;
+  workspace_id: string;
+  chat_conversation_id: string;
+  items: OperationThreadItem[];
 }
 
 /** Fixed, UI-safe refusal copy (never zod internals — G3). */
@@ -176,13 +314,41 @@ const REFUSAL_MESSAGES: Record<RosterRefusal["refusal_code"], string> = {
     "Adding this Agent increases cost or access and needs your approval first.",
 };
 
+/**
+ * Deterministic thread order: timestamp ascending; equal timestamps keep
+ * per-kind stream order (journal sequence / per-stream collaboration
+ * sequence), messages before collaboration events at the same instant.
+ */
+function compareThreadItems(a: OperationThreadItem, b: OperationThreadItem): number {
+  const at = a.kind === "message" ? a.occurred_at : a.issued_at;
+  const bt = b.kind === "message" ? b.occurred_at : b.issued_at;
+  if (at !== bt) {
+    return at < bt ? -1 : 1;
+  }
+  if (a.kind !== b.kind) {
+    return a.kind === "message" ? -1 : 1;
+  }
+  return a.sequence - b.sequence;
+}
+
 export class OperationsService {
   private readonly receipts: CommandReceiptsRepository;
   private readonly clock: () => string;
+  private packCatalog: OperationPackCatalog;
 
   constructor(private readonly deps: OperationsServiceDeps) {
     this.receipts = new CommandReceiptsRepository(deps.tx);
+    this.packCatalog = deps.packCatalog ?? EMPTY_PACK_CATALOG;
     this.clock = deps.clock ?? (() => new Date().toISOString());
+  }
+
+  /**
+   * Late-bind the workspace's loaded pack (composeRuntime calls this right
+   * after loadWorkspacePack — the same late-binding discipline as the agents
+   * service's pack seeds and the publish hook).
+   */
+  setPackCatalog(catalog: OperationPackCatalog): void {
+    this.packCatalog = catalog;
   }
 
   private now(): string {
@@ -190,7 +356,34 @@ export class OperationsService {
   }
 
   private get catalog(): OperationPackCatalog {
-    return this.deps.packCatalog;
+    return this.packCatalog;
+  }
+
+  /**
+   * The chat-composition deps (D41). A thread access without them is a
+   * composition fault — surfaced typed, never a silent fallback.
+   */
+  private chatDeps(): {
+    conversations: Pick<ConversationsRepository, "create" | "findById">;
+    events: Pick<EventsService, "appendEvent">;
+    journal: Pick<EventJournalRepository, "listStream">;
+    agents: Pick<AgentsRepository, "getAgent"> | null;
+    publish: OperationChatPublisher | null;
+  } {
+    if (this.deps.conversations === undefined || this.deps.events === undefined || this.deps.journal === undefined) {
+      throw new OperationsServiceError(
+        "OPERATION_COMMAND_INVALID",
+        "state",
+        "the Operation chat conversation storage is not wired in this composition",
+      );
+    }
+    return {
+      conversations: this.deps.conversations,
+      events: this.deps.events,
+      journal: this.deps.journal,
+      agents: this.deps.agents ?? null,
+      publish: this.deps.publish ?? null,
+    };
   }
 
   // -------------------------------------------------------------------------
@@ -651,7 +844,23 @@ export class OperationsService {
     return this.deps.tx.transaction((exec) => {
       const receipt = this.receipts.findById(workspaceId, receiptKey, exec);
       if (receipt !== null) {
-        return { event: delegated, child_run: this.replayDelegatedRun(workspaceId, operationId, receipt.result_json, exec), created: false };
+        // The original delegation committed the event row alongside the
+        // receipt: report its gapless position without re-appending.
+        const original = this.deps.operations.findCollaborationEventById(
+          workspaceId,
+          delegated.event_id,
+          exec,
+        );
+        if (original === null) {
+          throw new OperationRecordCorruptError("delegation receipt without its stream event");
+        }
+        return {
+          event: delegated,
+          child_run: this.replayDelegatedRun(workspaceId, operationId, receipt.result_json, exec),
+          created: false,
+          sequence: original.sequence,
+          stream_id: original.stream_id,
+        };
       }
 
       const appended = this.deps.operations.appendCollaborationEvent(workspaceId, delegated, exec);
@@ -659,7 +868,13 @@ export class OperationsService {
         // Lost a delegation race: the winner committed the receipt.
         const winner = this.receipts.findById(workspaceId, receiptKey, exec);
         if (winner !== null) {
-          return { event: delegated, child_run: this.replayDelegatedRun(workspaceId, operationId, winner.result_json, exec), created: false };
+          return {
+            event: delegated,
+            child_run: this.replayDelegatedRun(workspaceId, operationId, winner.result_json, exec),
+            created: false,
+            sequence: appended.persisted.sequence,
+            stream_id: appended.persisted.stream_id,
+          };
         }
         // The event was already in the stream without a delegation receipt
         // (appended bare): this path applies the delegation once — the
@@ -690,7 +905,13 @@ export class OperationsService {
         },
         exec,
       );
-      return { event: delegated, child_run: child, created: true };
+      return {
+        event: delegated,
+        child_run: child,
+        created: true,
+        sequence: appended.persisted.sequence,
+        stream_id: appended.persisted.stream_id,
+      };
     });
   }
 
@@ -742,6 +963,355 @@ export class OperationsService {
       runId: options.run_id,
       afterSequence: options.after_sequence,
     });
+  }
+
+  // -------------------------------------------------------------------------
+  // Operation chat (D41 — the Operation chat IS a real conversation) and the
+  // thread read model (S13 chunk 3)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Resolve the Operation chat's conversation, creating it (atomically,
+   * journaled, published strictly after commit) when no binding exists yet —
+   * the v5 direct-chat pattern (agents.service.ts) applied to Operations:
+   * the conversation row, its `conversation.created` journal append, AND the
+   * binding row commit in ONE transaction; the post-commit publish hook fires
+   * only after COMMIT (AC2, B4).
+   *
+   * Get-or-create race containment (B5): two concurrent first calls can both
+   * miss the read; the loser's binding insert hits the winner's committed
+   * (workspace_id, operation_id) primary key, which rolls THIS unit back
+   * atomically (no orphan conversation, no journal row) and re-reads the
+   * winner's binding — the exact contract of the non-race path.
+   */
+  getOrCreateChat(workspaceId: string, operationId: string): OperationChatResolution {
+    const operation = this.requireOperation(workspaceId, operationId);
+    const deps = this.chatDeps();
+
+    const existing = this.deps.operations.findChat(workspaceId, operationId);
+    if (existing !== null) {
+      return { operation_id: operationId, conversation_id: existing, created: false };
+    }
+
+    let committed: { conversation_id: string; event: ConversationCreatedEvent };
+    try {
+      committed = this.deps.tx.transaction((exec: SqliteExec) => {
+        const conversationId = randomUUID();
+        const now = this.now();
+        deps.conversations.create(
+          {
+            id: conversationId,
+            workspace_id: workspaceId,
+            title: operation.name,
+            revision: 1,
+            created_at: now,
+            updated_at: now,
+          },
+          exec,
+        );
+        const event = deps.events.appendEvent({
+          event_id: randomUUID(),
+          stream_id: conversationStreamFor(conversationId),
+          type: "conversation.created",
+          payload: {
+            conversation_id: conversationId,
+            workspace_id: workspaceId,
+            title: operation.name,
+          },
+          workspace_id: workspaceId,
+          correlation_id: `operation-chat:${workspaceId}:${operationId}`,
+        });
+        this.deps.operations.bindChat(
+          workspaceId,
+          { operation_id: operationId, conversation_id: conversationId, created_at: now },
+          exec,
+        );
+        return { conversation_id: conversationId, event };
+      });
+    } catch (error) {
+      if (isOperationChatConflict(error)) {
+        const winner = this.deps.operations.findChat(workspaceId, operationId);
+        if (winner !== null) {
+          return { operation_id: operationId, conversation_id: winner, created: false };
+        }
+      }
+      throw error;
+    }
+
+    // Strictly AFTER commit (AC8): a subscriber failure is contained by the
+    // composition's fanout wrapper and never fails the committed creation.
+    deps.publish?.(committed.event);
+    return { operation_id: operationId, conversation_id: committed.conversation_id, created: true };
+  }
+
+  /**
+   * Send one user/Agent message INTO the Operation chat (D41) with
+   * @-addressing (D7 recipient semantics): mentions resolve against the
+   * Operation roster at send time and the resolved recipient Agent ids are
+   * recorded in the SAME transaction as the message append + receipt (D23
+   * rule 6). Unresolvable mentions resolve to NOTHING — the literal text is
+   * never rewritten and the send never fails on them; a message with no
+   * resolved recipients is unaddressed ([] = Operation-wide).
+   *
+   * The message itself is an ordinary durable `message.appended` journal
+   * event on the chat conversation's stream — the SAME stream the /v1
+   * conversations command path writes, so the Operation chat's history reads
+   * back through the conversations read path unchanged. One idempotency key
+   * resolves to ONE message forever; a key already spent on a DIFFERENT
+   * command family is a typed rejection (never a duplicated effect).
+   */
+  sendOperationMessage(
+    workspaceId: string,
+    operationId: string,
+    input: SendOperationMessageInput,
+  ): OperationMessageSendResult {
+    this.requireOperation(workspaceId, operationId);
+    if (typeof input.idempotency_key !== "string" || input.idempotency_key.length < 8 || input.idempotency_key.length > 200) {
+      throw new OperationsServiceError(
+        "OPERATION_COMMAND_INVALID",
+        "validation",
+        "idempotency_key must be 8-200 characters",
+      );
+    }
+    if (typeof input.text !== "string" || input.text.length < 1 || input.text.length > 4000) {
+      throw new OperationsServiceError(
+        "OPERATION_COMMAND_INVALID",
+        "validation",
+        "message text must be 1-4000 characters",
+      );
+    }
+    const sender = MessageSender.safeParse(input.sender);
+    if (!sender.success) {
+      throw new OperationsServiceError(
+        "OPERATION_COMMAND_INVALID",
+        "validation",
+        "sender must be a user (display name) or agent (agent id) sender",
+      );
+    }
+
+    const replayed = this.replayMessageReceipt(
+      this.receipts.findById(workspaceId, input.idempotency_key),
+    );
+    if (replayed !== null) {
+      return replayed;
+    }
+
+    const deps = this.chatDeps();
+    // Lazy binding: the first thread access (send or read) creates the chat.
+    const chat = this.getOrCreateChat(workspaceId, operationId);
+    const roster = this.deps.operations
+      .listRoster(workspaceId, operationId)
+      .map((member) => member.agent_id);
+    const addressedTo = resolveMentions(input.text, roster);
+
+    let committed: {
+      conversation_id: string;
+      message_id: string;
+      addressed_to: string[];
+      event_id: string;
+      event: MessageAppendedEvent;
+    };
+    try {
+      committed = this.deps.tx.transaction((exec: SqliteExec) => {
+        const conversation = deps.conversations.findById(workspaceId, chat.conversation_id, exec);
+        if (conversation === null) {
+          throw new OperationRecordCorruptError("bound operation chat conversation is missing");
+        }
+        const messageId = randomUUID();
+        const event = deps.events.appendEvent({
+          event_id: randomUUID(),
+          stream_id: conversationStreamFor(chat.conversation_id),
+          type: "message.appended",
+          payload: {
+            conversation_id: chat.conversation_id,
+            workspace_id: workspaceId,
+            message_id: messageId,
+            sender: sender.data,
+            text: input.text,
+          },
+          workspace_id: workspaceId,
+          correlation_id: input.idempotency_key,
+        });
+        this.receipts.create(
+          {
+            workspace_id: workspaceId,
+            idempotency_key: input.idempotency_key,
+            command_type: "operation.message_send",
+            result_json: JSON.stringify({
+              kind: "message_sent",
+              conversation_id: chat.conversation_id,
+              message_id: messageId,
+              addressed_to: addressedTo,
+              event_id: event.event_id,
+            }),
+            created_at: this.now(),
+          },
+          exec,
+        );
+        this.deps.operations.recordMessageRecipients(
+          workspaceId,
+          {
+            message_id: messageId,
+            operation_id: operationId,
+            addressed_to: addressedTo,
+            recorded_at: this.now(),
+          },
+          exec,
+        );
+        return {
+          conversation_id: chat.conversation_id,
+          message_id: messageId,
+          addressed_to: addressedTo,
+          event_id: event.event_id,
+          event,
+        };
+      });
+    } catch (error) {
+      if (isReceiptKeyConflict(error)) {
+        const winner = this.replayMessageReceipt(
+          this.receipts.findById(workspaceId, input.idempotency_key),
+        );
+        if (winner !== null) {
+          return winner;
+        }
+      }
+      throw error;
+    }
+
+    // Strictly AFTER commit (AC8).
+    deps.publish?.(committed.event);
+    return {
+      kind: "message_sent",
+      conversation_id: committed.conversation_id,
+      message_id: committed.message_id,
+      addressed_to: committed.addressed_to,
+      event_id: committed.event_id,
+      created: true,
+    };
+  }
+
+  /**
+   * Replay a recorded operation.message_send receipt, or null when no
+   * receipt (or a foreign command family's receipt) sits on the key.
+   */
+  private replayMessageReceipt(receipt: ReturnType<CommandReceiptsRepository["findById"]>): OperationMessageSendResult | null {
+    if (receipt === null || receipt.command_type !== "operation.message_send") {
+      if (receipt !== null) {
+        throw new OperationsServiceError(
+          "OPERATION_COMMAND_INVALID",
+          "conflict",
+          "idempotency_key was already used by a different command",
+        );
+      }
+      return null;
+    }
+    let stored: { conversation_id?: unknown; message_id?: unknown; addressed_to?: unknown; event_id?: unknown };
+    try {
+      stored = JSON.parse(receipt.result_json) as typeof stored;
+    } catch {
+      throw new OperationRecordCorruptError("operation.message_send receipt result JSON");
+    }
+    if (
+      typeof stored.conversation_id !== "string" ||
+      typeof stored.message_id !== "string" ||
+      typeof stored.event_id !== "string" ||
+      !Array.isArray(stored.addressed_to)
+    ) {
+      throw new OperationRecordCorruptError("operation.message_send receipt result shape");
+    }
+    return {
+      kind: "message_sent",
+      conversation_id: stored.conversation_id,
+      message_id: stored.message_id,
+      addressed_to: stored.addressed_to as string[],
+      event_id: stored.event_id,
+      created: false,
+    };
+  }
+
+  /**
+   * The merged Operation-chat thread (D41): (a) the chat conversation's
+   * durable messages — sender attribution (user display name / Agent id) and
+   * the stored @-addressing per message — and (b) every D7 collaboration
+   * event of the Operation as a typed item with sender attribution. Items
+   * order by timestamp (the message's journal occurred_at / the event's
+   * issued_at); equal timestamps keep per-kind stream order, messages before
+   * events.
+   *
+   * The `after_sequence` cursor pages the MESSAGE leg (the conversation
+   * stream's journal sequence, exclusive); collaboration events are returned
+   * in full — their own per-stream cursors live on the events read model
+   * (GET /v1/operations/:id/events). First access get-or-creates the chat
+   * binding (D41 — lazy).
+   */
+  getThread(
+    workspaceId: string,
+    operationId: string,
+    options: { after_sequence?: number } = {},
+  ): OperationThread {
+    this.requireOperation(workspaceId, operationId);
+    const deps = this.chatDeps();
+    const chat = this.getOrCreateChat(workspaceId, operationId);
+    const after = options.after_sequence ?? 0;
+    const items: OperationThreadItem[] = [];
+
+    for (const row of deps.journal.listStream(conversationStreamFor(chat.conversation_id), workspaceId)) {
+      if (row.sequence <= after || row.event_type !== "message.appended") {
+        continue;
+      }
+      let payload: { message_id?: unknown; sender?: unknown; text?: unknown; conversation_id?: unknown };
+      try {
+        payload = JSON.parse(row.payload) as typeof payload;
+      } catch {
+        throw new OperationRecordCorruptError("message.appended journal payload (invalid JSON)");
+      }
+      if (
+        typeof payload.message_id !== "string" ||
+        typeof payload.text !== "string" ||
+        typeof payload.conversation_id !== "string" ||
+        payload.sender === undefined
+      ) {
+        throw new OperationRecordCorruptError("message.appended journal payload");
+      }
+      const recipients = this.deps.operations.findMessageRecipients(workspaceId, payload.message_id);
+      items.push({
+        kind: "message",
+        message_id: payload.message_id,
+        conversation_id: payload.conversation_id,
+        sequence: row.sequence,
+        sender: payload.sender as OperationMessageSender,
+        text: payload.text,
+        addressed_to: recipients ?? [],
+        occurred_at: row.occurred_at,
+      });
+    }
+
+    for (const persisted of this.deps.operations.listCollaborationEvents(workspaceId, operationId, {
+      runId: undefined,
+    })) {
+      const agent =
+        deps.agents?.getAgent(workspaceId, persisted.event.sender_agent_id) ?? null;
+      items.push({
+        kind: "collaboration_event",
+        sequence: persisted.sequence,
+        stream_id: persisted.stream_id,
+        sender: {
+          kind: "agent",
+          agent_id: persisted.event.sender_agent_id,
+          display_name: agent?.display_name ?? null,
+        },
+        event: persisted.event,
+        issued_at: persisted.event.issued_at,
+      });
+    }
+
+    items.sort(compareThreadItems);
+    return {
+      operation_id: operationId,
+      workspace_id: workspaceId,
+      chat_conversation_id: chat.conversation_id,
+      items,
+    };
   }
 
   // -------------------------------------------------------------------------

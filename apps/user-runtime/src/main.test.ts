@@ -159,3 +159,70 @@ describe("runtime node config from environment (no secrets cross this path, G3)"
     }
   });
 });
+
+/**
+ * S12 chunk 4 — the supervisor policy env knobs, parsed in the SAME config
+ * seam as the harness command. Programmatic constants (DEFAULT_SESSION_POLICY)
+ * stay the defaults; the knobs exist so test-scale hibernation timings are
+ * demonstrable in the browser and deployments can tune honestly. Garbage is a
+ * typed failure at startup (G4), never a silent fallback.
+ */
+describe("session supervisor policy env knobs (S12 chunk 4)", () => {
+  it("defaults to an empty policy partial — the programmatic constants apply", () => {
+    expect(runtimeConfigFromEnv({}).sessionPolicy).toEqual({});
+  });
+
+  it("parses the four policy knobs into the supervisor's policy keys", () => {
+    expect(
+      runtimeConfigFromEnv({
+        SHERA_SESSION_IDLE_HIBERNATE_MS: "15000",
+        SHERA_SESSION_HEARTBEAT_INTERVAL_MS: "1000",
+        SHERA_SESSION_MISSED_HEARTBEAT_LIMIT: "2",
+        SHERA_SESSION_HANDSHAKE_TIMEOUT_MS: "4000",
+      }).sessionPolicy,
+    ).toEqual({
+      idleHibernateMs: 15_000,
+      heartbeatIntervalMs: 1_000,
+      missedHeartbeatLimit: 2,
+      handshakeTimeoutMs: 4_000,
+    });
+  });
+
+  it("keeps unset knobs out of the partial — only explicit keys are overridden", () => {
+    expect(
+      runtimeConfigFromEnv({ SHERA_SESSION_IDLE_HIBERNATE_MS: "15000" }).sessionPolicy,
+    ).toEqual({ idleHibernateMs: 15_000 });
+  });
+
+  it("accepts the documented sane range edges", () => {
+    expect(
+      runtimeConfigFromEnv({
+        SHERA_SESSION_IDLE_HIBERNATE_MS: "1000",
+        SHERA_SESSION_HEARTBEAT_INTERVAL_MS: "250",
+        SHERA_SESSION_MISSED_HEARTBEAT_LIMIT: "1",
+        SHERA_SESSION_HANDSHAKE_TIMEOUT_MS: "1000",
+      }).sessionPolicy,
+    ).toEqual({ idleHibernateMs: 1000, heartbeatIntervalMs: 250, missedHeartbeatLimit: 1, handshakeTimeoutMs: 1000 });
+  });
+
+  it.each([
+    ["SHERA_SESSION_IDLE_HIBERNATE_MS", "soon"],
+    ["SHERA_SESSION_IDLE_HIBERNATE_MS", "500"], // below the 1s floor
+    ["SHERA_SESSION_IDLE_HIBERNATE_MS", "0"],
+    ["SHERA_SESSION_IDLE_HIBERNATE_MS", "-5"],
+    ["SHERA_SESSION_IDLE_HIBERNATE_MS", "1.5"],
+    ["SHERA_SESSION_HEARTBEAT_INTERVAL_MS", "0"],
+    ["SHERA_SESSION_MISSED_HEARTBEAT_LIMIT", "0"],
+    ["SHERA_SESSION_MISSED_HEARTBEAT_LIMIT", "2.5"],
+    ["SHERA_SESSION_HANDSHAKE_TIMEOUT_MS", "abc"],
+  ])("fails typed on garbage %s=%s instead of silently falling back (G4)", (name, value) => {
+    expect(() => runtimeConfigFromEnv({ [name]: value })).toThrow(new RegExp(name));
+  });
+
+  it("an explicit programmatic sessionPolicy wins over the environment", () => {
+    expect(
+      runtimeConfigFromEnv({ SHERA_SESSION_IDLE_HIBERNATE_MS: "15000" }, { sessionPolicy: { idleHibernateMs: 9000 } })
+        .sessionPolicy,
+    ).toEqual({ idleHibernateMs: 9000 });
+  });
+});

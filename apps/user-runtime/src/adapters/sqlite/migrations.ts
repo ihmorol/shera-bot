@@ -342,6 +342,38 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
   },
 ];
 
+/**
+ * Diagnostic read (adapter-internal, AC7): the applied migration versions in
+ * ascending order. Tests pin the chain head through this helper instead of
+ * running raw SQL outside adapters/sqlite.
+ */
+export function appliedMigrationVersions(db: DatabaseSync): number[] {
+  return (
+    db.prepare("SELECT version FROM schema_migrations ORDER BY version").all() as {
+      version: number | bigint;
+    }[]
+  ).map((row) => (typeof row.version === "bigint" ? Number(row.version) : row.version));
+}
+
+/**
+ * Diagnostic read (adapter-internal, AC7): true when the named table exists
+ * in the current schema. Catalog introspection goes through `PRAGMA
+ * table_list` — the SQLite catalog interface — because it reads NO product
+ * rows (schema metadata only, like the schema_migrations bookkeeping), so the
+ * E12 workspace predicate does not apply to it.
+ */
+export function sqliteTableExists(db: DatabaseSync, tableName: string): boolean {
+  const rows = db.prepare("PRAGMA table_list").all() as Array<
+    Record<string, string | number | bigint | null>
+  >;
+  return rows.some(
+    (row) =>
+      row.schema === "main" &&
+      row.type === "table" &&
+      row.name === tableName,
+  );
+}
+
 export function applyMigrations(db: DatabaseSync): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS schema_migrations (

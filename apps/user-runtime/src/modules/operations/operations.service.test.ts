@@ -25,7 +25,11 @@ import { fileURLToPath } from "node:url";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { openDatabase, type SqliteConnection } from "../../adapters/sqlite/connection.ts";
-import { applyMigrations } from "../../adapters/sqlite/migrations.ts";
+import {
+  appliedMigrationVersions,
+  applyMigrations,
+  sqliteTableExists,
+} from "../../adapters/sqlite/migrations.ts";
 import { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import { OperationsRepository } from "../../adapters/sqlite/operations-repository.ts";
 import {
@@ -175,15 +179,8 @@ function createDefaultOperation(): ReturnType<OperationsService["createOperation
 
 describe("S13 chunk 2 — v6 migration shape", () => {
   it("creates the operation-chat tables, workspace-scoped, recorded as version 6", () => {
-    const applied = conn.db
-      .prepare("SELECT version FROM schema_migrations ORDER BY version")
-      .all() as Array<{ version: number | bigint }>;
-    expect(applied.map((row) => Number(row.version))).toContain(6);
+    expect(appliedMigrationVersions(conn.db)).toContain(6);
 
-    const tables = conn.db
-      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
-      .all() as Array<{ name: string }>;
-    const names = tables.map((row) => row.name);
     for (const table of [
       "operations",
       "operation_roster",
@@ -192,7 +189,10 @@ describe("S13 chunk 2 — v6 migration shape", () => {
       "operation_runs",
       "operation_collaboration_events",
     ]) {
-      expect(names, `table ${table} must exist`).toContain(table);
+      expect(
+        sqliteTableExists(conn.db, table),
+        `table ${table} must exist`,
+      ).toBe(true);
     }
   });
 });

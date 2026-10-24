@@ -465,15 +465,20 @@ describe("S12 session wiring — full runtime restart persistence", () => {
         { from: "agent", text: "t1t2t3" },
       ]);
 
-      // Addressing again starts a FRESH session on demand.
+      // Addressing again starts a FRESH session on demand. The waits here
+      // assert eventual persistence/behavior, not latency: a full-suite run
+      // (parallel workers + fresh node children) can stall well past the
+      // default, so these get generous explicit deadlines.
       await sendUserMessage(second.origin, chatId, "idem-s12-restart-2", "after the restart");
-      await until(() =>
-        sessionPresence(second.origin, GENERAL).then((p) => (p === "active" ? p : undefined)),
+      await until(
+        () =>
+          sessionPresence(second.origin, GENERAL).then((p) => (p === "active" ? p : undefined)),
+        30_000,
       );
       const after = await until(async () => {
         const replayed = await replayConversation(second.origin, chatId);
         return messageFlow(replayed).length >= 4 ? messageFlow(replayed) : undefined;
-      });
+      }, 30_000);
       expect(after).toEqual([
         { from: "user", text: "before the restart" },
         { from: "agent", text: "t1t2t3" },

@@ -553,6 +553,27 @@ describe("S13 chunk 2 — roster commands (D36)", () => {
     ).toEqual([RESEARCHER]);
   });
 
+  it("caps the persisted refusals read at the 20 most recent, newest first", () => {
+    const operation = createDefaultOperation();
+    for (let index = 1; index <= 21; index += 1) {
+      repo.recordRosterRefusal(WORKSPACE, {
+        operation_id: operation.operation_id,
+        agent_id: UNKNOWN_AGENT,
+        pack_id: null,
+        refusal_code: "agent-not-in-pack",
+        message: `refusal ${index}`,
+        command_json: "null",
+        created_at: "2026-10-24T10:00:00.000Z",
+      });
+    }
+    const refusals = service.listRosterRefusals(WORKSPACE, operation.operation_id);
+    expect(refusals).toHaveLength(20);
+    // Newest first: the latest refusals lead (the "recent" in the name is
+    // honest, and the detail read model's most-recent pick is refusals[0]).
+    expect(refusals[0]?.message).toBe("refusal 21");
+    expect(refusals[19]?.message).toBe("refusal 2");
+  });
+
   it("answers an unknown operation for roster commands with a typed 404-class error", () => {
     try {
       service.addRosterAgent(addRosterCommand({ operation_id: "op_missing" }));

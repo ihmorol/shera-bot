@@ -387,9 +387,12 @@ describe("SessionSupervisor protocol-failure policy (D14)", () => {
     expect(failures.length).toBeGreaterThanOrEqual(2); // child 1 exhausted the cap
     expect(failures[0]!["code"]).toBe("PROTOCOL_VIOLATION");
     expect(failures[0]!["reason"]).toBe("unparseable_json_line");
-    // G3: the recorded detail is bounded — never a raw child stderr dump.
+    // G3: the recorded detail is a size digest — the raw violating line (the
+    // fake Pi writes "this line is not json") is NEVER echoed into the
+    // journal, even bounded.
     const detail = failures[0]!["detail"];
-    expect(detail === null || (typeof detail === "string" && detail.length <= 200)).toBe(true);
+    expect(typeof detail === "string" && detail.length <= 200).toBe(true);
+    expect(detail).not.toContain("this line is not json");
 
     await until(() => (h.supervisor.presenceState(WS, AGENT) === "failed" ? true : undefined));
     expect(eventsOf(h, "session.protocol_failure")).toHaveLength(3);
@@ -509,6 +512,42 @@ describe("SessionSupervisor presence state machine (D32 layer 2)", () => {
 
     await h.supervisor.stop(WS, AGENT);
     expect(h.supervisor.presenceState(WS, AGENT)).toBe("none");
+  });
+});
+
+describe("SessionSupervisor prompt racing an in-flight teardown (review pin)", () => {
+  it("never wedges a waiter: a prompt racing stop() settles against the fresh session", async () => {
+    // Regression for the review P1: a prompt landing during an in-flight
+    // termination (stop/hibernate grace window) used to register a waiter
+    // nothing ever rejected — wedging that conversation's reply chain until
+    // runtime restart. Now the address settles on the dying child's exit and
+    // transparently re-addresses (fresh spawn), so the prompt RESOLVES.
+    const h = makeSupervisor({ spawnSpec: () => ({ heartbeatMs: 25 }) });
+    await h.supervisor.ensureStarted(WS, AGENT);
+    expect(h.supervisor.presenceState(WS, AGENT)).toBe("active");
+
+    // Fire stop WITHOUT awaiting: terminateAndAwaitExit flips `terminating`
+    // synchronously before its first await, so the prompt below starts inside
+    // the teardown window.
+    const stopping = h.supervisor.stop(WS, AGENT);
+    const reply = await h.supervisor.prompt(WS, AGENT, "racing the teardown");
+    expect(reply.text.length).toBeGreaterThan(0);
+    await stopping;
+    // The reply came from the FRESH incarnation (transparent re-address), and
+    // the stopped child is gone — one replacement spawn, no orphan.
+    expect(h.spawns.length).toBeGreaterThanOrEqual(2);
+    expect(h.supervisor.presenceState(WS, AGENT)).toBe("active");
+  });
+
+  it("a prompt on an explicitly stopped-and-empty session resolves via a fresh start, not a stale child", async () => {
+    const h = makeSupervisor({ spawnSpec: () => ({ heartbeatMs: 25 }) });
+    await h.supervisor.ensureStarted(WS, AGENT);
+    await h.supervisor.stop(WS, AGENT);
+    expect(h.supervisor.presenceState(WS, AGENT)).toBe("none");
+    const reply = await h.supervisor.prompt(WS, AGENT, "after a full stop");
+    expect(reply.text.length).toBeGreaterThan(0);
+    expect(h.supervisor.presenceState(WS, AGENT)).toBe("active");
+    expect(h.spawns).toHaveLength(2);
   });
 });
 

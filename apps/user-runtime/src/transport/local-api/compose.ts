@@ -301,10 +301,20 @@ function wire(
         },
         stderrSink: {
           // G3: child stderr is diagnostic — bounded per incarnation by the
-          // supervisor, carried ONLY on the redacted operator-log conduit,
-          // never journaled and never part of any API response. The event
-          // name marks it diagnostic; the configured harness owns its bytes.
-          write: (chunk) => logFault("agent_session_stderr", { chunk }),
+          // supervisor, and reduced HERE to a classified digest (byte count
+          // plus a conservative message-like first-line shape) so raw
+          // harness bytes never reach the operator log even though the
+          // conduit itself is redaction-based. Never journaled, never in
+          // any API response; anything that does not read as a plain
+          // message is summarized, not quoted.
+          write: (chunk) => {
+            const bytes = Buffer.byteLength(chunk, "utf8");
+            const firstLine = chunk.split("\n", 1)[0] ?? "";
+            const shape = /^[A-Za-z0-9 .:'-]{1,60}$/.test(firstLine)
+              ? firstLine
+              : `${firstLine.length} chars, non-message`;
+            logFault("agent_session_stderr", { bytes, shape });
+          },
         },
         logFault: (event, fields) => logFault(event, fields),
         ...(options.sessionPolicy ? { policy: options.sessionPolicy } : {}),

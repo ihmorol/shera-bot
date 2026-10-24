@@ -227,7 +227,9 @@ export function FirstTimeSessionNote({ visible }: { visible: boolean }) {
       data-session-note={visible ? "visible" : "dismissed"}
       className={cn(
         "shrink-0 text-xs text-muted",
-        visible ? "border-b border-line bg-surface px-4 py-2 lg:px-6" : "hidden",
+        // Dismissed keeps the live region mounted (sr-only, not display:none)
+        // so it never disappears from the accessibility tree mid-announcement.
+        visible ? "border-b border-line bg-surface px-4 py-2 lg:px-6" : "sr-only",
       )}
     >
       {visible ? SESSION_NOTE_TEXT : ""}

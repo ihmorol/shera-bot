@@ -203,7 +203,10 @@ export function useAgentSessionPresence(
   agentId: string,
 ): AgentSessionPresenceState {
   const query = useQuery({
-    queryKey: ["agent-session-presence", workspaceId, agentId],
+    // SAME cache entry as useAgentDirectChat (["agent-detail"]) — one
+    // request stream per mounted surface, one cache truth. The presence
+    // observer contributes only its select + cadence.
+    queryKey: ["agent-detail", workspaceId, agentId],
     queryFn: () => fetchAgentDetail(workspaceId, agentId),
     select: (detail) => detail.session.presence,
     retry: false,

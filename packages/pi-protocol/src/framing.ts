@@ -75,9 +75,12 @@ export function parseFrame(line: string): PiFrame {
   try {
     value = JSON.parse(line) as unknown;
   } catch {
+    // G3: the raw line is child output — classify by SIZE, never echo it
+    // (a misbehaving child could print prompt text or secrets inside a
+    // malformed line; the digest carries nothing recoverable).
     throw new ProtocolViolationError({
       reason: "unparseable_json_line",
-      detail: line.slice(0, 200),
+      detail: `unparseable JSON line (${bytes} bytes)`,
     });
   }
   return validateFrame(value);

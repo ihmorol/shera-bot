@@ -109,11 +109,6 @@ export class SessionReplyBridge {
     this.chains.set(chainKey, next);
   }
 
-  /** True while a reply chain for this conversation is still in flight. */
-  hasPendingReply(workspaceId: string, conversationId: string): boolean {
-    return this.chains.has(`${workspaceId}:${conversationId}`);
-  }
-
   private async replyAndPublish(
     event: EventEnvelope,
     payload: MessageAppendedPayload,

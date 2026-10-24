@@ -312,8 +312,16 @@ export class SessionSupervisor {
       if (record.presence === "failed") {
         throw new AgentSessionFailedError(workspaceId, agentId);
       }
-      if (record.presence === "active" && record.current !== null) {
+      if (record.presence === "active" && record.current !== null && !record.current.terminating) {
         return this.snapshotOf(record);
+      }
+      if (record.current?.terminating === true) {
+        // A dying incarnation (idle-hibernate grace, crash teardown, stop)
+        // is never snapshotted or prompted: settle on its exit and re-loop.
+        // The aftermath (hibernating/none/restarting/failed) decides the
+        // next step honestly.
+        await record.current.child.waitForExit().catch(() => {});
+        continue;
       }
       if (record.startPromise !== null) {
         // Warm reuse + concurrent-start coalescing: ride the in-flight start.
@@ -369,8 +377,10 @@ export class SessionSupervisor {
     await this.ensureStarted(workspaceId, agentId);
     const record = this.records.get(recordKey(workspaceId, agentId))!;
     const incarnation = record.current;
-    if (incarnation === null || !incarnation.ready) {
-      // The session failed or dropped between the start and this send.
+    if (incarnation === null || !incarnation.ready || incarnation.terminating) {
+      // The session failed, dropped, or is mid-teardown between the start
+      // and this send. Typed rejection (the bridge contains it; the next
+      // message meets the restarted session) — never a wedged waiter.
       throw new AgentSessionInterruptedError(workspaceId, agentId);
     }
     const promptId = `prompt-${randomUUID()}`;
@@ -406,8 +416,13 @@ export class SessionSupervisor {
     }
     const incarnation = record.current;
     if (incarnation === null) return;
+    // Reject in-flight prompts BEFORE the shutdown — a waiter registered
+    // before stop() must settle typed, never hang behind the escalation.
+    this.rejectPrompts(incarnation, new AgentSessionInterruptedError(workspaceId, agentId));
     await this.terminateAndAwaitExit(record, incarnation);
-    record.presence = "none";
+    // Same concurrent-address guard as the hibernate aftermath: a fresh
+    // session started while this stop was in flight keeps its presence.
+    if (record.current === null) record.presence = "none";
   }
 
   /** Stop every live session (composition shutdown); resolves when all exited. */
@@ -469,7 +484,7 @@ export class SessionSupervisor {
         continue;
       }
 
-      const failure = await this.awaitHandshake(record, incarnation);
+      const failure = await this.awaitHandshake(incarnation);
       if (failure === null) {
         // A violating line can arrive in the SAME stdout burst as ready and
         // drive the session terminal (cap policy) before this continuation
@@ -576,11 +591,7 @@ export class SessionSupervisor {
    * completes hello/ready); the watchdog applies the same threshold before
    * ready, so a slow boot is never killed by the tighter heartbeat window.
    */
-  private awaitHandshake(
-    record: SessionRecord,
-    incarnation: Incarnation,
-  ): Promise<StartFailure | null> {
-    void record;
+  private awaitHandshake(incarnation: Incarnation): Promise<StartFailure | null> {
     return new Promise<StartFailure | null>((resolve) => {
       const remaining = Math.max(
         0,
@@ -894,15 +905,20 @@ export class SessionSupervisor {
     );
     await this.terminateAndAwaitExit(record, incarnation);
     this.detachCurrent(record, incarnation);
-    record.presence = "hibernating";
-    // Durable state is untouched (the supervisor owns none) — the next
-    // ensureStarted transparently restarts and the conversation continues.
-    this.recordEvent(record, "session.hibernate", {
-      session_id: incarnation.session_id,
-      workspace_id: record.workspace_id,
-      agent_id: record.agent_id,
-      idle_ms: Math.round(idleMs),
-    });
+    // A concurrent address could have started a FRESH session while this
+    // teardown was in flight (ensureStarted settles on the exit and
+    // re-loops) — never clobber a live incarnation's presence.
+    if (record.current === null) {
+      record.presence = "hibernating";
+      // Durable state is untouched (the supervisor owns none) — the next
+      // ensureStarted transparently restarts and the conversation continues.
+      this.recordEvent(record, "session.hibernate", {
+        session_id: incarnation.session_id,
+        workspace_id: record.workspace_id,
+        agent_id: record.agent_id,
+        idle_ms: Math.round(idleMs),
+      });
+    }
   }
 
   // ── Crash handling ────────────────────────────────────────────────────────
@@ -917,6 +933,14 @@ export class SessionSupervisor {
     for (const unsubscribe of incarnation.unsubscribers) unsubscribe();
     incarnation.unsubscribers = [];
     this.detachCurrent(record, incarnation);
+    // Late waiters (a prompt that raced the termination window) are
+    // rejected unconditionally — rejectPrompts is idempotent and the
+    // initiator's own rejection already ran. A registered waiter is never
+    // left unsettled (that would wedge the conversation's reply chain).
+    this.rejectPrompts(
+      incarnation,
+      new AgentSessionInterruptedError(record.workspace_id, record.agent_id),
+    );
     if (incarnation.terminating) return; // the initiator owns the aftermath
 
     // Nobody initiated this death. Exactly one handler wins the synchronous
@@ -1092,7 +1116,8 @@ export class SessionSupervisor {
     if (incarnation.stderrBytes >= this.policy.stderrMaxBytes) return;
     const remaining = this.policy.stderrMaxBytes - incarnation.stderrBytes;
     const bounded = chunk.length <= remaining ? chunk : chunk.slice(0, remaining);
-    incarnation.stderrBytes += bounded.length;
+    // UTF-8 bytes, not UTF-16 code units — the bound is named in bytes.
+    incarnation.stderrBytes += Buffer.byteLength(bounded, "utf8");
     this.deps.stderrSink?.write(bounded);
   }
 
@@ -1196,7 +1221,9 @@ export class SessionSupervisor {
 }
 
 function recordKey(workspaceId: string, agentId: string): string {
-  return `${workspaceId}${agentId}`;
+  // Delimited to match the journal stream naming (session:<ws>:<agent>) —
+  // collision-safe even if id conventions ever loosen.
+  return `${workspaceId}:${agentId}`;
 }
 
 /** Bounded typed detail (≤ 200 chars) — never raw child output (G3). */

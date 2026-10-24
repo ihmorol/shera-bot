@@ -9,6 +9,7 @@ import {
   OperationCollaborationEvent,
   OperationRecord,
   RemoveRosterAgentCommand,
+  type OperationRun,
 } from "@shera-bot/contracts";
 
 import { OperationRosterPanel } from "../components/operations/operation-roster-panel";
@@ -30,6 +31,7 @@ import {
   sendOperationChatMessage,
   setOperationCoordinator,
   submitOperationRosterCommand,
+  type OperationThreadPayload,
 } from "../lib/operation-api";
 import type { AgentRosterSummary } from "../lib/agent-api";
 
@@ -111,7 +113,7 @@ const ROSTER_MEMBER = (agent: AgentRosterSummary, requiresApproval = false) => (
   added_at: "2026-10-24T10:00:00.000Z",
 });
 
-const RUN = {
+const RUN: OperationRun = {
   run_id: "run_top_01",
   workspace_id: WORKSPACE,
   operation_id: OPERATION_ID,
@@ -124,7 +126,7 @@ const RUN = {
   updated_at: "2026-10-24T10:02:00.000Z",
 };
 
-const SUBRUN = {
+const SUBRUN: OperationRun = {
   ...RUN,
   run_id: "run_child_01",
   parent_task_id: "task_parent_01",
@@ -161,7 +163,7 @@ function collaborationEvent(
   });
 }
 
-const THREAD = {
+const THREAD: OperationThreadPayload = {
   operation_id: OPERATION_ID,
   workspace_id: WORKSPACE,
   chat_conversation_id: CHAT_ID,
@@ -219,6 +221,8 @@ function renderRoster(props: Record<string, unknown> = {}): string {
       identities: IDENTITIES,
       coordinatorAgentId: OPERATION.coordinator_agent_id,
       state: "ready",
+      safeErrorMessage: undefined,
+      onRetry: () => undefined,
       candidates: candidateAgentsForOperation(
         IDENTITIES,
         DETAIL.roster.map((member) => member.agent_id),
@@ -285,12 +289,14 @@ describe("Operation roster panel (§S4, D36/D42/D49)", () => {
     expect(html).toContain(`--agent-hue:${RESEARCHER.avatar_hue}`);
   });
 
-  it("renders a roster member without a seeded identity by its id — never a fabricated name", () => {
+  it("renders a roster member without any resolvable identity by its id — never a fabricated name", () => {
     const html = renderRoster({
-      roster: [{ ...ROSTER_MEMBER(GA), display_name: null }],
+      roster: [{ ...ROSTER_MEMBER(GA), agent_id: "agent_unknown_member", display_name: null }],
+      identities: [],
       candidates: [],
     });
-    expect(html).toContain(GA.agent_id);
+    expect(html).toContain("agent_unknown_member");
+    expect(html).not.toContain(GA.display_name);
   });
 
   it("marks the coordinator chip with a Coordinator badge and a remove action", () => {
@@ -335,11 +341,14 @@ describe("Operation roster panel (§S4, D36/D42/D49)", () => {
   });
 
   it("renders a refused add's fixed safe message verbatim, inline (D36)", () => {
+    // The cost-increase refusal copy (no apostrophe, so the verbatim check
+    // survives SSR entity-encoding) — the runtime's fixed safe copy, never
+    // raw internals.
     const html = renderRoster({
-      refusalMessage: "This Agent is not a member of the Operation's pinned Pack.",
+      refusalMessage: "Adding this Agent increases cost or access and needs your approval first.",
     });
     expect(html).toContain('role="alert"');
-    expect(html).toContain("This Agent is not a member of the Operation's pinned Pack.");
+    expect(html).toContain("Adding this Agent increases cost or access and needs your approval first.");
   });
 
   it("loading state is a layout-matched skeleton; error state carries the safe message + retry", () => {
@@ -480,7 +489,9 @@ describe("Operation thread (§S4, D41/D7)", () => {
 
   it("disables the send affordance while a send is pending", () => {
     const html = renderThread({ sendPending: true });
-    expect(html).toMatch(/aria-disabled="true"|disabled/);
+    // The disabled ATTRIBUTE (the Button's disabled:* utility classes are
+    // always present and never mean a control is actually disabled).
+    expect(html).toMatch(/\bdisabled=""/);
   });
 });
 
@@ -506,10 +517,10 @@ describe("Operation runs panel (§S4, D31/D34/D8)", () => {
   it("offers New run, honestly disabled while the creation is pending", () => {
     const idle = renderRuns();
     expect(idle).toContain("New run");
-    expect(idle).not.toMatch(/<button[^>]*disabled[^>]*>\s*New run/);
+    expect(idle).not.toMatch(/<button[^>]*?\bdisabled=""[^>]*>\s*New run/);
 
     const pending = renderRuns({ createPending: true });
-    expect(pending).toMatch(/<button[^>]*disabled[^>]*>\s*New run/);
+    expect(pending).toMatch(/<button[^>]*?\bdisabled=""[^>]*>\s*New run/);
   });
 
   it("empty state explains that nothing has run yet", () => {
@@ -563,7 +574,7 @@ describe("New Operation form (S6, D29/D31)", () => {
     // The form's own validation is asserted through the submit contract test
     // below (the page refuses to call onSubmit with an empty roster).
     const html = renderForm({ pending: true });
-    expect(html).toMatch(/<button[^>]*disabled[^>]*>\s*Create Operation/);
+    expect(html).toMatch(/<button[^>]*?\bdisabled=""[^>]*>\s*Create Operation/);
   });
 
   it("error state carries the safe message + retry; loading state is a skeleton", () => {

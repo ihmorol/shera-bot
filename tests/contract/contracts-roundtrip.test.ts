@@ -78,6 +78,14 @@ const ROUND_TRIP_CASES: ReadonlyArray<{ schema: ContractName; fixture: string }>
   { schema: "AgentSettingsCommand", fixture: "agent-settings-command-reset-all.json" },
   { schema: "AgentSettingsSnapshot", fixture: "agent-settings-snapshot.json" },
   { schema: "AgentSettingsOverrides", fixture: "agent-settings-overrides.json" },
+  // S13 chunk 1 (Operation chat: persisted record, D36 roster commands,
+  // operation runs, D7 collaboration event union).
+  { schema: "OperationRecord", fixture: "operation-record.json" },
+  { schema: "OperationRun", fixture: "operation-run.json" },
+  { schema: "AddRosterAgentCommand", fixture: "operation-roster-add-command.json" },
+  { schema: "RemoveRosterAgentCommand", fixture: "operation-roster-remove-command.json" },
+  { schema: "RosterRefusal", fixture: "operation-roster-refusal.json" },
+  { schema: "OperationCollaborationEvent", fixture: "operation-collaboration-event.json" },
 ];
 
 describe.each(ROUND_TRIP_CASES)("$schema round-trip ($fixture)", ({ schema, fixture }) => {

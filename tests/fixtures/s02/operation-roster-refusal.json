@@ -1,0 +1,6 @@
+{
+  "refusal_code": "foreign-pack-refused",
+  "message": "Candidate Agent belongs to a pack other than the Operation pinned pack.",
+  "agent_id": "agent_external_analyst",
+  "pack_id": "agent-packs/other/v1"
+}

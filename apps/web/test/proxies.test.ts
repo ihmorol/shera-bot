@@ -406,6 +406,241 @@ describe("runtime proxy — S11 agent surfaces (allowlist additions)", () => {
   });
 });
 
+describe("runtime proxy — S13 Operation surfaces (allowlist additions)", () => {
+  /** The stubbed fetch answer for a forwarded operation call. */
+  function operationResponse(): Response {
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }
+
+  it("forwards the workspace operations list read", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const { calls } = stubFetch(operationResponse);
+
+    const request = new Request("http://web.test/api/runtime/v1/operations?workspace_id=ws_1");
+    const response = await proxyToLocalApi(request, "/v1/operations");
+
+    expect(response.status).toBe(200);
+    expect(calls.at(-1)?.input).toBe(
+      `${CONTROL_BASE}/api/runtime/local/v1/operations?workspace_id=ws_1`,
+    );
+  });
+
+  it("forwards the Operation detail read (roster + runs + refusals + chat binding)", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const { calls } = stubFetch(operationResponse);
+
+    const request = new Request(
+      "http://web.test/api/runtime/v1/operations/op_research_01?workspace_id=ws_1",
+    );
+    const response = await proxyToLocalApi(request, "/v1/operations/op_research_01");
+
+    expect(response.status).toBe(200);
+    expect(calls.at(-1)?.input).toBe(
+      `${CONTROL_BASE}/api/runtime/local/v1/operations/op_research_01?workspace_id=ws_1`,
+    );
+  });
+
+  it("forwards the merged thread read with its after cursor", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const { calls } = stubFetch(operationResponse);
+
+    const request = new Request(
+      "http://web.test/api/runtime/v1/operations/op_research_01/thread?workspace_id=ws_1&after=4",
+    );
+    const response = await proxyToLocalApi(request, "/v1/operations/op_research_01/thread");
+
+    expect(response.status).toBe(200);
+    expect(calls.at(-1)?.input).toBe(
+      `${CONTROL_BASE}/api/runtime/local/v1/operations/op_research_01/thread?workspace_id=ws_1&after=4`,
+    );
+  });
+
+  it("forwards the ad-hoc Operation creation POST with its body", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const { calls } = stubFetch(operationResponse);
+
+    const request = new Request("http://web.test/api/runtime/v1/operations", {
+      method: "POST",
+      body: JSON.stringify({
+        workspace_id: "ws_1",
+        definition_ref: null,
+        name: "Research Paper",
+        roster_agent_ids: ["agent_general_assistant"],
+        coordinator_agent_id: "agent_general_assistant",
+      }),
+      headers: { "content-type": "application/json" },
+    });
+    const response = await proxyToLocalApi(request, "/v1/operations");
+
+    expect(response.status).toBe(200);
+    const call = calls.at(-1)!;
+    expect(String(call.input)).toBe(`${CONTROL_BASE}/api/runtime/local/v1/operations`);
+    expect(call.init?.method).toBe("POST");
+    expect(call.init?.body).toBe(
+      JSON.stringify({
+        workspace_id: "ws_1",
+        definition_ref: null,
+        name: "Research Paper",
+        roster_agent_ids: ["agent_general_assistant"],
+        coordinator_agent_id: "agent_general_assistant",
+      }),
+    );
+  });
+
+  it("forwards the D36 roster command POST with its body", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const { calls } = stubFetch(operationResponse);
+
+    const request = new Request(
+      "http://web.test/api/runtime/v1/operations/op_research_01/roster/commands",
+      {
+        method: "POST",
+        body: JSON.stringify({ type: "operation.remove_roster_agent", workspace_id: "ws_1" }),
+        headers: { "content-type": "application/json" },
+      },
+    );
+    const response = await proxyToLocalApi(
+      request,
+      "/v1/operations/op_research_01/roster/commands",
+    );
+
+    expect(response.status).toBe(200);
+    const call = calls.at(-1)!;
+    expect(String(call.input)).toBe(
+      `${CONTROL_BASE}/api/runtime/local/v1/operations/op_research_01/roster/commands`,
+    );
+    expect(call.init?.body).toBe(
+      JSON.stringify({ type: "operation.remove_roster_agent", workspace_id: "ws_1" }),
+    );
+  });
+
+  it("forwards the D42/D49 coordinator POST with its body", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const { calls } = stubFetch(operationResponse);
+
+    const request = new Request(
+      "http://web.test/api/runtime/v1/operations/op_research_01/coordinator",
+      {
+        method: "POST",
+        body: JSON.stringify({ workspace_id: "ws_1", coordinator_agent_id: "none" }),
+        headers: { "content-type": "application/json" },
+      },
+    );
+    const response = await proxyToLocalApi(request, "/v1/operations/op_research_01/coordinator");
+
+    expect(response.status).toBe(200);
+    expect(calls.at(-1)?.init?.body).toBe(
+      JSON.stringify({ workspace_id: "ws_1", coordinator_agent_id: "none" }),
+    );
+  });
+
+  it("forwards the run creation POST with its body", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const { calls } = stubFetch(operationResponse);
+
+    const request = new Request("http://web.test/api/runtime/v1/operations/op_research_01/runs", {
+      method: "POST",
+      body: JSON.stringify({ workspace_id: "ws_1" }),
+      headers: { "content-type": "application/json" },
+    });
+    const response = await proxyToLocalApi(request, "/v1/operations/op_research_01/runs");
+
+    expect(response.status).toBe(200);
+    expect(calls.at(-1)?.init?.body).toBe(JSON.stringify({ workspace_id: "ws_1" }));
+  });
+
+  it("forwards the D41 addressed message send POST with its body", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const { calls } = stubFetch(operationResponse);
+
+    const request = new Request(
+      "http://web.test/api/runtime/v1/operations/op_research_01/thread/messages",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          workspace_id: "ws_1",
+          idempotency_key: "idem_msg_draft_0001",
+          sender: { kind: "user", display_name: "Emon" },
+          text: "hello",
+        }),
+        headers: { "content-type": "application/json" },
+      },
+    );
+    const response = await proxyToLocalApi(
+      request,
+      "/v1/operations/op_research_01/thread/messages",
+    );
+
+    expect(response.status).toBe(200);
+    expect(calls.at(-1)?.init?.body).toBe(
+      JSON.stringify({
+        workspace_id: "ws_1",
+        idempotency_key: "idem_msg_draft_0001",
+        sender: { kind: "user", display_name: "Emon" },
+        text: "hello",
+      }),
+    );
+  });
+
+  it("still refuses the D7 collaboration-event write — the browser renders events, never authors them", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const calls: FetchCall[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({ input, init });
+        return Promise.resolve(new Response(null, { status: 500 }));
+      }),
+    );
+
+    const request = new Request("http://web.test/api/runtime/v1/operations/op_research_01/events", {
+      method: "POST",
+      body: JSON.stringify({ workspace_id: "ws_1" }),
+      headers: { "content-type": "application/json" },
+    });
+    const response = await proxyToLocalApi(request, "/v1/operations/op_research_01/events");
+
+    expect(response.status).toBe(404);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("still refuses operation sub-paths outside the surfaced reads (detail must not swallow everything)", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const calls: FetchCall[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({ input, init });
+        return Promise.resolve(new Response(null, { status: 500 }));
+      }),
+    );
+
+    for (const path of [
+      "/v1/operations/op_research_01/events",
+      "/v1/operations/op_research_01/runs/run_top_01",
+      "/v1/operations/op_research_01/roster",
+    ]) {
+      const request = new Request(`http://web.test/api/runtime${path}`, { method: "GET" });
+      const response = await proxyToLocalApi(request, path);
+      expect(response.status, path).toBe(404);
+    }
+    expect(calls).toHaveLength(0);
+  });
+});
+
 describe("runtime request boundaries", () => {
   it("rejects oversized bodies before forwarding commands", async () => {
     process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;

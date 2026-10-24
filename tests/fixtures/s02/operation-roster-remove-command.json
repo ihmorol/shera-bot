@@ -1,0 +1,13 @@
+{
+  "type": "operation.remove_roster_agent",
+  "command_id": "cmd_002",
+  "idempotency_key": "idem_cmd_002",
+  "workspace_id": "ws_default_01",
+  "operation_id": "op_001",
+  "actor": {
+    "type": "user",
+    "id": "user_emon"
+  },
+  "issued_at": "2026-10-24T00:00:00.000Z",
+  "agent_id": "agent_developer"
+}

@@ -1,0 +1,16 @@
+{
+  "run_id": "run_001",
+  "workspace_id": "ws_default_01",
+  "operation_id": "op_001",
+  "parent_task_id": null,
+  "state": "QUEUED",
+  "events_seq_cursor": 0,
+  "provider_snapshot": {
+    "provider_id": "provider_platform",
+    "model": "platform-default"
+  },
+  "credits": {},
+  "artifacts": [],
+  "created_at": "2026-10-24T00:00:00.000Z",
+  "updated_at": "2026-10-24T00:00:00.000Z"
+}

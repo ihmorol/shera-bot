@@ -39,6 +39,7 @@ import {
 import { AgentSettingsResetUnavailableError } from "../../modules/agents/agents.service.ts";
 import { ConversationsServiceError } from "../../modules/conversations/conversations.types.ts";
 import { EventsServiceError } from "../../modules/events/events.service.ts";
+import { OperationsServiceError } from "../../modules/operations/operations.service.ts";
 
 interface HttpErrorMapping {
   status: number;
@@ -118,6 +119,60 @@ const AGENTS_REJECTIONS: Record<
   },
 };
 
+/**
+ * S13: the operations boundary rejections (the module service's typed
+ * errors). NOT_FOUND* codes answer the 404-class, *_INVALID the 400
+ * validation class, and OPERATION_ROSTER_REFUSED the 403 policy class —
+ * with the typed D36 RosterRefusal in the body: its safe_message is the
+ * refusal's own fixed UI copy, and the full refusal rides in
+ * internal_details (ids + fixed copy only — authored for display, G3).
+ */
+const OPERATIONS_REJECTIONS: Record<
+  OperationsServiceError["code"],
+  { status: number; safe_message: string; user_action: string | null }
+> = {
+  OPERATION_NOT_FOUND: {
+    status: 404,
+    safe_message: "The Operation does not exist in this workspace.",
+    user_action: null,
+  },
+  OPERATION_RUN_NOT_FOUND: {
+    status: 404,
+    safe_message: "The run does not exist in this Operation.",
+    user_action: null,
+  },
+  OPERATION_ROSTER_AGENT_NOT_FOUND: {
+    status: 404,
+    safe_message: "That Agent is not in this Operation's roster.",
+    user_action: null,
+  },
+  OPERATION_COORDINATOR_NOT_FOUND: {
+    status: 404,
+    safe_message: "The coordinator Agent does not exist in the pinned pack.",
+    user_action: null,
+  },
+  OPERATION_ROSTER_REFUSED: {
+    status: 403,
+    safe_message: "This roster change was refused.",
+    user_action: null,
+  },
+  OPERATION_COMMAND_INVALID: {
+    status: 400,
+    safe_message: "The Operation request is malformed.",
+    user_action: null,
+  },
+  OPERATION_EVENT_INVALID: {
+    status: 400,
+    safe_message: "The collaboration event failed validation.",
+    user_action: null,
+  },
+  OPERATION_RUN_STATE_INVALID: {
+    status: 400,
+    safe_message: "The run state is not a known state.",
+    user_action: null,
+  },
+};
+
 function bodyParserType(error: unknown): string | null {
   if (typeof error === "object" && error !== null && "type" in error) {
     const type = (error as { type?: unknown }).type;
@@ -159,6 +214,25 @@ export function toSheraErrorResponse(error: unknown, correlationId?: string): Ht
         retryable: false,
         user_action: null,
         internal_details: null,
+        correlation_id,
+      },
+    };
+  }
+
+  if (error instanceof OperationsServiceError) {
+    const mapping = OPERATIONS_REJECTIONS[error.code];
+    const refusal = error.code === "OPERATION_ROSTER_REFUSED" ? error.refusal : null;
+    return {
+      status: mapping.status,
+      body: {
+        code: error.code,
+        category: error.category,
+        // The refusal's own fixed UI copy is the safe message the UI renders
+        // verbatim (authored for display — never a zod or storage detail).
+        safe_message: refusal?.message ?? mapping.safe_message,
+        retryable: false,
+        user_action: mapping.user_action,
+        internal_details: refusal ? { roster_refusal: refusal } : null,
         correlation_id,
       },
     };
@@ -301,6 +375,7 @@ function isUntypedFault(error: unknown): boolean {
   return (
     !(error instanceof ConversationsServiceError) &&
     !(error instanceof EventsServiceError) &&
+    !(error instanceof OperationsServiceError) &&
     !(error instanceof AgentNotFoundError) &&
     !(error instanceof AgentSettingsValidationError) &&
     !(error instanceof AgentSettingsResetUnavailableError) &&

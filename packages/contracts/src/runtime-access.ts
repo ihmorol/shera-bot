@@ -1,17 +1,32 @@
 /** Paths available to a signed-in browser; management and raw mutations stay private. */
 export function isBrowserRuntimePath(method: string, path: string): boolean {
   if (path.includes(String.fromCharCode(92)) || path.includes("%")) return false;
+  // Operation id segment: the local API's Id primitive allows a wide class, but
+  // browser URLs are the proxy's own concern — ids reach it percent-free and
+  // the proxy already refuses any "%" anywhere in the path.
   if (method === "POST") {
     return (
       path === "/v1/conversations/commands" ||
-      /^\/v1\/agents\/[a-zA-Z0-9_-]+\/settings\/commands$/.test(path)
+      /^\/v1\/agents\/[a-zA-Z0-9_-]+\/settings\/commands$/.test(path) ||
+      // S13 Operation chat (D31/D36/D41/D42): the record creation, the roster
+      // commands, the coordinator set/remove, run creation, and the addressed
+      // message send. The D7 collaboration-event write is deliberately absent
+      // — the browser RENDERS events, it never authors them.
+      path === "/v1/operations" ||
+      /^\/v1\/operations\/[a-zA-Z0-9_-]+\/(?:roster\/commands|coordinator|runs|thread\/messages)$/.test(
+        path,
+      )
     );
   }
   return (
     method === "GET" &&
     (path === "/v1/agents" ||
       /^\/v1\/agents\/[a-zA-Z0-9_-]+(?:\/settings)?$/.test(path) ||
-      /^\/v1\/conversations\/[a-zA-Z0-9_-]+\/events$/.test(path))
+      /^\/v1\/conversations\/[a-zA-Z0-9_-]+\/events$/.test(path) ||
+      // S13 reads: the operations list, the detail read model, and the merged
+      // thread. Run/event sub-reads stay private to the runtime surfaces.
+      path === "/v1/operations" ||
+      /^\/v1\/operations\/[a-zA-Z0-9_-]+(?:\/thread)?$/.test(path))
   );
 }
 

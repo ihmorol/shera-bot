@@ -1,0 +1,15 @@
+{
+  "type": "TaskProposed",
+  "event_id": "evt_task_proposed_001",
+  "workspace_id": "ws_default_01",
+  "operation_id": "op_001",
+  "run_id": null,
+  "sender_agent_id": "agent_general_assistant",
+  "recipient_agent_ids": ["agent_researcher"],
+  "correlation_id": "corr_001",
+  "issued_at": "2026-10-24T00:00:00.000Z",
+  "payload": {
+    "task_description": "Find five primary sources for the literature review",
+    "proposed_assignee_agent_id": "agent_researcher"
+  }
+}

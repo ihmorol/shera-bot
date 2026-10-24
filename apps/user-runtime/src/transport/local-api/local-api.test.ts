@@ -418,6 +418,9 @@ describe("local API — typed error middleware integration", () => {
       replay: { resolve: throwing } as unknown as ReplayService,
       agents: throwing as unknown as LocalApiDeps["agents"],
       folders: throwing as unknown as LocalApiDeps["folders"],
+      // S13: the operations seam stubbed like the others — this suite never
+      // reaches an operations route; a call would fault untyped on purpose.
+      operations: throwing as unknown as LocalApiDeps["operations"],
     });
     const running = await listenHttp(app);
     try {

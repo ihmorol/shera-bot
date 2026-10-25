@@ -73,10 +73,18 @@ describe("user-runtime SQL boundary (AC7, D23 rule 2)", () => {
     // The fake process test doubles spawn REAL children on purpose —
     // supervision suites must exercise true heartbeat silence, crash exit
     // codes and kill escalation against live processes (D14 for fake Pi,
-    // D32/E8 for the fake task worker). Each exception is mirrored in
+    // D32/E8 for the fake task worker). The S16 production task-worker spawn
+    // adapter wraps the worker command in prlimit(1) exec'd as a binary (no
+    // shell) for per-worker kernel resource limits (E1), and the fake worker
+    // CHILD script spawns short-lived node children so suites can prove the
+    // --nproc cap at the fork boundary. Each exception is mirrored in
     // scripts/boundary-guards.ts PROCESS_EXCEPTIONS with its rationale; the
     // production spawn seams live under adapters/process/.
-    const childProcessExceptions = new Set([join("modules", "workers", "fake-task-worker.ts")]);
+    const childProcessExceptions = new Set([
+      join("modules", "workers", "fake-task-worker.ts"),
+      join("modules", "workers", "worker-process-spawn.ts"),
+      join("modules", "workers", "fake-task-worker-child.ts"),
+    ]);
     const offenders = allFiles
       .filter((file) => !file.includes(join("src", "adapters", "process")))
       .filter((file) => !childProcessExceptions.has(relative(file)))

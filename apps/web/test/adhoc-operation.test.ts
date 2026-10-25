@@ -156,7 +156,9 @@ describe("New Operation form (§S6, D41/D42)", () => {
       initialSelectedAgentIds: [GA.agent_id],
     });
     expect(html).toContain("Leave unnamed to label it automatically");
-    const createButton = html.split("<button").find((segment) => segment.includes("Create Operation"));
+    const createButton = html
+      .split("<button")
+      .find((segment) => segment.includes("Create Operation"));
     expect(createButton).toBeDefined();
     expect(createButton).not.toMatch(/\bdisabled=""/);
   });
@@ -412,9 +414,7 @@ describe("Sidebar live Operation chats (§3.2 + S14)", () => {
     expect(html).toMatch(/italic/);
 
     const named = renderSection({
-      operations: [
-        { ...row({ name: "Weekly Review" }), is_adhoc: true, auto_label: false },
-      ],
+      operations: [{ ...row({ name: "Weekly Review" }), is_adhoc: true, auto_label: false }],
     });
     expect(named).toContain("Weekly Review");
     expect(named).not.toMatch(/italic/);
@@ -452,7 +452,9 @@ describe("Operation client (S14 surfaces, proxy paths)", () => {
   it("fetchOperations parses the S14 derived is_adhoc/auto_label on list rows", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(jsonResponse(200, { operations: [{ ...OPERATION, is_adhoc: true, auto_label: false }] }));
+      .mockResolvedValue(
+        jsonResponse(200, { operations: [{ ...OPERATION, is_adhoc: true, auto_label: false }] }),
+      );
     vi.stubGlobal("fetch", fetchMock);
 
     const operations = await fetchOperations(WORKSPACE);
@@ -467,9 +469,15 @@ describe("Operation client (S14 surfaces, proxy paths)", () => {
   });
 
   it("fetchOperationDetail parses is_adhoc/auto_label and the F6 pack_summary", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse(200, { ...DETAIL, auto_label: true, operation: { ...OPERATION, name: AUTO_LABEL } }),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse(200, {
+          ...DETAIL,
+          auto_label: true,
+          operation: { ...OPERATION, name: AUTO_LABEL },
+        }),
+      );
     vi.stubGlobal("fetch", fetchMock);
 
     const detail = await fetchOperationDetail(WORKSPACE, OPERATION_ID);
@@ -481,9 +489,11 @@ describe("Operation client (S14 surfaces, proxy paths)", () => {
   });
 
   it("createOperation sends the OPTIONAL name as null (auto-label) and accepts the none coordinator (D42)", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse(201, { ...OPERATION, name: AUTO_LABEL, coordinator_agent_id: "none" }),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse(201, { ...OPERATION, name: AUTO_LABEL, coordinator_agent_id: "none" }),
+      );
     vi.stubGlobal("fetch", fetchMock);
 
     const record = await createOperation(WORKSPACE, {
@@ -544,7 +554,10 @@ describe("Operation client (S14 surfaces, proxy paths)", () => {
     // client — the contracts parse refuses it at build time, and the editor
     // keeps Save disabled); the SERVER's typed 400 still surfaces as safe copy.
     await expect(renameOperation(WORKSPACE, OPERATION_ID, "Valid Name")).rejects.toMatchObject({
-      sheraError: { code: "OPERATION_COMMAND_INVALID", safe_message: "The rename command is not valid." },
+      sheraError: {
+        code: "OPERATION_COMMAND_INVALID",
+        safe_message: "The rename command is not valid.",
+      },
     });
   });
 
@@ -587,7 +600,9 @@ describe("Operation client (S14 surfaces, proxy paths)", () => {
       internal_details: null,
       correlation_id: "44444444-4444-4444-8444-444444444444",
     });
-    expect(createOperationOutcomeMessage(rosterEmpty)).toBe("An Operation needs at least one Agent.");
+    expect(createOperationOutcomeMessage(rosterEmpty)).toBe(
+      "An Operation needs at least one Agent.",
+    );
 
     // The local friendly copy for the two S14 refusal codes (used when the
     // server answer carries no usable safe_message), keyed by the typed code.

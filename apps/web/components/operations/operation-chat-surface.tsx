@@ -225,9 +225,7 @@ function RuntimeOperationChat({
               setRenameErrorMessage(null);
             },
             onError: (error) =>
-              setRenameErrorMessage(
-                safeOperationMessage(error, "The rename was not accepted."),
-              ),
+              setRenameErrorMessage(safeOperationMessage(error, "The rename was not accepted.")),
           });
         }}
       />

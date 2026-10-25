@@ -158,11 +158,7 @@ export function NewOperationForm({
 
         <fieldset>
           <legend className="text-sm font-medium text-text">Coordinator</legend>
-          <div
-            role="radiogroup"
-            aria-label="Coordinator"
-            className="mt-2 flex flex-col gap-1.5"
-          >
+          <div role="radiogroup" aria-label="Coordinator" className="mt-2 flex flex-col gap-1.5">
             {identities.map((identity) => (
               <label
                 key={identity.agent_id}
@@ -177,9 +173,7 @@ export function NewOperationForm({
                   aria-label={`Coordinator: ${identity.display_name}`}
                   className="size-4"
                 />
-                <span className="min-w-0 truncate text-sm text-text">
-                  {identity.display_name}
-                </span>
+                <span className="min-w-0 truncate text-sm text-text">{identity.display_name}</span>
               </label>
             ))}
             <label className="flex items-center gap-2.5 rounded-lg border border-line bg-surface px-3 py-2">

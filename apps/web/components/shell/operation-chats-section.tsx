@@ -101,7 +101,9 @@ export function LiveOperationChatsSection({
                     operation.auto_label && "italic text-muted",
                   )}
                   data-testid={
-                    operation.auto_label ? `operation-auto-label-${operation.operation_id}` : undefined
+                    operation.auto_label
+                      ? `operation-auto-label-${operation.operation_id}`
+                      : undefined
                   }
                 >
                   <span className="truncate">{operation.name}</span>

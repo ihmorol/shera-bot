@@ -48,12 +48,7 @@ export function OperationPackSummary({
         <p className="truncate text-xs text-muted" data-testid="pack-roster-count">
           {rosterCount} Agents on the roster
         </p>
-        <Button
-          variant="ghost"
-          size="sm"
-          aria-expanded={open}
-          onClick={() => onOpenChange(!open)}
-        >
+        <Button variant="ghost" size="sm" aria-expanded={open} onClick={() => onOpenChange(!open)}>
           {open ? (
             <ChevronUp className="size-3.5" aria-hidden="true" />
           ) : (
@@ -70,7 +65,9 @@ export function OperationPackSummary({
         </div>
       ) : state === "error" ? (
         <div role="alert" className="flex items-center gap-3 pb-3">
-          <p className="text-sm text-text">{safeErrorMessage ?? "The Operation could not be loaded."}</p>
+          <p className="text-sm text-text">
+            {safeErrorMessage ?? "The Operation could not be loaded."}
+          </p>
           <Button variant="outline" size="sm" onClick={onRetry}>
             Retry
           </Button>

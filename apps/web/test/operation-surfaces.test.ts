@@ -684,7 +684,9 @@ describe("Operation client (proxy paths)", () => {
   it("fetchOperations GETs the workspace's Operation records", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(jsonResponse(200, { operations: [{ ...OPERATION, is_adhoc: false, auto_label: false }] }));
+      .mockResolvedValue(
+        jsonResponse(200, { operations: [{ ...OPERATION, is_adhoc: false, auto_label: false }] }),
+      );
     vi.stubGlobal("fetch", fetchMock);
 
     const operations = await fetchOperations(WORKSPACE);

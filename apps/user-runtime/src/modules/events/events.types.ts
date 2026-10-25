@@ -136,6 +136,87 @@ export const SessionFailedPayload = z.strictObject({
 export type SessionFailedPayload = z.infer<typeof SessionFailedPayload>;
 
 /**
+ * Task worker supervision events (S16 chunk 1; D32 layer 3, D33, D10).
+ * Journaled on the RUN's stream (stream_id = the run_id — the S13 run-stream
+ * semantics: run-scoped history carries one gapless per-run cursor). Progress
+ * and checkpoints are persisted HERE and on the task_workers row — never only
+ * in the worker process's memory (D10), so a recovery slice can reconstruct
+ * the run from durable state alone. G3: payloads carry bounded typed fields —
+ * never secrets, never raw child stderr dumps (stderr goes to the
+ * supervisor's redacted, bounded sink).
+ */
+export const WorkerCrashCause = z.enum([
+  "unexpected_exit",
+  "hang",
+  "protocol_violation",
+  "worker_error",
+  "handshake_timeout",
+]);
+export type WorkerCrashCause = z.infer<typeof WorkerCrashCause>;
+
+export const WorkerStopReason = z.enum(["requested", "shutdown"]);
+export type WorkerStopReason = z.infer<typeof WorkerStopReason>;
+
+export const WorkerStartedPayload = z.strictObject({
+  worker_id: z.string().min(1),
+  workspace_id: z.string().min(1),
+  run_id: z.string().min(1),
+  /** The child process id observed on the hello handshake. */
+  pid: z.number().int().positive(),
+  /** Measured spawn→ready latency (ms); carries no child internals (G3). */
+  start_latency_ms: z.number().int().nonnegative(),
+});
+export type WorkerStartedPayload = z.infer<typeof WorkerStartedPayload>;
+
+export const WorkerProgressPayload = z.strictObject({
+  worker_id: z.string().min(1),
+  workspace_id: z.string().min(1),
+  run_id: z.string().min(1),
+  percent: z.number().int().min(0).max(100),
+  text: z.string().max(500),
+});
+export type WorkerProgressPayload = z.infer<typeof WorkerProgressPayload>;
+
+/** The opaque D33 checkpoint payload is persisted verbatim (runtime-owned JSON). */
+export const WorkerCheckpointPayload = z.strictObject({
+  worker_id: z.string().min(1),
+  workspace_id: z.string().min(1),
+  run_id: z.string().min(1),
+  checkpoint: z.record(z.string(), z.unknown()),
+});
+export type WorkerCheckpointPayload = z.infer<typeof WorkerCheckpointPayload>;
+
+export const WorkerCrashedPayload = z.strictObject({
+  worker_id: z.string().min(1),
+  workspace_id: z.string().min(1),
+  run_id: z.string().min(1),
+  cause: WorkerCrashCause,
+  exit_code: z.number().int().nullable(),
+  signal: z.string().nullable(),
+  /** The worker-reported failure class for worker_error; null otherwise. */
+  error_class: z.string().max(100).nullable(),
+  /** The last persisted progress percent when one was seen; null otherwise. */
+  last_percent: z.number().int().min(0).max(100).nullable(),
+});
+export type WorkerCrashedPayload = z.infer<typeof WorkerCrashedPayload>;
+
+export const WorkerCompletedPayload = z.strictObject({
+  worker_id: z.string().min(1),
+  workspace_id: z.string().min(1),
+  run_id: z.string().min(1),
+  summary: z.string().max(2_000),
+});
+export type WorkerCompletedPayload = z.infer<typeof WorkerCompletedPayload>;
+
+export const WorkerStoppedPayload = z.strictObject({
+  worker_id: z.string().min(1),
+  workspace_id: z.string().min(1),
+  run_id: z.string().min(1),
+  reason: WorkerStopReason,
+});
+export type WorkerStoppedPayload = z.infer<typeof WorkerStoppedPayload>;
+
+/**
  * The D26 task-execution vocabulary (S07; D51 seam) journaled on `task:<id>`
  * streams. The journal row stores the FULL contract envelope as its payload —
  * the envelope IS the durable D26 event — so each registry entry validates the
@@ -169,6 +250,12 @@ export const EVENT_TYPES = {
   "session.restarted": { schema_version: 1, payload: SessionRestartedPayload },
   "session.protocol_failure": { schema_version: 1, payload: SessionProtocolFailurePayload },
   "session.failed": { schema_version: 1, payload: SessionFailedPayload },
+  "worker.started": { schema_version: 1, payload: WorkerStartedPayload },
+  "worker.progress": { schema_version: 1, payload: WorkerProgressPayload },
+  "worker.checkpoint": { schema_version: 1, payload: WorkerCheckpointPayload },
+  "worker.crashed": { schema_version: 1, payload: WorkerCrashedPayload },
+  "worker.completed": { schema_version: 1, payload: WorkerCompletedPayload },
+  "worker.stopped": { schema_version: 1, payload: WorkerStoppedPayload },
   ...TASK_EVENT_REGISTRY,
 } as const;
 

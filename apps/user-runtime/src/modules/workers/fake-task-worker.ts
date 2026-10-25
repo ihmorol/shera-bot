@@ -51,6 +51,10 @@ export interface SpawnFakeTaskWorkerOptions {
   checkpointEvery?: number;
   /** Wrong-version misbehavior: announced on hello and every frame's v. */
   protocolVersion?: number;
+  /** S16 chunk 2 kernel tests: allocate + touch N MB after ready (E1). */
+  allocateMb?: number;
+  /** S16 chunk 2 kernel tests: spawn N short-lived children after ready (E1). */
+  forkChildren?: number;
 }
 
 export type FakeTaskWorkerExit = { code: number | null; signal: string | null };
@@ -158,7 +162,8 @@ export class FakeTaskWorkerHandle {
   }
 }
 
-function fakeWorkerArgs(options: SpawnFakeTaskWorkerOptions): string[] {
+/** argv for the child script; exported for the prlimit adapter tests (E1). */
+export function fakeWorkerArgs(options: SpawnFakeTaskWorkerOptions): string[] {
   const args: string[] = [];
   const push = (key: string, value: string | number | boolean | undefined): void => {
     if (value === undefined) return;
@@ -176,6 +181,8 @@ function fakeWorkerArgs(options: SpawnFakeTaskWorkerOptions): string[] {
   push("slow-ttft-ms", options.slowTtftMs);
   push("checkpoint-every", options.checkpointEvery);
   push("protocol-version", options.protocolVersion);
+  push("allocate-mb", options.allocateMb);
+  push("fork-children", options.forkChildren);
   return args;
 }
 

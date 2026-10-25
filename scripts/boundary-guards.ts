@@ -53,6 +53,18 @@ const PROCESS_EXCEPTIONS = new Set([
   // live in the adapters/process/ boundary (chunk 3 wires it), and only the
   // factory spawns; the child script itself spawns nothing.
   "apps/user-runtime/src/modules/workers/fake-task-worker.ts",
+  // The S16 production task-worker spawn adapter (chunk 2, E1): wraps the
+  // worker command in prlimit(1) exec'd as a BINARY (no shell) for per-worker
+  // kernel resource limits (--as address space, --nproc process count). This
+  // is the process adapter for the workers module — the supervisor reaches
+  // children ONLY through its injected spawnChild seam, of which this is the
+  // real implementation (the fake factory above is the test exception).
+  "apps/user-runtime/src/modules/workers/worker-process-spawn.ts",
+  // The fake task worker CHILD script (chunk 2): its --fork-children
+  // misbehavior spawns short-lived node children so suites can prove the
+  // prlimit --nproc kernel cap at the fork boundary (E1 kernel enforcement).
+  // Test-double-only; runtime worker children never spawn processes.
+  "apps/user-runtime/src/modules/workers/fake-task-worker-child.ts",
 ]);
 
 /** The only place SQL (and sqlite itself) may live in the runtime. */

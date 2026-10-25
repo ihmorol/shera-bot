@@ -50,12 +50,25 @@ import {
   TaskWorkerSupervisor,
   type TaskRunOperationsSeam,
   type TaskWorkerChild,
+  type TaskWorkerSnapshot,
+  type TaskWorkerStartResult,
   type TaskWorkerSupervisorPolicy,
 } from "./task-worker-supervisor.service.ts";
 
 const WS = "ws-workers";
 const OTHER_WS = "ws-workers-other";
 const AGENT = "agent_worker_test";
+
+/**
+ * S16 chunk 2 widened startWorker's result with the E1 QUEUED outcome; the
+ * chunk-1 suite only exercises admitted starts — narrow with an assertion.
+ */
+function expectRunning(result: TaskWorkerStartResult): TaskWorkerSnapshot {
+  if (result.state !== "running") {
+    throw new Error(`expected a running worker, got a ${result.state} result`);
+  }
+  return result;
+}
 
 /** Poll until the reader returns a value; bounded wait, chunk-1 style. */
 async function until<T>(read: () => T | undefined, timeoutMs = 5000): Promise<T> {
@@ -327,7 +340,7 @@ describe("S16 chunk 1 — start, ready, one worker per run", () => {
     const harness = makeHarness();
     const runA = createRun(harness, WS);
 
-    const snapshot = await harness.supervisor.startWorker(WS, runA);
+    const snapshot = expectRunning(await harness.supervisor.startWorker(WS, runA));
     expect(snapshot.run_id).toBe(runA);
     expect(snapshot.worker_id.length).toBeGreaterThan(0);
     expect(snapshot.pid).toBeGreaterThan(0);
@@ -357,8 +370,8 @@ describe("S16 chunk 1 — start, ready, one worker per run", () => {
     const harness = makeHarness();
     const runA = createRun(harness, WS);
 
-    const first = await harness.supervisor.startWorker(WS, runA);
-    const second = await harness.supervisor.startWorker(WS, runA);
+    const first = expectRunning(await harness.supervisor.startWorker(WS, runA));
+    const second = expectRunning(await harness.supervisor.startWorker(WS, runA));
     expect(second.worker_id).toBe(first.worker_id);
     expect(harness.spawns.length).toBe(1);
   });
@@ -372,7 +385,7 @@ describe("S16 chunk 1 — start, ready, one worker per run", () => {
       code: "WORKER_NOT_FOUND",
     });
 
-    const worker = await harness.supervisor.startWorker(WS, runA);
+    const worker = expectRunning(await harness.supervisor.startWorker(WS, runA));
     await until(() => {
       const row = harness.workersRepo.getWorker(WS, runA, worker.worker_id);
       return row?.state === "exited" ? row : undefined;
@@ -389,7 +402,7 @@ describe("S16 chunk 1 — lease + durable progress (D10, D32)", () => {
     const harness = makeHarness();
     const runA = createRun(harness, WS);
 
-    const snapshot = await harness.supervisor.startWorker(WS, runA);
+    const snapshot = expectRunning(await harness.supervisor.startWorker(WS, runA));
     const initial = harness.workersRepo.getWorker(WS, runA, snapshot.worker_id)!;
     const initialLease = Date.parse(initial.lease_expires_at);
 

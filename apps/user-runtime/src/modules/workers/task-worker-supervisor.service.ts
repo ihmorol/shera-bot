@@ -62,13 +62,38 @@
  * (stream_id = run_id), following the S13 run-stream semantics with one
  * gapless per-run cursor.
  *
- * Governing records: D32, D33, D10, D8, E1, PRD §19 item 25 (AC25).
+ * Admission control (S16 chunk 2, E1): when an admission gate is injected,
+ * startWorker consults it in startAttempt AFTER the run validation and
+ * BEFORE the worker row insert (one synchronous section — gate check and row
+ * insert cannot interleave on the single-threaded event loop, so the gate's
+ * live-row count is exact at decision time). A refusal NEVER touches running
+ * workers, their leases or their children (the never-kill guarantee — only
+ * NEW work queues): the run becomes QUEUED (D8 vocabulary) durably — a
+ * `worker.queued` journal event carrying the machine-readable reason
+ * ({code, limit, current} + human text) on the run stream, then the run row
+ * state through the seam — and the queued run enters a bounded internal
+ * dequeue that re-admits OLDEST-FIRST on capacity-free events (worker exit,
+ * done, stop) plus the periodic tick as a re-check loop for pressure that
+ * clears without a worker exit (disk space). The dequeue awaits each
+ * re-admitted start before considering the next entry, so the gate's count
+ * is exact between admissions; entries whose run turned terminal are
+ * dropped (never resurrected). startWorker resolves a QUEUED result
+ * immediately (state "queued" + reason) — chunk 3 wires the run flow around
+ * it; coalesced callers receive the same queued result rather than
+ * retry-looping against a full gate. The per-worker resource limits from
+ * the admission policy travel on the spawn request (resourceLimits) for the
+ * spawn adapter to enforce with kernel limits (prlimit — see
+ * worker-process-spawn.ts): the gate SCHEDULES, the kernel ENFORCES.
+ *
+ * Governing records: D32, D33, D10, D8, E1, D27, PRD §19 item 25 (AC25).
  */
 import { randomUUID } from "node:crypto";
 
 import { RUN_STATES_TERMINAL, type RunState } from "@shera-bot/contracts";
 
 import type { EventsService } from "../events/events.service.ts";
+import type { WorkerQueuedReason } from "../events/events.types.ts";
+import type { AdmissionGate, AdmissionPolicy } from "./admission.ts";
 import type {
   TaskWorkersRepository,
   TaskWorkerState,
@@ -93,6 +118,21 @@ export interface TaskWorkerSpec {
    * world-readable.
    */
   config?: Record<string, unknown>;
+  /**
+   * The run's provider snapshot placeholder (E1 admission control): the
+   * provider id the admission gate counts per-provider concurrency against.
+   * Placeholder shape — the full provider snapshot arrives with the slice
+   * that owns provider resolution; the gate reads only provider_id.
+   */
+  providerSnapshot?: { provider_id: string; model?: string } | null;
+}
+
+/** Per-worker kernel resource limits applied by the spawn adapter (E1). */
+export interface TaskWorkerResourceLimits {
+  /** Address-space cap for the child (prlimit --as). */
+  memoryBytes: number;
+  /** Process-creation cap for the child (prlimit --nproc). */
+  maxProcesses: number;
 }
 
 /** Everything the spawn seam needs to launch one worker incarnation. */
@@ -104,6 +144,11 @@ export interface TaskWorkerSpawnRequest {
   /** The heartbeat cadence the child should keep (the watchdog's unit). */
   heartbeat_interval_ms: number;
   spec: TaskWorkerSpec;
+  /**
+   * Kernel resource limits from the admission policy (E1); null when no
+   * admission gate is configured (chunk-1 behavior — no prlimit wrapper).
+   */
+  resourceLimits: TaskWorkerResourceLimits | null;
 }
 
 export interface TaskWorkerChildExit {
@@ -186,6 +231,12 @@ export interface TaskWorkerSupervisorDeps {
   taskWorkers: TaskWorkersRepository;
   /** The run boundary (run reads + authoritative run-state writes). */
   runControl: TaskRunOperationsSeam;
+  /**
+   * The E1 admission gate (S16 chunk 2). Omitted = no admission control
+   * (chunk-1 behavior): every start attempt spawns. Constructed by the
+   * composition root — garbage limits fail typed at gate construction (G4).
+   */
+  admission?: AdmissionGate | undefined;
   /** The process seam (process spawning stays in adapters/process). */
   spawnChild: (request: TaskWorkerSpawnRequest) => TaskWorkerChild | Promise<TaskWorkerChild>;
   /**
@@ -208,6 +259,33 @@ export interface TaskWorkerSnapshot {
   worker_id: string;
   pid: number;
   state: "running";
+}
+
+/**
+ * A start REFUSED by the admission gate (E1): the run is durably QUEUED
+ * (D8) and waits in the bounded internal dequeue. The machine-readable
+ * reason is the same object the worker.queued journal event carries.
+ */
+export interface TaskWorkerQueuedResult {
+  workspace_id: string;
+  run_id: string;
+  state: "queued";
+  reason: WorkerQueuedReason;
+  message: string;
+}
+
+/** What startWorker resolves: a running worker, or a durably queued run. */
+export type TaskWorkerStartResult = TaskWorkerSnapshot | TaskWorkerQueuedResult;
+
+/** Machine-readable pressure read model (chunk-4 UI + pressure coordinators). */
+export interface TaskWorkerAdmissionPressure {
+  configured: boolean;
+  liveWorkers: number;
+  queuedRuns: number;
+  freeDiskBytes: number | null;
+  limits: AdmissionPolicy | null;
+  projectedTotalWorkersMemoryBytes: number | null;
+  perProviderLive: Array<{ provider_id: string; live_workers: number }>;
 }
 
 /** Chunk-4 UI read model of one run's worker in this process. */
@@ -257,7 +335,17 @@ interface WorkerRecord {
   presence: TaskWorkerPresence;
   current: Incarnation | null;
   /** Coalesces concurrent starts onto ONE spawn per run. */
-  startPromise: Promise<TaskWorkerSnapshot> | null;
+  startPromise: Promise<TaskWorkerStartResult> | null;
+  /** The provider id of the CURRENT incarnation's spec (per-provider counting). */
+  providerId: string | null;
+}
+
+/** One run waiting in the bounded internal dequeue (E1). */
+interface QueuedEntry {
+  workspace_id: string;
+  run_id: string;
+  spec: TaskWorkerSpec;
+  queuedAtMs: number;
 }
 
 function isTerminalRunState(state: RunState): boolean {
@@ -273,11 +361,16 @@ function workerRecordKey(workspaceId: string, runId: string): string {
 
 export class TaskWorkerSupervisor {
   private readonly policy: TaskWorkerSupervisorPolicy;
+  private readonly admission: AdmissionGate | null;
   private readonly records = new Map<string, WorkerRecord>();
+  /** The bounded internal dequeue (E1): oldest-first re-admission. */
+  private readonly queued: QueuedEntry[] = [];
+  private pumping = false;
   private readonly tickTimer: NodeJS.Timeout;
 
   constructor(private readonly deps: TaskWorkerSupervisorDeps) {
     this.policy = { ...DEFAULT_WORKER_POLICY, ...deps.policy };
+    this.admission = deps.admission ?? null;
     // One global tick drives stall detection for every record.
     const tickMs = Math.min(
       1_000,
@@ -298,15 +391,19 @@ export class TaskWorkerSupervisor {
   /**
    * Start the ONE worker of this run on demand (the run flow calls this when
    * a run starts). A live worker is reused (coalescing — never a second
-   * spawn); a start already in flight is awaited; a start that fails rejects
-   * typed for EVERY coalesced caller (workers have no automatic restart —
-   * the D32 recovery policy belongs to the recovery slice).
+   * spawn); a start already in flight is awaited (its result — running OR
+   * queued — is returned to every coalesced caller); a start that fails
+   * rejects typed for EVERY coalesced caller (workers have no automatic
+   * restart — the D32 recovery policy belongs to the recovery slice).
+   * E1: a start refused by the admission gate does NOT reject — the run is
+   * durably QUEUED with a machine-readable reason and the queued result is
+   * returned (the dequeue re-admits it when capacity frees).
    */
   async startWorker(
     workspaceId: string,
     runId: string,
     spec: TaskWorkerSpec = {},
-  ): Promise<TaskWorkerSnapshot> {
+  ): Promise<TaskWorkerStartResult> {
     for (;;) {
       const record = this.recordFor(workspaceId, runId);
       const current = record.current;
@@ -314,8 +411,11 @@ export class TaskWorkerSupervisor {
         return this.snapshotOf(record, current);
       }
       if (record.startPromise !== null) {
-        // Propagate a failed start to every coalesced caller (no silent retry).
-        await record.startPromise;
+        // Propagate a failed start to every coalesced caller (no silent
+        // retry); a QUEUED result returns to every coalesced caller too —
+        // retry-looping against a full gate would spin forever.
+        const settled = await record.startPromise;
+        if (settled.state === "queued") return settled;
         continue; // resolved → loop to snapshot the fresh incarnation
       }
       if (current?.terminating === true) {
@@ -365,6 +465,13 @@ export class TaskWorkerSupervisor {
       run_id: record.run_id,
       reason,
     });
+    // Capacity freed (E1): the dequeue re-admits oldest-first.
+    void this.pumpQueue().catch((error) => {
+      this.faultLog("task_worker_dequeue_pump_failed", {
+        name: error instanceof Error ? error.name : "Error",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    });
   }
 
   /** Stop every live worker (composition shutdown); resolves when all exited. */
@@ -382,13 +489,16 @@ export class TaskWorkerSupervisor {
   /**
    * One start attempt: validate the run through the seam (unknown run and
    * terminal run are typed refusals — the runtime never spawns a worker for
-   * work the gateway has closed), insert the starting row, spawn, wait for
-   * the hello/ready handshake.
+   * work the gateway has closed), consult the E1 admission gate (a refusal
+   * queues the run durably — never touches running workers), insert the
+   * starting row, spawn, wait for the hello/ready handshake. The gate check
+   * and the row insert are ONE synchronous section: no interleaving on the
+   * event loop, so the gate's live-row count is exact at decision time.
    */
   private async startAttempt(
     record: WorkerRecord,
     spec: TaskWorkerSpec,
-  ): Promise<TaskWorkerSnapshot> {
+  ): Promise<TaskWorkerStartResult> {
     const currentState = this.deps.runControl.runState(record.workspace_id, record.run_id);
     if (currentState === null) {
       throw new TaskWorkerError(
@@ -403,7 +513,19 @@ export class TaskWorkerSupervisor {
       );
     }
 
+    // E1 admission control: the gate runs BEFORE any worker row insert — a
+    // refused start leaves NO row, NO spawn and NO presence change; the run
+    // is marked QUEUED durably and waits in the internal dequeue.
+    const providerId = spec.providerSnapshot?.provider_id ?? null;
+    if (this.admission !== null) {
+      const decision = this.admission.check({ providerId });
+      if (!decision.admitted) {
+        return this.queueRun(record, spec, decision.reason!, decision.message ?? "");
+      }
+    }
+
     record.presence = "starting";
+    record.providerId = providerId;
     const workerId = `wk-${randomUUID()}`;
     const startedAt = this.now();
     this.deps.taskWorkers.insertWorker({
@@ -514,6 +636,189 @@ export class TaskWorkerSupervisor {
     );
   }
 
+  // ── Admission control (E1): queue + bounded dequeue + pressure read ────────
+
+  /**
+   * A gate refusal: mark the run QUEUED durably (journal evidence first, then
+   * the guarded seam write — the crash-aftermath ordering) and remember the
+   * run in the bounded internal dequeue. A run already queued is NOT
+   * re-marked and NOT re-journaled (no duplicate durable noise); its entry's
+   * spec is refreshed in place and its original queue position kept.
+   */
+  private queueRun(
+    record: WorkerRecord,
+    spec: TaskWorkerSpec,
+    reason: WorkerQueuedReason,
+    message: string,
+  ): TaskWorkerQueuedResult {
+    const key = workerRecordKey(record.workspace_id, record.run_id);
+    const existing = this.queued.find(
+      (entry) => workerRecordKey(entry.workspace_id, entry.run_id) === key,
+    );
+    if (existing !== undefined) {
+      existing.spec = spec;
+    } else {
+      this.queued.push({
+        workspace_id: record.workspace_id,
+        run_id: record.run_id,
+        spec,
+        queuedAtMs: this.now(),
+      });
+      this.markRunQueued(record, reason, message);
+    }
+    record.presence = "none";
+    return {
+      workspace_id: record.workspace_id,
+      run_id: record.run_id,
+      state: "queued",
+      reason,
+      message,
+    };
+  }
+
+  /**
+   * Durable QUEUED marking: `worker.queued` on the run stream (the
+   * machine-readable reason is the UI contract for chunk 3), then the run
+   * row state through the seam — GUARDED (a terminal run is never
+   * resurrected; an already-QUEUED run is not rewritten). Both units are
+   * contained: a journaling or state gap is fault-logged, never thrown into
+   * the start path.
+   */
+  private markRunQueued(record: WorkerRecord, reason: WorkerQueuedReason, message: string): void {
+    try {
+      this.appendEventStrict(record, "worker.queued", {
+        workspace_id: record.workspace_id,
+        run_id: record.run_id,
+        reason,
+        message: message.slice(0, 500),
+      });
+    } catch (error) {
+      this.faultLog("task_worker_queued_event_failed", {
+        workspace_id: record.workspace_id,
+        run_id: record.run_id,
+        name: error instanceof Error ? error.name : "Error",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+    try {
+      const current = this.deps.runControl.runState(record.workspace_id, record.run_id);
+      if (current === null || isTerminalRunState(current) || current === "QUEUED") {
+        return;
+      }
+      this.deps.runControl.applyRunState(record.workspace_id, record.run_id, "QUEUED");
+    } catch (error) {
+      this.faultLog("task_worker_run_state_failed", {
+        workspace_id: record.workspace_id,
+        run_id: record.run_id,
+        target: "QUEUED",
+        name: error instanceof Error ? error.name : "Error",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  /**
+   * The bounded internal dequeue (prototype-grade, documented): on every
+   * capacity-free event (worker exit, done, stop) and on the periodic tick
+   * (a re-check loop for pressure that clears without a worker exit — disk
+   * space), queued runs are re-admitted OLDEST-FIRST. Strict FIFO: the head
+   * entry is never skipped past (no starvation). Each admitted start is
+   * awaited before the next entry is considered, so the gate's live count is
+   * exact between admissions; the head's refusal stops the loop (bounded —
+   * one pass per invocation, re-entrancy guarded). Terminal runs are dropped
+   * (never resurrected); entries whose run already carries a live worker are
+   * dropped (a direct startWorker won the race).
+   */
+  private async pumpQueue(): Promise<void> {
+    if (this.pumping || this.queued.length === 0 || this.admission === null) return;
+    this.pumping = true;
+    try {
+      while (this.queued.length > 0) {
+        const entry = this.queued[0]!;
+        const state = this.deps.runControl.runState(entry.workspace_id, entry.run_id);
+        if (state === null || isTerminalRunState(state)) {
+          this.queued.shift();
+          continue;
+        }
+        const record = this.records.get(workerRecordKey(entry.workspace_id, entry.run_id));
+        if (record !== undefined && record.current !== null) {
+          this.queued.shift(); // a direct startWorker already started this run
+          continue;
+        }
+        const decision = this.admission.check({
+          providerId: entry.spec.providerSnapshot?.provider_id ?? null,
+        });
+        if (!decision.admitted) break;
+        this.queued.shift();
+        try {
+          await this.startWorker(entry.workspace_id, entry.run_id, entry.spec);
+        } catch (error) {
+          // A failed dequeue start (spawn failure → the run is already in
+          // RECOVERY_REQUIRED per the start pipeline) is contained: no
+          // automatic restart, no re-queue (chunk-1 rule).
+          this.faultLog("task_worker_dequeue_start_failed", {
+            workspace_id: entry.workspace_id,
+            run_id: entry.run_id,
+            name: error instanceof Error ? error.name : "Error",
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+    } finally {
+      this.pumping = false;
+    }
+  }
+
+  /**
+   * Live workers attributed to one provider id (E1 per-provider counting):
+   * the in-process spec knowledge the admission gate counts through its
+   * counters seam. Public so composition roots can wire the same seam.
+   */
+  liveWorkerCountByProvider(providerId: string): number {
+    let count = 0;
+    for (const record of this.records.values()) {
+      const incarnation = record.current;
+      if (incarnation === null || incarnation.terminating) continue;
+      if (record.providerId === providerId) count += 1;
+    }
+    return count;
+  }
+
+  /** The E1 pressure read model (machine-readable, chunk-4 UI + coordinators). */
+  admissionPressure(): TaskWorkerAdmissionPressure {
+    if (this.admission === null) {
+      return {
+        configured: false,
+        liveWorkers: 0,
+        queuedRuns: this.queued.length,
+        freeDiskBytes: null,
+        limits: null,
+        projectedTotalWorkersMemoryBytes: null,
+        perProviderLive: [],
+      };
+    }
+    const gatePressure = this.admission.pressure();
+    const perProvider = new Map<string, number>();
+    for (const record of this.records.values()) {
+      const incarnation = record.current;
+      if (incarnation === null || incarnation.terminating || record.providerId === null) {
+        continue;
+      }
+      perProvider.set(record.providerId, (perProvider.get(record.providerId) ?? 0) + 1);
+    }
+    return {
+      configured: true,
+      liveWorkers: gatePressure.liveWorkers,
+      queuedRuns: this.queued.length,
+      freeDiskBytes: gatePressure.freeDiskBytes,
+      limits: gatePressure.limits,
+      projectedTotalWorkersMemoryBytes: gatePressure.projectedTotalWorkersMemoryBytes,
+      perProviderLive: [...perProvider.entries()]
+        .map(([provider_id, live_workers]) => ({ provider_id, live_workers }))
+        .sort((a, b) => a.provider_id.localeCompare(b.provider_id)),
+    };
+  }
+
   private async spawnIncarnation(
     record: WorkerRecord,
     workerId: string,
@@ -527,6 +832,15 @@ export class TaskWorkerSupervisor {
         worker_id: workerId,
         heartbeat_interval_ms: this.policy.heartbeatIntervalMs,
         spec,
+        // E1: the gate SCHEDULES, the kernel ENFORCES — the adapter wraps the
+        // child in prlimit with these limits (worker-process-spawn.ts).
+        resourceLimits:
+          this.admission === null
+            ? null
+            : {
+                memoryBytes: this.admission.policy.maxWorkerMemoryBytes,
+                maxProcesses: this.admission.policy.maxWorkerProcesses,
+              },
       });
     } catch (error) {
       this.faultLog("task_worker_spawn_failed", {
@@ -817,6 +1131,13 @@ export class TaskWorkerSupervisor {
     this.detachCurrent(record, incarnation);
     record.presence = "none";
     this.markRunSucceeded(record);
+    // Capacity freed (E1): the dequeue re-admits oldest-first.
+    void this.pumpQueue().catch((error) => {
+      this.faultLog("task_worker_dequeue_pump_failed", {
+        name: error instanceof Error ? error.name : "Error",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    });
   }
 
   /** The worker reports its own failure: escalate, then journal + recovery. */
@@ -880,6 +1201,14 @@ export class TaskWorkerSupervisor {
         }
       }
     }
+    // E1 dequeue re-check: queued runs re-admit when pressure cleared
+    // without a worker exit (e.g. disk space freed). Bounded + guarded.
+    void this.pumpQueue().catch((error) => {
+      this.faultLog("task_worker_dequeue_pump_failed", {
+        name: error instanceof Error ? error.name : "Error",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    });
   }
 
   /** Silent worker: mark stalled on the durable row, escalate, recovery state. */
@@ -942,6 +1271,13 @@ export class TaskWorkerSupervisor {
         last_percent: incarnation.lastPercent,
       });
       this.markRunForRecovery(record);
+      // Capacity freed (E1): the dequeue re-admits oldest-first.
+      void this.pumpQueue().catch((pumpError) => {
+        this.faultLog("task_worker_dequeue_pump_failed", {
+          name: pumpError instanceof Error ? pumpError.name : "Error",
+          message: pumpError instanceof Error ? pumpError.message : String(pumpError),
+        });
+      });
     } catch (error) {
       this.faultLog("task_worker_escalation_failed", {
         workspace_id: record.workspace_id,
@@ -997,6 +1333,13 @@ export class TaskWorkerSupervisor {
       last_percent: incarnation.lastPercent,
     });
     this.markRunForRecovery(record);
+    // Capacity freed (E1): the dequeue re-admits oldest-first.
+    void this.pumpQueue().catch((pumpError) => {
+      this.faultLog("task_worker_dequeue_pump_failed", {
+        name: pumpError instanceof Error ? pumpError.name : "Error",
+        message: pumpError instanceof Error ? pumpError.message : String(pumpError),
+      });
+    });
   }
 
   // ── Termination ────────────────────────────────────────────────────────────
@@ -1154,6 +1497,7 @@ export class TaskWorkerSupervisor {
         presence: "none",
         current: null,
         startPromise: null,
+        providerId: null,
       };
       this.records.set(key, record);
     }
@@ -1180,6 +1524,7 @@ export class TaskWorkerSupervisor {
   private recordEvent<
     T extends
       | "worker.started"
+      | "worker.queued"
       | "worker.progress"
       | "worker.checkpoint"
       | "worker.crashed"
@@ -1202,6 +1547,7 @@ export class TaskWorkerSupervisor {
   private appendEventStrict<
     T extends
       | "worker.started"
+      | "worker.queued"
       | "worker.progress"
       | "worker.checkpoint"
       | "worker.crashed"

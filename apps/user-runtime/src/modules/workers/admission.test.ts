@@ -26,7 +26,7 @@
  *
  * Governing records: E1, D27, D32, D10, D8.
  */
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -35,6 +35,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { spawnFakePi } from "@shera-bot/pi-protocol";
 
 import { openDatabase, type SqliteConnection } from "../../adapters/sqlite/connection.ts";
+import { applyMigrations } from "../../adapters/sqlite/migrations.ts";
 import { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
 import { OperationsRepository } from "../../adapters/sqlite/operations-repository.ts";
 import type { PackAgentSeed } from "../../adapters/sqlite/agents-repository.ts";
@@ -51,6 +52,7 @@ import { sessionStreamFor } from "../sessions/sessions.events.ts";
 import {
   FAKE_TASK_WORKER_CHILD_SCRIPT,
   fakeWorkerArgs,
+  spawnFakeTaskWorker,
   type SpawnFakeTaskWorkerOptions,
 } from "./fake-task-worker.ts";
 import {
@@ -68,12 +70,22 @@ import {
   TaskWorkerSupervisor,
   type TaskRunOperationsSeam,
   type TaskWorkerChild,
+  type TaskWorkerSnapshot,
   type TaskWorkerSpawnRequest,
+  type TaskWorkerStartResult,
   type TaskWorkerSupervisorPolicy,
 } from "./task-worker-supervisor.service.ts";
 
 const WS = "ws-admission";
 const AGENT = "agent_admission_test";
+
+/** Narrow an admitted start (E1 widened the result with the QUEUED outcome). */
+function expectRunning(result: TaskWorkerStartResult): TaskWorkerSnapshot {
+  if (result.state !== "running") {
+    throw new Error(`expected a running worker, got a ${result.state} result`);
+  }
+  return result;
+}
 
 const MB = 1024 * 1024;
 const GB = 1024 * MB;
@@ -160,9 +172,37 @@ interface HarnessOptions {
 
 const openHarnesses: AdmissionHarness[] = [];
 
+/**
+ * An upper bound on the machine's current task count (processes + threads).
+ * RLIMIT_NPROC is enforced per real user id, so a GENEROUS --nproc cap must
+ * sit above the live total or the capped worker dies at boot (its own
+ * thread creation denied) — this keeps the "generous limit" tests honest
+ * and machine-independent.
+ */
+function totalTaskUpperBound(): number {
+  try {
+    let count = 0;
+    for (const entry of readdirSync("/proc")) {
+      if (!/^\d+$/.test(entry)) continue;
+      count += 1;
+      try {
+        count += readdirSync(join("/proc", entry, "task")).length;
+      } catch {
+        // the process vanished between the two reads
+      }
+    }
+    return count;
+  } catch {
+    return 4_096; // non-procfs fallback; still generous on any dev box
+  }
+}
+
+const NPROC_GENEROUS = totalTaskUpperBound() + 1_024;
+
 function makeHarness(options: HarnessOptions = {}): AdmissionHarness {
   const dir = mkdtempSync(join(tmpdir(), "shera-s16-admission-"));
   const conn = openDatabase(join(dir, "runtime.db"));
+  applyMigrations(conn.db);
   const tx = new SqliteTransactions(conn.db);
   const journal = new EventJournalRepository(tx);
   const events = new EventsService(journal, tx);
@@ -201,10 +241,17 @@ function makeHarness(options: HarnessOptions = {}): AdmissionHarness {
   const stderrChunks: string[] = [];
 
   let gate: AdmissionGate | null = null;
+  let supervisorRef: TaskWorkerSupervisor | null = null;
   if (options.admissionPolicy !== undefined) {
     gate = new TaskWorkerAdmissionGate(
       options.admissionPolicy,
-      { liveWorkerCount: () => workersRepo.listLiveAll().length },
+      {
+        liveWorkerCount: () => workersRepo.listLiveAll().length,
+        // Per-provider counting is the supervisor's in-process spec knowledge,
+        // reached through the same public read model composition roots use.
+        liveWorkerCountForProvider: (providerId) =>
+          supervisorRef?.liveWorkerCountByProvider(providerId) ?? 0,
+      },
       {
         probeFreeDiskBytes: options.probeFreeDiskBytes,
         dataDir: options.probeFreeDiskBytes === undefined ? tmpdir() : undefined,
@@ -265,6 +312,7 @@ function makeHarness(options: HarnessOptions = {}): AdmissionHarness {
     stderrSink: { write: (chunk) => stderrChunks.push(chunk) },
     policy: { ...WORKER_POLICY, ...(options.policy ?? {}) },
   });
+  supervisorRef = supervisor;
 
   const harness: AdmissionHarness = {
     supervisor,
@@ -618,7 +666,9 @@ describe("S16 chunk 2 — dequeue: oldest-first re-admission as capacity frees",
       harness.journal.listStream(runC, WS).some((row) => row.event_type === "worker.started"),
     ).toBe(false);
 
-    // B's capacity frees → C re-admits AFTER B's started evidence.
+    // B's capacity frees → C re-admits AFTER B's started evidence. (The
+    // per-run streams each own their gapless cursor — cross-stream order is
+    // asserted through the spawn-request order, not event sequences.)
     await harness.supervisor.stopWorker(WS, runB, "requested");
     await until(() => {
       const event = harness.journal
@@ -626,13 +676,21 @@ describe("S16 chunk 2 — dequeue: oldest-first re-admission as capacity frees",
         .find((row) => row.event_type === "worker.started");
       return event ?? undefined;
     });
-    const seqB = harness.journal
-      .listStream(runB, WS)
-      .find((row) => row.event_type === "worker.started")!.sequence;
-    const seqC = harness.journal
-      .listStream(runC, WS)
-      .find((row) => row.event_type === "worker.started")!.sequence;
-    expect(seqC).toBeGreaterThan(seqB);
+    const workerIdB = (
+      JSON.parse(
+        harness.journal.listStream(runB, WS).find((row) => row.event_type === "worker.started")!
+          .payload,
+      ) as { worker_id: string }
+    ).worker_id;
+    const workerIdC = (
+      JSON.parse(
+        harness.journal.listStream(runC, WS).find((row) => row.event_type === "worker.started")!
+          .payload,
+      ) as { worker_id: string }
+    ).worker_id;
+    const idxB = harness.spawnRequests.findIndex((request) => request.worker_id === workerIdB);
+    const idxC = harness.spawnRequests.findIndex((request) => request.worker_id === workerIdC);
+    expect(idxC).toBeGreaterThan(idxB);
     expect(harness.spawns.length).toBe(3);
   });
 
@@ -706,7 +764,7 @@ describe("S16 chunk 2 — kernel enforcement: prlimit --as / --nproc on the spaw
         maxTotalWorkersMemoryBytes: 8 * GB,
         minFreeDiskBytes: 0,
         maxConcurrentRunsPerProvider: 10,
-        maxWorkerProcesses: 256,
+        maxWorkerProcesses: NPROC_GENEROUS,
       },
       spawnMode: "prlimit",
       spawnSpec: () => ({ steps: 2, stepDelayMs: 20, allocateMb: 4096 }),
@@ -749,7 +807,7 @@ describe("S16 chunk 2 — kernel enforcement: prlimit --as / --nproc on the spaw
         maxTotalWorkersMemoryBytes: 16 * GB,
         minFreeDiskBytes: 0,
         maxConcurrentRunsPerProvider: 10,
-        maxWorkerProcesses: 256,
+        maxWorkerProcesses: NPROC_GENEROUS,
       },
       spawnMode: "prlimit",
       spawnSpec: () => ({ steps: 3, stepDelayMs: 15, allocateMb: 64 }),
@@ -817,10 +875,12 @@ describe("S16 chunk 2 — admissionPressure + the never-kill guarantee", () => {
 
     const harness = makeHarness({
       admissionPolicy: {
-        maxConcurrentWorkers: 2,
+        maxConcurrentWorkers: 1,
         maxWorkerMemoryBytes: 1 * GB,
         maxTotalWorkersMemoryBytes: 4 * GB,
-        minFreeDiskBytes: 1 * GB,
+        // BELOW the injected probe (12345) so admissions flow; the probe
+        // value is still surfaced verbatim on the pressure read model.
+        minFreeDiskBytes: 1_000,
         maxConcurrentRunsPerProvider: 10,
         maxWorkerProcesses: 64,
       },
@@ -843,10 +903,10 @@ describe("S16 chunk 2 — admissionPressure + the never-kill guarantee", () => {
     expect(pressure.queuedRuns).toBe(1);
     expect(pressure.freeDiskBytes).toBe(12345);
     expect(pressure.limits).toEqual({
-      maxConcurrentWorkers: 2,
+      maxConcurrentWorkers: 1,
       maxWorkerMemoryBytes: 1 * GB,
       maxTotalWorkersMemoryBytes: 4 * GB,
-      minFreeDiskBytes: 1 * GB,
+      minFreeDiskBytes: 1_000,
       maxConcurrentRunsPerProvider: 10,
       maxWorkerProcesses: 64,
     });
@@ -869,7 +929,7 @@ describe("S16 chunk 2 — admissionPressure + the never-kill guarantee", () => {
     const runA = createRun(harness, WS);
     const runB = createRun(harness, WS);
 
-    const snapshotA = await harness.supervisor.startWorker(WS, runA);
+    const snapshotA = expectRunning(await harness.supervisor.startWorker(WS, runA));
     const resultB = await harness.supervisor.startWorker(WS, runB);
     expect(resultB.state).toBe("queued");
 
@@ -911,7 +971,7 @@ describe("S16 chunk 2 — pressure: idle session hibernates, healthy worker does
     const runB = createRun(harness, WS);
 
     // Capacity filled; B queued with its reason (the pressure trigger).
-    const snapshotA = await harness.supervisor.startWorker(WS, runA);
+    const snapshotA = expectRunning(await harness.supervisor.startWorker(WS, runA));
     const resultB = await harness.supervisor.startWorker(WS, runB);
     expect(resultB.state).toBe("queued");
 

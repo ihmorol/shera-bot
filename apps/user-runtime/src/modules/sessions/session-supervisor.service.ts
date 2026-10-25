@@ -48,6 +48,7 @@ import {
 } from "@shera-bot/pi-protocol";
 
 import type { EventsService } from "../events/events.service.ts";
+import type { SessionHibernateReason } from "../events/events.types.ts";
 import { sessionStreamFor } from "./sessions.events.ts";
 
 /** Presence of the (workspace, agent) session as the UI reads it (chunk 4). */
@@ -433,6 +434,35 @@ export class SessionSupervisor {
       stops.push(this.stop(record.workspace_id, record.agent_id));
     }
     await Promise.all(stops);
+  }
+
+  /**
+   * E1 pressure coordination (S16 chunk 2): hibernate idle sessions NOW under
+   * resource pressure. The D32 guidance allows idle Agent sessions to
+   * hibernate IMMEDIATELY under pressure — this method force-runs the SAME
+   * graceful idle-hibernation path (prompts rejected typed, shutdown frame →
+   * escalation → `hibernating` presence + durable `session.hibernate` event)
+   * WITHOUT waiting out the idle timer, for every ACTIVE session that is
+   * safely hibernatable: handshake completed, not already terminating, and no
+   * in-flight prompt (a registered waiter is never left unsettled — those
+   * sessions are skipped, not killed). The given reason ("resource_pressure")
+   * is journaled on the event so replay can distinguish a pressure
+   * hibernation from the natural idle timer. Resolves when every initiated
+   * hibernation has completed; returns the count of sessions it hibernated.
+   * Sessions already hibernating/failed/stopping are untouched (idempotent).
+   */
+  async hibernateIdleSessionsNow(
+    reason: SessionHibernateReason = "resource_pressure",
+  ): Promise<number> {
+    const initiated: Array<Promise<void>> = [];
+    for (const record of this.records.values()) {
+      const incarnation = record.current;
+      if (incarnation === null || incarnation.terminating || !incarnation.ready) continue;
+      if (incarnation.prompts.size > 0) continue;
+      initiated.push(this.handleIdleHibernate(record, incarnation, reason));
+    }
+    await Promise.all(initiated);
+    return initiated.length;
   }
 
   // ── Start pipeline ────────────────────────────────────────────────────────
@@ -897,6 +927,7 @@ export class SessionSupervisor {
   private async handleIdleHibernate(
     record: SessionRecord,
     incarnation: Incarnation,
+    reason?: SessionHibernateReason,
   ): Promise<void> {
     const idleMs = Math.max(0, this.now() - record.lastActivityAt);
     this.rejectPrompts(
@@ -917,6 +948,9 @@ export class SessionSupervisor {
         workspace_id: record.workspace_id,
         agent_id: record.agent_id,
         idle_ms: Math.round(idleMs),
+        // The natural idle path omits the reason (pre-chunk-2 payload shape);
+        // the E1 pressure path journals "resource_pressure".
+        ...(reason === undefined ? {} : { reason }),
       });
     }
   }

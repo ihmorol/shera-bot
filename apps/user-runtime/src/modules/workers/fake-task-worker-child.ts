@@ -16,8 +16,16 @@
  *   --error-class and exits.
  * - slow progress: --slow-ttft-ms delays the FIRST progress while heartbeats
  *   keep flowing — a slow-but-healthy worker the stall watchdog must spare.
+ * - memory hoarding (S16 chunk 2 kernel tests): --allocate-mb N allocates and
+ *   TOUCHES N MB in 32 MB chunks right after ready; under a prlimit --as cap
+ *   the allocation fails (catchable RangeError) → a diagnostic line on
+ *   stderr (G3: diagnostic, never protocol) → exit(1). Under a generous cap
+ *   the allocation succeeds and the worker proceeds normally.
+ * - process creation (S16 chunk 2 kernel tests): --fork-children N spawns N
+ *   short-lived node children after ready; any fork failure (e.g. EAGAIN
+ *   under a prlimit --nproc cap) is reported on stderr and exits(1).
  *
- * Governing records: D32, D33, E8, G3.
+ * Governing records: D32, D33, E8, G3, E1.
  */
 import { JsonLineParser } from "@shera-bot/pi-protocol";
 
@@ -69,6 +77,8 @@ const hangAfterStepRaw = numberArg("hang-after-step", Number.NaN);
 const hangAfterStep = Number.isFinite(hangAfterStepRaw) ? hangAfterStepRaw : null;
 const slowTtftMs = numberArg("slow-ttft-ms", 0);
 const checkpointEvery = numberArg("checkpoint-every", 0);
+const allocateMb = numberArg("allocate-mb", 0);
+const forkChildren = numberArg("fork-children", 0);
 
 function emit(frame: WorkerChildFrame): void {
   process.stdout.write(encodeWorkerFrame(frame));
@@ -96,8 +106,61 @@ function hang(): void {
   if (heartbeatTimer !== null) clearInterval(heartbeatTimer);
 }
 
+/**
+ * Allocate and TOUCH (zero-fill) `targetMb` in 32 MB chunks, keeping the
+ * references so the address space really grows. Returns false (after a
+ * stderr diagnostic — never protocol, G3) when the allocation fails, which
+ * under a prlimit --as cap is the KERNEL limit being hit.
+ */
+function hoardMemory(targetMb: number): boolean {
+  const chunkBytes = 32 * 1024 * 1024;
+  const chunks: Buffer[] = [];
+  try {
+    for (let allocated = 0; allocated < targetMb; allocated += 32) {
+      chunks.push(Buffer.alloc(chunkBytes, 1));
+    }
+    return true;
+  } catch (error) {
+    const name = error instanceof Error ? error.name : "Error";
+    process.stderr.write(`allocation_failed: ${name} after ${chunks.length * 32} MB\n`);
+    return false;
+  }
+}
+
+/**
+ * Spawn `count` short-lived node children SEQUENTIALLY, waiting for each.
+ * Returns false (after a stderr diagnostic) when any fork is denied — under
+ * a prlimit --nproc cap that is the KERNEL limit being hit (RLIMIT_NPROC is
+ * enforced per real user id, so a low cap denies forks at the kernel
+ * boundary; a cap of 1 even denies the child's own boot-time threads).
+ */
+async function spawnChildren(count: number): Promise<boolean> {
+  const { spawn } = await import("node:child_process");
+  let failed = 0;
+  for (let i = 0; i < count; i++) {
+    try {
+      await new Promise<void>((resolve) => {
+        const child = spawn(process.execPath, ["-e", "setTimeout(() => {}, 50)"], {
+          stdio: "ignore",
+        });
+        child.on("error", () => resolve());
+        child.on("exit", () => resolve());
+      });
+    } catch {
+      failed += 1;
+    }
+  }
+  if (failed > 0) {
+    process.stderr.write(`fork_denied: ${failed} of ${count} spawns failed\n`);
+    return false;
+  }
+  return true;
+}
+
 async function run(): Promise<void> {
   if (slowTtftMs > 0) await delay(slowTtftMs); // heartbeats keep flowing
+  if (allocateMb > 0 && !hoardMemory(allocateMb)) process.exit(1); // kernel cap hit
+  if (forkChildren > 0 && !(await spawnChildren(forkChildren))) process.exit(1);
   for (let step = 1; step <= steps; step++) {
     if (hung) return;
     if (hangAfterStep !== null && step > hangAfterStep) {

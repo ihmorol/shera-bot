@@ -110,6 +110,25 @@ export class TaskWorkersRepository {
       .all(workspaceId) as unknown as TaskWorkerRow[];
   }
 
+  /**
+   * Every live worker across ALL workspaces (E1 admission control): the
+   * process-count basis of the admission gate — worker rows are inserted
+   * before spawn and finalized on exit, so this count is the durable truth
+   * about how many worker processes this runtime is carrying.
+   */
+  listLiveAll(exec?: DatabaseSync): TaskWorkerRow[] {
+    const db = exec ?? this.tx.connection();
+    return db
+      .prepare(
+        `SELECT workspace_id, run_id, worker_id, pid, state, heartbeat_at,
+                lease_expires_at, last_progress_json, started_at
+         FROM task_workers
+         WHERE state IN ('starting', 'running', 'stalled')
+         ORDER BY started_at, worker_id`,
+      )
+      .all() as unknown as TaskWorkerRow[];
+  }
+
   setPid(
     workspaceId: string,
     runId: string,

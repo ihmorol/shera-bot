@@ -85,12 +85,22 @@ export const SessionStartedPayload = z.strictObject({
 });
 export type SessionStartedPayload = z.infer<typeof SessionStartedPayload>;
 
+/** Why a session hibernated (S16 chunk 2): the natural idle timer, or an
+ * explicit resource-pressure hibernation (E1 admission coordination). */
+export const SessionHibernateReason = z.enum(["idle_timeout", "resource_pressure"]);
+export type SessionHibernateReason = z.infer<typeof SessionHibernateReason>;
+
 export const SessionHibernatePayload = z.strictObject({
   session_id: z.string().min(1),
   workspace_id: z.string().min(1),
   agent_id: z.string().min(1),
   /** How long the session had been idle when it hibernated. */
   idle_ms: z.number().int().nonnegative(),
+  /**
+   * Why the session hibernated. Absent on pre-S16-chunk-2 idle hibernations
+   * (the natural idle path); "resource_pressure" on the E1 pressure path.
+   */
+  reason: SessionHibernateReason.optional(),
 });
 export type SessionHibernatePayload = z.infer<typeof SessionHibernatePayload>;
 
@@ -156,6 +166,38 @@ export type WorkerCrashCause = z.infer<typeof WorkerCrashCause>;
 
 export const WorkerStopReason = z.enum(["requested", "shutdown"]);
 export type WorkerStopReason = z.infer<typeof WorkerStopReason>;
+
+/**
+ * E1 admission control (S16 chunk 2): the machine-readable queued-reason
+ * vocabulary. `limit` is the ceiling that was hit, `current` the measured
+ * usage at decision time (both null-safe in the schema where the unit is not
+ * a count). Chunk 3 renders `message` for the UI; `reason` is the stable
+ * contract other code keys on.
+ */
+export const WorkerQueuedReasonCode = z.enum([
+  "worker_limit_reached",
+  "memory_limit",
+  "disk_pressure",
+  "provider_concurrency",
+]);
+export type WorkerQueuedReasonCode = z.infer<typeof WorkerQueuedReasonCode>;
+
+export const WorkerQueuedReason = z.strictObject({
+  code: WorkerQueuedReasonCode,
+  limit: z.number().nullable(),
+  current: z.number().nullable(),
+});
+export type WorkerQueuedReason = z.infer<typeof WorkerQueuedReason>;
+
+/** No worker incarnation exists for a queued run — hence no worker_id here. */
+export const WorkerQueuedPayload = z.strictObject({
+  workspace_id: z.string().min(1),
+  run_id: z.string().min(1),
+  reason: WorkerQueuedReason,
+  /** Human text (bounded); never secrets (G3). */
+  message: z.string().max(500),
+});
+export type WorkerQueuedPayload = z.infer<typeof WorkerQueuedPayload>;
 
 export const WorkerStartedPayload = z.strictObject({
   worker_id: z.string().min(1),
@@ -251,6 +293,7 @@ export const EVENT_TYPES = {
   "session.protocol_failure": { schema_version: 1, payload: SessionProtocolFailurePayload },
   "session.failed": { schema_version: 1, payload: SessionFailedPayload },
   "worker.started": { schema_version: 1, payload: WorkerStartedPayload },
+  "worker.queued": { schema_version: 1, payload: WorkerQueuedPayload },
   "worker.progress": { schema_version: 1, payload: WorkerProgressPayload },
   "worker.checkpoint": { schema_version: 1, payload: WorkerCheckpointPayload },
   "worker.crashed": { schema_version: 1, payload: WorkerCrashedPayload },

@@ -41,9 +41,9 @@ import { EventsService } from "../events/events.service.ts";
 import { OperationsService } from "../operations/operations.service.ts";
 import {
   SessionSupervisor,
-  sessionStreamFor,
   type SessionChild,
 } from "../sessions/session-supervisor.service.ts";
+import { sessionStreamFor } from "../sessions/sessions.events.ts";
 import {
   spawnFakeTaskWorker,
   type FakeTaskWorkerHandle,

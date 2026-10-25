@@ -195,9 +195,10 @@ function createDefaultOperation(): ReturnType<OperationsService["createOperation
 
 describe("S13 chunk 2 — v6 migration shape", () => {
   it("creates the operation-chat tables, workspace-scoped, recorded as version 6", () => {
-    // Chunk 3 appended v7 (operation chat binding + addressing) after this
-    // migration; the v6 tables below remain the chunk-2 surface under test.
-    expect(appliedMigrationVersions(conn.db)).toContain(7);
+    // Later slices appended v7 (operation chat binding) and v8 (task workers,
+    // S16) after this migration; the v6 tables below remain the chunk-2
+    // surface under test, and the pin asserts the CURRENT chain head.
+    expect(appliedMigrationVersions(conn.db)).toContain(8);
 
     for (const table of [
       "operations",

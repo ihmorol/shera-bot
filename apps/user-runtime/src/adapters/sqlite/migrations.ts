@@ -114,6 +114,24 @@
  * verbatim (the literal text is never rewritten), and an absent row means the
  * message was unaddressed (recipients = [], Operation-wide). The conversation
  * aggregate itself stays agent-agnostic; this is Operation-domain metadata.
+ *
+ * v8 — task workers (S16 chunk 1; D32 layer 3, D33, D10): one row per
+ * supervised worker incarnation, keyed (workspace_id, run_id, worker_id) —
+ * the same run_id in two workspaces are independent rows (E12), and a run may
+ * carry successive incarnations over its life, so worker_id (fresh per
+ * incarnation) completes the key. This table is the LEASE DURABILITY D32
+ * names: the runtime gateway renews lease_expires_at on every healthy frame,
+ * and a future recovery slice reads the row (state, heartbeat_at,
+ * last_progress_json) to reconstruct what survived a gateway restart — the
+ * worker's progress is NEVER only in process memory (D10). The state
+ * vocabulary is the task-state lifecycle, NOT the session's warm/hibernate
+ * one: starting|running|stalled|exited|killed — a healthy worker runs until
+ * done/stopped (no idle timer, no hibernation; AC25), `stalled` marks a
+ * missed-heartbeat detection (distinct from a slow-but-heartbeating worker,
+ * which stays `running`), `exited` an exit nobody initiated, `killed` a
+ * supervisor-initiated termination. run_id is validated by the writer (the
+ * run row lives in the same database, written through the operations
+ * repositories) so no FOREIGN KEY is declared — the v4/v5/v6 discipline.
  */
 import type { DatabaseSync } from "node:sqlite";
 
@@ -381,6 +399,30 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
         recorded_at       TEXT NOT NULL,
         PRIMARY KEY (workspace_id, message_id)
       ) STRICT;
+    `,
+  },
+  {
+    version: 8,
+    name: "task-workers",
+    sql: `
+      CREATE TABLE IF NOT EXISTS task_workers (
+        workspace_id       TEXT    NOT NULL,
+        run_id             TEXT    NOT NULL,
+        worker_id          TEXT    NOT NULL,
+        pid                INTEGER,
+        state              TEXT    NOT NULL CHECK (state IN ('starting', 'running', 'stalled', 'exited', 'killed')),
+        heartbeat_at       TEXT,
+        lease_expires_at   TEXT    NOT NULL,
+        last_progress_json TEXT    CHECK (last_progress_json IS NULL OR json_valid(last_progress_json)),
+        started_at         TEXT    NOT NULL,
+        PRIMARY KEY (workspace_id, run_id, worker_id)
+      ) STRICT;
+
+      CREATE INDEX IF NOT EXISTS task_workers_by_run_idx
+        ON task_workers (workspace_id, run_id);
+
+      CREATE INDEX IF NOT EXISTS task_workers_live_idx
+        ON task_workers (workspace_id, state);
     `,
   },
 ];

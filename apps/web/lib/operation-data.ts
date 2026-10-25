@@ -11,6 +11,7 @@ import {
   fetchOperationThread,
   fetchOperations,
   newOperationCommandIds,
+  renameOperationMutationOptions,
   samePackAddRisk,
   sendOperationChatMessage,
   setOperationCoordinator,
@@ -270,6 +271,17 @@ export function useCreateOperation(workspaceId: string) {
       void queryClient.invalidateQueries({ queryKey: ["operations", workspaceId] });
     },
   });
+}
+
+/**
+ * S14 rename (D41/D23 rule 6): the user-owned name write. The mutation
+ * invalidates BOTH the detail read model and the workspace list, so the
+ * chat header and the sidebar show the runtime's read-after-write truth.
+ * Validation failures (empty, >120 chars) surface typed with safe copy.
+ */
+export function useRenameOperation(workspaceId: string, operationId: string) {
+  const queryClient = useQueryClient();
+  return useMutation(renameOperationMutationOptions(queryClient, workspaceId, operationId));
 }
 
 export { samePackAddRisk };

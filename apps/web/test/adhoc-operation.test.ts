@@ -338,7 +338,7 @@ describe("Operation pack summary (§S6/F6, D38)", () => {
     const open = renderSummary({ open: true });
     expect(open).toMatch(/aria-expanded="true"/);
     expect(open).toContain("Research core");
-    expect(open).toContain("Scholar library");
+    expect(open).toContain("connector_scholar_library");
   });
 
   it("renders the pinned pack's skills by title, falling back to the id — never a fabricated name", () => {
@@ -349,7 +349,9 @@ describe("Operation pack summary (§S6/F6, D38)", () => {
 
   it("renders every connector as Not configured — never 'Connected' (D38, G3)", () => {
     const html = renderSummary({ open: true });
-    expect(html).toContain("Scholar library");
+    // The summary carries connector ids (the runtime's truthful shape), the
+    // fixed not-configured status, and never a fabricated connection.
+    expect(html).toContain("connector_scholar_library");
     expect(html).toContain("Not configured");
     expect(html).not.toMatch(/Connected/);
   });
@@ -538,9 +540,21 @@ describe("Operation client (S14 surfaces, proxy paths)", () => {
         }),
       ),
     );
-    await expect(renameOperation(WORKSPACE, OPERATION_ID, "")).rejects.toMatchObject({
+    // A VALID envelope reaches the wire (an empty name never leaves the
+    // client — the contracts parse refuses it at build time, and the editor
+    // keeps Save disabled); the SERVER's typed 400 still surfaces as safe copy.
+    await expect(renameOperation(WORKSPACE, OPERATION_ID, "Valid Name")).rejects.toMatchObject({
       sheraError: { code: "OPERATION_COMMAND_INVALID", safe_message: "The rename command is not valid." },
     });
+  });
+
+  it("an invalid rename (empty name) fails at build time — never a malformed POST", () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    // The contracts parse is synchronous: a malformed rename throws HERE.
+    expect(() => renameOperation(WORKSPACE, OPERATION_ID, "")).toThrow();
+    expect(() => renameOperation(WORKSPACE, OPERATION_ID, "x".repeat(121))).toThrow();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("the rename hook invalidates the detail AND list reads after a successful rename", async () => {

@@ -11,9 +11,12 @@ export function isBrowserRuntimePath(method: string, path: string): boolean {
       // S13 Operation chat (D31/D36/D41/D42): the record creation, the roster
       // commands, the coordinator set/remove, run creation, and the addressed
       // message send. The D7 collaboration-event write is deliberately absent
-      // — the browser RENDERS events, it never authors them.
+      // — the browser RENDERS events, it never authors them. S14 adds the
+      // rename (D41: ad-hoc Operations are created nameless and renamed by
+      // the user afterwards) — a durable row update carried by the same
+      // contracts command envelope, never a free-form field write.
       path === "/v1/operations" ||
-      /^\/v1\/operations\/[a-zA-Z0-9_-]+\/(?:roster\/commands|coordinator|runs|thread\/messages)$/.test(
+      /^\/v1\/operations\/[a-zA-Z0-9_-]+\/(?:roster\/commands|coordinator|runs|thread\/messages|rename)$/.test(
         path,
       )
     );

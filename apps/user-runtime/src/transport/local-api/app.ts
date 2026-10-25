@@ -19,6 +19,7 @@ import { z } from "zod";
 import {
   AgentSettingsCommand,
   Id,
+  OPERATION_NAME_MAX_LENGTH,
   OperationCollaborationEvent,
   OperationCoordinatorRef,
   type OperationRecord,
@@ -112,7 +113,7 @@ const CreateOperationBody = z.strictObject({
    * Operation `Ad-hoc · N Agents` at the service; a pack-defined create
    * without one is the typed OPERATION_NAME_REQUIRED (400) from the service.
    */
-  name: z.string().max(200).nullish(),
+  name: z.string().max(OPERATION_NAME_MAX_LENGTH).nullish(),
   /**
    * The EMPTY roster is admitted to the service on purpose: the typed
    * OPERATION_ROSTER_EMPTY refusal (400) is the service's D41 rule, not a

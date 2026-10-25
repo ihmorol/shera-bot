@@ -125,11 +125,14 @@ export type OperationPinning = z.infer<typeof OperationPinning>;
  * persists; the S02 `Operation` above remains the conversation-summary wire
  * shape. `definition_ref` is null for ad-hoc Operations (D41, D29).
  */
+/** One cap for every user-authored Operation name (create AND rename) — a name created at any length must stay re-saveable through rename. */
+export const OPERATION_NAME_MAX_LENGTH = 120;
+
 export const OperationRecord = z.strictObject({
   operation_id: Id,
   workspace_id: WorkspaceId,
   definition_ref: z.string().min(1).max(512).nullable(),
-  name: z.string().min(1).max(200),
+  name: z.string().min(1).max(OPERATION_NAME_MAX_LENGTH),
   status: OperationRecordStatus,
   /** D42/D49: coordinator Agent id, or "none" after removal. */
   coordinator_agent_id: OperationCoordinatorRef,
@@ -248,7 +251,7 @@ export const OperationRenameCommand = z.strictObject({
   name: z
     .string()
     .min(1)
-    .max(120)
+    .max(OPERATION_NAME_MAX_LENGTH)
     .refine((value) => value.trim().length > 0, {
       message: "name must be non-empty once trimmed",
     }),

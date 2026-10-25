@@ -48,7 +48,13 @@ export function OperationPackSummary({
         <p className="truncate text-xs text-muted" data-testid="pack-roster-count">
           {rosterCount} Agents on the roster
         </p>
-        <Button variant="ghost" size="sm" aria-expanded={open} onClick={() => onOpenChange(!open)}>
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-expanded={open}
+          aria-controls="operation-pack-details"
+          onClick={() => onOpenChange(!open)}
+        >
           {open ? (
             <ChevronUp className="size-3.5" aria-hidden="true" />
           ) : (
@@ -73,7 +79,7 @@ export function OperationPackSummary({
           </Button>
         </div>
       ) : open && packSummary ? (
-        <div className="grid gap-x-8 gap-y-4 pb-4 sm:grid-cols-2">
+        <div id="operation-pack-details" className="grid gap-x-8 gap-y-4 pb-4 sm:grid-cols-2">
           <div>
             <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted">Skills</p>
             {packSummary.skills.length === 0 ? (

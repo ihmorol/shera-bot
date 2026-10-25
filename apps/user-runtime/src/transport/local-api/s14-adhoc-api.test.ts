@@ -490,3 +490,51 @@ describe("S14 shared machinery (PRD §4.1/§4.2 AC5) — ad-hoc reuses the SAME 
     }
   });
 });
+
+describe("S14 ad-hoc restart persistence (D41 — AC1)", () => {
+  it("persists the ad-hoc record, roster, coordinator none, and pinning across a full restart", async () => {
+    const dir = makeTempDir("shera-runtime-s14-restart-");
+    const dbPath = join(dir, "runtime.db");
+    const first = await composeOn(dbPath);
+    let operationId: string;
+    try {
+      const created = await postJson(
+        first.origin,
+        "/v1/operations",
+        adhocCreateBody({ coordinator_agent_id: "none" }),
+      );
+      expect(created.status).toBe(201);
+      operationId = created.body["operation_id"] as string;
+      expect(created.body["name"]).toBe("Ad-hoc · 3 Agents");
+    } finally {
+      await first.close();
+    }
+
+    // A fresh composition on the SAME data dir re-reads everything durable.
+    const second = await composeOn(dbPath);
+    try {
+      const detail = await getJson(
+        second.origin,
+        `/v1/operations/${operationId}?workspace_id=${WORKSPACE}`,
+      );
+      expect(detail.status).toBe(200);
+      expect(detail.body).toMatchObject({
+        is_adhoc: true,
+        auto_label: true,
+      });
+      const operation = detail.body["operation"] as Record<string, unknown>;
+      expect(operation["name"]).toBe("Ad-hoc · 3 Agents");
+      expect(operation["definition_ref"]).toBeNull();
+      expect(operation["coordinator_agent_id"]).toBe("none");
+      const roster = detail.body["roster"] as Array<{ agent_id: string }>;
+      expect(roster.map((member) => member.agent_id).sort()).toEqual(
+        [RESEARCHER, CITATION, DEVELOPER].sort(),
+      );
+      const pinning = operation["pinning"] as Record<string, unknown>;
+      expect(pinning["pack_id"]).toBe(STUDENT_MANIFEST.pack_id);
+      expect(typeof pinning["pack_version"]).toBe("string");
+    } finally {
+      await second.close();
+    }
+  });
+});

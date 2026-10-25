@@ -57,10 +57,10 @@
  *   beyond the D7 collaboration events (the chat conversation's journal
  *   belongs to the chat, D41), so none is invented here; idempotency rides
  *   the command receipt (`operation-rename:<command_id>`) written in the
- *   SAME transaction as the row update: a replayed command answers the
- *   CURRENT record (the same re-read discipline as the remove-roster
- *   receipt), and renaming to the SAME name is the naturally idempotent
- *   no-op that writes no receipt.
+ *   SAME transaction as the row update (ALSO on the same-name no-op, so a
+ *   future replay of the command_id is inert): a replayed command answers
+ *   the CURRENT record (the same re-read discipline as the remove-roster
+ *   receipt).
  *
  * Every mutation commits as ONE atomic transaction unit (AC2): a mid-unit
  * failure applies NOTHING. Unknown operations/runs answer with typed
@@ -73,6 +73,7 @@ import {
   AddRosterAgentCommand,
   Id,
   JsonObject,
+  OPERATION_NAME_MAX_LENGTH,
   OperationCollaborationEvent,
   OperationCoordinatorRef,
   OperationRecord,
@@ -521,11 +522,11 @@ export class OperationsService {
     // the name from the definition is deferred until a flow needs it).
     let name: string | null = null;
     if (typeof input.name === "string" && input.name.trim() !== "") {
-      if (input.name.length > 200) {
+      if (input.name.length > OPERATION_NAME_MAX_LENGTH) {
         throw new OperationsServiceError(
           "OPERATION_COMMAND_INVALID",
           "validation",
-          "operation name must be 1-200 characters",
+          "operation name must be 1-120 characters",
         );
       }
       name = input.name;
@@ -850,11 +851,13 @@ export class OperationsService {
       }
 
       const operation = this.requireOperationRow(workspaceId, operationId, exec);
-      if (operation.name === nextName) {
-        return operation;
-      }
       const now = this.now();
-      this.deps.operations.updateName(workspaceId, operationId, nextName, now, exec);
+      if (operation.name !== nextName) {
+        this.deps.operations.updateName(workspaceId, operationId, nextName, now, exec);
+      }
+      // The receipt is written even for the same-name no-op: a future replay
+      // of this command_id must be inert, never re-apply an old name over an
+      // intervening rename (the review's replay shape).
       this.receipts.create(
         {
           workspace_id: workspaceId,

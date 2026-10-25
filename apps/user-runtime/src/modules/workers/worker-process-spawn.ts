@@ -85,6 +85,52 @@ export interface WorkerCommand {
   args: readonly string[];
 }
 
+/**
+ * The configured task-worker harness command (S16 chunk 3) — the same shape
+ * as the session harness config, parsed from SHERA_WORKER_HARNESS_COMMAND/
+ * _ARGS in main.ts. The committed demo worker (fake-task-worker-child.ts) is
+ * the harness command for tests and preview; production real workers arrive
+ * with the tools slice. Per-spawn placeholders in the args are substituted
+ * from the spawn request: `{run_id}`, `{worker_id}`, `{heartbeat_interval_ms}`
+ * — never a shell, never an interpolation layer (G3/G4: the elements pass to
+ * execve verbatim after substitution).
+ */
+export interface TaskWorkerHarnessConfig {
+  /** Executable path (resolved through the host PATH like any spawn). */
+  file: string;
+  /** Static arguments, plus the per-spawn placeholders documented above. */
+  args?: readonly string[];
+}
+
+/** Substitute the documented per-spawn placeholders into the static args. */
+export function workerHarnessArgs(config: TaskWorkerHarnessConfig, request: TaskWorkerSpawnRequest): string[] {
+  return (config.args ?? []).map((arg) =>
+    arg
+      .replaceAll("{run_id}", request.run_id)
+      .replaceAll("{worker_id}", request.worker_id)
+      .replaceAll("{heartbeat_interval_ms}", String(request.heartbeat_interval_ms)),
+  );
+}
+
+/**
+ * Build the supervisor's spawnChild seam from the configured harness command:
+ * every incarnation spawns the SAME executable with the per-spawn placeholder
+ * substitution, wrapped in prlimit when the request carries kernel limits.
+ * `prlimitPath` (resolved once at composition startup — the G4 typed-failure
+ * point) is forwarded so spawns never re-probe.
+ */
+export function createTaskWorkerSpawn(
+  config: TaskWorkerHarnessConfig,
+  options: { prlimitPath?: string } = {},
+): (request: TaskWorkerSpawnRequest) => TaskWorkerChild {
+  return (request: TaskWorkerSpawnRequest): TaskWorkerChild =>
+    spawnTaskWorkerChild(
+      request,
+      { file: config.file, args: workerHarnessArgs(config, request) },
+      options,
+    );
+}
+
 /** Wrap one worker command with prlimit per the request's resource limits. */
 export function prlimitArgv(
   request: TaskWorkerSpawnRequest,
@@ -116,8 +162,14 @@ export function spawnTaskWorkerChild(
   command: WorkerCommand,
   options: { prlimitPath?: string } = {},
 ): TaskWorkerChild {
-  const prlimitPath = options.prlimitPath ?? resolvePrlimitBinary();
-  const argv = prlimitArgv(request, command, prlimitPath);
+  // prlimit is only NEEDED when the request carries kernel limits — an
+  // unlimited worker (no admission policy) spawns unwrapped and must not
+  // demand the binary (chunk-1 behavior on hosts without util-linux).
+  const prlimitPath =
+    request.resourceLimits === null || request.resourceLimits === undefined
+      ? null
+      : (options.prlimitPath ?? resolvePrlimitBinary());
+  const argv = prlimitArgv(request, command, prlimitPath ?? "");
   const child: ChildProcess = spawn(argv[0]!, argv.slice(1), {
     stdio: ["pipe", "pipe", "pipe"],
   });

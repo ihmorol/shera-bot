@@ -28,6 +28,7 @@ import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import type { SessionHarnessConfig } from "./adapters/process/session-process-spawn.ts";
+import type { TaskWorkerHarnessConfig } from "./modules/workers/worker-process-spawn.ts";
 import {
   DEFAULT_WORKSPACE_ID,
   composeRuntime,
@@ -81,6 +82,16 @@ export interface RuntimeNodeConfig {
    * programmatic constants (DEFAULT_SESSION_POLICY in the supervisor service).
    */
   sessionPolicy?: Partial<SessionSupervisorPolicy>;
+  /**
+   * S16 (D32 layer 3, E1): the configured task-worker harness command. When
+   * set, the composed runtime supervises per-run task workers (a worker per
+   * run on the RUNNING transition, E1 admission control, restart
+   * reconciliation). Default: SHERA_WORKER_HARNESS_COMMAND, else unset — the
+   * worker system is DISABLED (G4: no harness command, no worker process ever
+   * spawns, runs behave exactly as before, the admission readout reports
+   * "not configured").
+   */
+  workerHarness?: TaskWorkerHarnessConfig;
   /** Install SIGINT/SIGTERM handlers that drain and stop the node. Default false. */
   signals?: boolean;
 }
@@ -114,6 +125,11 @@ export interface RuntimeNodeEnvConfig {
    * the defaults.
    */
   sessionPolicy: Partial<SessionSupervisorPolicy>;
+  /**
+   * S16: the resolved task-worker harness command, or null when none is
+   * configured (worker system disabled — G4).
+   */
+  workerHarness: TaskWorkerHarnessConfig | null;
 }
 
 const DEFAULT_HOST = "127.0.0.1";
@@ -203,6 +219,31 @@ function sessionPolicyFromEnv(
     policy[key] = value;
   }
   return policy;
+}
+
+/**
+ * S16 — the task-worker harness command from the environment, parsed in the
+ * SAME seam as the session harness knob. SHERA_WORKER_HARNESS_COMMAND is one
+ * executable path; SHERA_WORKER_HARNESS_ARGS is a whitespace-split argument
+ * list (no shell, no quoting layer — G3/G4: nothing is interpolated; the
+ * documented `{run_id}` / `{worker_id}` / `{heartbeat_interval_ms}`
+ * placeholders are substituted per spawn by the spawn adapter). Empty/absent
+ * → null (the worker system is disabled — runs behave exactly as before).
+ */
+function workerHarnessFromEnv(
+  env: Record<string, string | undefined>,
+  overrides: RuntimeNodeConfig,
+): TaskWorkerHarnessConfig | null {
+  if (overrides.workerHarness !== undefined) {
+    return overrides.workerHarness;
+  }
+  const command = env["SHERA_WORKER_HARNESS_COMMAND"];
+  if (command === undefined || command.trim() === "") {
+    return null;
+  }
+  const rawArgs = env["SHERA_WORKER_HARNESS_ARGS"];
+  const args = rawArgs === undefined || rawArgs.trim() === "" ? [] : rawArgs.trim().split(/\s+/);
+  return { file: command, args };
 }
 
 /** Parse the environment into a node config; explicit values win. Pure (G3). */

@@ -291,6 +291,26 @@ export interface TaskWorkerAdmissionPressure {
 /** Chunk-4 UI read model of one run's worker in this process. */
 export type TaskWorkerPresence = "none" | "starting" | "running" | "stopping";
 
+/**
+ * The admission readout the local API's GET /v1/workers/admission serves
+ * (S16 chunk 3): the configured limits, the live worker count, and the queued
+ * runs with their verbatim refusal — the honest "who is waiting and why".
+ * `configured: false` (no worker harness) carries null limits and empty
+ * queues; the UI renders that as "not configured", never as zeros dressed up
+ * as policy (G4).
+ */
+export interface WorkerAdmissionReadout {
+  configured: boolean;
+  limits: AdmissionPolicy | null;
+  live_workers: number;
+  queued_runs: Array<{
+    workspace_id: string;
+    run_id: string;
+    reason: WorkerQueuedReason;
+    message: string;
+  }>;
+}
+
 /** Stable failure codes for the worker boundary (SCREAMING_SNAKE). */
 export type TaskWorkerFailureCode =
   "WORKER_NOT_FOUND" | "WORKER_RUN_TERMINAL" | "WORKER_START_FAILED";
@@ -346,6 +366,9 @@ interface QueuedEntry {
   run_id: string;
   spec: TaskWorkerSpec;
   queuedAtMs: number;
+  /** The refusal that put the run here (the read model renders it verbatim). */
+  reason: WorkerQueuedReason;
+  message: string;
 }
 
 function isTerminalRunState(state: RunState): boolean {
@@ -663,6 +686,8 @@ export class TaskWorkerSupervisor {
         run_id: record.run_id,
         spec,
         queuedAtMs: this.now(),
+        reason,
+        message,
       });
       this.markRunQueued(record, reason, message);
     }
@@ -782,6 +807,26 @@ export class TaskWorkerSupervisor {
       if (record.providerId === providerId) count += 1;
     }
     return count;
+  }
+
+  /**
+   * The queued-run read model (S16 chunk 3 UI): every run waiting in the
+   * internal dequeue with the refusal that put it there — the exact evidence
+   * the worker.queued event carries, rendered verbatim by the admission
+   * readout. Oldest first (the dequeue's re-admission order).
+   */
+  queuedRuns(): Array<{
+    workspace_id: string;
+    run_id: string;
+    reason: WorkerQueuedReason;
+    message: string;
+  }> {
+    return this.queued.map((entry) => ({
+      workspace_id: entry.workspace_id,
+      run_id: entry.run_id,
+      reason: { ...entry.reason },
+      message: entry.message,
+    }));
   }
 
   /** The E1 pressure read model (machine-readable, chunk-4 UI + coordinators). */

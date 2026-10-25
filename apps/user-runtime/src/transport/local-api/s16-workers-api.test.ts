@@ -271,7 +271,7 @@ function readWorkerRows(dbPath: string): WorkerRowRead[] {
   try {
     return conn.db
       .prepare(`SELECT run_id, worker_id, pid, state FROM task_workers ORDER BY started_at`)
-      .all() as WorkerRowRead[];
+      .all() as unknown as WorkerRowRead[];
   } finally {
     conn.close();
   }

@@ -53,6 +53,30 @@ export interface AdmissionPolicy {
   maxWorkerProcesses: number;
 }
 
+/**
+ * The composition's default admission policy (S16 chunk 3), used when a
+ * worker harness is configured without an explicit policy. Values are
+ * PROTOTYPE defaults, chosen so a node-based worker child boots under the
+ * kernel limits on an ordinary dev box (RLIMIT_NPROC is enforced per real
+ * user id — a heavier host raises maxWorkerProcesses through the
+ * composition's programmatic policy override):
+ *
+ *   maxConcurrentWorkers            4        (the process count)
+ *   maxWorkerMemoryBytes            2 GiB    (prlimit --as per worker)
+ *   maxTotalWorkersMemoryBytes      8 GiB    (the summed budget)
+ *   minFreeDiskBytes                0        (no disk floor by default)
+ *   maxConcurrentRunsPerProvider    2
+ *   maxWorkerProcesses              4096     (prlimit --nproc per worker)
+ */
+export const DEFAULT_WORKER_ADMISSION_POLICY: AdmissionPolicy = {
+  maxConcurrentWorkers: 4,
+  maxWorkerMemoryBytes: 2 * 1024 * 1024 * 1024,
+  maxTotalWorkersMemoryBytes: 8 * 1024 * 1024 * 1024,
+  minFreeDiskBytes: 0,
+  maxConcurrentRunsPerProvider: 2,
+  maxWorkerProcesses: 4_096,
+};
+
 /** Machine-readable queued-reason codes (chunk 3 renders these for the UI). */
 export type WorkerQueuedReasonCode =
   "worker_limit_reached" | "memory_limit" | "disk_pressure" | "provider_concurrency";

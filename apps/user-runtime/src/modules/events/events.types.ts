@@ -259,6 +259,28 @@ export const WorkerStoppedPayload = z.strictObject({
 export type WorkerStoppedPayload = z.infer<typeof WorkerStoppedPayload>;
 
 /**
+ * Restart reconciliation (S16 chunk 3): a live task_workers row (starting/
+ * running/stalled) whose process the boot reconciliation's kill(pid, 0) probe
+ * proved gone. The row is terminal (killed) BEFORE this event is appended —
+ * the event is the aftermath-COMPLETION marker, like worker.crashed. The
+ * run's own fate is NOT decided here: QUEUED runs re-enter the admission
+ * queue; RECOVERY_REQUIRED and the other non-terminal states stay for the
+ * recovery slice.
+ */
+export const WorkerReapedPayload = z.strictObject({
+  worker_id: z.string().min(1),
+  workspace_id: z.string().min(1),
+  run_id: z.string().min(1),
+  /** The dead pid (null when the row never recorded one). */
+  pid: z.number().int().positive().nullable(),
+  /** The live row state the reconciliation found. */
+  previous_state: z.enum(["starting", "running", "stalled"]),
+  /** Why the row was reaped — the only cause today is the gateway restart. */
+  cause: z.literal("gateway_restart"),
+});
+export type WorkerReapedPayload = z.infer<typeof WorkerReapedPayload>;
+
+/**
  * The D26 task-execution vocabulary (S07; D51 seam) journaled on `task:<id>`
  * streams. The journal row stores the FULL contract envelope as its payload —
  * the envelope IS the durable D26 event — so each registry entry validates the
@@ -299,6 +321,7 @@ export const EVENT_TYPES = {
   "worker.crashed": { schema_version: 1, payload: WorkerCrashedPayload },
   "worker.completed": { schema_version: 1, payload: WorkerCompletedPayload },
   "worker.stopped": { schema_version: 1, payload: WorkerStoppedPayload },
+  "worker.reaped": { schema_version: 1, payload: WorkerReapedPayload },
   ...TASK_EVENT_REGISTRY,
 } as const;
 

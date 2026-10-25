@@ -42,6 +42,7 @@ import { CommandReceiptsRepository } from "../../adapters/sqlite/command-receipt
 import { ConversationsRepository } from "../../adapters/sqlite/conversations-repository.ts";
 import { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
 import { OperationsRepository } from "../../adapters/sqlite/operations-repository.ts";
+import { TaskWorkersRepository } from "../../adapters/sqlite/task-workers-repository.ts";
 import { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import type { HarnessAdapter } from "../../adapters/process/harness-adapter.ts";
 import { FakeHarnessAdapter } from "../../adapters/process/fake-harness-adapter.ts";
@@ -75,6 +76,28 @@ import {
   type SessionSupervisorPolicy,
 } from "../../modules/sessions/session-supervisor.service.ts";
 import { SessionReplyBridge } from "../../modules/sessions/session-reply-bridge.ts";
+import {
+  TaskWorkerAdmissionGate,
+  DEFAULT_WORKER_ADMISSION_POLICY,
+  type AdmissionGate,
+  type AdmissionPolicy,
+} from "../../modules/workers/admission.ts";
+import { OperationsRunSeam } from "../../modules/workers/operations-run-seam.ts";
+import { RunFlowOperationsService } from "../../modules/workers/task-run-flow.ts";
+import {
+  TaskWorkerSupervisor,
+  type TaskWorkerSupervisorPolicy,
+  type WorkerAdmissionReadout,
+} from "../../modules/workers/task-worker-supervisor.service.ts";
+import {
+  createTaskWorkerSpawn,
+  resolvePrlimitBinary,
+  type TaskWorkerHarnessConfig,
+} from "../../modules/workers/worker-process-spawn.ts";
+import {
+  reconcileTaskWorkersAfterRestart,
+  type WorkerReconciliationReport,
+} from "../../modules/workers/worker-reconciliation.ts";
 import { createLocalApi } from "./app.ts";
 import { consoleRedactedLogger, type RedactedLogger } from "../http/typed-errors.ts";
 import { attachWebSocketGateway, type WebSocketGatewayHandle } from "../websocket/gateway.ts";
@@ -171,6 +194,48 @@ export interface ComposeRuntimeOptions extends ComposeLocalApiOptions {
    * policy semantics live in the supervisor.
    */
   sessionPolicy?: Partial<SessionSupervisorPolicy>;
+  /**
+   * S16 (D32 layer 3, E1): the configured task-worker harness command. When
+   * set, the runtime composes the supervised per-run worker system — the run
+   * flow starts a worker per run on the RUNNING transition, the E1 admission
+   * gate queues runs when limits are hit, and boot reconciliation reaps
+   * dead-pid worker rows and re-drives QUEUED runs. When it is NOT set (the
+   * default), the composition has NO worker system: runs behave exactly as
+   * before this slice, no worker process ever spawns, and the admission
+   * readout honestly reports "not configured" (G4). The committed demo worker
+   * (fake-task-worker-child.ts) is the harness command for tests and preview;
+   * production real workers arrive with the tools slice.
+   */
+  workerHarness?: TaskWorkerHarnessConfig;
+  /**
+   * S16: programmatic overrides for the admission policy, merged over
+   * DEFAULT_WORKER_ADMISSION_POLICY (the same seam rule as sessionPolicy).
+   * Without a worker harness this is ignored (no gate is built).
+   */
+  workerAdmissionPolicy?: Partial<AdmissionPolicy>;
+  /**
+   * S16: ms-scale overrides for the task-worker supervisor's policy defaults
+   * (heartbeat window, handshake timeout, escalation graces) — verbatim
+   * passthrough, the policy semantics live in the supervisor.
+   */
+  workerPolicy?: Partial<TaskWorkerSupervisorPolicy>;
+}
+
+/**
+ * The composed worker supervision system (S16): the supervisor, its E1
+ * admission gate, and the boot reconciliation. Present on a RuntimeHandle
+ * when (and only when) a worker harness is configured (G4).
+ */
+export interface TaskWorkerSystem {
+  supervisor: TaskWorkerSupervisor;
+  admission: AdmissionGate;
+  /**
+   * The restart reconciliation (dead-pid rows reaped, QUEUED runs re-driven
+   * into the admission queue, RECOVERY_REQUIRED left for the recovery slice).
+   * Idempotent; the composition runs it once at boot (fire-and-forget) and
+   * tests/operators may drive it again explicitly.
+   */
+  reconcile(): Promise<WorkerReconciliationReport>;
 }
 
 export interface RuntimeHandle {
@@ -204,6 +269,13 @@ export interface RuntimeHandle {
    * and no session process ever spawns.
    */
   sessions: SessionSupervisor | undefined;
+  /**
+   * S16: the supervised task-worker system when a harness command is
+   * configured; undefined otherwise (G4) — runs behave exactly as before,
+   * no worker process ever spawns, and the admission readout reports
+   * "not configured".
+   */
+  workers: TaskWorkerSystem | undefined;
   /** Closes the gateway (and with it the HTTP server), then SQLite. */
   close(): Promise<void>;
 }
@@ -221,6 +293,7 @@ interface Wired {
   sessions: SessionSupervisor | undefined;
   sessionBridge: SessionReplyBridge | undefined;
   operations: OperationsService;
+  workers: TaskWorkerSystem | undefined;
   setPublisher(publisher: ConversationPublisher): void;
 }
 
@@ -284,6 +357,9 @@ function wire(
   options: ComposeLocalApiOptions & {
     sessionHarness?: SessionHarnessConfig | undefined;
     sessionPolicy?: Partial<SessionSupervisorPolicy> | undefined;
+    workerHarness?: TaskWorkerHarnessConfig | undefined;
+    workerAdmissionPolicy?: Partial<AdmissionPolicy> | undefined;
+    workerPolicy?: Partial<TaskWorkerSupervisorPolicy> | undefined;
   },
 ): Wired {
   const logFault = options.logUntypedFault ?? consoleRedactedLogger;
@@ -396,15 +472,165 @@ function wire(
   // (the agents-seed discipline); without a pack every roster validation is
   // refused typed and nothing Operation-shaped can be created.
   const operationsRepository = new OperationsRepository(tx);
-  const operations = new OperationsService({
-    operations: operationsRepository,
-    conversations: conversationsRepository,
-    events,
-    journal,
-    agents: agentsRepository,
-    tx,
-    publish: containFanout((event) => publisher(event), logFault),
-  });
+  // S16 (D32 layer 3): when a worker harness is configured the composed
+  // operations service is the RUN-FLOW variant — applyRunState stays exactly
+  // the D8-validated write and additionally drives the worker lifecycle
+  // (RUNNING starts a worker, CANCELLING/terminal stops it). Without the
+  // harness the plain service is composed and transitions behave exactly as
+  // before (G4).
+  const operations: OperationsService = options.workerHarness
+    ? new RunFlowOperationsService({
+        operations: operationsRepository,
+        conversations: conversationsRepository,
+        events,
+        journal,
+        agents: agentsRepository,
+        tx,
+        publish: containFanout((event) => publisher(event), logFault),
+      })
+    : new OperationsService({
+        operations: operationsRepository,
+        conversations: conversationsRepository,
+        events,
+        journal,
+        agents: agentsRepository,
+        tx,
+        publish: containFanout((event) => publisher(event), logFault),
+      });
+
+  // S16: the supervised task-worker system (supervisor + E1 admission gate +
+  // run-flow wiring + boot reconciliation). Built ONLY when a worker harness
+  // command is configured — no harness, no worker system, no spawns (G4).
+  // prlimit is resolved ONCE at startup (G4 typed failure naming the missing
+  // binary — never a silent fall-back to unlimited workers at spawn time),
+  // and the admission gate counts the DURABLE live worker rows with the
+  // supervisor's per-provider attribution late-bound (the same shape as the
+  // chunk-2 suites).
+  const workers: TaskWorkerSystem | undefined = (() => {
+    const harness = options.workerHarness;
+    if (!harness) {
+      return undefined;
+    }
+    const prlimitPath = resolvePrlimitBinary();
+    const taskWorkers = new TaskWorkersRepository(tx);
+    // Late-bound: the supervisor is constructed right after the gate, and the
+    // per-provider counter only reads it once workers are live.
+    let supervisorRef: TaskWorkerSupervisor | null = null;
+    const admission = new TaskWorkerAdmissionGate(
+      { ...DEFAULT_WORKER_ADMISSION_POLICY, ...(options.workerAdmissionPolicy ?? {}) },
+      {
+        liveWorkerCount: () => taskWorkers.listLiveAll().length,
+        liveWorkerCountForProvider: (providerId) =>
+          supervisorRef?.liveWorkerCountByProvider(providerId) ?? 0,
+      },
+      // The disk floor (when a policy configures one) measures the runtime
+      // data dir — the directory the database file lives in.
+      { dataDir: dirname(options.dbPath) },
+    );
+    const supervisor = new TaskWorkerSupervisor({
+      events,
+      tx,
+      taskWorkers,
+      runControl: new OperationsRunSeam(operations),
+      admission,
+      spawnChild: createTaskWorkerSpawn(harness, { prlimitPath }),
+      stderrSink: {
+        // G3: child stderr is diagnostic — bounded per incarnation by the
+        // supervisor, reduced HERE to a classified digest exactly like the
+        // session harness's sink. Never journaled, never in any response.
+        write: (chunk) => {
+          const bytes = Buffer.byteLength(chunk, "utf8");
+          const firstLine = chunk.split("\n", 1)[0] ?? "";
+          const shape = /^[A-Za-z0-9 .:'-]{1,60}$/.test(firstLine)
+            ? firstLine
+            : `${firstLine.length} chars, non-message`;
+          logFault("task_worker_stderr", { bytes, shape });
+        },
+      },
+      logFault: (event, fields) => logFault(event, fields),
+      ...(options.workerPolicy ? { policy: options.workerPolicy } : {}),
+    });
+    supervisorRef = supervisor;
+
+    // The run flow (chunk 3's wiring half): committed RUNNING transitions
+    // start the run's worker (fire-and-forget — a spawn never blocks a
+    // state write); CANCELLING/terminal transitions stop it. The spec carries
+    // the run row's provider snapshot so the E1 per-provider limit sees the
+    // run's attribution.
+    const specForRun = (workspaceId: string, runId: string) => {
+      const operationId = operationsRepository.findRunOperation(workspaceId, runId);
+      const run =
+        operationId === null ? null : operationsRepository.getRun(workspaceId, operationId, runId);
+      return run?.provider_snapshot
+        ? {
+            providerSnapshot: {
+              provider_id: run.provider_snapshot.provider_id,
+              model: run.provider_snapshot.model,
+            },
+          }
+        : {};
+    };
+    if (operations instanceof RunFlowOperationsService) {
+      operations.runFlow = {
+        startRunWorker: (workspaceId, runId) => {
+          void supervisor.startWorker(workspaceId, runId, specForRun(workspaceId, runId)).catch(
+            (error: unknown) => {
+              logFault("task_run_worker_start_failed", {
+                workspace_id: workspaceId,
+                run_id: runId,
+                name: error instanceof Error ? error.name : "Error",
+                message: error instanceof Error ? error.message : String(error),
+              });
+            },
+          );
+        },
+        stopRunWorker: (workspaceId, runId) => {
+          void supervisor.stopWorker(workspaceId, runId, "requested").catch(
+            (error: unknown) => {
+              logFault("task_run_worker_stop_failed", {
+                workspace_id: workspaceId,
+                run_id: runId,
+                name: error instanceof Error ? error.name : "Error",
+                message: error instanceof Error ? error.message : String(error),
+              });
+            },
+          );
+        },
+        logFault: (event, fields) => logFault(event, fields),
+      };
+    }
+
+    const reconcile = (): Promise<WorkerReconciliationReport> =>
+      reconcileTaskWorkersAfterRestart({
+        taskWorkers,
+        events,
+        runs: operationsRepository,
+        supervisor,
+        logFault: (event, fields) => logFault(event, fields),
+      });
+
+    return { supervisor, admission, reconcile };
+  })();
+
+  // S16: the admission readout behind GET /v1/workers/admission — the
+  // configured limits, the live count, and the queued runs with their
+  // verbatim refusal, scoped to the reading workspace. Without a worker
+  // system the endpoint answers the honest not-configured shape (the route
+  // owns that default).
+  const workerAdmission: ((workspaceId: string) => WorkerAdmissionReadout) | undefined =
+    workers
+      ? (workspaceId) => {
+          const pressure = workers.supervisor.admissionPressure();
+          return {
+            configured: pressure.configured,
+            limits: pressure.limits,
+            live_workers: pressure.liveWorkers,
+            queued_runs: workers.supervisor
+              .queuedRuns()
+              .filter((entry) => entry.workspace_id === workspaceId),
+          };
+        }
+      : undefined;
 
   const replay = new ReplayService({
     journal,
@@ -443,6 +669,7 @@ function wire(
         }
       : {}),
     operations,
+    ...(workerAdmission ? { workerAdmission } : {}),
     ...(options.logUntypedFault ? { logUntypedFault: options.logUntypedFault } : {}),
   });
   return {
@@ -458,6 +685,7 @@ function wire(
     sessions,
     sessionBridge,
     operations,
+    workers,
     setPublisher(next) {
       publisher = next;
     },
@@ -572,6 +800,26 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     ...(options.now ? { now: options.now } : {}),
   });
 
+  // S16 (D32): boot-time restart reconciliation — live worker rows whose
+  // process died with the previous gateway are reaped (worker.reaped), and
+  // runs the durable rows left QUEUED re-enter the admission queue.
+  // RECOVERY_REQUIRED stays for the recovery slice. Fire-and-forget at boot
+  // (a reconciliation gap is a fault record, never a failed boot); the
+  // handle's reconcile() is the explicit, awaited entry for tests/operators.
+  const reconciliation = wired.workers
+    ? wired.workers
+        .reconcile()
+        .catch((error: unknown) => {
+          logFault("task_worker_reconcile_boot_failed", {
+            name: error instanceof Error ? error.name : "Error",
+            message: error instanceof Error ? error.message : String(error),
+          });
+          throw error;
+        })
+        .catch(() => {})
+    : undefined;
+  void reconciliation;
+
   return {
     app: wired.app,
     httpServer,
@@ -583,8 +831,12 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     operations: wired.operations,
     replyStreamer,
     sessions: wired.sessions,
+    workers: wired.workers,
     close: async () => {
       replyStreamer?.stopAll();
+      // S16: drain every live worker child through the escalation BEFORE the
+      // transport goes down — a stopped runtime never leaves an orphan.
+      await wired.workers?.supervisor.stopAll();
       // S12: drain every live session child through the escalation BEFORE the
       // transport goes down — a stopped runtime never leaves an orphan.
       await wired.sessions?.stopAll();

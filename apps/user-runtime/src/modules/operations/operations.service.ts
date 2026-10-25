@@ -1012,6 +1012,18 @@ export class OperationsService {
     return this.requireRunRow(workspaceId, operationId, runId);
   }
 
+  /**
+   * The operation id that owns ONE run, resolved from the run row alone (S16
+   * chunk 3): the task-worker run boundary knows (workspace, run) — not the
+   * operation — and this read bridges the two WITHOUT a second lookup path
+   * (the same repository read the getRun routes sit on). Null when the run
+   * does not exist in THIS workspace (E12: a cross-workspace run id is
+   * unreachable, not an error — the caller decides what unreachable means).
+   */
+  findRunOperation(workspaceId: string, runId: string): string | null {
+    return this.deps.operations.findRunOperation(workspaceId, runId);
+  }
+
   listRuns(workspaceId: string, operationId: string): OperationRun[] {
     this.requireOperation(workspaceId, operationId);
     return this.deps.operations.listRuns(workspaceId, operationId);

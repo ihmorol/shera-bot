@@ -39,10 +39,7 @@ import { TaskWorkersRepository } from "../../adapters/sqlite/task-workers-reposi
 import { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import { EventsService } from "../events/events.service.ts";
 import { OperationsService } from "../operations/operations.service.ts";
-import {
-  SessionSupervisor,
-  type SessionChild,
-} from "../sessions/session-supervisor.service.ts";
+import { SessionSupervisor, type SessionChild } from "../sessions/session-supervisor.service.ts";
 import { sessionStreamFor } from "../sessions/sessions.events.ts";
 import {
   spawnFakeTaskWorker,
@@ -192,7 +189,8 @@ function makeHarness(options: HarnessOptions = {}): WorkerHarness {
       return child;
     },
     stderrSink: { write: (chunk) => stderrChunks.push(chunk) },
-    ...(options.policy ? { policy: options.policy } : {}),
+    // ms-scale policies by default (tests may override per harness).
+    policy: { ...WORKER_POLICY, ...(options.policy ?? {}) },
   });
 
   const harness: WorkerHarness = {
@@ -281,7 +279,12 @@ describe("S16 chunk 1 — v8 migration (task_workers)", () => {
       last_progress_json: null,
       started_at: now,
     };
-    harness.workersRepo.insertWorker({ ...base, workspace_id: WS, run_id: "run-shared", state: "starting" });
+    harness.workersRepo.insertWorker({
+      ...base,
+      workspace_id: WS,
+      run_id: "run-shared",
+      state: "starting",
+    });
     harness.workersRepo.insertWorker({
       ...base,
       workspace_id: OTHER_WS,
@@ -289,7 +292,9 @@ describe("S16 chunk 1 — v8 migration (task_workers)", () => {
       state: "starting",
     });
     expect(harness.workersRepo.getWorker(WS, "run-shared", "wk-shared")?.state).toBe("starting");
-    expect(harness.workersRepo.getWorker(OTHER_WS, "run-shared", "wk-shared")?.state).toBe("starting");
+    expect(harness.workersRepo.getWorker(OTHER_WS, "run-shared", "wk-shared")?.state).toBe(
+      "starting",
+    );
   });
 
   it("rejects a state outside the worker vocabulary and a non-JSON progress blob", () => {
@@ -305,7 +310,11 @@ describe("S16 chunk 1 — v8 migration (task_workers)", () => {
       started_at: now,
     };
     expect(() =>
-      harness.workersRepo.insertWorker({ ...base, state: "hibernating" as never, last_progress_json: null }),
+      harness.workersRepo.insertWorker({
+        ...base,
+        state: "hibernating" as never,
+        last_progress_json: null,
+      }),
     ).toThrow();
     expect(() =>
       harness.workersRepo.insertWorker({ ...base, state: "starting", last_progress_json: "{oops" }),
@@ -407,16 +416,18 @@ describe("S16 chunk 1 — lease + durable progress (D10, D32)", () => {
     const stream = harness.journal.listStream(runA, WS);
     const progress = stream.filter((row) => row.event_type === "worker.progress");
     const checkpoints = stream.filter((row) => row.event_type === "worker.checkpoint");
-    expect(progress.map((row) => (JSON.parse(row.payload) as { percent: number }).percent)).toEqual([
-      25, 50, 75, 100,
-    ]);
+    expect(progress.map((row) => (JSON.parse(row.payload) as { percent: number }).percent)).toEqual(
+      [25, 50, 75, 100],
+    );
     expect(checkpoints.length).toBe(2);
     const stepIds = checkpoints.map(
       (row) => (JSON.parse(row.payload) as { checkpoint: { step_id: string } }).checkpoint.step_id,
     );
     expect(stepIds).toEqual(["step-2", "step-4"]);
 
-    const exitedRow = harness.workersRepo.listByRun(WS, runA).find((row) => row.state === "exited")!;
+    const exitedRow = harness.workersRepo
+      .listByRun(WS, runA)
+      .find((row) => row.state === "exited")!;
     const lastProgress = JSON.parse(exitedRow.last_progress_json!) as {
       percent: number;
       text: string;
@@ -454,7 +465,9 @@ describe("S16 chunk 1 — crash, stall, worker-reported error (D32 recovery post
 
     await harness.supervisor.startWorker(WS, runA);
     const crashed = await until(() => {
-      return harness.journal.listStream(runA, WS).find((row) => row.event_type === "worker.crashed");
+      return harness.journal
+        .listStream(runA, WS)
+        .find((row) => row.event_type === "worker.crashed");
     });
 
     const payload = JSON.parse(crashed.payload) as {
@@ -481,11 +494,15 @@ describe("S16 chunk 1 — crash, stall, worker-reported error (D32 recovery post
 
     await harness.supervisor.startWorker(WS, runA);
     const crashed = await until(() => {
-      return harness.journal.listStream(runA, WS).find((row) => row.event_type === "worker.crashed");
+      return harness.journal
+        .listStream(runA, WS)
+        .find((row) => row.event_type === "worker.crashed");
     });
 
     expect((JSON.parse(crashed.payload) as { cause: string }).cause).toBe("hang");
-    expect(harness.workersRepo.listByRun(WS, runA).some((row) => row.state === "killed")).toBe(true);
+    expect(harness.workersRepo.listByRun(WS, runA).some((row) => row.state === "killed")).toBe(
+      true,
+    );
     expect(harness.seamWrites).toContainEqual({ run_id: runA, state: "RECOVERY_REQUIRED" });
   });
 
@@ -520,7 +537,9 @@ describe("S16 chunk 1 — crash, stall, worker-reported error (D32 recovery post
 
     await harness.supervisor.startWorker(WS, runA);
     const crashed = await until(() => {
-      return harness.journal.listStream(runA, WS).find((row) => row.event_type === "worker.crashed");
+      return harness.journal
+        .listStream(runA, WS)
+        .find((row) => row.event_type === "worker.crashed");
     });
 
     const payload = JSON.parse(crashed.payload) as { cause: string; error_class: string | null };
@@ -540,7 +559,9 @@ describe("S16 chunk 1 — stops (graceful escalation, D32: governed by the task)
     await harness.supervisor.startWorker(WS, runA);
     await harness.supervisor.stopWorker(WS, runA);
 
-    expect(harness.workersRepo.listByRun(WS, runA).some((row) => row.state === "killed")).toBe(true);
+    expect(harness.workersRepo.listByRun(WS, runA).some((row) => row.state === "killed")).toBe(
+      true,
+    );
     const stream = harness.journal.listStream(runA, WS);
     const stopped = stream.find((row) => row.event_type === "worker.stopped");
     expect(stopped).toBeDefined();
@@ -561,8 +582,12 @@ describe("S16 chunk 1 — stops (graceful escalation, D32: governed by the task)
     await harness.supervisor.startWorker(WS, runB);
     await harness.supervisor.stopAll();
 
-    expect(harness.workersRepo.listByRun(WS, runA).some((row) => row.state === "killed")).toBe(true);
-    expect(harness.workersRepo.listByRun(WS, runB).some((row) => row.state === "killed")).toBe(true);
+    expect(harness.workersRepo.listByRun(WS, runA).some((row) => row.state === "killed")).toBe(
+      true,
+    );
+    expect(harness.workersRepo.listByRun(WS, runB).some((row) => row.state === "killed")).toBe(
+      true,
+    );
     for (const handle of harness.spawns) {
       const exit = await handle.waitForExit();
       expect(exit.code !== null || exit.signal !== null).toBe(true);
@@ -614,19 +639,19 @@ describe("S16 chunk 1 — AC25: session hibernation never stops the run's worker
       },
     });
 
-    // Address the session so it starts, then let it idle into hibernation.
+    // The worker starts FIRST and the session then idles into hibernation
+    // WHILE the worker runs — the AC25 shape: the user's session dies away
+    // (browser closure idles the chat) and the healthy worker must keep
+    // running to completion untouched (D32 rule: a running worker is never
+    // stopped by the session idle timer). No worker.* stop/crash may appear
+    // from the session side.
+    await harness.supervisor.startWorker(WS, runA);
     await session.ensureStarted(WS, AGENT);
     await until(() => {
       return harness.journal
         .listStream(sessionStreamFor(WS, AGENT), WS)
         .find((row) => row.event_type === "session.hibernate");
     }, 8000);
-
-    // The worker started AFTER the hibernation and must run to completion
-    // untouched (D32 rule: a running worker is never stopped by the session
-    // idle timer; AC25: session hibernation/browser closure never stops a
-    // healthy worker). No worker.* stop/crash may appear from the session side.
-    await harness.supervisor.startWorker(WS, runA);
     await until(() => {
       const rows = harness.workersRepo.listByRun(WS, runA);
       return rows.some((row) => row.state === "exited") ? rows : undefined;

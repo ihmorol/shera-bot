@@ -115,11 +115,7 @@ export class WorkerProtocolError extends Error {
   /** Bounded, size-only detail — never raw child output (G3). */
   readonly detail: string | null;
 
-  constructor(input: {
-    code?: WorkerProtocolErrorCode;
-    reason?: string;
-    detail?: string;
-  }) {
+  constructor(input: { code?: WorkerProtocolErrorCode; reason?: string; detail?: string }) {
     super(
       `${input.code ?? "WORKER_PROTOCOL_VIOLATION"}${input.reason ? `: ${input.reason}` : ""}` +
         (input.detail ? ` (${input.detail})` : ""),
@@ -181,13 +177,19 @@ export function parseWorkerFrame(line: string): WorkerChildFrame {
 
   switch (value.type) {
     case "hello": {
-      if (!isFiniteNumber(value.worker_version) || !isIntegerBetween(value.pid, 1, Number.MAX_SAFE_INTEGER)) {
+      if (
+        !isFiniteNumber(value.worker_version) ||
+        !isIntegerBetween(value.pid, 1, Number.MAX_SAFE_INTEGER)
+      ) {
         throw new WorkerProtocolError({ reason: "invalid_hello", detail: "worker_version/pid" });
       }
       return value as unknown as WorkerHelloFrame;
     }
     case "ready": {
-      if (!isBoundedString(value.worker_id, 256) || !isIntegerBetween(value.pid, 1, Number.MAX_SAFE_INTEGER)) {
+      if (
+        !isBoundedString(value.worker_id, 256) ||
+        !isIntegerBetween(value.pid, 1, Number.MAX_SAFE_INTEGER)
+      ) {
         throw new WorkerProtocolError({ reason: "invalid_ready", detail: "worker_id/pid" });
       }
       return value as unknown as WorkerReadyFrame;
@@ -199,7 +201,10 @@ export function parseWorkerFrame(line: string): WorkerChildFrame {
       return value as unknown as WorkerHeartbeatFrame;
     }
     case "progress": {
-      if (!isIntegerBetween(value.percent, 0, 100) || !isBoundedString(value.text, MAX_PROGRESS_TEXT_CHARS, 0)) {
+      if (
+        !isIntegerBetween(value.percent, 0, 100) ||
+        !isBoundedString(value.text, MAX_PROGRESS_TEXT_CHARS, 0)
+      ) {
         throw new WorkerProtocolError({ reason: "invalid_progress", detail: "percent/text" });
       }
       return value as unknown as WorkerProgressFrame;
@@ -221,7 +226,10 @@ export function parseWorkerFrame(line: string): WorkerChildFrame {
         !isBoundedString(value.failure_class, MAX_FAILURE_CLASS_CHARS) ||
         !isBoundedString(value.message, MAX_ERROR_MESSAGE_CHARS, 0)
       ) {
-        throw new WorkerProtocolError({ reason: "invalid_error_frame", detail: "failure_class/message" });
+        throw new WorkerProtocolError({
+          reason: "invalid_error_frame",
+          detail: "failure_class/message",
+        });
       }
       return value as unknown as WorkerErrorFrame;
     }

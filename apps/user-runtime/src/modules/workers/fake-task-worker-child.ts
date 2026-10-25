@@ -21,7 +21,11 @@
  */
 import { JsonLineParser } from "@shera-bot/pi-protocol";
 
-import { encodeWorkerFrame, WORKER_PROTOCOL_VERSION, type WorkerChildFrame } from "./worker-frames.ts";
+import {
+  encodeWorkerFrame,
+  WORKER_PROTOCOL_VERSION,
+  type WorkerChildFrame,
+} from "./worker-frames.ts";
 
 function parseArgs(argv: readonly string[]): Record<string, string> {
   const out: Record<string, string> = {};

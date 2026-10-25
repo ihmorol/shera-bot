@@ -215,9 +215,7 @@ export type TaskWorkerPresence = "none" | "starting" | "running" | "stopping";
 
 /** Stable failure codes for the worker boundary (SCREAMING_SNAKE). */
 export type TaskWorkerFailureCode =
-  | "WORKER_NOT_FOUND"
-  | "WORKER_RUN_TERMINAL"
-  | "WORKER_START_FAILED";
+  "WORKER_NOT_FOUND" | "WORKER_RUN_TERMINAL" | "WORKER_START_FAILED";
 
 export class TaskWorkerError extends Error {
   readonly code: TaskWorkerFailureCode;
@@ -425,12 +423,7 @@ export class TaskWorkerSupervisor {
       // Spawn itself failed: no process ever ran. Leave the durable trace
       // (row exited + crash event) and reject the caller honestly; the RUN's
       // state is untouched — the start never took the run anywhere.
-      this.deps.taskWorkers.updateState(
-        record.workspace_id,
-        record.run_id,
-        workerId,
-        "exited",
-      );
+      this.deps.taskWorkers.updateState(record.workspace_id, record.run_id, workerId, "exited");
       this.recordEvent(record, "worker.crashed", {
         worker_id: workerId,
         workspace_id: record.workspace_id,
@@ -616,11 +609,7 @@ export class TaskWorkerSupervisor {
      handler (an unhandled throw there would kill the runtime). The previous
      durable state stands; the next frame retries.
    */
-  private handleLineSafe(
-    record: WorkerRecord,
-    incarnation: Incarnation,
-    line: string,
-  ): void {
+  private handleLineSafe(record: WorkerRecord, incarnation: Incarnation, line: string): void {
     try {
       this.handleLine(record, incarnation, line);
     } catch (error) {

@@ -110,7 +110,13 @@ export class TaskWorkersRepository {
       .all(workspaceId) as unknown as TaskWorkerRow[];
   }
 
-  setPid(workspaceId: string, runId: string, workerId: string, pid: number, exec?: DatabaseSync): void {
+  setPid(
+    workspaceId: string,
+    runId: string,
+    workerId: string,
+    pid: number,
+    exec?: DatabaseSync,
+  ): void {
     const db = exec ?? this.tx.connection();
     db.prepare(
       `UPDATE task_workers SET pid = ? WHERE workspace_id = ? AND run_id = ? AND worker_id = ?`,

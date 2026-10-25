@@ -180,7 +180,9 @@ function fakeWorkerArgs(options: SpawnFakeTaskWorkerOptions): string[] {
 }
 
 /** Spawn the fake task worker as a real node child process and return the harness. */
-export function spawnFakeTaskWorker(options: SpawnFakeTaskWorkerOptions = {}): FakeTaskWorkerHandle {
+export function spawnFakeTaskWorker(
+  options: SpawnFakeTaskWorkerOptions = {},
+): FakeTaskWorkerHandle {
   const child = spawn(
     process.execPath,
     [FAKE_TASK_WORKER_CHILD_SCRIPT, ...fakeWorkerArgs(options)],

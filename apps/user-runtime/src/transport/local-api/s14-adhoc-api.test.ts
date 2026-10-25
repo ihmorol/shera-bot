@@ -434,7 +434,7 @@ describe("S14 shared machinery (PRD §4.1/§4.2 AC5) — ad-hoc reuses the SAME 
         (detail.body["roster"] as Array<Record<string, unknown>>)
           .map((member) => member["agent_id"])
           .sort(),
-      ).toEqual([DEVELOPER, RESEARCHER].sort());
+      ).toEqual([DEVELOPER, GENERAL, RESEARCHER].sort());
       expect((detail.body["operation"] as Record<string, unknown>)["coordinator_agent_id"]).toBe(
         "none",
       );

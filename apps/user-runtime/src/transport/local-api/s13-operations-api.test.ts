@@ -246,10 +246,13 @@ describe("S13 Operation API — create, list, detail (D31, D29, D36, D41)", () =
     const dir = makeTempDir("shera-runtime-s13-create-failures-");
     const running = await composeOn(join(dir, "runtime.db"));
     try {
+      // S14 note: an empty name on an AD-HOC create is no longer malformed —
+      // it auto-labels `Ad-hoc · N Agents` (covered by s14-adhoc-api.test.ts).
+      // The route-level validation 400 case uses an over-long name instead.
       const malformed = await postJson(
         running.origin,
         "/v1/operations",
-        createOperationBody({ name: "" }),
+        createOperationBody({ name: "x".repeat(201) }),
       );
       expect(malformed.status).toBe(400);
       expect(malformed.body).toMatchObject({ code: "CONTRACT_VALIDATION_FAILED" });

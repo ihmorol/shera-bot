@@ -40,6 +40,7 @@ import type { AgentSessionPresence } from "../../modules/sessions/session-superv
 import type { ReplayService } from "../../modules/events/replay.service.ts";
 import { MessageSender } from "../../modules/events/events.types.ts";
 import type { OperationsService } from "../../modules/operations/operations.service.ts";
+import { ADHOC_AUTO_LABEL_PATTERN } from "../../modules/operations/operations.service.ts";
 import {
   contractValidationResponse,
   createTypedErrorRequestHandler,
@@ -63,6 +64,7 @@ export const GET_OPERATION_PATH = "/v1/operations/:operation_id" as const;
 export const OPERATION_ROSTER_COMMANDS_PATH =
   "/v1/operations/:operation_id/roster/commands" as const;
 export const OPERATION_COORDINATOR_PATH = "/v1/operations/:operation_id/coordinator" as const;
+export const OPERATION_RENAME_PATH = "/v1/operations/:operation_id/rename" as const;
 export const OPERATION_RUNS_PATH = "/v1/operations/:operation_id/runs" as const;
 export const OPERATION_RUN_PATH = "/v1/operations/:operation_id/runs/:run_id" as const;
 export const OPERATION_EVENTS_PATH = "/v1/operations/:operation_id/events" as const;
@@ -102,8 +104,18 @@ const CreateOperationBody = z.strictObject({
   workspace_id: WorkspaceId,
   /** Null for ad-hoc Operations (D41, D29). */
   definition_ref: z.string().min(1).max(512).nullable(),
-  name: z.string().min(1).max(200),
-  roster_agent_ids: z.array(z.string().min(1).max(256)).min(1).max(50),
+  /**
+   * S14 (D41): optional for ad-hoc creates — omitted/empty/null names the
+   * Operation `Ad-hoc · N Agents` at the service; a pack-defined create
+   * without one is the typed OPERATION_NAME_REQUIRED (400) from the service.
+   */
+  name: z.string().max(200).nullish(),
+  /**
+   * The EMPTY roster is admitted to the service on purpose: the typed
+   * OPERATION_ROSTER_EMPTY refusal (400) is the service's D41 rule, not a
+   * route-schema shape error — the client gets the real refusal code.
+   */
+  roster_agent_ids: z.array(z.string().min(1).max(256)).min(0).max(50),
   coordinator_agent_id: OperationCoordinatorRef,
 });
 
@@ -217,11 +229,26 @@ function agentDetail(row: AgentRow, directChatId: string, presence: AgentSession
 }
 
 /**
+ * S14 — the derived ad-hoc read-model fields (D41), pure derivation with no
+ * extra column: `is_adhoc` is `definition_ref === null`; `auto_label` is the
+ * current name matching the auto-label pattern (a user renaming an Operation
+ * TO the auto-label shape reads auto_label again — an accepted, documented
+ * tradeoff; the pattern lives in the service module as its single source).
+ */
+function operationReadFields(operation: OperationRecord) {
+  return {
+    is_adhoc: operation.definition_ref === null,
+    auto_label: ADHOC_AUTO_LABEL_PATTERN.test(operation.name),
+  };
+}
+
+/**
  * S13 — the Operation detail read model: the record, the roster with its
  * requires_approval flags and display names, the runs summary, and the
  * recent persisted D36 refusals (the UI's "why"). The chat binding id is
  * reported WITHOUT creating it — the binding is created lazily on first
- * thread access (D41), never by a detail read.
+ * thread access (D41), never by a detail read. S14 adds the derived
+ * `is_adhoc`/`auto_label` fields (additive).
  */
 function operationDetail(
   operation: OperationRecord,
@@ -233,6 +260,7 @@ function operationDetail(
 ) {
   return {
     operation,
+    ...operationReadFields(operation),
     roster: roster.map((member) => ({
       agent_id: member.agent_id,
       display_name: agentNames.get(member.agent_id) ?? null,
@@ -304,6 +332,7 @@ export interface LocalApiDeps {
     | "addRosterAgent"
     | "removeRosterAgent"
     | "setCoordinator"
+    | "renameOperation"
     | "createRun"
     | "getRun"
     | "listRuns"
@@ -534,18 +563,21 @@ export function createLocalApi(deps: LocalApiDeps): Express {
   });
 
   /**
-   * S13 — create one Operation chat record (D31): the service runtime-validates
-   * the roster against the PINNED pack catalog (D36) and builds the D29
-   * pinning snapshot. A refused roster is the typed 403
-   * (OPERATION_ROSTER_REFUSED, the RosterRefusal in the body) and leaves
-   * NOTHING behind. The chat binding is created lazily on first thread
-   * access (D41), never here.
+   * S13/S14 — create one Operation chat record (D31): the service
+   * runtime-validates the roster against the PINNED pack catalog (D36) and
+   * builds the D29 pinning snapshot. A refused roster is the typed 403
+   * (OPERATION_ROSTER_REFUSED, the RosterRefusal in the body) and an empty
+   * roster the typed 400 (OPERATION_ROSTER_EMPTY); both leave NOTHING
+   * behind. A nameless ad-hoc create auto-labels `Ad-hoc · N Agents` (D41);
+   * a nameless pack-defined create is the typed 400
+   * (OPERATION_NAME_REQUIRED). The chat binding is created lazily on first
+   * thread access (D41), never here.
    */
   app.post(CREATE_OPERATION_PATH, (req, res) => {
     const body = CreateOperationBody.safeParse(req.body);
     if (!body.success) {
       const { status, body: errorBody } = contractValidationResponse(
-        "The create request is not valid: a workspace_id, a name, a roster, and a coordinator are required.",
+        "The create request is not valid: a workspace_id, a roster, and a coordinator are required; a name is optional for ad-hoc creates.",
       );
       res.status(status).json(errorBody);
       return;
@@ -553,14 +585,14 @@ export function createLocalApi(deps: LocalApiDeps): Express {
     res.status(201).json(
       deps.operations.createOperation(body.data.workspace_id, {
         definition_ref: body.data.definition_ref,
-        name: body.data.name,
+        name: body.data.name ?? null,
         roster_agent_ids: body.data.roster_agent_ids,
         coordinator_agent_id: body.data.coordinator_agent_id,
       }),
     );
   });
 
-  /** S13 — the workspace's Operations (E12). */
+  /** S13/S14 — the workspace's Operations (E12), each row with the derived is_adhoc/auto_label fields. */
   app.get(LIST_OPERATIONS_PATH, (req, res) => {
     const query = OperationWorkspaceQuery.safeParse(req.query);
     if (!query.success) {
@@ -570,7 +602,11 @@ export function createLocalApi(deps: LocalApiDeps): Express {
       res.status(status).json(body);
       return;
     }
-    res.status(200).json({ operations: deps.operations.listOperations(query.data.workspace_id) });
+    res.status(200).json({
+      operations: deps.operations
+        .listOperations(query.data.workspace_id)
+        .map((operation) => ({ ...operation, ...operationReadFields(operation) })),
+    });
   });
 
   /**
@@ -683,6 +719,37 @@ export function createLocalApi(deps: LocalApiDeps): Express {
           body.data.coordinator_agent_id,
         ),
       );
+  });
+
+  /**
+   * S14 — rename one Operation (POST-command convention): the body is the
+   * raw operation.rename_operation envelope; the service parses it, applies
+   * the rename as a durable row update, and answers the record (a replayed
+   * command_id answers the record again through its receipt — D23 rule 6).
+   * The envelope's workspace_id scopes the command (E12) and its
+   * operation_id must agree with the path — a mismatch is the typed 400,
+   * never a silent retarget.
+   */
+  app.post(OPERATION_RENAME_PATH, (req, res) => {
+    const operationId = Id.safeParse(req.params.operation_id);
+    const raw =
+      typeof req.body === "object" && req.body !== null
+        ? (req.body as Record<string, unknown>)
+        : {};
+    const envelopeWorkspace = typeof raw["workspace_id"] === "string" ? raw["workspace_id"] : null;
+    const envelopeOperation = typeof raw["operation_id"] === "string" ? raw["operation_id"] : null;
+    if (
+      !operationId.success ||
+      envelopeWorkspace === null ||
+      envelopeOperation !== operationId.data
+    ) {
+      const { status, body } = contractValidationResponse(
+        "The rename command is not valid: the envelope must carry a workspace_id and the operation_id of the path.",
+      );
+      res.status(status).json(body);
+      return;
+    }
+    res.status(200).json(deps.operations.renameOperation(envelopeWorkspace, operationId.data, raw));
   });
 
   /**

@@ -469,15 +469,13 @@ describe("Operation client (S14 surfaces, proxy paths)", () => {
   });
 
   it("fetchOperationDetail parses is_adhoc/auto_label and the F6 pack_summary", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(
-        jsonResponse(200, {
-          ...DETAIL,
-          auto_label: true,
-          operation: { ...OPERATION, name: AUTO_LABEL },
-        }),
-      );
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(200, {
+        ...DETAIL,
+        auto_label: true,
+        operation: { ...OPERATION, name: AUTO_LABEL },
+      }),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const detail = await fetchOperationDetail(WORKSPACE, OPERATION_ID);

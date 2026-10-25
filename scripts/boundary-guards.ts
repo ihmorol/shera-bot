@@ -46,6 +46,13 @@ const PROCESS_EXCEPTIONS = new Set([
   // escalation and crash semantics. The production Pi adapter will live in
   // the adapters/process/ seam (chunk 3 wires the spawn dependency there).
   "packages/pi-protocol/src/fake-pi.ts",
+  // The S16 fake task worker test double: same rationale as the fake Pi —
+  // worker supervision suites must exercise true heartbeat silence, crash
+  // exit codes and the SIGTERM→SIGKILL escalation against live child
+  // processes (D32 layer 3, E8). The production task-worker spawn seam will
+  // live in the adapters/process/ boundary (chunk 3 wires it), and only the
+  // factory spawns; the child script itself spawns nothing.
+  "apps/user-runtime/src/modules/workers/fake-task-worker.ts",
 ]);
 
 /** The only place SQL (and sqlite itself) may live in the runtime. */

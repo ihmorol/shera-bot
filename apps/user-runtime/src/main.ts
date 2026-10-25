@@ -281,7 +281,17 @@ export function runtimeConfigFromEnv(
     overrides.packsRoot ?? env["RUNTIME_PACKS_ROOT"] ?? defaultPacksRoot(import.meta.dirname);
   const sessionHarness = sessionHarnessFromEnv(env, overrides);
   const sessionPolicy = sessionPolicyFromEnv(env, overrides);
-  return { host, port, dbPath, defaultWorkspaceId, packsRoot, sessionHarness, sessionPolicy };
+  const workerHarness = workerHarnessFromEnv(env, overrides);
+  return {
+    host,
+    port,
+    dbPath,
+    defaultWorkspaceId,
+    packsRoot,
+    sessionHarness,
+    sessionPolicy,
+    workerHarness,
+  };
 }
 
 /** Start the runtime node: compose, bind, (optionally) wire shutdown signals. */
@@ -295,6 +305,7 @@ export async function startRuntimeNode(config: RuntimeNodeConfig = {}): Promise<
     packsRoot,
     sessionHarness,
     sessionPolicy,
+    workerHarness,
   } = runtimeConfigFromEnv(process.env, config);
   const defaultWorkspaceId = management ? `ws_${management.accountId}` : configuredWorkspace;
   if (management && !isLoopbackHost(host))
@@ -318,6 +329,9 @@ export async function startRuntimeNode(config: RuntimeNodeConfig = {}): Promise<
     // S12 chunk 4: the env-resolved policy partial merges over the
     // supervisor's programmatic constants (empty object = pure defaults).
     ...(Object.keys(sessionPolicy).length > 0 ? { sessionPolicy } : {}),
+    // S16 (D32 layer 3 / E1): the task-worker harness when configured;
+    // absent otherwise — runs stay worker-free exactly as before (G4).
+    ...(workerHarness ? { workerHarness } : {}),
   });
   let managementServer: ReturnType<typeof createManagementServer> | undefined;
   let managementPort: number | null = null;

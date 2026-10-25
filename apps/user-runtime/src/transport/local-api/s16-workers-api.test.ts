@@ -57,12 +57,11 @@ import {
   type TaskWorkerSupervisorPolicy,
 } from "../../modules/workers/task-worker-supervisor.service.ts";
 import { TaskWorkerAdmissionGate } from "../../modules/workers/admission.ts";
-import { spawnFakeTaskWorker, type FakeTaskWorkerHandle } from "../../modules/workers/fake-task-worker.ts";
 import {
-  DEFAULT_WORKSPACE_ID,
-  composeRuntime,
-  type RuntimeHandle,
-} from "./compose.ts";
+  spawnFakeTaskWorker,
+  type FakeTaskWorkerHandle,
+} from "../../modules/workers/fake-task-worker.ts";
+import { DEFAULT_WORKSPACE_ID, composeRuntime, type RuntimeHandle } from "./compose.ts";
 import { runtimeConfigFromEnv } from "../../main.ts";
 import {
   cleanupTempResources,
@@ -224,11 +223,7 @@ async function createOperationAndRun(
   return { operationId, runId };
 }
 
-async function runStateOf(
-  origin: string,
-  operationId: string,
-  runId: string,
-): Promise<string> {
+async function runStateOf(origin: string, operationId: string, runId: string): Promise<string> {
   const detail = await getJson(
     origin,
     `/v1/operations/${operationId}/runs/${runId}?workspace_id=${WORKSPACE}`,
@@ -393,15 +388,12 @@ describe("S16 run wiring (harness-configured composition)", () => {
   });
 
   it("starts a worker on the RUNNING transition and lands the run SUCCEEDED (real spawn adapter)", async () => {
-    runtime = await composeOn(makeTempDir("shera-s16-wiring-"), {
+    runtime = await composeOn(join(makeTempDir("shera-s16-wiring-"), "runtime.db"), {
       workerHarness: FAKE_WORKER_HARNESS,
       workerAdmissionPolicy: { maxWorkerProcesses: totalTaskUpperBound() + 1_024 },
       workerPolicy: MS_POLICY,
     });
-    const { operationId, runId } = await createOperationAndRun(
-      runtime.origin,
-      "run-worker-e2e",
-    );
+    const { operationId, runId } = await createOperationAndRun(runtime.origin, "run-worker-e2e");
 
     // The composition exposes the worker system when (and only when) the
     // harness is configured.
@@ -412,9 +404,7 @@ describe("S16 run wiring (harness-configured composition)", () => {
     // The fake worker (harness command) runs its two steps and completes:
     // done → worker.completed + run SUCCEEDED through the seam.
     await until(async () =>
-      (await runStateOf(runtime.origin, operationId, runId)) === "SUCCEEDED"
-        ? true
-        : undefined,
+      (await runStateOf(runtime.origin, operationId, runId)) === "SUCCEEDED" ? true : undefined,
     );
 
     const rows = readWorkerRows(runtime.dbPath);
@@ -429,30 +419,23 @@ describe("S16 run wiring (harness-configured composition)", () => {
   }, 30_000);
 
   it("stops the worker on the CANCELLING transition (escalation observed)", async () => {
-    runtime = await composeOn(makeTempDir("shera-s16-cancel-"), {
+    runtime = await composeOn(join(makeTempDir("shera-s16-cancel-"), "runtime.db"), {
       workerHarness: FAKE_WORKER_HARNESS,
       workerAdmissionPolicy: { maxWorkerProcesses: totalTaskUpperBound() + 1_024 },
       workerPolicy: MS_POLICY,
     });
-    const { operationId, runId } = await createOperationAndRun(
-      runtime.origin,
-      "run-worker-cancel",
-    );
+    const { operationId, runId } = await createOperationAndRun(runtime.origin, "run-worker-cancel");
 
     runtime.runtime.operations.applyRunState(WORKSPACE, operationId, runId, "RUNNING");
     await until(async () =>
-      readWorkerRows(runtime.dbPath).some(
-        (row) => row.run_id === runId && row.state === "running",
-      )
+      readWorkerRows(runtime.dbPath).some((row) => row.run_id === runId && row.state === "running")
         ? true
         : undefined,
     );
 
     runtime.runtime.operations.applyRunState(WORKSPACE, operationId, runId, "CANCELLING");
     await until(async () =>
-      readWorkerRows(runtime.dbPath).some(
-        (row) => row.run_id === runId && row.state === "killed",
-      )
+      readWorkerRows(runtime.dbPath).some((row) => row.run_id === runId && row.state === "killed")
         ? true
         : undefined,
     );
@@ -465,7 +448,7 @@ describe("S16 run wiring (harness-configured composition)", () => {
   }, 30_000);
 
   it("queues the run durably when the admission gate is full, and re-admits when capacity frees", async () => {
-    runtime = await composeOn(makeTempDir("shera-s16-queue-"), {
+    runtime = await composeOn(join(makeTempDir("shera-s16-queue-"), "runtime.db"), {
       workerHarness: FAKE_WORKER_HARNESS,
       workerAdmissionPolicy: {
         maxConcurrentWorkers: 1,
@@ -492,7 +475,12 @@ describe("S16 run wiring (harness-configured composition)", () => {
 
     // Second run: the gate is full → the run is durably QUEUED, with the
     // machine-readable reason on its stream.
-    runtime.runtime.operations.applyRunState(WORKSPACE, op.operationId, "run-queue-second", "RUNNING");
+    runtime.runtime.operations.applyRunState(
+      WORKSPACE,
+      op.operationId,
+      "run-queue-second",
+      "RUNNING",
+    );
     expect(await runStateOf(runtime.origin, op.operationId, "run-queue-second")).toBe("QUEUED");
     const queuedEvents = readRunJournal(runtime.dbPath, "run-queue-second").filter(
       (event) => event.type === "worker.queued",
@@ -551,7 +539,7 @@ describe("S16 worker-less composition (G4 fallback)", () => {
   });
 
   it("keeps run transitions worker-free: no rows, no worker events, readout says not configured", async () => {
-    runtime = await composeOn(makeTempDir("shera-s16-g4-"));
+    runtime = await composeOn(join(makeTempDir("shera-s16-g4-"), "runtime.db"));
     const { operationId, runId } = await createOperationAndRun(runtime.origin, "run-no-harness");
 
     expect(runtime.runtime.workers).toBeUndefined();
@@ -816,11 +804,13 @@ describe("S16 restart reconciliation (dead pids reaped, QUEUED re-queued, RECOVE
       // The QUEUED run re-entered the admission queue — the gate is full (the
       // live row counts), so it queued AGAIN (fresh worker.queued evidence)
       // and no worker was spawned for it.
-      expect(report.requeued).toEqual([{ workspace_id: "ws-reconcile", run_id: runs.queued, queued: true }]);
+      expect(report.requeued).toEqual([
+        { workspace_id: "ws-reconcile", run_id: runs.queued, queued: true },
+      ]);
       expect(harness.spawns).toHaveLength(0);
-      expect(
-        harness.ops.getRun("ws-reconcile", harness.operationId, runs.queued).state,
-      ).toBe("QUEUED");
+      expect(harness.ops.getRun("ws-reconcile", harness.operationId, runs.queued).state).toBe(
+        "QUEUED",
+      );
       expect(
         readJournalEvents(harness.dbPath, runs.queued).filter(
           (event) => event.type === "worker.queued",
@@ -828,9 +818,9 @@ describe("S16 restart reconciliation (dead pids reaped, QUEUED re-queued, RECOVE
       ).toHaveLength(1);
 
       // RECOVERY_REQUIRED: untouched — no events, no re-queue.
-      expect(
-        harness.ops.getRun("ws-reconcile", harness.operationId, runs.recovery).state,
-      ).toBe("RECOVERY_REQUIRED");
+      expect(harness.ops.getRun("ws-reconcile", harness.operationId, runs.recovery).state).toBe(
+        "RECOVERY_REQUIRED",
+      );
       expect(readJournalEvents(harness.dbPath, runs.recovery)).toEqual([]);
     } finally {
       await harness.supervisor.stopAll();
@@ -855,8 +845,7 @@ describe("S16 restart reconciliation (dead pids reaped, QUEUED re-queued, RECOVE
 
       // The re-driven run completes end-to-end: done → SUCCEEDED.
       await until(async () =>
-        harness.ops.getRun("ws-reconcile", harness.operationId, runs.queued).state ===
-        "SUCCEEDED"
+        harness.ops.getRun("ws-reconcile", harness.operationId, runs.queued).state === "SUCCEEDED"
           ? true
           : undefined,
       );

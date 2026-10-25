@@ -31,10 +31,7 @@
  *
  * Governing records: D32, D8, E1, D10; AC25.
  */
-import {
-  OperationsService,
-  type OperationsServiceDeps,
-} from "../operations/operations.service.ts";
+import { OperationsService, type OperationsServiceDeps } from "../operations/operations.service.ts";
 import type { RunState } from "@shera-bot/contracts";
 
 /** The states that START a run's worker (the run is actively executing). */
@@ -42,12 +39,7 @@ const WORKER_START_STATES: readonly RunState[] = ["RUNNING"];
 
 /** The states that STOP the run's worker (cancellation, or a terminal state
  * reached by another path — defensively idempotent). */
-const WORKER_STOP_STATES: readonly RunState[] = [
-  "CANCELLING",
-  "CANCELLED",
-  "FAILED",
-  "SUCCEEDED",
-];
+const WORKER_STOP_STATES: readonly RunState[] = ["CANCELLING", "CANCELLED", "FAILED", "SUCCEEDED"];
 
 export function isWorkerStartState(state: RunState): boolean {
   return WORKER_START_STATES.includes(state);
@@ -80,7 +72,7 @@ export class RunFlowOperationsService extends OperationsService {
     super(deps);
   }
 
-  applyRunState(
+  override applyRunState(
     workspaceId: string,
     operationId: string,
     runId: string,

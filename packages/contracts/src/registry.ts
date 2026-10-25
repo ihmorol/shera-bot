@@ -32,6 +32,7 @@ import {
   OperationCollaborationEvent,
   OperationDefinition,
   OperationRecord,
+  OperationRenameCommand,
   OperationRun,
   RemoveRosterAgentCommand,
   RosterRefusal,
@@ -110,6 +111,7 @@ export const CONTRACT_REGISTRY = {
   OperationRun,
   AddRosterAgentCommand,
   RemoveRosterAgentCommand,
+  OperationRenameCommand,
   RosterRefusal,
   OperationCollaborationEvent,
 } as const;

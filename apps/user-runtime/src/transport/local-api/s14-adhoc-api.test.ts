@@ -280,7 +280,11 @@ describe("S14 rename (D23 rule 6 — idempotent replay answers the record)", () 
     const running = await composeWithNamedOperation(join(dir, "runtime.db"));
     const renamePath = `/v1/operations/${running.operationId}/rename`;
     try {
-      const renamed = await postJson(running.origin, renamePath, renameCommand(running.operationId));
+      const renamed = await postJson(
+        running.origin,
+        renamePath,
+        renameCommand(running.operationId),
+      );
       expect(renamed.status).toBe(200);
       expect(renamed.body).toMatchObject({
         operation_id: running.operationId,
@@ -300,7 +304,10 @@ describe("S14 rename (D23 rule 6 — idempotent replay answers the record)", () 
       // duplicated effect, never a 404 for an applied rename.
       const replay = await postJson(running.origin, renamePath, renameCommand(running.operationId));
       expect(replay.status).toBe(200);
-      expect(replay.body).toMatchObject({ operation_id: running.operationId, name: "Weekly Review" });
+      expect(replay.body).toMatchObject({
+        operation_id: running.operationId,
+        name: "Weekly Review",
+      });
 
       // Unknown operation → typed 404.
       const missing = await postJson(running.origin, "/v1/operations/op_nobody/rename", {
@@ -408,16 +415,12 @@ describe("S14 shared machinery (PRD §4.1/§4.2 AC5) — ad-hoc reuses the SAME 
 
       // 5. An @-addressed thread message resolves against the CURRENT roster
       //    (Citation was removed; the mention resolves to Developer only).
-      const sent = await postJson(
-        running.origin,
-        `/v1/operations/${operationId}/thread/messages`,
-        {
-          workspace_id: WORKSPACE,
-          idempotency_key: "idem_s14_shared_msg_001",
-          sender: { kind: "user", display_name: "Emon" },
-          text: "@agent_developer please start the outline",
-        },
-      );
+      const sent = await postJson(running.origin, `/v1/operations/${operationId}/thread/messages`, {
+        workspace_id: WORKSPACE,
+        idempotency_key: "idem_s14_shared_msg_001",
+        sender: { kind: "user", display_name: "Emon" },
+        text: "@agent_developer please start the outline",
+      });
       expect(sent.status).toBe(201);
       expect(sent.body).toMatchObject({ kind: "message_sent", addressed_to: [DEVELOPER] });
 

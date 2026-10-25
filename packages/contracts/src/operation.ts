@@ -232,6 +232,29 @@ export const RemoveRosterAgentCommand = z.strictObject({
 });
 export type RemoveRosterAgentCommand = z.infer<typeof RemoveRosterAgentCommand>;
 
+/**
+ * S14 — rename one Operation (user-owned field, D41: ad-hoc Operations are
+ * created nameless with the auto-label and renamed by the user afterwards).
+ * The rename is a durable row update on the Operation record, NOT a journaled
+ * event: the record has no event stream of its own beyond the D7
+ * collaboration events (the chat conversation's journal belongs to the chat),
+ * so idempotency is carried by the command receipt (D23 rule 6), not by a
+ * stream append. `name` is 1-120 characters and must stay non-empty once
+ * trimmed; the runtime persists the trimmed value.
+ */
+export const OperationRenameCommand = z.strictObject({
+  ...OperationRosterCommandBase,
+  type: z.literal("operation.rename_operation"),
+  name: z
+    .string()
+    .min(1)
+    .max(120)
+    .refine((value) => value.trim().length > 0, {
+      message: "name must be non-empty once trimmed",
+    }),
+});
+export type OperationRenameCommand = z.infer<typeof OperationRenameCommand>;
+
 export const OPERATION_ROSTER_COMMAND_TYPES = [
   "operation.add_roster_agent",
   "operation.remove_roster_agent",

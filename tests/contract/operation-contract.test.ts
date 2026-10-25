@@ -16,6 +16,7 @@ import {
   OPERATION_ROSTER_COMMAND_TYPES,
   OperationCollaborationEvent,
   OperationRecord,
+  OperationRenameCommand,
   OperationRun,
   RemoveRosterAgentCommand,
   ROSTER_REFUSAL_CODES,
@@ -290,6 +291,65 @@ describe("Roster-change command contracts (D36)", () => {
       message: "nope",
     });
     expect(unknown.success).toBe(false);
+  });
+});
+
+describe("Operation rename command contract (S14, D41, D23 rule 6)", () => {
+  it("parses a valid rename command", () => {
+    const result = OperationRenameCommand.safeParse({
+      ...baseRosterCommandEnvelope(),
+      type: "operation.rename_operation",
+      name: "Weekly Review",
+    });
+    expect(result.success, JSON.stringify(result)).toBe(true);
+  });
+
+  it("accepts a name of exactly 120 characters", () => {
+    const result = OperationRenameCommand.safeParse({
+      ...baseRosterCommandEnvelope(),
+      type: "operation.rename_operation",
+      name: "x".repeat(120),
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a name over 120 characters", () => {
+    const result = OperationRenameCommand.safeParse({
+      ...baseRosterCommandEnvelope(),
+      type: "operation.rename_operation",
+      name: "x".repeat(121),
+    });
+    expectTypedIssue(result as AnyResult, "name", "too_big");
+  });
+
+  it("rejects an empty name", () => {
+    const result = OperationRenameCommand.safeParse({
+      ...baseRosterCommandEnvelope(),
+      type: "operation.rename_operation",
+      name: "",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a whitespace-only name (non-empty once trimmed)", () => {
+    const result = OperationRenameCommand.safeParse({
+      ...baseRosterCommandEnvelope(),
+      type: "operation.rename_operation",
+      name: "   ",
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(JSON.stringify(result.error.issues)).toContain("non-empty once trimmed");
+    }
+  });
+
+  it("rejects an unknown command type literal", () => {
+    const result = OperationRenameCommand.safeParse({
+      ...baseRosterCommandEnvelope(),
+      type: "operation.delete_operation",
+      name: "Weekly Review",
+    });
+    expect(result.success).toBe(false);
   });
 });
 

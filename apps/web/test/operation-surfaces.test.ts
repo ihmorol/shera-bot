@@ -140,10 +140,25 @@ const SUBRUN: OperationRun = {
 
 const DETAIL = {
   operation: OPERATION,
+  // S14: the derived ad-hoc fields + the F6 pack summary (the pinned pack's
+  // skills/connectors, connectors honestly not-configured — D38).
+  is_adhoc: false,
+  auto_label: false,
   roster: [ROSTER_MEMBER(GA), ROSTER_MEMBER(RESEARCHER)],
   runs: [RUN, SUBRUN],
   recent_refusals: [],
   chat_conversation_id: CHAT_ID,
+  pack_summary: {
+    skills: [
+      { skill_id: "skill_research_core", title: "Research core" },
+      { skill_id: "skill_citation_core", title: "Citation core" },
+      { skill_id: "skill_writing_core", title: "Writing core" },
+      { skill_id: "skill_development_core", title: "Development core" },
+      { skill_id: "skill_tutoring_core", title: "Tutoring core" },
+      { skill_id: "skill_planning_core", title: "Planning core" },
+    ],
+    connectors: [{ connector_id: "connector_scholar_library", connected: false }],
+  },
 };
 
 function collaborationEvent(
@@ -667,7 +682,11 @@ afterEach(() => {
 
 describe("Operation client (proxy paths)", () => {
   it("fetchOperations GETs the workspace's Operation records", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { operations: [OPERATION] }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse(200, { operations: [{ ...OPERATION, is_adhoc: false, auto_label: false }] }),
+      );
     vi.stubGlobal("fetch", fetchMock);
 
     const operations = await fetchOperations(WORKSPACE);

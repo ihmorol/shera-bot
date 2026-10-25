@@ -593,6 +593,37 @@ describe("runtime proxy — S13 Operation surfaces (allowlist additions)", () =>
     );
   });
 
+  it("forwards the S14 rename POST with its contracts envelope", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const { calls } = stubFetch(operationResponse);
+
+    const envelope = {
+      command_id: "cmd_s14_rename_001",
+      idempotency_key: "idem_s14_rename_001",
+      workspace_id: "ws_1",
+      operation_id: "op_research_01",
+      actor: { type: "user", id: "user_emon" },
+      issued_at: "2026-10-24T12:00:00.000Z",
+      type: "operation.rename_operation",
+      name: "Weekly Review",
+    };
+    const request = new Request("http://web.test/api/runtime/v1/operations/op_research_01/rename", {
+      method: "POST",
+      body: JSON.stringify(envelope),
+      headers: { "content-type": "application/json" },
+    });
+    const response = await proxyToLocalApi(request, "/v1/operations/op_research_01/rename");
+
+    expect(response.status).toBe(200);
+    const call = calls.at(-1)!;
+    expect(String(call.input)).toBe(
+      `${CONTROL_BASE}/api/runtime/local/v1/operations/op_research_01/rename`,
+    );
+    expect(call.init?.method).toBe("POST");
+    expect(call.init?.body).toBe(JSON.stringify(envelope));
+  });
+
   it("still refuses the D7 collaboration-event write — the browser renders events, never authors them", async () => {
     process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
     process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;

@@ -171,6 +171,17 @@ const OPERATIONS_REJECTIONS: Record<
     safe_message: "The run state is not a known state.",
     user_action: null,
   },
+  // S14 (D41 ad-hoc creation rules): both stay in the 400 validation class.
+  OPERATION_ROSTER_EMPTY: {
+    status: 400,
+    safe_message: "An Operation needs at least one Agent.",
+    user_action: null,
+  },
+  OPERATION_NAME_REQUIRED: {
+    status: 400,
+    safe_message: "A pack-defined Operation needs a name.",
+    user_action: null,
+  },
 };
 
 function bodyParserType(error: unknown): string | null {

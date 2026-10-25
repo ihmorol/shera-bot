@@ -5,18 +5,21 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { NewOperationForm } from "@/components/operations/new-operation-form";
+import { OperationChatHeader } from "@/components/operations/operation-chat-header";
+import { OperationPackSummary } from "@/components/operations/operation-pack-summary";
 import { OperationRosterPanel } from "@/components/operations/operation-roster-panel";
 import { OperationRunsPanel } from "@/components/operations/operation-runs-panel";
 import { OperationThreadView } from "@/components/operations/operation-thread";
 import { ContainerGate } from "@/components/shell/container-gate";
 import { EmptyState, SurfaceFrame } from "@/components/shell/surface-frame";
 import type { AgentRosterSummary } from "@/lib/agent-api";
-import { safeRuntimeMessage, useAgentRoster as useWorkspaceRoster } from "@/lib/agent-data";
+import { useAgentRoster as useWorkspaceRoster } from "@/lib/agent-data";
 import { useContainerResolution, useSessionIdentity } from "@/lib/container-connection";
 import { operationInstanceById, rosterSubtitle } from "@/lib/fixtures";
 import { findOperationTemplate } from "@/lib/navigation";
 import {
   candidateAgentsForOperation,
+  createOperationOutcomeMessage,
   newMessageDraftKey,
   samePackAddRisk,
   type OperationRosterMember,
@@ -28,6 +31,7 @@ import {
   useCreateRun,
   useOperationDetail,
   useOperationThread,
+  useRenameOperation,
   useRosterCommand,
   useSendOperationMessage,
 } from "@/lib/operation-data";
@@ -125,17 +129,24 @@ function RuntimeOperationChat({
   const coordinatorCommand = useCoordinatorCommand(workspaceId, operationId);
   const createRun = useCreateRun(workspaceId, operationId);
   const sendMessage = useSendOperationMessage(workspaceId, operationId);
+  // S14 (D41/D23 rule 6): the user-owned rename, wired to the header affordance.
+  const renameOperation = useRenameOperation(workspaceId, operationId);
 
   const [composerValue, setComposerValue] = useState("");
   const [confirmingAdd, setConfirmingAdd] = useState<AgentRosterSummary | null>(null);
   const [refusalMessage, setRefusalMessage] = useState<string | null>(null);
+  const [renameEditing, setRenameEditing] = useState(false);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [renameErrorMessage, setRenameErrorMessage] = useState<string | null>(null);
+  const [packSummaryOpen, setPackSummaryOpen] = useState(false);
   // One idempotency key per draft: a retry of the SAME send reuses it (never a
   // duplicated turn); the key rotates only after a send settles successfully.
   const [draftKey, setDraftKey] = useState(() => newMessageDraftKey());
 
   const operation = detail.detail?.operation ?? null;
   const runs = detail.detail?.runs ?? [];
-  const pending = rosterCommand.isPending || coordinatorCommand.isPending;
+  const pending =
+    rosterCommand.isPending || coordinatorCommand.isPending || renameOperation.isPending;
 
   const rosterMembers: OperationRosterMember[] = useMemo(
     () => detail.detail?.roster ?? [],
@@ -185,18 +196,52 @@ function RuntimeOperationChat({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-line bg-surface px-4 lg:px-6">
-        <div className="min-w-0">
-          <h1 className="truncate font-display text-lg font-semibold tracking-tight text-text">
-            {operation ? operation.name : "Operation"}
-          </h1>
-          <p className="truncate font-mono text-xs tracking-[0.08em] text-muted">
-            {packPinning
-              ? `pack ${packPinning} · ${runs.length} ${runs.length === 1 ? "run" : "runs"}`
-              : "Operation chat"}
-          </p>
-        </div>
-      </header>
+      <OperationChatHeader
+        name={operation ? operation.name : "Operation"}
+        isAdhoc={detail.detail?.is_adhoc ?? false}
+        autoLabel={detail.detail?.auto_label ?? false}
+        packLabel={packPinning}
+        runCount={runs.length}
+        renameEditing={renameEditing}
+        renameDraft={renameDraft}
+        renamePending={renameOperation.isPending}
+        renameErrorMessage={renameErrorMessage}
+        onRenameStart={() => {
+          setRenameErrorMessage(null);
+          setRenameDraft(operation?.name ?? "");
+          setRenameEditing(true);
+        }}
+        onRenameCancel={() => setRenameEditing(false)}
+        onRenameDraftChange={setRenameDraft}
+        onRenameSubmit={() => {
+          const name = renameDraft.trim();
+          if (!name || renameOperation.isPending) return;
+          renameOperation.mutate(name, {
+            // The editor closes only on the runtime's read-after-write truth
+            // (the hook invalidates the detail + list reads); a typed failure
+            // keeps the editor open with its safe copy (D23 rule 4).
+            onSuccess: () => {
+              setRenameEditing(false);
+              setRenameErrorMessage(null);
+            },
+            onError: (error) =>
+              setRenameErrorMessage(safeOperationMessage(error, "The rename was not accepted.")),
+          });
+        }}
+      />
+
+      {/* S14 (UI_DESIGN S6/F6): the collapsible roster + pack skills/connectors
+          summary — connectors render the runtime's honest not-configured
+          status (D38), never an invented connection. */}
+      <OperationPackSummary
+        packSummary={detail.detail?.pack_summary ?? null}
+        rosterCount={rosterMembers.length}
+        open={packSummaryOpen}
+        onOpenChange={setPackSummaryOpen}
+        state={detail.state === "ready" ? "ready" : detail.state}
+        safeErrorMessage={detail.safeErrorMessage}
+        onRetry={detail.refetch}
+      />
 
       <OperationRosterPanel
         roster={rosterMembers}
@@ -338,16 +383,20 @@ function RuntimeNewOperation({ workspaceId }: { workspaceId: string }) {
         pending={createOperation.isPending}
         errorMessage={
           createOperation.isError
-            ? safeRuntimeMessage(createOperation.error, "The Operation could not be created.")
+            ? // The typed refusal as ONE safe message: the server's safe copy
+              // first, the S14 refusal codes mapped to friendly copy (G3).
+              createOperationOutcomeMessage(createOperation.error)
             : null
         }
         defaultCoordinatorId={DEFAULT_COORDINATOR_ID}
-        onSubmit={(name, rosterAgentIds) => {
+        onSubmit={({ name, rosterAgentIds, coordinatorAgentId }) => {
           createOperation.mutate(
             {
+              // Null when left unnamed — the server auto-labels `Ad-hoc · N
+              // Agents` (D41); the coordinator may be an Agent or "none" (D42).
               name,
               roster_agent_ids: rosterAgentIds,
-              coordinator_agent_id: DEFAULT_COORDINATOR_ID,
+              coordinator_agent_id: coordinatorAgentId,
             },
             {
               onSuccess: (record) => {

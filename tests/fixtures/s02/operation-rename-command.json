@@ -1,0 +1,13 @@
+{
+  "type": "operation.rename_operation",
+  "command_id": "cmd_003",
+  "idempotency_key": "idem_cmd_003",
+  "workspace_id": "ws_default_01",
+  "operation_id": "op_001",
+  "actor": {
+    "type": "user",
+    "id": "user_emon"
+  },
+  "issued_at": "2026-10-24T00:00:00.000Z",
+  "name": "Weekly Review"
+}

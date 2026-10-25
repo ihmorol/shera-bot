@@ -1,10 +1,13 @@
 import { z } from "zod";
 
+import type { QueryClient } from "@tanstack/react-query";
+
 import {
   AddRosterAgentCommand,
   OperationCollaborationEvent,
   OperationCoordinatorRef,
   OperationRecord,
+  OperationRenameCommand,
   OperationRun,
   RemoveRosterAgentCommand,
   RosterRefusal,
@@ -60,6 +63,10 @@ export function agentIdentityFromSummary(summary: {
  *                                                      command union)
  *   POST /v1/operations/:operation_id/coordinator    set an Agent or "none"
  *                                                    (D42/D49)
+ *   POST /v1/operations/:operation_id/rename       rename (S14, D41/D23 r6 —
+ *                                                  the OperationRenameCommand
+ *                                                  envelope, durable row
+ *                                                  update + receipt replay)
  *   POST /v1/operations/:operation_id/runs           create one run (D31)
  *
  * The D7 collaboration-event write route is deliberately NOT exposed: the
@@ -95,13 +102,41 @@ export const OperationRefusalRowSchema = z.strictObject({
 });
 export type OperationRefusalRow = z.infer<typeof OperationRefusalRowSchema>;
 
+/** One pinned-pack skill in the F6 pack summary (the pack may omit a title). */
+export const PackSummarySkillSchema = z.strictObject({
+  skill_id: z.string().min(1),
+  title: z.string().nullable(),
+});
+
+/** One pinned-pack connector in the F6 pack summary (honestly not-configured). */
+export const PackSummaryConnectorSchema = z.strictObject({
+  connector_id: z.string().min(1),
+  connected: z.boolean(),
+});
+
+/** The S6/F6 pack summary block (mirrors the runtime's read model verbatim). */
+export const PackSummarySchema = z.strictObject({
+  skills: z.array(PackSummarySkillSchema),
+  connectors: z.array(PackSummaryConnectorSchema),
+});
+export type PackSummary = z.infer<typeof PackSummarySchema>;
+
 /** The S13 detail read model: record + roster + runs + refusals + chat binding. */
 export const OperationDetailSchema = z.strictObject({
   operation: OperationRecord,
+  // S14 (D41): the derived ad-hoc fields — is_adhoc flags a definition-less
+  // Operation; auto_label flags the server-derived `Ad-hoc · N Agents` name.
+  is_adhoc: z.boolean(),
+  auto_label: z.boolean(),
   roster: z.array(OperationRosterMemberSchema),
   runs: z.array(OperationRun),
   recent_refusals: z.array(OperationRefusalRowSchema),
   chat_conversation_id: z.string().nullable(),
+  // S14 (UI_DESIGN S6/F6): the pinned pack's skills and connectors. The
+  // runtime derives it honestly — every connector reports connected: false
+  // in the prototype (D38: recommended, never auto-installed; no connector
+  // runtime), so the UI may render "Not configured" but never "Connected".
+  pack_summary: PackSummarySchema,
 });
 export type OperationDetail = z.infer<typeof OperationDetailSchema>;
 
@@ -246,11 +281,21 @@ async function requestRosterOutcome(
 // Reads and writes (S13 chunk 4 surface)
 // ---------------------------------------------------------------------------
 
+/**
+ * S14: the list rows carry the derived ad-hoc fields on top of the record —
+ * the sidebar uses them for the Ad-hoc tag and the auto-label styling (D41).
+ */
+export const OperationListRowSchema = OperationRecord.extend({
+  is_adhoc: z.boolean(),
+  auto_label: z.boolean(),
+});
+export type OperationListRow = z.infer<typeof OperationListRowSchema>;
+
 const OperationsListResponse = z.strictObject({
-  operations: z.array(OperationRecord),
+  operations: z.array(OperationListRowSchema),
 });
 
-export function fetchOperations(workspaceId: string): Promise<OperationRecordType[]> {
+export function fetchOperations(workspaceId: string): Promise<OperationListRow[]> {
   const query = new URLSearchParams({ workspace_id: workspaceId });
   return requestOperation(
     `/api/runtime/v1/operations?${query.toString()}`,
@@ -258,9 +303,13 @@ export function fetchOperations(workspaceId: string): Promise<OperationRecordTyp
   );
 }
 
-/** Ad-hoc creation input (D29/D41): no reusable definition, full pinning derived. */
+/**
+ * Ad-hoc creation input (D29/D41): no reusable definition, full pinning
+ * derived. S14: `name` is OPTIONAL — null (or empty once trimmed) lets the
+ * server auto-label the Operation `Ad-hoc · N Agents`.
+ */
 export interface CreateOperationInput {
-  name: string;
+  name: string | null;
   roster_agent_ids: string[];
   coordinator_agent_id: string;
 }
@@ -277,12 +326,107 @@ export function createOperation(
       body: JSON.stringify({
         workspace_id: workspaceId,
         definition_ref: null,
+        // Null (or trimmed-empty) names the Operation server-side: the
+        // `Ad-hoc · N Agents` auto-label (D41).
         name: input.name,
         roster_agent_ids: input.roster_agent_ids,
         coordinator_agent_id: input.coordinator_agent_id,
       }),
     },
   );
+}
+
+// ---------------------------------------------------------------------------
+// S14 — rename (D23 rule 6): the ONE user-owned field write, carried by the
+// same contracts command envelope as every other Operation mutation.
+// ---------------------------------------------------------------------------
+
+/**
+ * The friendly copy for the S14 creation refusal codes. The server's
+ * safe_message always wins when present; these are the local fallbacks,
+ * phrased like the server's own refusals (no raw internals — G3).
+ */
+export const CREATE_REFUSAL_COPY: Record<string, string> = {
+  OPERATION_ROSTER_EMPTY: "An Operation needs at least one Agent. Select at least one Agent below.",
+  OPERATION_NAME_REQUIRED:
+    "A pack-defined Operation needs a name. Name this Operation, or create it without a pack definition.",
+};
+
+/**
+ * The create command's typed failure as ONE safe message: the server's
+ * safe_message first (it is the runtime's own copy for its refusals), then
+ * the known S14 refusal codes mapped to local friendly copy, then the honest
+ * generic fallback. Never raw internals (D23 rule 4, G3).
+ */
+export function createOperationOutcomeMessage(error: unknown, fallback?: string): string {
+  const generic = fallback ?? "The Operation could not be created.";
+  if (error instanceof RuntimeApiError) {
+    const { code, safe_message } = error.sheraError;
+    if (safe_message.length > 0) {
+      return safe_message;
+    }
+    return CREATE_REFUSAL_COPY[code] ?? generic;
+  }
+  return generic;
+}
+
+/**
+ * Rename one Operation (D41: ad-hoc Operations are created nameless and
+ * renamed by the user afterwards). The envelope is built CLIENT-SIDE and
+ * validated through the runtime's own contracts schema — a malformed rename
+ * (empty name, >120 chars) throws HERE, never as a 400 on the wire; the
+ * server's typed validation failures still surface as RuntimeApiError with
+ * their safe copy. The rename is a durable row update (no journaled event —
+ * the record has no event stream of its own), idempotent through the command
+ * receipt: a replayed envelope answers the record, never a duplicated effect.
+ */
+export function renameOperation(
+  workspaceId: string,
+  operationId: string,
+  name: string,
+): Promise<OperationRecordType> {
+  const envelope = OperationRenameCommand.parse({
+    ...newOperationCommandIds(),
+    workspace_id: workspaceId,
+    operation_id: operationId,
+    actor: AGENT_SETTINGS_USER_ACTOR,
+    type: "operation.rename_operation",
+    name,
+  });
+  return requestOperation(
+    `/api/runtime/v1/operations/${encodeURIComponent(operationId)}/rename`,
+    (payload) => OperationRecord.parse(payload),
+    {
+      method: "POST",
+      body: JSON.stringify(envelope),
+    },
+  );
+}
+
+/**
+ * The rename mutation's options, built over a QueryClient so the hook's
+ * invalidation contract stays testable without a React renderer: a
+ * successful rename invalidates BOTH the detail read model (the renamed
+ * record) and the workspace list (the row's name/derived fields) — the
+ * rendered state is always the runtime's read-after-write truth.
+ */
+export function renameOperationMutationOptions(
+  queryClient: QueryClient,
+  workspaceId: string,
+  operationId: string,
+): {
+  mutationFn: (name: string) => Promise<OperationRecordType>;
+  onSuccess: (data: OperationRecordType) => void;
+} {
+  return {
+    mutationFn: (name: string) => renameOperation(workspaceId, operationId, name),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["operation-detail", workspaceId, operationId],
+      });
+      void queryClient.invalidateQueries({ queryKey: ["operations", workspaceId] });
+    },
+  };
 }
 
 export function fetchOperationDetail(

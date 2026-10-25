@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { AgentRosterSection } from "@/components/shell/agent-roster";
+import { LiveOperationChatsSection } from "@/components/shell/operation-chats-section";
 import { AgentAvatar } from "@/components/chat/agent-avatar";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -17,6 +18,7 @@ import {
   type AttentionVariant,
   type ConversationState,
 } from "@/lib/fixtures";
+import { useOperationsList } from "@/lib/operation-data";
 import { routes } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
@@ -59,6 +61,35 @@ function LiveAgentRosterSection({
       state={roster.state === "ready" && roster.agents.length === 0 ? "empty" : roster.state}
       safeErrorMessage={roster.safeErrorMessage}
       onRetry={roster.refetch}
+      pathname={pathname}
+      onNavigate={onNavigate}
+    />
+  );
+}
+
+/**
+ * The live Operation chats (S14): the workspace's REAL Operations read from
+ * GET /v1/operations, each entry carrying the ad-hoc identity (D41). Rendered
+ * beside the fixture demo chats (which stay, honestly labeled demo data, G4);
+ * a wrapper component keeps the list hook's lifecycle inside "container
+ * ready" — the same discipline as LiveAgentRosterSection.
+ */
+function LiveOperationChats({
+  workspaceId,
+  pathname,
+  onNavigate,
+}: {
+  workspaceId: string;
+  pathname: string;
+  onNavigate?: (() => void) | undefined;
+}) {
+  const operations = useOperationsList(workspaceId);
+  return (
+    <LiveOperationChatsSection
+      operations={operations.operations}
+      state={operations.state}
+      safeErrorMessage={operations.safeErrorMessage}
+      onRetry={operations.refetch}
       pathname={pathname}
       onNavigate={onNavigate}
     />
@@ -232,10 +263,21 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             })}
           </ul>
 
-          {/* Active Operation chats group (§3.2: "── active chats ──") */}
+          {/* Active Operation chats group (§3.2: "── active chats ──").
+              S14: the REAL Operations render first with the ad-hoc identity
+              (D41); the fixture demo chats stay below, honestly demo. */}
           <p className="px-3 pb-1 pt-3 font-mono text-[11px] uppercase tracking-[0.16em] text-muted">
             Active chats
           </p>
+          {readyWorkspaceId ? (
+            <div className="pb-1">
+              <LiveOperationChats
+                workspaceId={readyWorkspaceId}
+                pathname={pathname}
+                onNavigate={onNavigate}
+              />
+            </div>
+          ) : null}
           <ul>
             {model.operationChats.map(
               ({ operation, conversation, subtitle, state, approvalCount, attention }) => {

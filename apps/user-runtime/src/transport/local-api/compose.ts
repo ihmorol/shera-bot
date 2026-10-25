@@ -229,7 +229,9 @@ interface Wired {
  * SAME loaded workspace pack the agents seeding consumes (one pinned pack,
  * D28). `locateAgentPack` lets the runtime tell a foreign pack's Agent
  * (`foreign-pack-refused`) from an id no installed pack claims
- * (`agent-not-in-pack`).
+ * (`agent-not-in-pack`). S14 (S6/F6): the manifest's skill and connector
+ * catalogs ride along verbatim — the pack summary renders what the pack
+ * declares, and the service owns the honest "Not configured" connector status.
  */
 function operationPackCatalog(pack: WorkspacePack): OperationPackCatalog {
   const agents = pack.manifest.agents as readonly PackAgentSeed[];
@@ -237,6 +239,13 @@ function operationPackCatalog(pack: WorkspacePack): OperationPackCatalog {
     pack_id: pack.manifest.pack_id,
     pack_version: pack.manifest.version,
     agents,
+    skills: pack.manifest.skills.map((skill) => ({
+      skill_id: skill.skill_id,
+      title: skill.title,
+    })),
+    connectors: pack.manifest.connectors.map((connector) => ({
+      connector_id: connector.connector_id,
+    })),
     locateAgentPack(agentId: string): string | null {
       return agents.some((agent) => agent.agent_id === agentId) ? pack.manifest.pack_id : null;
     },

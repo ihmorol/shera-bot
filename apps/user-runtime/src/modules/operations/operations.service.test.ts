@@ -53,6 +53,10 @@ const studentManifestPath = resolve(here, "../../../../../agent-packs/student/v1
 const studentManifest = JSON.parse(readFileSync(studentManifestPath, "utf8")) as {
   pack_id: string;
   version: string;
+  // S14 (S6/F6): the pack's authored skill/connector catalogs ride the
+  // catalog for the detail read model's pack summary.
+  skills: Array<{ skill_id: string; version: string; title: string }>;
+  connectors: Array<{ connector_id: string; version: string; title: string }>;
   agents: Array<{
     agent_id: string;
     display_name: string;
@@ -93,6 +97,8 @@ const catalog: OperationPackCatalog = {
   pack_id: studentManifest.pack_id,
   pack_version: studentManifest.version,
   agents: studentManifest.agents,
+  skills: studentManifest.skills,
+  connectors: studentManifest.connectors,
   locateAgentPack(agentId: string): string | null {
     if (studentManifest.agents.some((agent) => agent.agent_id === agentId)) {
       return studentManifest.pack_id;

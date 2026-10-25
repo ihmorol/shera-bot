@@ -44,6 +44,23 @@
  *   contracts union, enforces the gapless per-stream sequence, persists the
  *   sender attribution fields, and advances the run cursor for run-scoped
  *   events. Malformed events are typed-rejected — never silently dropped.
+ * - Ad-hoc creation + naming (S14, D41): a nameless (omitted or
+ *   trimmed-empty) create with a null `definition_ref` is AD-HOC and names
+ *   itself `Ad-hoc · N Agents` (N = roster size); a pack-defined create
+ *   (`definition_ref` set) REQUIRES a name — typed
+ *   OPERATION_NAME_REQUIRED (deriving the name from the definition is
+ *   deferred: no creation flow sends a definition_ref without a name today).
+ *   An empty roster is refused typed (OPERATION_ROSTER_EMPTY) — an Operation
+ *   needs at least one Agent (D41: ad-hoc obeys the same rules).
+ * - Rename (S14, D23 rule 6): a durable row update on the record, NOT a
+ *   journaled event — the Operation record has no event stream of its own
+ *   beyond the D7 collaboration events (the chat conversation's journal
+ *   belongs to the chat, D41), so none is invented here; idempotency rides
+ *   the command receipt (`operation-rename:<command_id>`) written in the
+ *   SAME transaction as the row update (ALSO on the same-name no-op, so a
+ *   future replay of the command_id is inert): a replayed command answers
+ *   the CURRENT record (the same re-read discipline as the remove-roster
+ *   receipt).
  *
  * Every mutation commits as ONE atomic transaction unit (AC2): a mid-unit
  * failure applies NOTHING. Unknown operations/runs answer with typed
@@ -56,9 +73,11 @@ import {
   AddRosterAgentCommand,
   Id,
   JsonObject,
+  OPERATION_NAME_MAX_LENGTH,
   OperationCollaborationEvent,
   OperationCoordinatorRef,
   OperationRecord,
+  OperationRenameCommand,
   OperationRun,
   ProviderSnapshot,
   RemoveRosterAgentCommand,
@@ -100,7 +119,10 @@ export type OperationsServiceFailureCode =
   | "OPERATION_ROSTER_REFUSED"
   | "OPERATION_COMMAND_INVALID"
   | "OPERATION_EVENT_INVALID"
-  | "OPERATION_RUN_STATE_INVALID";
+  | "OPERATION_RUN_STATE_INVALID"
+  // S14 (D41 ad-hoc creation rules).
+  | "OPERATION_ROSTER_EMPTY"
+  | "OPERATION_NAME_REQUIRED";
 
 export class OperationsServiceError extends Error {
   readonly code: OperationsServiceFailureCode;
@@ -136,16 +158,65 @@ export interface OperationPackCatalog {
   readonly pack_version: string;
   /** The pinned pack's agent roster (the seed source). */
   readonly agents: readonly PackAgentSeed[];
+  /**
+   * S14 (UI_DESIGN S6/F6): the pinned pack's authored skill and connector
+   * lists, verbatim from the manifest — the pack summary renders what the
+   * pack declares; it never derives capabilities from the roster (a roster
+   * subset is not the pack's capability surface).
+   */
+  readonly skills: readonly { skill_id: string; title?: string | null }[];
+  readonly connectors: readonly { connector_id: string }[];
   /** Which installed pack owns an agent id; null when no pack claims it. */
   locateAgentPack(agentId: string): string | null;
+}
+
+/** One pinned-pack skill in the F6 summary (a pack may omit the title). */
+export interface PackSummarySkill {
+  skill_id: string;
+  title: string | null;
+}
+
+/**
+ * One pinned-pack connector in the F6 summary. D38: recommended connectors
+ * are NEVER auto-installed and the prototype has no connector runtime — the
+ * runtime does not pretend otherwise, so `connected` is false for every
+ * connector (the UI renders "Not configured", never "Connected").
+ */
+export interface PackSummaryConnector {
+  connector_id: string;
+  connected: boolean;
+}
+
+/** The S6/F6 pack summary block on the Operation detail read model. */
+export interface PackSummary {
+  skills: PackSummarySkill[];
+  connectors: PackSummaryConnector[];
 }
 
 export interface CreateOperationInput {
   /** Null for ad-hoc Operations (D41, D29). */
   definition_ref: string | null;
-  name: string;
+  /**
+   * S14: optional for ad-hoc creates — omitted or trimmed-empty names the
+   * Operation `Ad-hoc · N Agents` (the auto-label); a pack-defined create
+   * (definition_ref set) REQUIRES it (typed OPERATION_NAME_REQUIRED).
+   */
+  name?: string | null;
   roster_agent_ids: string[];
   coordinator_agent_id: OperationCoordinatorRef;
+}
+
+/**
+ * The S14 auto-label: a nameless ad-hoc Operation carries this name shape.
+ * The read models derive `auto_label` by matching it (pure derivation, no
+ * extra column — documented in the S14 slice); a user renaming an Operation
+ * TO this exact shape reads auto_label again — an accepted, documented
+ * tradeoff of derivation over state.
+ */
+export const ADHOC_AUTO_LABEL_PATTERN = /^Ad-hoc · \d+ Agents$/;
+
+function adhocAutoLabel(rosterSize: number): string {
+  return `Ad-hoc · ${rosterSize} Agents`;
 }
 
 export interface CreateOperationRunInput {
@@ -226,6 +297,8 @@ const EMPTY_PACK_CATALOG: OperationPackCatalog = {
   pack_id: "",
   pack_version: "",
   agents: [],
+  skills: [],
+  connectors: [],
   locateAgentPack: () => null,
 };
 
@@ -366,6 +439,30 @@ export class OperationsService {
   }
 
   /**
+   * S14 (UI_DESIGN S6/F6): the pinned pack's summary for the Operation detail
+   * read model — the pack's authored skills (by title, null when the pack
+   * omits one) and its connectors with HONEST status: D38 recommends
+   * connectors but never auto-installs them, and the prototype has no
+   * connector runtime, so every connector reports `connected: false` (the UI
+   * renders "Not configured" — the read model never claims a live
+   * connection that does not exist, G2/G3). Pure derivation over the injected
+   * catalog; one Operation's pinned pack is the workspace's pinned pack
+   * (D28), so no per-Operation argument is needed.
+   */
+  getPackSummary(): PackSummary {
+    return {
+      skills: this.catalog.skills.map((skill) => ({
+        skill_id: skill.skill_id,
+        title: skill.title ?? null,
+      })),
+      connectors: this.catalog.connectors.map((connector) => ({
+        connector_id: connector.connector_id,
+        connected: false,
+      })),
+    };
+  }
+
+  /**
    * The chat-composition deps (D41). A thread access without them is a
    * composition fault — surfaced typed, never a silent fallback.
    */
@@ -407,13 +504,6 @@ export class OperationsService {
    * roster leaves NOTHING behind.
    */
   createOperation(workspaceId: string, input: CreateOperationInput): OperationRecord {
-    if (typeof input.name !== "string" || input.name.length < 1 || input.name.length > 200) {
-      throw new OperationsServiceError(
-        "OPERATION_COMMAND_INVALID",
-        "validation",
-        "operation name must be 1-200 characters",
-      );
-    }
     if (
       input.definition_ref !== null &&
       (typeof input.definition_ref !== "string" ||
@@ -426,6 +516,27 @@ export class OperationsService {
         "definition_ref must be null or 1-512 characters",
       );
     }
+    // S14 (D41): the name is optional for AD-HOC creates — omitted or
+    // trimmed-empty auto-labels from the roster size — while a pack-defined
+    // create REQUIRES one (never auto-label a defined Operation; deriving
+    // the name from the definition is deferred until a flow needs it).
+    let name: string | null = null;
+    if (typeof input.name === "string" && input.name.trim() !== "") {
+      if (input.name.length > OPERATION_NAME_MAX_LENGTH) {
+        throw new OperationsServiceError(
+          "OPERATION_COMMAND_INVALID",
+          "validation",
+          "operation name must be 1-120 characters",
+        );
+      }
+      name = input.name;
+    } else if (input.definition_ref !== null) {
+      throw new OperationsServiceError(
+        "OPERATION_NAME_REQUIRED",
+        "validation",
+        "a pack-defined Operation needs a name",
+      );
+    }
     const roster = this.validatedRoster(input.roster_agent_ids);
     const coordinator = this.validatedCoordinator(input.coordinator_agent_id);
     this.validatedRosterMembership(roster);
@@ -435,7 +546,7 @@ export class OperationsService {
       operation_id: randomUUID(),
       workspace_id: workspaceId,
       definition_ref: input.definition_ref,
-      name: input.name,
+      name: name ?? adhocAutoLabel(roster.length),
       status: "active",
       coordinator_agent_id: coordinator,
       pinning: {
@@ -674,6 +785,91 @@ export class OperationsService {
   listRosterRefusals(workspaceId: string, operationId: string): OperationRosterRefusalRow[] {
     this.requireOperation(workspaceId, operationId);
     return this.deps.operations.listRosterRefusals(workspaceId, operationId);
+  }
+
+  // -------------------------------------------------------------------------
+  // Rename (S14 — the user-owned Operation name; D41, D23 rule 6)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Apply an operation.rename_operation envelope: a DURABLE ROW UPDATE on the
+   * Operation record — deliberately NOT journaled. The record has no event
+   * stream of its own beyond the D7 collaboration events (the chat
+   * conversation's journal belongs to the chat, D41), and inventing a
+   * parallel stream for one user-owned field would be a second mutation path
+   * for the same row; the agent-settings command surface already follows the
+   * same not-journaled precedent for field mutations.
+   *
+   * Idempotency is the receipts seam (D23 rule 6), mirroring
+   * removeRosterAgent: the receipt (`operation-rename:<command_id>`,
+   * workspace-scoped, command type `operation.rename_operation`) commits in
+   * the SAME transaction as the row update; a replay answers the CURRENT
+   * record — never a duplicated effect, never a 404 for an applied rename.
+   * Renaming to the SAME name (trimmed) is the naturally idempotent no-op
+   * that writes no receipt: it re-derives the same answer. The name is
+   * persisted trimmed (the contract guarantees 1-120 chars non-empty once
+   * trimmed).
+   */
+  renameOperation(workspaceId: string, operationId: string, command: unknown): OperationRecord {
+    const scope = this.commandScope(command);
+    if (scope.workspace_id !== workspaceId || scope.operation_id !== operationId) {
+      throw new OperationsServiceError(
+        "OPERATION_COMMAND_INVALID",
+        "validation",
+        "rename command must target the operation named by the route",
+      );
+    }
+    this.requireOperation(workspaceId, operationId);
+
+    const parsed = OperationRenameCommand.safeParse(command);
+    if (!parsed.success) {
+      throw new OperationsServiceError(
+        "OPERATION_COMMAND_INVALID",
+        "validation",
+        "rename command does not conform to OperationRenameCommand",
+      );
+    }
+    const nextName = parsed.data.name.trim();
+    const receiptKey = `operation-rename:${parsed.data.command_id}`;
+
+    return this.deps.tx.transaction((exec) => {
+      const receipt = this.receipts.findById(workspaceId, receiptKey, exec);
+      if (receipt !== null) {
+        if (receipt.command_type !== "operation.rename_operation") {
+          throw new OperationRecordCorruptError("rename receipt command type");
+        }
+        let stored: { name?: unknown };
+        try {
+          stored = JSON.parse(receipt.result_json) as typeof stored;
+        } catch {
+          throw new OperationRecordCorruptError("rename receipt result JSON");
+        }
+        if (typeof stored.name !== "string") {
+          throw new OperationRecordCorruptError("rename receipt result shape");
+        }
+        return this.requireOperationRow(workspaceId, operationId, exec);
+      }
+
+      const operation = this.requireOperationRow(workspaceId, operationId, exec);
+      const now = this.now();
+      if (operation.name !== nextName) {
+        this.deps.operations.updateName(workspaceId, operationId, nextName, now, exec);
+      }
+      // The receipt is written even for the same-name no-op: a future replay
+      // of this command_id must be inert, never re-apply an old name over an
+      // intervening rename (the review's replay shape).
+      this.receipts.create(
+        {
+          workspace_id: workspaceId,
+          idempotency_key: receiptKey,
+          command_type: "operation.rename_operation",
+          result_json: JSON.stringify({ name: nextName }),
+          created_at: now,
+        },
+        exec,
+      );
+      return this.requireOperationRow(workspaceId, operationId, exec);
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -1465,6 +1661,23 @@ export class OperationsService {
     return record;
   }
 
+  /** Transaction-scoped requireOperation: the same typed 404 through `exec`. */
+  private requireOperationRow(
+    workspaceId: string,
+    operationId: string,
+    exec: SqliteExec,
+  ): OperationRecord {
+    const record = this.deps.operations.getOperation(workspaceId, operationId, exec);
+    if (record === null) {
+      throw new OperationsServiceError(
+        "OPERATION_NOT_FOUND",
+        "state",
+        `operation ${operationId} not found in workspace ${workspaceId}`,
+      );
+    }
+    return record;
+  }
+
   private requireRunRow(workspaceId: string, operationId: string, runId: string): OperationRun {
     const run = this.deps.operations.getRun(workspaceId, operationId, runId);
     if (run === null) {
@@ -1478,6 +1691,15 @@ export class OperationsService {
   }
 
   private validatedRoster(rosterAgentIds: string[]): string[] {
+    // S14 (D41): an Operation needs at least one Agent — the dedicated typed
+    // code (400-class) instead of the generic malformed-command rejection.
+    if (Array.isArray(rosterAgentIds) && rosterAgentIds.length === 0) {
+      throw new OperationsServiceError(
+        "OPERATION_ROSTER_EMPTY",
+        "validation",
+        "an Operation needs at least one Agent",
+      );
+    }
     if (!Array.isArray(rosterAgentIds) || rosterAgentIds.length < 1 || rosterAgentIds.length > 50) {
       throw new OperationsServiceError(
         "OPERATION_COMMAND_INVALID",

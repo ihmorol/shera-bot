@@ -345,6 +345,29 @@ export class OperationsRepository {
     }
   }
 
+  /**
+   * S14: update the user-owned name field (the rename — a durable row
+   * update, not a journaled event; see OperationsService.renameOperation for
+   * the receipts/idempotency discipline).
+   */
+  updateName(
+    workspaceId: string,
+    operationId: string,
+    name: string,
+    updatedAt: string,
+    exec?: DatabaseSync,
+  ): void {
+    const db = exec ?? this.tx.connection();
+    const result = db
+      .prepare(
+        `UPDATE operations SET name = ?, updated_at = ? WHERE workspace_id = ? AND operation_id = ?`,
+      )
+      .run(name, updatedAt, workspaceId, operationId);
+    if (Number(result.changes) === 0) {
+      throw new OperationNotFoundError(workspaceId, operationId);
+    }
+  }
+
   private recordFromRow(row: OperationSqlRow, rosterAgentIds: string[]): OperationRecord {
     let parsed: OperationRecord;
     try {

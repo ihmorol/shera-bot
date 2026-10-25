@@ -40,7 +40,10 @@ import type { AgentSessionPresence } from "../../modules/sessions/session-superv
 import type { ReplayService } from "../../modules/events/replay.service.ts";
 import { MessageSender } from "../../modules/events/events.types.ts";
 import type { OperationsService } from "../../modules/operations/operations.service.ts";
-import { ADHOC_AUTO_LABEL_PATTERN } from "../../modules/operations/operations.service.ts";
+import {
+  ADHOC_AUTO_LABEL_PATTERN,
+  type PackSummary,
+} from "../../modules/operations/operations.service.ts";
 import {
   contractValidationResponse,
   createTypedErrorRequestHandler,
@@ -257,6 +260,7 @@ function operationDetail(
   refusals: OperationRosterRefusalRow[],
   chatConversationId: string | null,
   agentNames: ReadonlyMap<string, string>,
+  packSummary: PackSummary,
 ) {
   return {
     operation,
@@ -278,6 +282,10 @@ function operationDetail(
       created_at: refusal.created_at,
     })),
     chat_conversation_id: chatConversationId,
+    // S14 (UI_DESIGN S6/F6): the pinned pack's skills and connectors with
+    // HONEST status — the service derives it from the injected pack catalog
+    // and reports every connector not-configured (D38; no connector runtime).
+    pack_summary: packSummary,
   };
 }
 
@@ -341,6 +349,7 @@ export interface LocalApiDeps {
     | "listCollaborationEvents"
     | "getThread"
     | "sendOperationMessage"
+    | "getPackSummary"
   >;
   /**
    * B-1: the redacted sink untyped HTTP faults are recorded to — the generic
@@ -640,6 +649,7 @@ export function createLocalApi(deps: LocalApiDeps): Express {
           deps.operations.listRosterRefusals(workspaceId, operationId.data),
           deps.operations.findChat(workspaceId, operationId.data),
           agentNames,
+          deps.operations.getPackSummary(),
         ),
       );
   });

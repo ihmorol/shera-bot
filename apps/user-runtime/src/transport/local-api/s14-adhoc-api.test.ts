@@ -341,6 +341,41 @@ describe("S14 rename (D23 rule 6 — idempotent replay answers the record)", () 
   });
 });
 
+describe("S14 pack summary (UI_DESIGN S6/F6 — the pinned pack's skills and connectors)", () => {
+  it("exposes pack_summary on the detail read model with truthful connector status", async () => {
+    const dir = makeTempDir("shera-runtime-s14-pack-summary-");
+    const running = await composeWithNamedOperation(join(dir, "runtime.db"));
+    try {
+      const detail = await getJson(
+        running.origin,
+        `/v1/operations/${running.operationId}?workspace_id=${WORKSPACE}`,
+      );
+      expect(detail.status).toBe(200);
+
+      // The pinned pack's skills ride the summary by title (the pack manifest
+      // is the single source; nothing is fabricated from the roster).
+      const summary = detail.body["pack_summary"] as {
+        skills: Array<{ skill_id: string; title: string | null }>;
+        connectors: Array<{ connector_id: string; connected: boolean }>;
+      };
+      expect(summary.skills).toHaveLength(6);
+      expect(summary.skills).toContainEqual({
+        skill_id: "skill_research_core",
+        title: "Research core",
+      });
+
+      // D38 honesty: the prototype has NO connector runtime and recommended
+      // connectors are never auto-installed — every connector reports
+      // connected: false (the UI renders "Not configured", never "Connected").
+      expect(summary.connectors).toEqual([
+        { connector_id: "connector_scholar_library", connected: false },
+      ]);
+    } finally {
+      await running.close();
+    }
+  });
+});
+
 describe("S14 shared machinery (PRD §4.1/§4.2 AC5) — ad-hoc reuses the SAME code paths", () => {
   it("walks roster add/remove, coordinator set/remove, run creation, and an @-addressed message on one ad-hoc Operation", async () => {
     const dir = makeTempDir("shera-runtime-s14-shared-machinery-");

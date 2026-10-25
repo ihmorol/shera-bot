@@ -157,8 +157,39 @@ export interface OperationPackCatalog {
   readonly pack_version: string;
   /** The pinned pack's agent roster (the seed source). */
   readonly agents: readonly PackAgentSeed[];
+  /**
+   * S14 (UI_DESIGN S6/F6): the pinned pack's authored skill and connector
+   * lists, verbatim from the manifest — the pack summary renders what the
+   * pack declares; it never derives capabilities from the roster (a roster
+   * subset is not the pack's capability surface).
+   */
+  readonly skills: readonly { skill_id: string; title?: string | null }[];
+  readonly connectors: readonly { connector_id: string }[];
   /** Which installed pack owns an agent id; null when no pack claims it. */
   locateAgentPack(agentId: string): string | null;
+}
+
+/** One pinned-pack skill in the F6 summary (a pack may omit the title). */
+export interface PackSummarySkill {
+  skill_id: string;
+  title: string | null;
+}
+
+/**
+ * One pinned-pack connector in the F6 summary. D38: recommended connectors
+ * are NEVER auto-installed and the prototype has no connector runtime — the
+ * runtime does not pretend otherwise, so `connected` is false for every
+ * connector (the UI renders "Not configured", never "Connected").
+ */
+export interface PackSummaryConnector {
+  connector_id: string;
+  connected: boolean;
+}
+
+/** The S6/F6 pack summary block on the Operation detail read model. */
+export interface PackSummary {
+  skills: PackSummarySkill[];
+  connectors: PackSummaryConnector[];
 }
 
 export interface CreateOperationInput {
@@ -265,6 +296,8 @@ const EMPTY_PACK_CATALOG: OperationPackCatalog = {
   pack_id: "",
   pack_version: "",
   agents: [],
+  skills: [],
+  connectors: [],
   locateAgentPack: () => null,
 };
 
@@ -402,6 +435,30 @@ export class OperationsService {
 
   private get catalog(): OperationPackCatalog {
     return this.packCatalog;
+  }
+
+  /**
+   * S14 (UI_DESIGN S6/F6): the pinned pack's summary for the Operation detail
+   * read model — the pack's authored skills (by title, null when the pack
+   * omits one) and its connectors with HONEST status: D38 recommends
+   * connectors but never auto-installs them, and the prototype has no
+   * connector runtime, so every connector reports `connected: false` (the UI
+   * renders "Not configured" — the read model never claims a live
+   * connection that does not exist, G2/G3). Pure derivation over the injected
+   * catalog; one Operation's pinned pack is the workspace's pinned pack
+   * (D28), so no per-Operation argument is needed.
+   */
+  getPackSummary(): PackSummary {
+    return {
+      skills: this.catalog.skills.map((skill) => ({
+        skill_id: skill.skill_id,
+        title: skill.title ?? null,
+      })),
+      connectors: this.catalog.connectors.map((connector) => ({
+        connector_id: connector.connector_id,
+        connected: false,
+      })),
+    };
   }
 
   /**

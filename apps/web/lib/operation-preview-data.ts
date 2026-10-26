@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 
 import type { OperationLaunchPreview } from "@shera-bot/contracts";
 
@@ -9,7 +9,9 @@ import { RuntimeApiError } from "@/lib/runtime-client";
 import {
   fetchOperationDefinitions,
   fetchOperationLaunchPreview,
+  launchOperation,
   type OperationDefinitionSummary,
+  type OperationLaunchResult,
   type OperationPreviewOverrides,
 } from "@/lib/operation-preview-api";
 
@@ -207,4 +209,48 @@ export function useOperationLaunchPreview(
     applyOverrides,
     resetOverrides: () => applyOverrides({}),
   };
+}
+
+// ---------------------------------------------------------------------------
+// The confirm step (S15 chunk 3 — the gate's ONE mutation)
+// ---------------------------------------------------------------------------
+
+const GENERIC_LAUNCH_ERROR_MESSAGE = "The Operation could not be launched.";
+
+/** The launch failure's safe copy: the runtime's message, never internals (G3). */
+export function safeLaunchMessage(error: unknown, fallback?: string): string {
+  const generic = fallback ?? GENERIC_LAUNCH_ERROR_MESSAGE;
+  if (error instanceof RuntimeApiError) {
+    return error.sheraError.safe_message;
+  }
+  return generic;
+}
+
+/**
+ * The launch mutation's options, extracted so the suite can pin the contract
+ * without a renderer (the S13 discipline): the mutation launches the preview
+ * AS DISPLAYED and onSuccess invalidates the workspace's operations list —
+ * the S14 create pattern (the read-after-write truth; navigation to the new
+ * Operation chat is the CALLER's concern, wired on mutate's onSuccess).
+ */
+export function operationLaunchMutationOptions(queryClient: QueryClient, workspaceId: string) {
+  return {
+    mutationFn: (preview: OperationLaunchPreview): Promise<OperationLaunchResult> =>
+      launchOperation(workspaceId, preview),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["operations", workspaceId] });
+    },
+  };
+}
+
+/**
+ * The confirm mutation (D30/AC23): one click = one launch envelope = exactly
+ * one Operation chat + one first run at the runtime. The idempotency key is
+ * minted inside the client per submission; the runtime's receipt makes a
+ * replayed key answer the original ids. Failures surface typed with the
+ * runtime's safe copy while the gate stays open and re-armable.
+ */
+export function useOperationLaunch(workspaceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation(operationLaunchMutationOptions(queryClient, workspaceId));
 }

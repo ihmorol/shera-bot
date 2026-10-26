@@ -1,6 +1,7 @@
 "use client";
 
 import { RotateCcw, X } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
 import type { OperationLaunchPreview, OperationPreviewRosterSource } from "@shera-bot/contracts";
@@ -11,9 +12,12 @@ import { Button } from "@/components/ui/button";
 import type { AgentRosterSummary } from "@/lib/agent-api";
 import { useAgentRoster } from "@/lib/agent-data";
 import { agentIdentityFromSummary } from "@/lib/operation-api";
+import { routes } from "@/lib/routes";
 import type { OperationDefinitionSummary } from "@/lib/operation-preview-api";
 import {
+  safeLaunchMessage,
   useOperationDefinitions,
+  useOperationLaunch,
   useOperationLaunchPreview,
   type PreviewSurfaceState,
 } from "@/lib/operation-preview-data";
@@ -35,13 +39,20 @@ import { cn } from "@/lib/utils";
  *    + preview hooks + modal state) the S6 creation surface mounts beside
  *    S14's untouched ad-hoc form.
  *
- * CHUNK 3 CONTRACT — the footer: Cancel closes the modal (side-effect free);
- * Launch is rendered INERT on purpose, marked `data-testid="launch-inert"`
- * with its title naming the follow-up. The launch/confirm behavior, the
- * captures, and the gates land with chunk 3, which replaces the inert
- * marker. Nothing in this component issues a command — the only network
- * traffic until chunk 3 is the GET pair behind the read model (D30/AC6: the
- * preview is a safety gate where NOTHING executes before confirmation).
+ * CHUNK 3 CONTRACT — the confirm flow (D30/AC23): the footer's Launch is the
+ * gate's ONE mutation. It launches the preview AS DISPLAYED — the effective
+ * roster and coordinator the user saw — through `launchOperation`, which
+ * POSTs the contracts launch envelope to /v1/operations/launch; the runtime
+ * re-resolves the definition and re-validates the roster before creating
+ * anything (the preview's edits are never trusted, D36). On success the
+ * wired launcher invalidates the operations list and navigates to the new
+ * Operation chat (the S14 create pattern). Cancel/Close/Escape remain a
+ * pure, side-effect-free close — nothing has started, so nothing is undone;
+ * the automated zero-side-effect proof lives at the backend (the sqlite
+ * fingerprint probe) and the web suite pins that rendering the gate in any
+ * state (and closing it) issues NO network call. While the launch POST is
+ * in flight the footer disables with the honest "Launching…" copy, and a
+ * refused launch surfaces its typed safe copy while the gate stays open.
  *
  * Honesty rules carried from the payload (G2/G3/G4): connectors render the
  * fixed "Not configured" status and the word "Connected" never appears; the
@@ -104,6 +115,15 @@ export interface OperationLaunchPreviewModalProps {
   onResetOverrides: () => void;
   /** Cancel/Close/Escape — side-effect free (D30: nothing has started). */
   onClose: () => void;
+  /**
+   * Chunk 3 — the confirm step (D30/AC23): launches the preview AS DISPLAYED.
+   * The only mutation path in the gate; Cancel still triggers nothing.
+   */
+  onLaunch: () => void;
+  /** True while the launch POST is in flight — the footer disables. */
+  launchPending: boolean;
+  /** The safe copy of a refused launch, shown while the gate stays open. */
+  launchErrorMessage: string | null;
 }
 
 export function OperationLaunchPreviewModal({
@@ -118,6 +138,9 @@ export function OperationLaunchPreviewModal({
   onCoordinatorChange,
   onResetOverrides,
   onClose,
+  onLaunch,
+  launchPending,
+  launchErrorMessage,
 }: OperationLaunchPreviewModalProps) {
   const title = preview ? `Launch ${preview.definition.title}` : "Launch preview";
   const rosterIds = new Set(preview?.roster.agents.map((agent) => agent.agent_id) ?? []);
@@ -522,18 +545,36 @@ export function OperationLaunchPreviewModal({
           </div>
         )}
 
-        {/* Footer — Cancel is the only live action in chunk 2 (side-effect
-            free close). Launch is the chunk-3 contract marker: see the header
-            comment; chunk 3 replaces the inert marker with the confirm flow. */}
-        <footer className="mt-auto flex items-center justify-between gap-4 border-t border-line bg-surface px-4 py-3 lg:px-6">
-          <p className="text-xs text-muted">Nothing runs until you confirm.</p>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button data-testid="launch-inert" title="Launch wiring lands with the confirm flow">
-              Launch Operation
-            </Button>
+        {/* Footer — Cancel is the only action before confirmation and stays
+            side-effect free (a pure close, no network). Launch is chunk 3's
+            confirm step: it launches the preview AS DISPLAYED through the
+            launch mutation (the gate's ONE mutation); while the POST is in
+            flight both controls disable with the honest in-flight copy, and
+            a refused launch surfaces its safe copy while the gate stays open. */}
+        <footer className="mt-auto flex flex-col gap-2 border-t border-line bg-surface px-4 py-3 lg:px-6">
+          {launchErrorMessage ? (
+            <p
+              role="alert"
+              data-testid="launch-error"
+              className="rounded-lg border border-line bg-surface-elevated px-3 py-2 text-sm text-failed"
+            >
+              {launchErrorMessage}
+            </p>
+          ) : null}
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-xs text-muted">Nothing runs until you confirm.</p>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" onClick={onClose} disabled={launchPending}>
+                Cancel
+              </Button>
+              <Button
+                data-testid="launch-confirm"
+                onClick={onLaunch}
+                disabled={launchPending || overridePending || state !== "ready"}
+              >
+                {launchPending ? "Launching…" : "Launch Operation"}
+              </Button>
+            </div>
           </div>
         </footer>
       </div>
@@ -631,6 +672,8 @@ export function OperationPackLauncher({ workspaceId }: { workspaceId: string }) 
   const roster = useAgentRoster(workspaceId);
   const [selectedDefinitionId, setSelectedDefinitionId] = useState<string | null>(null);
   const preview = useOperationLaunchPreview(workspaceId, selectedDefinitionId ?? "");
+  const launch = useOperationLaunch(workspaceId);
+  const router = useRouter();
 
   return (
     <div>
@@ -670,6 +713,21 @@ export function OperationPackLauncher({ workspaceId }: { workspaceId: string }) 
           }
           onResetOverrides={() => preview.resetOverrides()}
           onClose={() => setSelectedDefinitionId(null)}
+          // The confirm step (D30/AC23): launch the preview AS DISPLAYED —
+          // the effective overrides the user saw are what the runtime
+          // persists (and re-validates, D36). On success invalidate the
+          // operations list (the mutation options) and navigate to the new
+          // Operation chat — the S14 create pattern, read-after-write.
+          onLaunch={() => {
+            if (!preview.preview || launch.isPending) return;
+            launch.mutate(preview.preview, {
+              onSuccess: (result) => {
+                router.push(routes.operation(result.operation_id));
+              },
+            });
+          }}
+          launchPending={launch.isPending}
+          launchErrorMessage={launch.isError ? safeLaunchMessage(launch.error) : null}
         />
       ) : null}
     </div>

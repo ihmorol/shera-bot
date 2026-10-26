@@ -1,7 +1,8 @@
 import { z } from "zod";
 
-import { OperationLaunchPreview, SemVer } from "@shera-bot/contracts";
+import { OperationLaunchCommand, OperationLaunchPreview, SemVer } from "@shera-bot/contracts";
 
+import { AGENT_SETTINGS_USER_ACTOR } from "@/lib/agent-api";
 import { RuntimeApiError } from "@/lib/runtime-client";
 import { UNREACHABLE_ERROR, typedErrorFromPayload } from "@/lib/typed-error";
 
@@ -22,12 +23,14 @@ import { UNREACHABLE_ERROR, typedErrorFromPayload } from "@/lib/typed-error";
  *                                    roster_agent_ids and a
  *                                    coordinator_agent_id, "none" allowed)
  *
- * STRICTLY READ-ONLY: the preview is the safety gate where nothing may
- * execute before the user confirms (D30, AC6/AC23), so there is deliberately
- * NO mutation function here — chunk 3's launch route is the only path that
- * will ever create the Operation, and it does not exist yet. The override
- * params ride the query string (the server recomputes every group); the UI
- * never patches the preview locally.
+ * STRICTLY READ-ONLY until the user confirms (D30, AC6/AC23): the preview is
+ * the safety gate where nothing may execute before the user confirms, so the
+ * override params ride the query string (the server recomputes every group)
+ * and the UI never patches the preview locally. The ONE mutation is the
+ * chunk-3 confirm step below: `launchOperation` POSTs the contracts launch
+ * envelope — built from the preview AS DISPLAYED — to /v1/operations/launch,
+ * and the runtime (never the browser) re-resolves the definition and
+ * re-validates the roster before creating anything.
  */
 
 /** One definition summary in the launch menu (mirrors the runtime verbatim). */
@@ -129,4 +132,66 @@ export function fetchOperationLaunchPreview(
     `/api/runtime/v1/operation-definitions/${encodeURIComponent(operationDefinitionId)}/preview?${previewQueryParams(workspaceId, overrides)}`,
     (payload) => OperationLaunchPreview.parse(payload),
   );
+}
+
+// ---------------------------------------------------------------------------
+// The confirm step (S15 chunk 3 — the gate's ONE mutation, D30/AC23)
+// ---------------------------------------------------------------------------
+
+/** The launch answer: the ids the chat page reads the detail read model with. */
+export const OperationLaunchResultSchema = z.strictObject({
+  operation_id: z.string().min(1),
+  run_id: z.string().min(1),
+  chat_conversation_id: z.string().min(1),
+});
+export type OperationLaunchResult = z.infer<typeof OperationLaunchResultSchema>;
+
+/**
+ * Confirm the preview: POST the contracts OperationLaunchCommand envelope to
+ * /v1/operations/launch. The envelope is built from THE PREVIEW AS DISPLAYED
+ * — the effective roster and coordinator the user saw are what launch
+ * persists — and parsed through the SAME contracts schema the runtime
+ * enforces, so a malformed launch fails at build time, never on the wire
+ * (the S14 rename idiom). The idempotency key is minted per confirm click:
+ * a retried submission of the SAME confirmation reuses nothing (each click
+ * is its own launch decision), and the runtime's receipt answers a replayed
+ * key with the original ids (D23 rule 6).
+ */
+export async function launchOperation(
+  workspaceId: string,
+  preview: OperationLaunchPreview,
+): Promise<OperationLaunchResult> {
+  const command = OperationLaunchCommand.parse({
+    workspace_id: workspaceId,
+    operation_definition_id: preview.definition.operation_definition_id,
+    roster_agent_ids: preview.roster.agents.map((agent) => agent.agent_id),
+    coordinator_agent_id: preview.roster.coordinator_agent_id,
+    idempotency_key: `idem_launch_${globalThis.crypto.randomUUID()}`,
+    actor: AGENT_SETTINGS_USER_ACTOR,
+    issued_at: new Date().toISOString(),
+  });
+
+  let response: Response;
+  try {
+    response = await fetch("/api/runtime/v1/operations/launch", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(command),
+    });
+  } catch {
+    throw new RuntimeApiError(UNREACHABLE_ERROR);
+  }
+  const payload: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw toPreviewError(payload);
+  }
+  try {
+    return OperationLaunchResultSchema.parse(payload);
+  } catch (error) {
+    if (error instanceof RuntimeApiError) {
+      throw error;
+    }
+    // A 2xx body that fails its contract is a server drift, not user error.
+    throw toPreviewError(null);
+  }
 }

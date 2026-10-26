@@ -76,6 +76,7 @@ import {
   OPERATION_NAME_MAX_LENGTH,
   OperationCollaborationEvent,
   OperationCoordinatorRef,
+  OperationLaunchPreview,
   OperationRecord,
   OperationRenameCommand,
   OperationRun,
@@ -84,6 +85,17 @@ import {
   RunState,
   type RosterRefusal,
 } from "@shera-bot/contracts";
+
+import {
+  classifyToolRiskClasses,
+  CONNECTOR_PREVIEW_NOTE,
+  D35_MAPPING_NOTE,
+  estimateCredits,
+  PLATFORM_PROVIDER_ID,
+  PROVIDER_PREVIEW_NOTE,
+  purposeDerivedOutputs,
+  operationDefinitionRef,
+} from "./operations-preview.ts";
 
 import type { PackAgentSeed } from "../../adapters/sqlite/agents-repository.ts";
 import {
@@ -122,7 +134,9 @@ export type OperationsServiceFailureCode =
   | "OPERATION_RUN_STATE_INVALID"
   // S14 (D41 ad-hoc creation rules).
   | "OPERATION_ROSTER_EMPTY"
-  | "OPERATION_NAME_REQUIRED";
+  | "OPERATION_NAME_REQUIRED"
+  // S15 (D30 launch preview: unknown definition in the pinned pack).
+  | "OPERATION_DEFINITION_NOT_FOUND";
 
 export class OperationsServiceError extends Error {
   readonly code: OperationsServiceFailureCode;
@@ -165,7 +179,34 @@ export interface OperationPackCatalog {
    * subset is not the pack's capability surface).
    */
   readonly skills: readonly { skill_id: string; title?: string | null }[];
-  readonly connectors: readonly { connector_id: string }[];
+  readonly connectors: readonly {
+    connector_id: string;
+    title?: string | null;
+    version?: string | null;
+  }[];
+  /**
+   * D42/D46: the pack-wide default coordinator (the definition's coordinator
+   * override wins when present). Optional for compositions predating S15;
+   * composeRuntime passes it from the manifest with the rest of the catalog.
+   */
+  readonly default_coordinator_agent_id?: string;
+  /**
+   * S15 (D30): the pinned pack's operation definitions — the launch preview's
+   * source of truth. Optional for compositions predating S15; composeRuntime
+   * passes them verbatim from the manifest. Without them (or without a pack)
+   * every preview answers the typed OPERATION_DEFINITION_NOT_FOUND.
+   */
+  readonly operation_definitions?: readonly {
+    readonly operation_id: string;
+    readonly version: string;
+    readonly title: string;
+    readonly purpose: string;
+    readonly roster: readonly string[];
+    /** Agent id or "none" (D42); absent means the pack default coordinates. */
+    readonly coordinator?: string;
+    readonly skills: readonly string[];
+    readonly connectors: readonly string[];
+  }[];
   /** Which installed pack owns an agent id; null when no pack claims it. */
   locateAgentPack(agentId: string): string | null;
 }
@@ -191,6 +232,29 @@ export interface PackSummaryConnector {
 export interface PackSummary {
   skills: PackSummarySkill[];
   connectors: PackSummaryConnector[];
+}
+
+/**
+ * S15 (D30): one entry of the pinned pack's definitions list — the launch
+ * surface's menu. The purpose is served verbatim (the pack's purposes are
+ * one-line summaries; truncation would be a second, lossy rendering).
+ */
+export interface OperationDefinitionSummary {
+  operation_definition_id: string;
+  version: string;
+  title: string;
+  purpose_summary: string;
+}
+
+/**
+ * S15 (D30): the read-only roster override the preview recomputes from —
+ * D30 co-planning. NEVER persisted: the same eight groups are recomputed and
+ * nothing is written anywhere (the zero-side-effect proof).
+ */
+export interface OperationPreviewOverride {
+  roster_agent_ids?: string[];
+  /** A pack Agent id, or "none" (D42). */
+  coordinator_agent_id?: string;
 }
 
 export interface CreateOperationInput {
@@ -460,6 +524,266 @@ export class OperationsService {
         connected: false,
       })),
     };
+  }
+
+  // -------------------------------------------------------------------------
+  // Launch preview (S15 — D30; READ-ONLY, nothing may execute before
+  // confirmation, so these methods write NOTHING: no rows, no receipts, no
+  // journal appends, no events — the zero-side-effect proof holds)
+  // -------------------------------------------------------------------------
+
+  /**
+   * The pinned pack's operation definitions (the launch menu): id, title,
+   * and the purpose verbatim. Empty when no pack (or a pack without
+   * definitions) is pinned — the routes still answer 200 with an empty list,
+   * exactly like the pack summary does without a pack.
+   */
+  listOperationDefinitions(_workspaceId: string): OperationDefinitionSummary[] {
+    return (this.catalog.operation_definitions ?? []).map((definition) => ({
+      operation_definition_id: definition.operation_id,
+      version: definition.version,
+      title: definition.title,
+      purpose_summary: definition.purpose,
+    }));
+  }
+
+  /**
+   * Build the D30 launch preview for one pinned-pack definition: the eight
+   * groups recomputed from the pack catalog and the workspace's Agent rows —
+   * and NOTHING else. Reads only (catalog is in-memory; the agent rows come
+   * through the repository's pure getAgent read); writes nothing anywhere
+   * (D30: the Operation chat and task are created only after confirmation).
+   *
+   * `override` (D30 co-planning) recomputes the SAME eight groups for a
+   * candidate roster/coordinator without persisting anything. Override
+   * validation is against the PINNED pack catalog only: an unknown Agent or
+   * an empty roster is the typed 400-class refusal, and an unknown definition
+   * is the typed OPERATION_DEFINITION_NOT_FOUND (404-class). The preview is
+   * validated through the contracts schema before it leaves the module.
+   */
+  buildLaunchPreview(
+    workspaceId: string,
+    definitionId: string,
+    override?: OperationPreviewOverride,
+  ): OperationLaunchPreview {
+    const definition = (this.catalog.operation_definitions ?? []).find(
+      (candidate) => candidate.operation_id === definitionId,
+    );
+    if (definition === undefined) {
+      throw new OperationsServiceError(
+        "OPERATION_DEFINITION_NOT_FOUND",
+        "state",
+        `operation definition ${definitionId} is not in the pinned pack`,
+      );
+    }
+
+    // --- Group 2: the recommended roster (override-aware, never persisted).
+    let rosterSource: "pack_default" | "definition_override" | "request_override" = "pack_default";
+    let rosterIds: string[];
+    if (override?.roster_agent_ids !== undefined) {
+      if (!Array.isArray(override.roster_agent_ids) || override.roster_agent_ids.length === 0) {
+        throw new OperationsServiceError(
+          "OPERATION_ROSTER_EMPTY",
+          "validation",
+          "a roster override needs at least one Agent",
+        );
+      }
+      const seen = new Set<string>();
+      rosterIds = [];
+      for (const agentId of override.roster_agent_ids) {
+        if (typeof agentId !== "string" || agentId.length < 1 || agentId.length > 256) {
+          throw new OperationsServiceError(
+            "OPERATION_COMMAND_INVALID",
+            "validation",
+            "roster override entries must be 1-256 character Agent ids",
+          );
+        }
+        if (!this.catalog.agents.some((agent) => agent.agent_id === agentId)) {
+          throw new OperationsServiceError(
+            "OPERATION_COMMAND_INVALID",
+            "validation",
+            `roster override names Agent ${agentId} outside the pinned pack`,
+          );
+        }
+        if (!seen.has(agentId)) {
+          seen.add(agentId);
+          rosterIds.push(agentId);
+        }
+      }
+      rosterSource = "request_override";
+    } else {
+      rosterIds = [...definition.roster];
+    }
+
+    // Coordinator: request override > definition override > pack default
+    // (D42/D46 — the coordinator role is not a roster assignment, so the
+    // coordinator may sit outside the roster; is_coordinator marks only
+    // roster members).
+    let coordinator: OperationCoordinatorRef;
+    if (override?.coordinator_agent_id !== undefined) {
+      const candidate = override.coordinator_agent_id;
+      if (
+        candidate !== "none" &&
+        (typeof candidate !== "string" ||
+          !this.catalog.agents.some((agent) => agent.agent_id === candidate))
+      ) {
+        throw new OperationsServiceError(
+          "OPERATION_COMMAND_INVALID",
+          "validation",
+          'coordinator override must be a pack Agent id or "none"',
+        );
+      }
+      coordinator = candidate;
+      rosterSource = "request_override";
+    } else if (definition.coordinator !== undefined) {
+      coordinator = definition.coordinator;
+      if (rosterSource === "pack_default" && definition.coordinator !== "none") {
+        rosterSource = "definition_override";
+      }
+    } else {
+      coordinator = this.catalog.default_coordinator_agent_id ?? "none";
+    }
+
+    const seedOf = (agentId: string) =>
+      this.catalog.agents.find((agent) => agent.agent_id === agentId);
+    const skillTitle = new Map(
+      this.catalog.skills.map((skill) => [skill.skill_id, skill.title ?? null]),
+    );
+    const connectorOf = new Map(
+      this.catalog.connectors.map((connector) => [connector.connector_id, connector]),
+    );
+
+    // Identity from the pack seeds; the provider pair from the workspace's
+    // Agent rows (read-only) — the user-owned effective value, falling back
+    // to the pack seed when no row exists.
+    const rosterAgents: OperationLaunchPreview["roster"]["agents"] = [];
+    const providerAgents: OperationLaunchPreview["providers"]["agents"] = [];
+    const skillAgents: OperationLaunchPreview["skills"]["agents"] = [];
+    const toolIds: string[] = [];
+    const customProviderAgentIds: string[] = [];
+    let platformProviderAgents = 0;
+    for (const agentId of rosterIds) {
+      const seed = seedOf(agentId);
+      if (seed === undefined) {
+        // Roster ids were validated against the catalog above; unreachable
+        // unless the definition itself rosters an undeclared agent (the pack
+        // loader refuses that — see the SDK's unknown-agent-ref rule).
+        throw new OperationsServiceError(
+          "OPERATION_COMMAND_INVALID",
+          "validation",
+          `definition rosters Agent ${agentId} outside the pinned pack`,
+        );
+      }
+      rosterAgents.push({
+        agent_id: agentId,
+        display_name: seed.display_name,
+        role: seed.role_description,
+        is_coordinator: coordinator === agentId,
+      });
+
+      const row = this.deps.agents?.getAgent(workspaceId, agentId) ?? null;
+      const provider =
+        row !== null
+          ? {
+              provider_id: row.default_provider_id,
+              model: row.default_provider_model,
+              source: "agent_settings" as const,
+            }
+          : {
+              provider_id: seed.default_provider.provider_id,
+              model: seed.default_provider.model,
+              source: "pack_default" as const,
+            };
+      if (provider.provider_id === PLATFORM_PROVIDER_ID) {
+        platformProviderAgents += 1;
+      } else {
+        customProviderAgentIds.push(agentId);
+      }
+      providerAgents.push({
+        agent_id: agentId,
+        ...provider,
+        configured: false,
+        note: PROVIDER_PREVIEW_NOTE,
+      });
+
+      skillAgents.push({
+        agent_id: agentId,
+        skills: seed.skills.map((skillId) => ({
+          skill_id: skillId,
+          title: skillTitle.get(skillId) ?? null,
+        })),
+      });
+
+      for (const tool of seed.tools) {
+        if (!toolIds.includes(tool.tool_id)) {
+          toolIds.push(tool.tool_id);
+        }
+      }
+    }
+
+    // Groups 3/4: the definition's declared skills/connectors, resolved
+    // against the pack catalog (references only — nothing is fetched,
+    // installed, or contacted, D38).
+    const connectors: OperationLaunchPreview["connectors"]["items"] = definition.connectors.map(
+      (connectorId) => {
+        const declared = connectorOf.get(connectorId);
+        return {
+          connector_id: connectorId,
+          title: declared?.title ?? null,
+          version: declared?.version ?? null,
+          connected: false as const,
+          status: "not_connected" as const,
+          note: CONNECTOR_PREVIEW_NOTE,
+        };
+      },
+    );
+
+    // Groups 6/7: the documented placeholder estimate and the D35 ladder
+    // mapping (pure derivations in operations-preview.ts).
+    const estimated_credits = estimateCredits(platformProviderAgents, customProviderAgentIds);
+    const approvals = classifyToolRiskClasses(toolIds);
+
+    const preview = OperationLaunchPreview.parse({
+      workspace_id: workspaceId,
+      definition_ref: operationDefinitionRef(
+        this.catalog.pack_id,
+        this.catalog.pack_version,
+        definition.operation_id,
+        definition.version,
+      ),
+      pack: {
+        pack_id: this.catalog.pack_id,
+        pack_version: this.catalog.pack_version,
+        pinned: true,
+      },
+      definition: {
+        operation_definition_id: definition.operation_id,
+        version: definition.version,
+        title: definition.title,
+        purpose: definition.purpose,
+      },
+      roster: {
+        agents: rosterAgents,
+        coordinator_agent_id: coordinator,
+        source: rosterSource,
+      },
+      skills: {
+        operation_skill_ids: [...definition.skills],
+        agents: skillAgents,
+        source: "pack" as const,
+      },
+      connectors: { items: connectors },
+      providers: { agents: providerAgents },
+      estimated_credits,
+      approval_requirements: {
+        risk_classes: approvals.risk_classes,
+        classes_requiring_approval: approvals.classes_requiring_approval,
+        mapping: approvals.mapping,
+        mapping_note: D35_MAPPING_NOTE,
+      },
+      expected_outputs: purposeDerivedOutputs(definition.purpose),
+    });
+    return preview;
   }
 
   /**

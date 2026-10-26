@@ -620,6 +620,24 @@ export class TaskWorkerSupervisor {
         });
       }
       record.presence = "running";
+      // Review P3-4: a re-admitted run (dequeue or reconciliation re-drive)
+      // must read RUNNING while its worker works — never QUEUED-until-done.
+      // The flow's own start hook is a coalesced no-op here (the incarnation
+      // is live and snapshotOf-able), so the re-entrant startWorker call this
+      // may trigger cannot double-spawn. Contained: a failed advance never
+      // fails the started worker.
+      if (currentState === "QUEUED") {
+        try {
+          this.deps.runControl.applyRunState(record.workspace_id, record.run_id, "RUNNING");
+        } catch (error) {
+          this.faultLog("task_worker_running_advance_failed", {
+            workspace_id: record.workspace_id,
+            run_id: record.run_id,
+            name: error instanceof Error ? error.name : "Error",
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
       return this.snapshotOf(record, incarnation);
     }
 

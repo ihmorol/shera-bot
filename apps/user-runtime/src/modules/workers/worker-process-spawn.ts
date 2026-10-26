@@ -96,7 +96,17 @@ export interface WorkerCommand {
  * execve verbatim after substitution).
  */
 export interface TaskWorkerHarnessConfig {
-  /** Executable path (resolved through the host PATH like any spawn). */
+  /**
+   * Executable path (resolved through the host PATH like any spawn).
+   *
+   * HARNESS CONTRACT (review P2-1): a worker process MUST exit on its own
+   * when its stdin closes (EOF). The gateway's kill -9 orphan story depends
+   * on it — reconciliation reaps the ROWS after restart, but the processes
+   * left alive by a hard gateway death terminate themselves at stdin EOF.
+   * The committed fake worker honors this (fake-task-worker-child.ts); a
+   * production harness that ignores stdin EOF will leak processes until the
+   * next gateway restart's escalation — recorded in E27's NOT-verified.
+   */
   file: string;
   /** Static arguments, plus the per-spawn placeholders documented above. */
   args?: readonly string[];
@@ -109,9 +119,16 @@ export function workerHarnessArgs(
 ): string[] {
   return (config.args ?? []).map((arg) =>
     arg
-      .replaceAll("{run_id}", request.run_id)
-      .replaceAll("{worker_id}", request.worker_id)
-      .replaceAll("{heartbeat_interval_ms}", String(request.heartbeat_interval_ms)),
+      // Single-pass substitution in ONE regex pass: a server-generated value
+      // (run_id is a UUID) that happens to contain placeholder-looking text
+      // must never be re-expanded by a later replaceAll (argv confusion).
+      .replace(/\{run_id\}|\{worker_id\}|\{heartbeat_interval_ms\}/g, (token) =>
+        token === "{run_id}"
+          ? request.run_id
+          : token === "{worker_id}"
+            ? request.worker_id
+            : String(request.heartbeat_interval_ms),
+      ),
   );
 }
 

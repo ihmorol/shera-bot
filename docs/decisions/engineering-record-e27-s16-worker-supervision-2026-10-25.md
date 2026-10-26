@@ -50,9 +50,16 @@ Implementation owner: delegated coding agent (this branch, chunks 1–4); review
 
 **Boundary contract:** the process-spawn exceptions are named in BOTH guard surfaces — `scripts/boundary-guards.ts` `PROCESS_EXCEPTIONS` and `tests/contract/user-runtime-boundary.test.ts` — for the fake task worker factory, the production spawn adapter (`worker-process-spawn.ts`, the workers module's process seam), and the fake worker child (its fork misbehavior exists to prove `--nproc` at the fork boundary); production spawn seams stay under `adapters/process/` and SQL under `adapters/sqlite/`. The AC7 round also moved the s16-workers-api suite's journal/row reads onto the repository read paths — no raw SQL outside the adapter, with the cross-connection durability check preserved.
 
-## Review-round postures
+## Review-round postures (2026-10-25, recorded so they are choices, not oversights)
 
-(To be recorded at PR review time: the two-axis review of the S16 stack had not run when this record was filed — PR #58 is open. Postures arising from that review will be appended here as choices, not oversights, per the E24/E25/E26 pattern.)
+The two-axis review returned FIX-THEN-MERGE on process grounds (the branch predated the S14 merge) with the supervision/admission code judged mergeable-quality; every finding is closed in this round:
+
+- **stdin-EOF harness contract (P2-1):** a worker process MUST exit on its own when its stdin closes — the kill -9 orphan story depends on it (reconciliation reaps rows, the processes self-terminate at EOF). Now stated in the `TaskWorkerHarnessConfig` contract comment; the committed fake worker honors it. A production harness ignoring stdin EOF would leak processes until the next restart's escalation (recorded below).
+- **PID-reuse limitation (P2-2):** the boot reconciliation's `kill(pid, 0)` probe can read a dead worker's reused pid as alive, keeping the row (and its admission slot) until the next restart. Fail-safe direction, boot-time-only, single-user prototype — accepted and recorded here rather than adding an adoption path.
+- **Boot-reconciliation ordering (P3-5):** the reconciliation pass is fire-and-forget while the HTTP server already accepts traffic, so a start racing the pass can act on a not-yet-reaped count. Accepted for the single-user prototype; a boot-barrier is the hardening if multi-user arrives.
+- **Placeholder substitution (P3-3):** the harness-arg placeholders are now substituted in ONE regex pass — a server-generated run_id containing placeholder-looking text can never be re-expanded by a later `replaceAll` (argv confusion, not injection; values stay server-generated).
+- **Re-admitted runs read RUNNING (P3-4):** `startAttempt` advances a QUEUED run through the seam once its worker is live — a working run never sits QUEUED until done; the flow's own start hook is a coalesced no-op there.
+- **Boundary commentary (P3-6):** the stale "chunk 3 wires it" notes in both boundary surfaces now describe the shipped `worker-process-spawn` adapter as the named production exception it is.
 
 ## NOT verified (standing)
 

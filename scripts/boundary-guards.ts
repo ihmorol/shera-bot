@@ -50,8 +50,9 @@ const PROCESS_EXCEPTIONS = new Set([
   // worker supervision suites must exercise true heartbeat silence, crash
   // exit codes and the SIGTERM→SIGKILL escalation against live child
   // processes (D32 layer 3, E8). The production task-worker spawn seam will
-  // live in the adapters/process/ boundary (chunk 3 wires it), and only the
-  // factory spawns; the child script itself spawns nothing.
+  // is the modules/workers/ worker-process-spawn adapter (chunk 3 shipped it
+  // as the named production exception below), and only the factory spawns;
+  // the child script itself spawns nothing.
   "apps/user-runtime/src/modules/workers/fake-task-worker.ts",
   // The S16 production task-worker spawn adapter (chunk 2, E1): wraps the
   // worker command in prlimit(1) exec'd as a BINARY (no shell) for per-worker

@@ -79,7 +79,8 @@ describe("user-runtime SQL boundary (AC7, D23 rule 2)", () => {
     // CHILD script spawns short-lived node children so suites can prove the
     // --nproc cap at the fork boundary. Each exception is mirrored in
     // scripts/boundary-guards.ts PROCESS_EXCEPTIONS with its rationale; the
-    // production spawn seams live under adapters/process/.
+    // production task-worker spawn seam is the worker-process-spawn adapter
+    // itself (sessions keep their adapters/process/ seam).
     const childProcessExceptions = new Set([
       join("modules", "workers", "fake-task-worker.ts"),
       join("modules", "workers", "worker-process-spawn.ts"),

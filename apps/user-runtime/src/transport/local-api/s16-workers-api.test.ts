@@ -116,6 +116,35 @@ const MS_POLICY: Partial<TaskWorkerSupervisorPolicy> = {
 };
 
 /**
+ * A LONGER-HORIZON harness for the queue test (TEST-LOCAL RACE FIX, not an
+ * implementation change): the shared demo harness above completes its whole
+ * work in ~40 ms — shorter than the test's own read path (three sequential
+ * HTTP/SQLite round trips) under suite load, so the FIRST worker finished
+ * (and the dequeue re-admitted the queued run) before the readout could
+ * observe the queue. The queue test needs the first worker to stay live
+ * until the test's CANCELLING frees capacity — the very scenario it asserts —
+ * so this harness stretches the work window to ~800 ms (4 steps x 200 ms,
+ * heartbeats still on the 40 ms beat). The re-admitted second run completes
+ * on its own within the same window budget.
+ */
+const LONG_WORKER_HARNESS = {
+  file: process.execPath,
+  args: [
+    resolve(here, "../../modules/workers/fake-task-worker-child.ts"),
+    "--run-id",
+    "{run_id}",
+    "--worker-id",
+    "{worker_id}",
+    "--heartbeat-ms",
+    "{heartbeat_interval_ms}",
+    "--steps",
+    "4",
+    "--step-delay-ms",
+    "200",
+  ],
+};
+
+/**
  * An upper bound on the machine's current task count (processes + threads).
  * prlimit --nproc is enforced per real user id, so the admission policy's
  * per-worker process cap must sit ABOVE the live total or the worker child
@@ -449,7 +478,7 @@ describe("S16 run wiring (harness-configured composition)", () => {
 
   it("queues the run durably when the admission gate is full, and re-admits when capacity frees", async () => {
     runtime = await composeOn(join(makeTempDir("shera-s16-queue-"), "runtime.db"), {
-      workerHarness: FAKE_WORKER_HARNESS,
+      workerHarness: LONG_WORKER_HARNESS,
       workerAdmissionPolicy: {
         maxConcurrentWorkers: 1,
         maxWorkerProcesses: totalTaskUpperBound() + 1_024,

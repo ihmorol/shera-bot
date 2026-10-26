@@ -85,12 +85,22 @@ export const SessionStartedPayload = z.strictObject({
 });
 export type SessionStartedPayload = z.infer<typeof SessionStartedPayload>;
 
+/** Why a session hibernated (S16 chunk 2): the natural idle timer, or an
+ * explicit resource-pressure hibernation (E1 admission coordination). */
+export const SessionHibernateReason = z.enum(["idle_timeout", "resource_pressure"]);
+export type SessionHibernateReason = z.infer<typeof SessionHibernateReason>;
+
 export const SessionHibernatePayload = z.strictObject({
   session_id: z.string().min(1),
   workspace_id: z.string().min(1),
   agent_id: z.string().min(1),
   /** How long the session had been idle when it hibernated. */
   idle_ms: z.number().int().nonnegative(),
+  /**
+   * Why the session hibernated. Absent on pre-S16-chunk-2 idle hibernations
+   * (the natural idle path); "resource_pressure" on the E1 pressure path.
+   */
+  reason: SessionHibernateReason.optional(),
 });
 export type SessionHibernatePayload = z.infer<typeof SessionHibernatePayload>;
 
@@ -136,6 +146,141 @@ export const SessionFailedPayload = z.strictObject({
 export type SessionFailedPayload = z.infer<typeof SessionFailedPayload>;
 
 /**
+ * Task worker supervision events (S16 chunk 1; D32 layer 3, D33, D10).
+ * Journaled on the RUN's stream (stream_id = the run_id — the S13 run-stream
+ * semantics: run-scoped history carries one gapless per-run cursor). Progress
+ * and checkpoints are persisted HERE and on the task_workers row — never only
+ * in the worker process's memory (D10), so a recovery slice can reconstruct
+ * the run from durable state alone. G3: payloads carry bounded typed fields —
+ * never secrets, never raw child stderr dumps (stderr goes to the
+ * supervisor's redacted, bounded sink).
+ */
+export const WorkerCrashCause = z.enum([
+  "unexpected_exit",
+  "hang",
+  "protocol_violation",
+  "worker_error",
+  "handshake_timeout",
+]);
+export type WorkerCrashCause = z.infer<typeof WorkerCrashCause>;
+
+export const WorkerStopReason = z.enum(["requested", "shutdown"]);
+export type WorkerStopReason = z.infer<typeof WorkerStopReason>;
+
+/**
+ * E1 admission control (S16 chunk 2): the machine-readable queued-reason
+ * vocabulary. `limit` is the ceiling that was hit, `current` the measured
+ * usage at decision time (both null-safe in the schema where the unit is not
+ * a count). Chunk 3 renders `message` for the UI; `reason` is the stable
+ * contract other code keys on.
+ */
+export const WorkerQueuedReasonCode = z.enum([
+  "worker_limit_reached",
+  "memory_limit",
+  "disk_pressure",
+  "provider_concurrency",
+]);
+export type WorkerQueuedReasonCode = z.infer<typeof WorkerQueuedReasonCode>;
+
+export const WorkerQueuedReason = z.strictObject({
+  code: WorkerQueuedReasonCode,
+  limit: z.number().nullable(),
+  current: z.number().nullable(),
+});
+export type WorkerQueuedReason = z.infer<typeof WorkerQueuedReason>;
+
+/** No worker incarnation exists for a queued run — hence no worker_id here. */
+export const WorkerQueuedPayload = z.strictObject({
+  workspace_id: z.string().min(1),
+  run_id: z.string().min(1),
+  reason: WorkerQueuedReason,
+  /** Human text (bounded); never secrets (G3). */
+  message: z.string().max(500),
+});
+export type WorkerQueuedPayload = z.infer<typeof WorkerQueuedPayload>;
+
+export const WorkerStartedPayload = z.strictObject({
+  worker_id: z.string().min(1),
+  workspace_id: z.string().min(1),
+  run_id: z.string().min(1),
+  /** The child process id observed on the hello handshake. */
+  pid: z.number().int().positive(),
+  /** Measured spawn→ready latency (ms); carries no child internals (G3). */
+  start_latency_ms: z.number().int().nonnegative(),
+});
+export type WorkerStartedPayload = z.infer<typeof WorkerStartedPayload>;
+
+export const WorkerProgressPayload = z.strictObject({
+  worker_id: z.string().min(1),
+  workspace_id: z.string().min(1),
+  run_id: z.string().min(1),
+  percent: z.number().int().min(0).max(100),
+  text: z.string().max(500),
+});
+export type WorkerProgressPayload = z.infer<typeof WorkerProgressPayload>;
+
+/** The opaque D33 checkpoint payload is persisted verbatim (runtime-owned JSON). */
+export const WorkerCheckpointPayload = z.strictObject({
+  worker_id: z.string().min(1),
+  workspace_id: z.string().min(1),
+  run_id: z.string().min(1),
+  checkpoint: z.record(z.string(), z.unknown()),
+});
+export type WorkerCheckpointPayload = z.infer<typeof WorkerCheckpointPayload>;
+
+export const WorkerCrashedPayload = z.strictObject({
+  worker_id: z.string().min(1),
+  workspace_id: z.string().min(1),
+  run_id: z.string().min(1),
+  cause: WorkerCrashCause,
+  exit_code: z.number().int().nullable(),
+  signal: z.string().nullable(),
+  /** The worker-reported failure class for worker_error; null otherwise. */
+  error_class: z.string().max(100).nullable(),
+  /** The last persisted progress percent when one was seen; null otherwise. */
+  last_percent: z.number().int().min(0).max(100).nullable(),
+});
+export type WorkerCrashedPayload = z.infer<typeof WorkerCrashedPayload>;
+
+export const WorkerCompletedPayload = z.strictObject({
+  worker_id: z.string().min(1),
+  workspace_id: z.string().min(1),
+  run_id: z.string().min(1),
+  summary: z.string().max(2_000),
+});
+export type WorkerCompletedPayload = z.infer<typeof WorkerCompletedPayload>;
+
+export const WorkerStoppedPayload = z.strictObject({
+  worker_id: z.string().min(1),
+  workspace_id: z.string().min(1),
+  run_id: z.string().min(1),
+  reason: WorkerStopReason,
+});
+export type WorkerStoppedPayload = z.infer<typeof WorkerStoppedPayload>;
+
+/**
+ * Restart reconciliation (S16 chunk 3): a live task_workers row (starting/
+ * running/stalled) whose process the boot reconciliation's kill(pid, 0) probe
+ * proved gone. The row is terminal (killed) BEFORE this event is appended —
+ * the event is the aftermath-COMPLETION marker, like worker.crashed. The
+ * run's own fate is NOT decided here: QUEUED runs re-enter the admission
+ * queue; RECOVERY_REQUIRED and the other non-terminal states stay for the
+ * recovery slice.
+ */
+export const WorkerReapedPayload = z.strictObject({
+  worker_id: z.string().min(1),
+  workspace_id: z.string().min(1),
+  run_id: z.string().min(1),
+  /** The dead pid (null when the row never recorded one). */
+  pid: z.number().int().positive().nullable(),
+  /** The live row state the reconciliation found. */
+  previous_state: z.enum(["starting", "running", "stalled"]),
+  /** Why the row was reaped — the only cause today is the gateway restart. */
+  cause: z.literal("gateway_restart"),
+});
+export type WorkerReapedPayload = z.infer<typeof WorkerReapedPayload>;
+
+/**
  * The D26 task-execution vocabulary (S07; D51 seam) journaled on `task:<id>`
  * streams. The journal row stores the FULL contract envelope as its payload —
  * the envelope IS the durable D26 event — so each registry entry validates the
@@ -169,6 +314,14 @@ export const EVENT_TYPES = {
   "session.restarted": { schema_version: 1, payload: SessionRestartedPayload },
   "session.protocol_failure": { schema_version: 1, payload: SessionProtocolFailurePayload },
   "session.failed": { schema_version: 1, payload: SessionFailedPayload },
+  "worker.started": { schema_version: 1, payload: WorkerStartedPayload },
+  "worker.queued": { schema_version: 1, payload: WorkerQueuedPayload },
+  "worker.progress": { schema_version: 1, payload: WorkerProgressPayload },
+  "worker.checkpoint": { schema_version: 1, payload: WorkerCheckpointPayload },
+  "worker.crashed": { schema_version: 1, payload: WorkerCrashedPayload },
+  "worker.completed": { schema_version: 1, payload: WorkerCompletedPayload },
+  "worker.stopped": { schema_version: 1, payload: WorkerStoppedPayload },
+  "worker.reaped": { schema_version: 1, payload: WorkerReapedPayload },
   ...TASK_EVENT_REGISTRY,
 } as const;
 

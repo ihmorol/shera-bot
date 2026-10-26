@@ -41,6 +41,7 @@ import type { AgentSessionPresence } from "../../modules/sessions/session-superv
 import type { ReplayService } from "../../modules/events/replay.service.ts";
 import { MessageSender } from "../../modules/events/events.types.ts";
 import type { OperationsService } from "../../modules/operations/operations.service.ts";
+import type { WorkerAdmissionReadout } from "../../modules/workers/task-worker-supervisor.service.ts";
 import {
   ADHOC_AUTO_LABEL_PATTERN,
   type PackSummary,
@@ -75,6 +76,9 @@ export const OPERATION_EVENTS_PATH = "/v1/operations/:operation_id/events" as co
 export const OPERATION_THREAD_PATH = "/v1/operations/:operation_id/thread" as const;
 export const OPERATION_THREAD_MESSAGES_PATH =
   "/v1/operations/:operation_id/thread/messages" as const;
+// S16 — the task-worker admission readout (E1; the settings "Runtime &
+// resources" read model).
+export const GET_WORKER_ADMISSION_PATH = "/v1/workers/admission" as const;
 
 /**
  * Replay query (D26): the client's last acknowledged sequence drives exactly
@@ -352,6 +356,16 @@ export interface LocalApiDeps {
     | "sendOperationMessage"
     | "getPackSummary"
   >;
+  /**
+   * S16: the task-worker admission readout (E1) — the configured limits, the
+   * live worker count, and the queued runs with their verbatim refusal
+   * (reason.code + message), scoped to the reading workspace. Present ONLY to
+   * expose what the composition already enforces; nothing here mutates. When
+   * the composition has no worker system (no harness command), the honest
+   * not-configured shape answers — the UI renders that as "not configured",
+   * never as zeros dressed up as policy (G4).
+   */
+  workerAdmission?: (workspaceId: string) => WorkerAdmissionReadout;
   /**
    * B-1: the redacted sink untyped HTTP faults are recorded to — the generic
    * INTERNAL_ERROR's correlation_id is logged with it, so "The failure has
@@ -936,6 +950,36 @@ export function createLocalApi(deps: LocalApiDeps): Express {
         sender: body.data.sender,
         text: body.data.text,
       }),
+    );
+  });
+
+  /**
+   * S16 — the task-worker admission readout (E1; UI_DESIGN S9 "Runtime &
+   * resources", S11 "Resource states"): the tier limits as configured, the
+   * live worker count, and the queued runs with their verbatim refusal
+   * (reason.code + message — never re-derived, never invented numbers).
+   * Workspace-scoped like every read (E12): the queued list is narrowed to
+   * the reading workspace, while live_workers/limits are the runtime-global
+   * constraint they honestly are.
+   */
+  app.get(GET_WORKER_ADMISSION_PATH, (req, res) => {
+    const query = OperationWorkspaceQuery.safeParse(req.query);
+    if (!query.success) {
+      const { status, body } = contractValidationResponse(
+        "The worker admission request is not valid: a workspace_id is required.",
+      );
+      res.status(status).json(body);
+      return;
+    }
+    res.status(200).json(
+      deps.workerAdmission
+        ? deps.workerAdmission(query.data.workspace_id)
+        : {
+            configured: false,
+            limits: null,
+            live_workers: 0,
+            queued_runs: [],
+          },
     );
   });
 

@@ -6,9 +6,10 @@
  * - SQL may exist ONLY under apps/user-runtime/src/adapters/sqlite/ — no
  *   module, service, or transport file speaks SQL.
  * - node:sqlite is imported ONLY by the sqlite adapter.
- * - child_process is imported NOWHERE in user-runtime yet; when the process
- *   supervisor arrives it must live under adapters/process/ (the allowlist
- *   already reserves that path).
+ * - child_process lives ONLY under adapters/process/ (the production spawn
+ *   seams) plus the NAMED test-double exceptions below — each one is also a
+ *   named PROCESS_EXCEPTIONS entry in scripts/boundary-guards.ts, so no
+ *   exception exists in only one of the two guard surfaces.
  * - Every SQL statement in the repositories is workspace-scoped (E12): each
  *   statement string that reads or writes rows must mention workspace_id.
  */
@@ -68,9 +69,26 @@ describe("user-runtime SQL boundary (AC7, D23 rule 2)", () => {
     expect(offenders, `node:sqlite outside the adapter: ${offenders.join(", ")}`).toEqual([]);
   });
 
-  it("keeps child_process out of user-runtime (process adapter does not exist yet)", () => {
+  it("keeps child_process out of user-runtime (production seams + named test-double exceptions only)", () => {
+    // The fake process test doubles spawn REAL children on purpose —
+    // supervision suites must exercise true heartbeat silence, crash exit
+    // codes and kill escalation against live processes (D14 for fake Pi,
+    // D32/E8 for the fake task worker). The S16 production task-worker spawn
+    // adapter wraps the worker command in prlimit(1) exec'd as a binary (no
+    // shell) for per-worker kernel resource limits (E1), and the fake worker
+    // CHILD script spawns short-lived node children so suites can prove the
+    // --nproc cap at the fork boundary. Each exception is mirrored in
+    // scripts/boundary-guards.ts PROCESS_EXCEPTIONS with its rationale; the
+    // production task-worker spawn seam is the worker-process-spawn adapter
+    // itself (sessions keep their adapters/process/ seam).
+    const childProcessExceptions = new Set([
+      join("modules", "workers", "fake-task-worker.ts"),
+      join("modules", "workers", "worker-process-spawn.ts"),
+      join("modules", "workers", "fake-task-worker-child.ts"),
+    ]);
     const offenders = allFiles
       .filter((file) => !file.includes(join("src", "adapters", "process")))
+      .filter((file) => !childProcessExceptions.has(relative(file)))
       .filter((file) => /child_process/.test(readFileSync(file, "utf8")))
       .map(relative);
     expect(offenders, `child_process outside adapters/process: ${offenders.join(", ")}`).toEqual(

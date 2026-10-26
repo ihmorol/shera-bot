@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 
 import { AgentSettingsSurface } from "@/components/settings/agent-settings";
+import { WorkersSettingsSurface } from "@/components/settings/worker-admission-readout";
 import { SurfaceFrame } from "@/components/shell/surface-frame";
 import { findAgent } from "@/lib/navigation";
 import { routes } from "@/lib/routes";
@@ -16,13 +17,15 @@ export const metadata: Metadata = {
 };
 
 /**
- * S9 settings shell. The Agents section is REAL (S11): /app/settings/agents/
- * <agent> renders the D16 per-Agent settings surface (display label, current
- * value, recommended default, why it matters, risk note, reset-to-default,
- * read-only pack-owned entries — through the ONE D16 commands endpoint).
- * Other sections are named here as pending labels, not links — each becomes a
- * real route with its own slice, so the shell never links to a section that
- * cannot render yet (G4).
+ * S9 settings shell. Two sections are REAL: /app/settings/agents/<agent>
+ * renders the D16 per-Agent settings surface (display label, current value,
+ * recommended default, why it matters, risk note, reset-to-default,
+ * read-only pack-owned entries — through the ONE D16 commands endpoint), and
+ * /app/settings/workers renders the S16 Task workers admission readout
+ * (UI_DESIGN S9 "Runtime & resources" queue state, E1). Other sections are
+ * named here as pending labels, not links — each becomes a real route with
+ * its own slice, so the shell never links to a section that cannot render
+ * yet (G4).
  */
 export default async function SettingsPage({ params }: SettingsPageProps) {
   const { section } = await params;
@@ -41,6 +44,16 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
     );
   }
 
+  if (section?.length === 1 && section[0] === "workers") {
+    return (
+      <SurfaceFrame title="Settings" meta="Workers">
+        <div className="mx-auto max-w-xl">
+          <WorkersSettingsSurface />
+        </div>
+      </SurfaceFrame>
+    );
+  }
+
   const sectionLabel = section?.length ? section.join(" / ") : "Overview";
 
   return (
@@ -51,6 +64,15 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
           stay masked with revoke/replace only, and memory rejects secrets outright.
         </p>
         <ul className="mt-6 space-y-2">
+          <li className="flex items-center justify-between rounded-xl border border-line bg-surface px-4 py-3">
+            <Link
+              href={routes.settings("workers")}
+              className="text-sm text-text underline underline-offset-4 hover:text-cool-highlight"
+            >
+              Workers
+            </Link>
+            <span className="font-mono text-xs uppercase tracking-[0.16em] text-muted">open</span>
+          </li>
           {["Profile", "Providers", "Tools", "Git", "Memory", "Credits", "Workspace"].map(
             (item) => (
               <li

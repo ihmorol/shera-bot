@@ -751,6 +751,45 @@ export class OperationsRepository {
     return row === undefined ? null : this.runFromRow(row);
   }
 
+  /**
+   * The operation id that owns ONE run, found from the run row alone (S16
+   * chunk 3 — the task-worker run boundary resolves a run's operation without
+   * knowing the operation up front). Workspace-scoped (E12): the same run_id
+   * under another workspace is a different, unreachable row → null. The
+   * composite (workspace_id, operation_id, run_id) key means a run_id is
+   * unique per workspace in practice; if a workspace ever held duplicates the
+   * FIRST by created_at wins deterministically (the run-creation order).
+   */
+  findRunOperation(workspaceId: string, runId: string, exec?: DatabaseSync): string | null {
+    const db = exec ?? this.tx.connection();
+    const row = db
+      .prepare(
+        `SELECT operation_id FROM operation_runs
+         WHERE workspace_id = ? AND run_id = ?
+         ORDER BY created_at, run_id LIMIT 1`,
+      )
+      .get(workspaceId, runId) as { operation_id: string } | undefined;
+    return row === undefined ? null : row.operation_id;
+  }
+
+  /**
+   * Every run in ONE D8 state across ALL workspaces (S16 chunk 3 — the boot
+   * reconciliation read: QUEUED runs re-enter the admission queue after a
+   * gateway restart). Runs are parsed through the contract like every other
+   * read, so a stored row that no longer conforms fails typed.
+   */
+  listRunsByState(state: OperationRun["state"], exec?: DatabaseSync): OperationRun[] {
+    const db = exec ?? this.tx.connection();
+    const rows = db
+      .prepare(
+        `SELECT ${RUN_COLUMNS} FROM operation_runs
+         WHERE state = ?
+         ORDER BY created_at, run_id`,
+      )
+      .all(state) as unknown as OperationRunSqlRow[];
+    return rows.map((row) => this.runFromRow(row));
+  }
+
   listRuns(workspaceId: string, operationId: string, exec?: DatabaseSync): OperationRun[] {
     const db = exec ?? this.tx.connection();
     const rows = db

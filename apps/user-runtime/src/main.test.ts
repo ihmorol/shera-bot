@@ -70,6 +70,9 @@ describe("runtime node config from environment (no secrets cross this path, G3)"
       // no policy knobs set → the programmatic constants apply (chunk 4).
       sessionHarness: null,
       sessionPolicy: {},
+      // S16 (D32 layer 3): no worker harness command configured → the task
+      // worker system is not composed at all (G4 — no spawns, no gate).
+      workerHarness: null,
     });
     expect(
       runtimeConfigFromEnv(
@@ -89,6 +92,7 @@ describe("runtime node config from environment (no secrets cross this path, G3)"
       packsRoot: "/tmp/packs",
       sessionHarness: null,
       sessionPolicy: {},
+      workerHarness: null,
     });
   });
 

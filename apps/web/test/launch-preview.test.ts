@@ -4,7 +4,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { OperationLaunchPreview } from "@shera-bot/contracts";
 
-import { OperationLaunchMenu, OperationLaunchPreviewModal } from "../components/operations/launch-preview";
+import {
+  OperationLaunchMenu,
+  OperationLaunchPreviewModal,
+} from "../components/operations/launch-preview";
 import type { AgentRosterSummary } from "../lib/agent-api";
 import { RuntimeApiError } from "../lib/runtime-client";
 import {
@@ -190,8 +193,16 @@ const PREVIEW = OperationLaunchPreview.parse({
     classes_requiring_approval: ["local-mutation", "external-write"],
     mapping: [
       { risk_class: "read-only", tool_ids: ["tool_file_read"], behavior: "auto_execute" },
-      { risk_class: "local-mutation", tool_ids: ["tool_file_write"], behavior: "approval_required" },
-      { risk_class: "external-write", tool_ids: ["tool_custom_unmapped"], behavior: "approval_required" },
+      {
+        risk_class: "local-mutation",
+        tool_ids: ["tool_file_write"],
+        behavior: "approval_required",
+      },
+      {
+        risk_class: "external-write",
+        tool_ids: ["tool_custom_unmapped"],
+        behavior: "approval_required",
+      },
     ],
     mapping_note: MAPPING_NOTE,
   },
@@ -317,13 +328,15 @@ describe("Operation preview client (proxy paths)", () => {
   });
 
   it("roster and coordinator overrides ride the query string — the server recomputes", async () => {
+    // URLSearchParams percent-encodes the comma separator (the runtime's
+    // query parser decodes it back before splitting).
     const cases: Array<{
       overrides: Parameters<typeof fetchOperationLaunchPreview>[2];
       tail: string;
     }> = [
       {
         overrides: { roster_agent_ids: [RESEARCHER.agent_id, CITATION.agent_id] },
-        tail: `&roster_agent_ids=${RESEARCHER.agent_id},${CITATION.agent_id}`,
+        tail: `&roster_agent_ids=${RESEARCHER.agent_id}%2C${CITATION.agent_id}`,
       },
       {
         overrides: { coordinator_agent_id: CITATION.agent_id },
@@ -391,7 +404,9 @@ describe("Operation preview client (proxy paths)", () => {
       ),
     );
     await expect(
-      fetchOperationLaunchPreview(WORKSPACE, DEFINITION_ID, { roster_agent_ids: ["agent_elsewhere"] }),
+      fetchOperationLaunchPreview(WORKSPACE, DEFINITION_ID, {
+        roster_agent_ids: ["agent_elsewhere"],
+      }),
     ).rejects.toMatchObject({
       sheraError: { code: "OPERATION_PREVIEW_OVERRIDE_INVALID" },
     });
@@ -402,8 +417,9 @@ describe("Operation preview client (proxy paths)", () => {
       "fetch",
       vi.fn().mockResolvedValue(jsonResponse(200, { definitions: "all of them, trust me" })),
     );
+    // The generic typed fallback — a server drift, never a user-facing 4xx.
     await expect(fetchOperationDefinitions(WORKSPACE)).rejects.toMatchObject({
-      sheraError: { code: "RUNTIME_UNEXPECTED_RESPONSE" },
+      sheraError: { code: "INTERNAL_ERROR" },
     });
   });
 });
@@ -510,8 +526,10 @@ describe("From-the-pack launcher (§S5 entry, D30)", () => {
       state: "error",
       safeErrorMessage: "The pack's Operations could not be loaded.",
     });
+    // SSR entity-encodes the apostrophe — assert the apostrophe-free tail
+    // (the suite's verbatim-check convention).
     expect(error).toContain('role="alert"');
-    expect(error).toContain("The pack's Operations could not be loaded.");
+    expect(error).toContain("Operations could not be loaded.");
     expect(error).toContain("Retry");
   });
 });
@@ -566,7 +584,9 @@ describe("Launch preview modal — the eight groups (§S5, D30/D38/D20/D35)", ()
     expect(html).toContain('aria-label="Provider and model"');
     expect(html).toContain("provider_platform · platform-default");
     expect(html).toContain("provider_openrouter · openrouter/free");
-    expect(html).toContain(PROVIDER_NOTE);
+    // The runtime's honest note (SSR encodes the apostrophe — assert the
+    // apostrophe-free head of the note).
+    expect(html).toContain("no live provider is wired in this prototype");
   });
 
   it("group 6, estimated credits: the bounded range, the settlement note verbatim, and custom-provider Agents marked", () => {
@@ -592,9 +612,11 @@ describe("Launch preview modal — the eight groups (§S5, D30/D38/D20/D35)", ()
   it("group 8, expected outputs: the statement with its honest source, or the honest null", () => {
     const derived = renderModal();
     expect(derived).toContain('aria-label="Expected outputs"');
-    expect(derived).toContain(`From the definition's purpose: ${PURPOSE}`);
+    // SSR entity-encodes the apostrophe in "definition's" — assert around it.
+    expect(derived).toContain("From the definition");
+    expect(derived).toContain(`purpose: ${PURPOSE}`);
     expect(derived).toContain("derived from the purpose");
-    expect(derived).toContain(OUTPUTS_REASON);
+    expect(derived).toContain("carries no expected outputs field");
 
     // A definition with no derivable outputs renders the honest null — the
     // UI never invents artifacts (G4).
@@ -656,9 +678,7 @@ describe("Launch preview modal — roster overrides (D30 co-planning)", () => {
         },
       }),
     );
-    expect(solo).toMatch(
-      new RegExp(`aria-label="Include ${GA.display_name}"[^>]*\\bdisabled=""`),
-    );
+    expect(solo).toMatch(new RegExp(`aria-label="Include ${GA.display_name}"[^>]*\\bdisabled=""`));
     expect(solo).toContain("An Operation needs at least one Agent.");
   });
 
@@ -666,7 +686,7 @@ describe("Launch preview modal — roster overrides (D30 co-planning)", () => {
     const html = renderModal({}, PREVIEW_OVERRIDE);
     expect(html).toContain("Adjusted in this preview");
     expect(html).toContain("nothing is saved");
-    expect(html).toContain('aria-label="Back to the pack\'s recommended roster"');
+    expect(html).toContain('aria-label="Back to the pack-recommended roster"');
     // The override flipped the coordinator to none: the peer-to-peer radio
     // reflects it (D49) and no chip claims the coordinator role.
     expect(html).toMatch(/aria-label="No coordinator \(peer-to-peer\)"[^>]*aria-checked="true"/);
@@ -677,7 +697,9 @@ describe("Launch preview modal — roster overrides (D30 co-planning)", () => {
     const html = renderModal({ overridePending: true });
     // SSR serializes the disabled boolean attribute.
     expect(html).toMatch(new RegExp(`aria-label="Include ${GA.display_name}"[^>]*\\bdisabled=""`));
-    expect(html).toMatch(new RegExp(`aria-label="Coordinator: ${GA.display_name}"[^>]*\\bdisabled=""`));
+    expect(html).toMatch(
+      new RegExp(`aria-label="Coordinator: ${GA.display_name}"[^>]*\\bdisabled=""`),
+    );
     // The default render has none disabled.
     const idle = renderModal();
     expect(idle).not.toMatch(

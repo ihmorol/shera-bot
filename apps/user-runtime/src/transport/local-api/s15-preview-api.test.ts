@@ -46,7 +46,7 @@ import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
 
 // The zero-side-effect probe lives in the sqlite adapter — the ONLY place
-// node:sqlite and SQL may appear (D23 rule 2; the boundary contract
+// the sqlite driver and SQL may appear (D23 rule 2; the boundary contract
 // enforces it).
 import { sqliteSideEffectProbe } from "../../adapters/sqlite/operations-repository.ts";
 import { DEFAULT_WORKSPACE_ID, composeRuntime, type RuntimeHandle } from "./compose.ts";
@@ -607,7 +607,12 @@ describe("S15 chunk 3 — the launch confirm flow (POST /v1/operations/launch)",
     const pinning = operation.pinning as Record<string, unknown>;
     expect(pinning.pack_id).toBe(STUDENT_MANIFEST.pack_id);
     expect(pinning.pack_version).toBe(STUDENT_MANIFEST.version);
-    expect(pinning.roster_agent_ids).toEqual([RESEARCHER, CITATION]);
+    // The pinning roster is DERIVED from the membership table (the v6
+    // normalization — the JSON snapshot stores no roster), so it is pinned as
+    // a set: the same Agents the user confirmed, whatever the table order.
+    expect([...(pinning.roster_agent_ids as string[])].sort()).toEqual(
+      [CITATION, RESEARCHER].sort(),
+    );
     const roster = detailBody.roster as Array<Record<string, unknown>>;
     expect(roster.map((member) => member.agent_id).sort()).toEqual([CITATION, RESEARCHER].sort());
 
@@ -647,24 +652,27 @@ describe("S15 chunk 3 — the launch confirm flow (POST /v1/operations/launch)",
     expect(unknown.status).toBe(404);
     expect((unknown.json as Record<string, unknown>).code).toBe("OPERATION_DEFINITION_NOT_FOUND");
 
-    // A roster naming an Agent outside the pinned pack: the typed 400.
+    // A roster naming an Agent outside the pinned pack: the SAME D36 refusal
+    // the ad-hoc creation path answers (the launch shares createOperation's
+    // validation, no fork) — the 403 policy class, nothing left behind.
     const foreign = await postAny(
       origin,
       LAUNCH_PATH,
       launchBody({ roster_agent_ids: [RESEARCHER, "agent_not_in_any_pack"] }),
     );
-    expect(foreign.status).toBe(400);
-    expect((foreign.json as Record<string, unknown>).code).toBe("OPERATION_COMMAND_INVALID");
+    expect(foreign.status).toBe(403);
+    expect((foreign.json as Record<string, unknown>).code).toBe("OPERATION_ROSTER_REFUSED");
 
-    // A coordinator outside the pinned pack: the same re-validation.
+    // A coordinator outside the pinned pack: the same re-validation, answered
+    // by the shared coordinator rule (the 404 state class).
     const foreignCoordinator = await postAny(
       origin,
       LAUNCH_PATH,
       launchBody({ coordinator_agent_id: "agent_not_in_any_pack" }),
     );
-    expect(foreignCoordinator.status).toBe(400);
+    expect(foreignCoordinator.status).toBe(404);
     expect((foreignCoordinator.json as Record<string, unknown>).code).toBe(
-      "OPERATION_COMMAND_INVALID",
+      "OPERATION_COORDINATOR_NOT_FOUND",
     );
 
     // An empty roster: the launch envelope requires at least one Agent.

@@ -786,6 +786,179 @@ export class OperationsService {
     return preview;
   }
 
+  // -------------------------------------------------------------------------
+  // Launch (S15 chunk 3 — the D30 CONFIRM step; the only mutation the gate
+  // leads to, and the only path in this slice that creates anything)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Launch one pinned-pack definition: the CONFIRM step of the D30 gate. The
+   * preview's effective overrides (roster/coordinator) are what the user
+   * confirms, and this method persists exactly them — but it NEVER trusts
+   * them: the definition is re-resolved from the pinned pack (an unknown id
+   * is the typed OPERATION_DEFINITION_NOT_FOUND) and the roster/coordinator
+   * are re-validated against the pack catalog by the SAME createOperation
+   * machinery the ad-hoc flow uses (D36 — the preview's edits are re-checked
+   * at launch, never trusted).
+   *
+   * Confirm creates EXACTLY ONE Operation chat and ONE first run (D30/AC23):
+   * the Operation record (definition_ref + the D29 pinning snapshot, named
+   * from the definition's title — the launch is the first flow that sends a
+   * definition_ref with a derived name), its first run (D8 CREATED), and the
+   * journaled chat binding, each through the shared machinery.
+   *
+   * Idempotency rides the command receipts seam (D23 rule 6) on
+   * (workspace_id, idempotency_key) with command type `operation.launch`: a
+   * replay answers the ORIGINAL {operation_id, run_id, chat_conversation_id}
+   * without creating duplicates; a key already spent on a DIFFERENT command
+   * family is the typed conflict (the same discipline as the message send).
+   * The receipt is written AFTER the three creations commit — the launch
+   * composes three shared transaction units (createOperation, createRun,
+   * getOrCreateChat) and the receipt records their outcome; a crash in
+   * between is the recorded bounded limitation in E28 (the runtime gateway's
+   * journaled launch supersedes it).
+   */
+  launchOperation(
+    workspaceId: string,
+    input: {
+      operation_definition_id: string;
+      roster_agent_ids: string[];
+      coordinator_agent_id: OperationCoordinatorRef;
+      idempotency_key: string;
+    },
+  ): { operation_id: string; run_id: string; chat_conversation_id: string; created: boolean } {
+    if (
+      typeof input.idempotency_key !== "string" ||
+      input.idempotency_key.length < 8 ||
+      input.idempotency_key.length > 200
+    ) {
+      throw new OperationsServiceError(
+        "OPERATION_COMMAND_INVALID",
+        "validation",
+        "idempotency_key must be 8-200 characters",
+      );
+    }
+
+    // Replay: the receipt on (workspace_id, idempotency_key) answers the
+    // original launch — validated shape, never a silent fallback (D23 rule 6).
+    const replayed = this.replayLaunchReceipt(
+      this.receipts.findById(workspaceId, input.idempotency_key),
+    );
+    if (replayed !== null) {
+      return { ...replayed, created: false };
+    }
+
+    // Re-resolve the definition from the PINNED pack (D30): the preview read
+    // it read-only; the launch resolves it again at the moment of confirm.
+    const definition = (this.catalog.operation_definitions ?? []).find(
+      (candidate) => candidate.operation_id === input.operation_definition_id,
+    );
+    if (definition === undefined) {
+      throw new OperationsServiceError(
+        "OPERATION_DEFINITION_NOT_FOUND",
+        "state",
+        `operation definition ${input.operation_definition_id} is not in the pinned pack`,
+      );
+    }
+
+    // The SAME creation machinery the ad-hoc flow uses (no fork): definition_ref
+    // pins the pack-authored definition, the name derives from its title, and
+    // the roster/coordinator are re-validated against the pack (D36) with the
+    // D29 pinning snapshot built inside.
+    const operation = this.createOperation(workspaceId, {
+      definition_ref: operationDefinitionRef(
+        this.catalog.pack_id,
+        this.catalog.pack_version,
+        definition.operation_id,
+        definition.version,
+      ),
+      name: definition.title,
+      roster_agent_ids: input.roster_agent_ids,
+      coordinator_agent_id: input.coordinator_agent_id,
+    });
+
+    // THE FIRST RUN (D30/AC23): D8 CREATED, D26 cursor 0 — the runtime, never
+    // an Agent, decided this run exists (D34).
+    const run = this.createRun(workspaceId, operation.operation_id);
+
+    // The chat binding (D41): journaled, published after commit, exactly one
+    // conversation per Operation.
+    const chat = this.getOrCreateChat(workspaceId, operation.operation_id);
+
+    const result = {
+      operation_id: operation.operation_id,
+      run_id: run.run_id,
+      chat_conversation_id: chat.conversation_id,
+    };
+    try {
+      this.deps.tx.transaction((exec) => {
+        this.receipts.create(
+          {
+            workspace_id: workspaceId,
+            idempotency_key: input.idempotency_key,
+            command_type: "operation.launch",
+            result_json: JSON.stringify({
+              operation_id: result.operation_id,
+              run_id: result.run_id,
+              chat_conversation_id: result.chat_conversation_id,
+            }),
+            created_at: this.now(),
+          },
+          exec,
+        );
+      });
+    } catch (error) {
+      if (isReceiptKeyConflict(error)) {
+        const winner = this.replayLaunchReceipt(
+          this.receipts.findById(workspaceId, input.idempotency_key),
+        );
+        if (winner !== null) {
+          return { ...winner, created: true };
+        }
+      }
+      throw error;
+    }
+    return { ...result, created: true };
+  }
+
+  /**
+   * Replay a recorded operation.launch receipt, or null when no receipt (or a
+   * foreign command family's receipt) sits on the key — the foreign family is
+   * the typed conflict (never a duplicated effect, never a silent retarget).
+   */
+  private replayLaunchReceipt(
+    receipt: ReturnType<CommandReceiptsRepository["findById"]>,
+  ): { operation_id: string; run_id: string; chat_conversation_id: string } | null {
+    if (receipt === null || receipt.command_type !== "operation.launch") {
+      if (receipt !== null) {
+        throw new OperationsServiceError(
+          "OPERATION_COMMAND_INVALID",
+          "conflict",
+          "idempotency_key was already used by a different command",
+        );
+      }
+      return null;
+    }
+    let stored: { operation_id?: unknown; run_id?: unknown; chat_conversation_id?: unknown };
+    try {
+      stored = JSON.parse(receipt.result_json) as typeof stored;
+    } catch {
+      throw new OperationRecordCorruptError("operation.launch receipt result JSON");
+    }
+    if (
+      typeof stored.operation_id !== "string" ||
+      typeof stored.run_id !== "string" ||
+      typeof stored.chat_conversation_id !== "string"
+    ) {
+      throw new OperationRecordCorruptError("operation.launch receipt result shape");
+    }
+    return {
+      operation_id: stored.operation_id,
+      run_id: stored.run_id,
+      chat_conversation_id: stored.chat_conversation_id,
+    };
+  }
+
   /**
    * The chat-composition deps (D41). A thread access without them is a
    * composition fault — surfaced typed, never a silent fallback.

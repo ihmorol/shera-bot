@@ -22,6 +22,7 @@ import {
   OPERATION_NAME_MAX_LENGTH,
   OperationCollaborationEvent,
   OperationCoordinatorRef,
+  OperationLaunchCommand,
   type OperationRecord,
   type OperationRun,
   WorkspaceId,
@@ -89,6 +90,13 @@ export const GET_WORKER_ADMISSION_PATH = "/v1/workers/admission" as const;
 export const LIST_OPERATION_DEFINITIONS_PATH = "/v1/operation-definitions" as const;
 export const GET_OPERATION_DEFINITION_PREVIEW_PATH =
   "/v1/operation-definitions/:operation_definition_id/preview" as const;
+/**
+ * S15 chunk 3 — the D30 CONFIRM step. A POST, so the GET /v1/operations/
+ * :operation_id capture cannot swallow the literal "launch" (different
+ * method); the path stays distinct from the S13 mutation routes, which all
+ * require the :operation_id segment.
+ */
+export const OPERATION_LAUNCH_PATH = "/v1/operations/launch" as const;
 
 /**
  * Replay query (D26): the client's last acknowledged sequence drives exactly
@@ -380,6 +388,8 @@ export interface LocalApiDeps {
     // S15 (D30): the launch preview read model — read-only, no persistence.
     | "listOperationDefinitions"
     | "buildLaunchPreview"
+    // S15 chunk 3 (D30): the confirm step — the launch itself.
+    | "launchOperation"
   >;
   /**
    * S16: the task-worker admission readout (E1) — the configured limits, the
@@ -1058,6 +1068,44 @@ export function createLocalApi(deps: LocalApiDeps): Express {
         : {}),
     });
     res.status(200).json(preview);
+  });
+
+  /**
+   * S15 chunk 3 — the D30 CONFIRM step (POST /v1/operations/launch): the ONLY
+   * route in this slice that creates anything. The body is the contracts
+   * OperationLaunchCommand envelope (D16-command shape: idempotency_key,
+   * actor, issued_at); the service re-resolves the definition from the pinned
+   * pack and re-validates the roster/coordinator against it (D36 — the
+   * preview's edits are re-checked at launch, never trusted), creates the
+   * Operation through the SAME createOperation machinery (definition_ref +
+   * D29 pinning snapshot), THE FIRST RUN (D30/AC23), and the chat binding
+   * (D41). Idempotent on (workspace_id, idempotency_key) through the command
+   * receipts seam (D23 rule 6): a replay answers the ORIGINAL ids (200)
+   * without creating duplicates; a fresh launch answers 201. Unknown
+   * definition → typed 404; an out-of-pack roster/coordinator or a malformed
+   * envelope → typed 400; a key spent on a different command family → the
+   * typed conflict.
+   */
+  app.post(OPERATION_LAUNCH_PATH, (req, res) => {
+    const parsed = OperationLaunchCommand.safeParse(req.body);
+    if (!parsed.success) {
+      const { status, body } = contractValidationResponse(
+        "The launch request is not valid: a workspace_id, an operation_definition_id, a roster of at least one Agent, a coordinator, an idempotency_key, an actor, and issued_at are required.",
+      );
+      res.status(status).json(body);
+      return;
+    }
+    const result = deps.operations.launchOperation(parsed.data.workspace_id, {
+      operation_definition_id: parsed.data.operation_definition_id,
+      roster_agent_ids: parsed.data.roster_agent_ids,
+      coordinator_agent_id: parsed.data.coordinator_agent_id,
+      idempotency_key: parsed.data.idempotency_key,
+    });
+    res.status(result.created ? 201 : 200).json({
+      operation_id: result.operation_id,
+      run_id: result.run_id,
+      chat_conversation_id: result.chat_conversation_id,
+    });
   });
 
   /**

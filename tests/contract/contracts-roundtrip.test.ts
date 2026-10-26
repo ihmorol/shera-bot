@@ -90,6 +90,9 @@ const ROUND_TRIP_CASES: ReadonlyArray<{ schema: ContractName; fixture: string }>
   { schema: "OperationRenameCommand", fixture: "operation-rename-command.json" },
   // S15 chunk 1 (D30 launch preview read model: the eight groups).
   { schema: "OperationLaunchPreview", fixture: "operation-launch-preview.json" },
+  // S15 chunk 3 (the D30 confirm step: the launch envelope + its receipt).
+  { schema: "OperationLaunchCommand", fixture: "operation-launch-command.json" },
+  { schema: "OperationLaunchReceipt", fixture: "operation-launch-receipt.json" },
 ];
 
 describe.each(ROUND_TRIP_CASES)("$schema round-trip ($fixture)", ({ schema, fixture }) => {

@@ -182,6 +182,13 @@ const OPERATIONS_REJECTIONS: Record<
     safe_message: "A pack-defined Operation needs a name.",
     user_action: null,
   },
+  // S15 (D30 launch preview): an unknown definition in the pinned pack is the
+  // 404 state class — the preview is read-only, so nothing was touched.
+  OPERATION_DEFINITION_NOT_FOUND: {
+    status: 404,
+    safe_message: "That Operation definition does not exist in the pinned pack.",
+    user_action: null,
+  },
 };
 
 function bodyParserType(error: unknown): string | null {

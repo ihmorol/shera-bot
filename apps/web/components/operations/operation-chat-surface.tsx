@@ -10,6 +10,7 @@ import { OperationPackSummary } from "@/components/operations/operation-pack-sum
 import { OperationRosterPanel } from "@/components/operations/operation-roster-panel";
 import { OperationRunsPanel } from "@/components/operations/operation-runs-panel";
 import { OperationThreadView } from "@/components/operations/operation-thread";
+import { OperationPackLauncher } from "@/components/operations/launch-preview";
 import { ContainerGate } from "@/components/shell/container-gate";
 import { EmptyState, SurfaceFrame } from "@/components/shell/surface-frame";
 import type { AgentRosterSummary } from "@/lib/agent-api";
@@ -375,6 +376,10 @@ function RuntimeNewOperation({ workspaceId }: { workspaceId: string }) {
 
   return (
     <SurfaceFrame title="New ad-hoc Operation" meta="Pack: student v1">
+      {/* S15 (D30): the pack-defined launch path — the "From the pack…"
+          launcher opens the preview gate beside (never instead of) the S14
+          ad-hoc form below. */}
+      <OperationPackLauncher workspaceId={workspaceId} />
       <NewOperationForm
         identities={roster.agents}
         state={roster.state}

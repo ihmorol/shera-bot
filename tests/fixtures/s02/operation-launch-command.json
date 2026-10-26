@@ -1,0 +1,12 @@
+{
+  "workspace_id": "ws_default_01",
+  "operation_definition_id": "operation_research_paper",
+  "roster_agent_ids": ["agent_researcher", "agent_citation_manager"],
+  "coordinator_agent_id": "agent_citation_manager",
+  "idempotency_key": "idem_launch_0001",
+  "actor": {
+    "type": "user",
+    "id": "user_emon"
+  },
+  "issued_at": "2026-10-25T12:00:00.000Z"
+}

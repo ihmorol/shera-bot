@@ -318,6 +318,21 @@ function operationPackCatalog(pack: WorkspacePack): OperationPackCatalog {
     })),
     connectors: pack.manifest.connectors.map((connector) => ({
       connector_id: connector.connector_id,
+      title: connector.title,
+      version: connector.version,
+    })),
+    // S15 (D30): the definitions the launch preview reads — verbatim from the
+    // pinned manifest, the same source the agents seeding consumes (D28).
+    default_coordinator_agent_id: pack.manifest.default_coordinator_agent_id,
+    operation_definitions: pack.manifest.operations.map((operation) => ({
+      operation_id: operation.operation_id,
+      version: operation.version,
+      title: operation.title,
+      purpose: operation.purpose,
+      roster: operation.roster,
+      ...(operation.coordinator !== undefined ? { coordinator: operation.coordinator } : {}),
+      skills: operation.skills,
+      connectors: operation.connectors,
     })),
     locateAgentPack(agentId: string): string | null {
       return agents.some((agent) => agent.agent_id === agentId) ? pack.manifest.pack_id : null;

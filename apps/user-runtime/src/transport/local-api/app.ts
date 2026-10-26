@@ -22,6 +22,7 @@ import {
   OPERATION_NAME_MAX_LENGTH,
   OperationCollaborationEvent,
   OperationCoordinatorRef,
+  OperationLaunchCommand,
   type OperationRecord,
   type OperationRun,
   WorkspaceId,
@@ -79,6 +80,23 @@ export const OPERATION_THREAD_MESSAGES_PATH =
 // S16 — the task-worker admission readout (E1; the settings "Runtime &
 // resources" read model).
 export const GET_WORKER_ADMISSION_PATH = "/v1/workers/admission" as const;
+/**
+ * S15 — the D30 launch preview surface. Deliberately DISTINCT from
+ * /v1/operations/:operation_id (a "/v1/operations/definitions" path would let
+ * the :operation_id segment capture the literal "definitions" — Express
+ * matches in registration order): the definitions read model lives under its
+ * own /v1/operation-definitions prefix.
+ */
+export const LIST_OPERATION_DEFINITIONS_PATH = "/v1/operation-definitions" as const;
+export const GET_OPERATION_DEFINITION_PREVIEW_PATH =
+  "/v1/operation-definitions/:operation_definition_id/preview" as const;
+/**
+ * S15 chunk 3 — the D30 CONFIRM step. A POST, so the GET /v1/operations/
+ * :operation_id capture cannot swallow the literal "launch" (different
+ * method); the path stays distinct from the S13 mutation routes, which all
+ * require the :operation_id segment.
+ */
+export const OPERATION_LAUNCH_PATH = "/v1/operations/launch" as const;
 
 /**
  * Replay query (D26): the client's last acknowledged sequence drives exactly
@@ -162,6 +180,18 @@ const OperationThreadMessageBody = z.strictObject({
   idempotency_key: z.string().min(8).max(200),
   sender: MessageSender,
   text: z.string().min(1).max(4000),
+});
+
+/**
+ * S15 (D30): the preview query — workspace scoping (E12) plus the OPTIONAL
+ * read-only roster override (D30 co-planning): comma-separated Agent ids and
+ * a coordinator (Agent id or "none"). The override recomputes the same eight
+ * groups WITHOUT persisting anything — the preview never writes.
+ */
+const OperationDefinitionPreviewQuery = z.strictObject({
+  workspace_id: WorkspaceId,
+  roster_agent_ids: z.string().min(1).max(4096).optional(),
+  coordinator_agent_id: z.string().min(1).max(256).optional(),
 });
 
 /**
@@ -355,6 +385,11 @@ export interface LocalApiDeps {
     | "getThread"
     | "sendOperationMessage"
     | "getPackSummary"
+    // S15 (D30): the launch preview read model — read-only, no persistence.
+    | "listOperationDefinitions"
+    | "buildLaunchPreview"
+    // S15 chunk 3 (D30): the confirm step — the launch itself.
+    | "launchOperation"
   >;
   /**
    * S16: the task-worker admission readout (E1) — the configured limits, the
@@ -981,6 +1016,102 @@ export function createLocalApi(deps: LocalApiDeps): Express {
             queued_runs: [],
           },
     );
+  });
+
+  /**
+   * S15 — the pinned pack's operation definitions (the D30 launch menu):
+   * id, version, title, and the purpose verbatim. Read-only; empty when no
+   * pack (or a pack without definitions) is pinned. The workspace_id query
+   * stays required (every read is workspace-scoped at the transport), while
+   * the listing itself is the pinned pack's — runtime-global by pinning.
+   */
+  app.get(LIST_OPERATION_DEFINITIONS_PATH, (req, res) => {
+    const query = OperationWorkspaceQuery.safeParse(req.query);
+    if (!query.success) {
+      const { status, body } = contractValidationResponse(
+        "The operation definitions request is not valid: a workspace_id is required.",
+      );
+      res.status(status).json(body);
+      return;
+    }
+    res.status(200).json({ definitions: deps.operations.listOperationDefinitions() });
+  });
+  /**
+   * S15 — the D30 Operation launch preview (READ MODEL): the eight groups
+   * (purpose, recommended roster with the coordinator marked, per-Agent
+   * skills, connectors ALWAYS not connected (D38), honest provider/model
+   * pairs, the credits RANGE with the settlement note (D20), the D35
+   * approval classes, and the expected outputs) recomputed from the pinned
+   * pack. NOTHING may execute before confirmation (D30), so this route
+   * writes nothing anywhere — the optional roster override (query params,
+   * D30 co-planning) recomputes the same groups read-only. An unknown
+   * definition answers the typed 404-class
+   * (OPERATION_DEFINITION_NOT_FOUND); an override naming an Agent outside
+   * the pinned pack (or an empty override roster) answers the typed 400
+   * class. Chunk 3's launch route — the only path that creates the
+   * Operation chat and task — does not exist yet.
+   */
+  app.get(GET_OPERATION_DEFINITION_PREVIEW_PATH, (req, res) => {
+    const definitionId = Id.safeParse(req.params.operation_definition_id);
+    const query = OperationDefinitionPreviewQuery.safeParse(req.query);
+    if (!definitionId.success || !query.success) {
+      const { status, body } = contractValidationResponse(
+        "The preview request is not valid: a workspace_id is required; the optional override takes comma-separated roster_agent_ids and a coordinator_agent_id.",
+      );
+      res.status(status).json(body);
+      return;
+    }
+    const rosterOverride = query.data.roster_agent_ids
+      ? query.data.roster_agent_ids
+          .split(",")
+          .map((agentId) => agentId.trim())
+          .filter((agentId) => agentId.length > 0)
+      : undefined;
+    const preview = deps.operations.buildLaunchPreview(query.data.workspace_id, definitionId.data, {
+      ...(rosterOverride !== undefined ? { roster_agent_ids: rosterOverride } : {}),
+      ...(query.data.coordinator_agent_id !== undefined
+        ? { coordinator_agent_id: query.data.coordinator_agent_id }
+        : {}),
+    });
+    res.status(200).json(preview);
+  });
+
+  /**
+   * S15 chunk 3 — the D30 CONFIRM step (POST /v1/operations/launch): the ONLY
+   * route in this slice that creates anything. The body is the contracts
+   * OperationLaunchCommand envelope (D16-command shape: idempotency_key,
+   * actor, issued_at); the service re-resolves the definition from the pinned
+   * pack and re-validates the roster/coordinator against it (D36 — the
+   * preview's edits are re-checked at launch, never trusted), creates the
+   * Operation through the SAME createOperation machinery (definition_ref +
+   * D29 pinning snapshot), THE FIRST RUN (D30/AC23), and the chat binding
+   * (D41). Idempotent on (workspace_id, idempotency_key) through the command
+   * receipts seam (D23 rule 6): a replay answers the ORIGINAL ids (200)
+   * without creating duplicates; a fresh launch answers 201. Unknown
+   * definition → typed 404; an out-of-pack roster/coordinator or a malformed
+   * envelope → typed 400; a key spent on a different command family → the
+   * typed conflict.
+   */
+  app.post(OPERATION_LAUNCH_PATH, (req, res) => {
+    const parsed = OperationLaunchCommand.safeParse(req.body);
+    if (!parsed.success) {
+      const { status, body } = contractValidationResponse(
+        "The launch request is not valid: a workspace_id, an operation_definition_id, a roster of at least one Agent, a coordinator, an idempotency_key, an actor, and issued_at are required.",
+      );
+      res.status(status).json(body);
+      return;
+    }
+    const result = deps.operations.launchOperation(parsed.data.workspace_id, {
+      operation_definition_id: parsed.data.operation_definition_id,
+      roster_agent_ids: parsed.data.roster_agent_ids,
+      coordinator_agent_id: parsed.data.coordinator_agent_id,
+      idempotency_key: parsed.data.idempotency_key,
+    });
+    res.status(result.created ? 201 : 200).json({
+      operation_id: result.operation_id,
+      run_id: result.run_id,
+      chat_conversation_id: result.chat_conversation_id,
+    });
   });
 
   /**

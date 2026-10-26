@@ -945,7 +945,9 @@ describe("Launch mutation (testable contract — the S14 invalidation/navigate p
     expect(result.operation_id).toBe("0b1f2c3d-0000-4000-8000-000000000001");
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    await options.onSuccess(result, PREVIEW, undefined);
+    // The invalidation is the mutation's own onSuccess (the wired launcher
+    // adds the navigation on the mutate call, the S14 split).
+    await options.onSuccess();
     expect(queryClient.getQueryState(["operations", WORKSPACE])?.isInvalidated).toBe(true);
   });
 });

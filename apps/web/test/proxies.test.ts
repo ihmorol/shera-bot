@@ -781,10 +781,7 @@ describe("runtime proxy — S15 launch preview surfaces (allowlist additions)", 
       expect(response.status, path).toBe(404);
     for (const [method, path] of [
       ["POST", "/v1/operation-definitions"],
-      [
-        "POST",
-        "/v1/operation-definitions/operation_research_paper/preview",
-      ],
+      ["POST", "/v1/operation-definitions/operation_research_paper/preview"],
       ["DELETE", "/v1/operation-definitions/operation_research_paper"],
     ] as const) {
       const request = new Request(`http://web.test/api/runtime${path}`, {

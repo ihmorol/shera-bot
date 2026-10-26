@@ -100,10 +100,20 @@ async function until<T>(read: () => T | undefined, timeoutMs = 8000): Promise<T>
   }
 }
 
-/** ms-scale worker policy with a WIDE stall window for kernel-limit tests. */
+/**
+ * ms-scale worker policy with a WIDE stall window for kernel-limit tests
+ * (50 ms × 60 = 3 s): these children all beat or exit on their own, and the
+ * suite's own hoarding test (plus sibling vitest workers) can transiently
+ * starve an event loop for seconds — a false stall would land a healthy run
+ * in RECOVERY_REQUIRED and its completion wait would time out (observed on
+ * loaded machines at tighter windows). No test here depends on stall
+ * DETECTION timing; the dedicated watchdog suite owns it. The one test that
+ * needs an even wider window (the --as hoard, whose allocation blocks the
+ * child's loop) overrides this further below.
+ */
 const WORKER_POLICY: Partial<TaskWorkerSupervisorPolicy> = {
   heartbeatIntervalMs: 50,
-  missedHeartbeatLimit: 20,
+  missedHeartbeatLimit: 60,
   leaseWindowMs: 1_000,
   handshakeTimeoutMs: 10_000,
   shutdownGraceMs: 150,

@@ -81,10 +81,20 @@ async function until<T>(read: () => T | undefined, timeoutMs = 5000): Promise<T>
   }
 }
 
-/** ms-scale worker policy: stall window = 40ms × 3 missed beats = 120ms. */
+/**
+ * ms-scale worker policy: stall window = 40ms × 50 missed beats = 2s. The
+ * window is deliberately WIDE (not the naive 3-beat 120ms): the suite's
+ * healthy children beat every 40ms, and a transiently starved event loop
+ * (sibling vitest workers running the kernel suites, prlimit children
+ * hoarding gigabytes) must never be misread as a stalled worker — a false
+ * stall lands runs in RECOVERY_REQUIRED and completion waits time out
+ * (observed on loaded machines at tighter windows). The watchdog tests still
+ * verify stall DETECTION (a hung child produces no frames at all); they
+ * detect it at the 2s window, far inside their 5s until budget.
+ */
 const WORKER_POLICY: Partial<TaskWorkerSupervisorPolicy> = {
   heartbeatIntervalMs: 40,
-  missedHeartbeatLimit: 3,
+  missedHeartbeatLimit: 50,
   leaseWindowMs: 120,
   handshakeTimeoutMs: 2_000,
   shutdownGraceMs: 150,

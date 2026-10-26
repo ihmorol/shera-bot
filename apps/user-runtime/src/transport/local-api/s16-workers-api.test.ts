@@ -104,10 +104,19 @@ const FAKE_WORKER_HARNESS = {
   ],
 };
 
-/** ms-scale supervisor overrides: the watchdog window tracks the child's beat. */
+/**
+ * ms-scale supervisor overrides for the wiring tests. The stall window is
+ * deliberately WIDE (40 ms beat x 25 = 1 s, not the naive 3-beat 120 ms):
+ * these tests spawn REAL children next to sibling vitest workers running the
+ * chunk-2 kernel suites (prlimit children hoarding gigabytes), and a
+ * transiently starved event loop must never be misread as a stalled worker —
+ * a false stall lands the run in RECOVERY_REQUIRED and the SUCCEEDED waits
+ * time out (observed on loaded machines at the 120 ms window). Stall
+ * DETECTION is not under test here; the dedicated stall suite owns it.
+ */
 const MS_POLICY: Partial<TaskWorkerSupervisorPolicy> = {
   heartbeatIntervalMs: 40,
-  missedHeartbeatLimit: 3,
+  missedHeartbeatLimit: 25,
   leaseWindowMs: 150,
   handshakeTimeoutMs: 4_000,
   shutdownGraceMs: 200,
@@ -115,16 +124,21 @@ const MS_POLICY: Partial<TaskWorkerSupervisorPolicy> = {
 };
 
 /**
- * A LONGER-HORIZON harness for the queue test (TEST-LOCAL RACE FIX, not an
- * implementation change): the shared demo harness above completes its whole
- * work in ~40 ms — shorter than the test's own read path (three sequential
- * HTTP/SQLite round trips) under suite load, so the FIRST worker finished
- * (and the dequeue re-admitted the queued run) before the readout could
- * observe the queue. The queue test needs the first worker to stay live
- * until the test's CANCELLING frees capacity — the very scenario it asserts —
- * so this harness stretches the work window to ~800 ms (4 steps x 200 ms,
- * heartbeats still on the 40 ms beat). The re-admitted second run completes
- * on its own within the same window budget.
+ * A LONGER-HORIZON harness for the queue and escalation tests (TEST-LOCAL
+ * RACE FIX, not an implementation change): the shared demo harness above
+ * completes its whole work in ~40 ms — shorter than a test's own observation
+ * path (sequential HTTP/SQLite round trips) under suite load, where sibling
+ * vitest workers run the chunk-2 kernel suites (prlimit children hoarding
+ * gigabytes and thrashing the page cache). Two wiring tests need a worker
+ * that stays live across their observations: the queue test reads the
+ * admission readout while the gate is full and then CANCELS the first run to
+ * free capacity, and the escalation test issues CANCELLING after observing
+ * "running" — both races lost at 40 ms under load (a completed worker means
+ * an honestly empty queue, or a stop that no-ops against an already-exited
+ * incarnation). This harness stretches the work window to ~2 s (4 steps x
+ * 500 ms, heartbeats still on the 40 ms beat), giving every in-test
+ * observation hundreds-of-ms headroom on any loaded machine. Re-admitted
+ * runs complete on their own within the same window budget.
  */
 const LONG_WORKER_HARNESS = {
   file: process.execPath,
@@ -139,7 +153,7 @@ const LONG_WORKER_HARNESS = {
     "--steps",
     "4",
     "--step-delay-ms",
-    "200",
+    "500",
   ],
 };
 
@@ -454,10 +468,19 @@ describe("S16 run wiring (harness-configured composition)", () => {
     runtime.runtime.operations.applyRunState(WORKSPACE, operationId, runId, "RUNNING");
 
     // The fake worker (harness command) runs its two steps and completes:
-    // done → worker.completed + run SUCCEEDED through the seam.
-    await until(async () =>
-      (await runStateOf(runtime.origin, operationId, runId)) === "SUCCEEDED" ? true : undefined,
-    );
+    // done → worker.completed + run SUCCEEDED through the seam. The run row
+    // flips first (the seam write follows the worker-row tx), so poll the
+    // WORKER row for its terminal state on the second connection — a one-shot
+    // read raced the sibling-writer flush once under gauntlet load; the END
+    // state is the assertion, and it is reached within milliseconds.
+    await until(async () => {
+      const state = await runStateOf(runtime.origin, operationId, runId);
+      return state === "SUCCEEDED" ? true : undefined;
+    });
+    await until(async () => {
+      const rows = readRunWorkerRows(runtime.dbPath, runId);
+      return rows.some((row) => row.state === "exited") ? rows : undefined;
+    });
 
     const rows = readRunWorkerRows(runtime.dbPath, runId);
     expect(rows).toHaveLength(1);
@@ -472,7 +495,11 @@ describe("S16 run wiring (harness-configured composition)", () => {
 
   it("stops the worker on the CANCELLING transition (escalation observed)", async () => {
     runtime = await composeOn(join(makeTempDir("shera-s16-cancel-"), "runtime.db"), {
-      workerHarness: FAKE_WORKER_HARNESS,
+      // The LONG harness (see its note): the worker must still be live when
+      // the test issues CANCELLING — a 40 ms worker can complete first under
+      // suite load, the stop then no-ops against an exited incarnation, and
+      // the row reads "exited" instead of "killed" forever.
+      workerHarness: LONG_WORKER_HARNESS,
       workerAdmissionPolicy: { maxWorkerProcesses: totalTaskUpperBound() + 1_024 },
       workerPolicy: MS_POLICY,
     });
@@ -762,9 +789,14 @@ describe("S16 restart reconciliation (dead pids reaped, QUEUED re-queued, RECOVE
         };
         return child;
       },
+      // The SAME wide window as MS_POLICY above (1 s, not 120 ms): the
+      // reconciliation re-drive spawns real children while sibling vitest
+      // workers run the kernel suites, and a starved event loop must not be
+      // misread as a stalled worker (a false stall would land the QUEUED run
+      // in RECOVERY_REQUIRED and the SUCCEEDED wait would time out).
       policy: {
         heartbeatIntervalMs: 40,
-        missedHeartbeatLimit: 3,
+        missedHeartbeatLimit: 25,
         leaseWindowMs: 150,
         handshakeTimeoutMs: 4_000,
         shutdownGraceMs: 200,

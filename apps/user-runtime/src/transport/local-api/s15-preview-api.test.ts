@@ -35,15 +35,17 @@
  *   GET /v1/operation-definitions
  *   GET /v1/operation-definitions/:operation_definition_id/preview
  */
-import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { DatabaseSync } from "node:sqlite";
 
 import { afterAll, describe, expect, it } from "vitest";
 
+// The zero-side-effect probe lives in the sqlite adapter — the ONLY place
+// node:sqlite and SQL may appear (D23 rule 2; the boundary contract
+// enforces it).
+import { sqliteSideEffectProbe } from "../../adapters/sqlite/operations-repository.ts";
 import { DEFAULT_WORKSPACE_ID, composeRuntime, type RuntimeHandle } from "./compose.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -135,51 +137,18 @@ async function listDefinitions(origin: string) {
   return (list.json?.definitions ?? null) as Array<Record<string, unknown>> | null;
 }
 
-/** Row counts for every user table in the SQLite database. */
+/**
+ * The zero-side-effect probe (the sqlite adapter's read-only helper): row
+ * counts AND a content fingerprint for every user table. If ANY row anywhere
+ * changes (operations, runs, chats, conversations, sessions, journal,
+ * receipts), the fingerprint changes.
+ */
 function tableCounts(dbPath: string): Record<string, number> {
-  const db = new DatabaseSync(dbPath, { readOnly: true });
-  try {
-    const tables = db
-      .prepare(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
-      )
-      .all() as Array<{ name: string }>;
-    const counts: Record<string, number> = {};
-    for (const { name } of tables) {
-      const row = db.prepare(`SELECT COUNT(*) AS n FROM "${name}"`).get() as {
-        n: number | bigint;
-      };
-      counts[name] = Number(row.n);
-    }
-    return counts;
-  } finally {
-    db.close();
-  }
+  return sqliteSideEffectProbe(dbPath).tableCounts;
 }
 
-/**
- * Content fingerprint of every user table: the strongest read-only proof —
- * if ANY row anywhere changes (operations, runs, chats, conversations,
- * sessions, journal/events, workers), the fingerprint changes.
- */
 function dbFingerprint(dbPath: string): string {
-  const db = new DatabaseSync(dbPath, { readOnly: true });
-  try {
-    const tables = db
-      .prepare(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
-      )
-      .all() as Array<{ name: string }>;
-    const parts: string[] = [];
-    for (const { name } of tables) {
-      const rows = db.prepare(`SELECT * FROM "${name}" ORDER BY rowid`).all();
-      const hash = createHash("sha256").update(JSON.stringify(rows)).digest("hex");
-      parts.push(`${name}=${hash}`);
-    }
-    return parts.join("|");
-  } finally {
-    db.close();
-  }
+  return sqliteSideEffectProbe(dbPath).fingerprint;
 }
 
 /** D30/D35: classes are NAMED; nothing promises an executed outcome. */

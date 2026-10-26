@@ -30,7 +30,9 @@
  * event_id) is an idempotent no-op returning the ORIGINAL event (the v1
  * journal discipline, AC3).
  */
-import type { DatabaseSync } from "node:sqlite";
+import { createHash } from "node:crypto";
+
+import { DatabaseSync } from "node:sqlite";
 
 import {
   OperationCollaborationEvent,
@@ -43,6 +45,52 @@ import type { SqliteTransactions } from "./transactions.ts";
 
 /** The reserved stream-sentinel prefix no run id may take (v6 header note). */
 export const OPERATION_CHAT_STREAM_PREFIX = "operation:";
+
+/**
+ * S15 — the zero-side-effect probe for the D30 launch preview (READ-ONLY).
+ * The preview is a safety boundary where NOTHING may execute before
+ * confirmation; this probe is how the composed-stack test PROVES the preview
+ * routes change nothing: it opens the database file through a second,
+ * strictly read-only connection and reports (a) every user table's row count
+ * and (b) a per-table content fingerprint — ANY row inserted, updated, or
+ * deleted anywhere (operations, runs, chats, conversations, sessions,
+ * journal, receipts) changes the fingerprint.
+ *
+ * Schema introspection only (sqlite_master) — no product-table statement
+ * lives here, so no workspace predicate applies (E12 governs product rows);
+ * the per-table reads are plain whole-table counts for the proof, never a
+ * product read model. The probe writes nothing.
+ */
+export interface SqliteSideEffectProbe {
+  /** Row count for every user table (sqlite_master, sqlite_% excluded). */
+  tableCounts: Record<string, number>;
+  /** "<table>=<sha256 of its rows>" parts joined by "|", tables name-ordered. */
+  fingerprint: string;
+}
+
+export function sqliteSideEffectProbe(dbPath: string): SqliteSideEffectProbe {
+  const db = new DatabaseSync(dbPath, { readOnly: true });
+  try {
+    const tables = db
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+      )
+      .all() as Array<{ name: string }>;
+    const tableCounts: Record<string, number> = {};
+    const parts: string[] = [];
+    for (const { name } of tables) {
+      const count = db.prepare(`SELECT COUNT(*) AS n FROM "${name}"`).get() as {
+        n: number | bigint;
+      };
+      tableCounts[name] = Number(count.n);
+      const rows = db.prepare(`SELECT * FROM "${name}" ORDER BY rowid`).all();
+      parts.push(`${name}=${createHash("sha256").update(JSON.stringify(rows)).digest("hex")}`);
+    }
+    return { tableCounts, fingerprint: parts.join("|") };
+  } finally {
+    db.close();
+  }
+}
 
 /**
  * True when an Operation-chat binding insert lost the race against the

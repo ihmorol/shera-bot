@@ -225,6 +225,8 @@ function makeHarness(options: HarnessOptions = {}): AdmissionHarness {
       pack_version: "1.0.0",
       agents: [FAKE_SEED],
       locateAgentPack: (agentId) => (agentId === AGENT ? "pack_admission_test" : null),
+      skills: [],
+      connectors: [],
     },
   });
 

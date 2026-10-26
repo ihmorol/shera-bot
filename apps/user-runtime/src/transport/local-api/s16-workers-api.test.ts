@@ -382,6 +382,8 @@ describe("S16 run seam (OperationsRunSeam over the real OperationsService)", () 
         pack_version: "1.0.0",
         agents: [FAKE_SEED],
         locateAgentPack: (agentId) => (agentId === AGENT ? "pack_seam_test" : null),
+        skills: [],
+        connectors: [],
       },
     });
     trackConnection({ close: () => conn.close() });
@@ -695,6 +697,11 @@ describe("S16 restart reconciliation (dead pids reaped, QUEUED re-queued, RECOVE
         pack_id: "pack_reconcile_test",
         pack_version: "1.0.0",
         agents: [FAKE_SEED],
+        // S14 extended the catalog with the pinned pack's skills/connectors
+        // (the detail read model's pack_summary); this reconcile fixture
+        // exercises none of that surface, so empty arrays are honest.
+        skills: [],
+        connectors: [],
         locateAgentPack: (agentId) => (agentId === AGENT ? "pack_reconcile_test" : null),
       },
     });

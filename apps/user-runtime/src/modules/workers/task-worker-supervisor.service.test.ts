@@ -156,6 +156,8 @@ function makeHarness(options: HarnessOptions = {}): WorkerHarness {
       pack_version: "1.0.0",
       agents: [FAKE_SEED],
       locateAgentPack: (agentId) => (agentId === AGENT ? "pack_workers_test" : null),
+      skills: [],
+      connectors: [],
     },
   });
 

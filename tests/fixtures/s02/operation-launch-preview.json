@@ -1,0 +1,122 @@
+{
+  "workspace_id": "ws_default_01",
+  "definition_ref": "agent-packs/student/v1/operations/operation_research_paper@1.0.0",
+  "pack": {
+    "pack_id": "student",
+    "pack_version": "1.0.0",
+    "pinned": true
+  },
+  "definition": {
+    "operation_definition_id": "operation_research_paper",
+    "version": "1.0.0",
+    "title": "Research Paper",
+    "purpose": "Take a research paper from topic to submission: sources, outline, drafts, and a checked bibliography."
+  },
+  "roster": {
+    "agents": [
+      {
+        "agent_id": "agent_general_assistant",
+        "display_name": "General Assistant",
+        "role": "Coordinates the Operation, clarifies goals, delegates, and synthesizes the final answer.",
+        "is_coordinator": true
+      },
+      {
+        "agent_id": "agent_researcher",
+        "display_name": "Researcher",
+        "role": "Investigates questions and produces evidence-backed outputs from public web sources.",
+        "is_coordinator": false
+      },
+      {
+        "agent_id": "agent_citation_manager",
+        "display_name": "Citation Manager",
+        "role": "Maintains source indexes, reference metadata, and citation formats.",
+        "is_coordinator": false
+      }
+    ],
+    "coordinator_agent_id": "agent_general_assistant",
+    "source": "pack_default"
+  },
+  "skills": {
+    "operation_skill_ids": ["skill_research_core", "skill_citation_core", "skill_writing_core"],
+    "agents": [
+      {
+        "agent_id": "agent_general_assistant",
+        "skills": [{ "skill_id": "skill_planning_core", "title": "Planning core" }]
+      },
+      {
+        "agent_id": "agent_researcher",
+        "skills": [{ "skill_id": "skill_research_core", "title": "Research core" }]
+      },
+      {
+        "agent_id": "agent_citation_manager",
+        "skills": [{ "skill_id": "skill_citation_core", "title": "Citation core" }]
+      }
+    ],
+    "source": "pack"
+  },
+  "connectors": {
+    "items": [
+      {
+        "connector_id": "connector_scholar_library",
+        "title": "Scholar library",
+        "version": "1.0.0",
+        "connected": false,
+        "status": "not_connected",
+        "note": "Recommended connector, not installed. Connect it yourself before launch if you want it available."
+      }
+    ]
+  },
+  "providers": {
+    "agents": [
+      {
+        "agent_id": "agent_general_assistant",
+        "provider_id": "provider_platform",
+        "model": "platform-default",
+        "configured": false,
+        "source": "agent_settings",
+        "note": "Not configured: no live provider is wired in this prototype (S23 owns provider wiring); the pair shown is the Agent's saved default."
+      },
+      {
+        "agent_id": "agent_researcher",
+        "provider_id": "provider_platform",
+        "model": "platform-default",
+        "configured": false,
+        "source": "agent_settings",
+        "note": "Not configured: no live provider is wired in this prototype (S23 owns provider wiring); the pair shown is the Agent's saved default."
+      },
+      {
+        "agent_id": "agent_citation_manager",
+        "provider_id": "provider_platform",
+        "model": "platform-default",
+        "configured": false,
+        "source": "agent_settings",
+        "note": "Not configured: no live provider is wired in this prototype (S23 owns provider wiring); the pair shown is the Agent's saved default."
+      }
+    ]
+  },
+  "estimated_credits": {
+    "currency": "shera_credits",
+    "min_credits": 3,
+    "max_credits": 15,
+    "formula": "Policy placeholder (D20): min = 1 credit per platform-provider Agent, max = 5 credits per platform-provider Agent; Agents on custom providers consume no Shera credits. The providers slice (S23) replaces this with real pricing.",
+    "settlement_note": "The runtime reserves a bounded estimate before execution, settles against actual usage, and releases unused reservations (D20). The preview itself consumes nothing.",
+    "custom_provider_agents": []
+  },
+  "approval_requirements": {
+    "risk_classes": ["read-only"],
+    "classes_requiring_approval": [],
+    "mapping": [
+      {
+        "risk_class": "read-only",
+        "tool_ids": ["tool_web_search", "tool_file_read"],
+        "behavior": "auto_execute"
+      }
+    ],
+    "mapping_note": "The pinned pack references tools without risk classes (the runtime owns tool definitions, D38); this preview applies the documented D35 default ladder to tool ids, and the runtime re-derives every class at execution time. Read-only tools execute automatically; the other ladder classes request approval (D35)."
+  },
+  "expected_outputs": {
+    "statement": "The definition does not declare expected outputs; its purpose implies: Take a research paper from topic to submission: sources, outline, drafts, and a checked bibliography.",
+    "source": "purpose_derived",
+    "reason": "The pinned pack's definition carries no expected outputs field."
+  }
+}

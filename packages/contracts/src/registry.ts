@@ -37,6 +37,7 @@ import {
   RemoveRosterAgentCommand,
   RosterRefusal,
 } from "./operation.ts";
+import { OperationLaunchPreview } from "./operation-preview.ts";
 import { Pack } from "./pack.ts";
 import {
   GetRuntimeStatusInput,
@@ -114,6 +115,8 @@ export const CONTRACT_REGISTRY = {
   OperationRenameCommand,
   RosterRefusal,
   OperationCollaborationEvent,
+  // S15 chunk 1 (D30 launch preview read model: the eight groups, D38/D20/D35).
+  OperationLaunchPreview,
 } as const;
 
 export type ContractName = keyof typeof CONTRACT_REGISTRY;

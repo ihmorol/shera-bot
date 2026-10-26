@@ -7898,6 +7898,527 @@
         ],
         "additionalProperties": false
       },
+      "OperationLaunchPreview": {
+        "type": "object",
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "definition_ref": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "pack": {
+            "type": "object",
+            "properties": {
+              "pack_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "pack_version": {
+                "type": "string",
+                "pattern": "^\\d+\\.\\d+\\.\\d+$"
+              },
+              "pinned": {
+                "type": "boolean",
+                "enum": [
+                  true
+                ]
+              }
+            },
+            "required": [
+              "pack_id",
+              "pack_version",
+              "pinned"
+            ],
+            "additionalProperties": false
+          },
+          "definition": {
+            "type": "object",
+            "properties": {
+              "operation_definition_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "version": {
+                "type": "string",
+                "pattern": "^\\d+\\.\\d+\\.\\d+$"
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "purpose": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            },
+            "required": [
+              "operation_definition_id",
+              "version",
+              "title",
+              "purpose"
+            ],
+            "additionalProperties": false
+          },
+          "roster": {
+            "type": "object",
+            "properties": {
+              "agents": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "agent_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "display_name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "role": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 2000
+                    },
+                    "is_coordinator": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "agent_id",
+                    "display_name",
+                    "role",
+                    "is_coordinator"
+                  ],
+                  "additionalProperties": false
+                },
+                "minItems": 1,
+                "maxItems": 50
+              },
+              "coordinator_agent_id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  {
+                    "type": "string",
+                    "enum": [
+                      "none"
+                    ]
+                  }
+                ]
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "pack_default",
+                  "definition_override",
+                  "request_override"
+                ]
+              }
+            },
+            "required": [
+              "agents",
+              "coordinator_agent_id",
+              "source"
+            ],
+            "additionalProperties": false
+          },
+          "skills": {
+            "type": "object",
+            "properties": {
+              "operation_skill_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "maxItems": 200
+              },
+              "agents": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "agent_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "skills": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "skill_id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "title": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "minLength": 1,
+                            "maxLength": 200
+                          }
+                        },
+                        "required": [
+                          "skill_id",
+                          "title"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "maxItems": 200
+                    }
+                  },
+                  "required": [
+                    "agent_id",
+                    "skills"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 50
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "pack"
+                ]
+              }
+            },
+            "required": [
+              "operation_skill_ids",
+              "agents",
+              "source"
+            ],
+            "additionalProperties": false
+          },
+          "connectors": {
+            "type": "object",
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "connector_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "title": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "version": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+                    },
+                    "connected": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "not_connected"
+                      ]
+                    },
+                    "note": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 500
+                    }
+                  },
+                  "required": [
+                    "connector_id",
+                    "title",
+                    "version",
+                    "connected",
+                    "status",
+                    "note"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 100
+              }
+            },
+            "required": [
+              "items"
+            ],
+            "additionalProperties": false
+          },
+          "providers": {
+            "type": "object",
+            "properties": {
+              "agents": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "agent_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "provider_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "model": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "configured": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "source": {
+                      "type": "string",
+                      "enum": [
+                        "agent_settings",
+                        "pack_default"
+                      ]
+                    },
+                    "note": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 500
+                    }
+                  },
+                  "required": [
+                    "agent_id",
+                    "provider_id",
+                    "model",
+                    "configured",
+                    "source",
+                    "note"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 50
+              }
+            },
+            "required": [
+              "agents"
+            ],
+            "additionalProperties": false
+          },
+          "estimated_credits": {
+            "type": "object",
+            "properties": {
+              "currency": {
+                "type": "string",
+                "enum": [
+                  "shera_credits"
+                ]
+              },
+              "min_credits": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "max_credits": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "formula": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "settlement_note": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "custom_provider_agents": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "maxItems": 50
+              }
+            },
+            "required": [
+              "currency",
+              "min_credits",
+              "max_credits",
+              "formula",
+              "settlement_note",
+              "custom_provider_agents"
+            ],
+            "additionalProperties": false
+          },
+          "approval_requirements": {
+            "type": "object",
+            "properties": {
+              "risk_classes": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "read-only",
+                    "local-mutation",
+                    "code-execution",
+                    "repository-mutation",
+                    "external-write",
+                    "destructive-irreversible"
+                  ]
+                },
+                "maxItems": 6
+              },
+              "classes_requiring_approval": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "read-only",
+                    "local-mutation",
+                    "code-execution",
+                    "repository-mutation",
+                    "external-write",
+                    "destructive-irreversible"
+                  ]
+                },
+                "maxItems": 6
+              },
+              "mapping": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "risk_class": {
+                      "type": "string",
+                      "enum": [
+                        "read-only",
+                        "local-mutation",
+                        "code-execution",
+                        "repository-mutation",
+                        "external-write",
+                        "destructive-irreversible"
+                      ]
+                    },
+                    "tool_ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                      },
+                      "maxItems": 100
+                    },
+                    "behavior": {
+                      "type": "string",
+                      "enum": [
+                        "auto_execute",
+                        "approval_required"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "risk_class",
+                    "tool_ids",
+                    "behavior"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 6
+              },
+              "mapping_note": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              }
+            },
+            "required": [
+              "risk_classes",
+              "classes_requiring_approval",
+              "mapping",
+              "mapping_note"
+            ],
+            "additionalProperties": false
+          },
+          "expected_outputs": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "statement": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "definition",
+                  "purpose_derived"
+                ]
+              },
+              "reason": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1,
+                "maxLength": 500
+              }
+            },
+            "required": [
+              "statement",
+              "source",
+              "reason"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "workspace_id",
+          "definition_ref",
+          "pack",
+          "definition",
+          "roster",
+          "skills",
+          "connectors",
+          "providers",
+          "estimated_credits",
+          "approval_requirements",
+          "expected_outputs"
+        ],
+        "additionalProperties": false
+      },
       "OperationRecord": {
         "type": "object",
         "properties": {

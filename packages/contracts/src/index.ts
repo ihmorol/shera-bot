@@ -20,6 +20,7 @@ export * from "./errors.ts";
 export * from "./session.ts";
 export * from "./agent.ts";
 export * from "./operation.ts";
+export * from "./operation-preview.ts";
 export * from "./pack.ts";
 export * from "./state-vocabulary.ts";
 export * from "./task-run.ts";

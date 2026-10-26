@@ -30,7 +30,6 @@
  *
  * Governing records: D32, D10, D8, E1, D27, G4, E12; AC25.
  */
-import { spawn } from "node:child_process";
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -266,17 +265,24 @@ interface JournalRow {
   payload: Record<string, unknown>;
 }
 
-/** The worker.* journal events of one run stream, read straight off the rows. */
-function readRunJournal(dbPath: string, runId: string): JournalRow[] {
+/**
+ * The worker.* journal events of one run stream, read through the repository
+ * on a SECOND connection — the honest cross-connection durability check,
+ * without speaking SQL here (the AC7 boundary contract keeps every SQL
+ * statement inside adapters/sqlite).
+ */
+function readRunJournal(
+  dbPath: string,
+  runId: string,
+  workspaceId: string = WORKSPACE,
+): JournalRow[] {
   const conn = openDatabase(dbPath);
   try {
-    const rows = conn.db
-      .prepare(
-        `SELECT event_type, payload FROM event_journal
-         WHERE workspace_id = ? AND stream_id = ? ORDER BY sequence`,
-      )
-      .all(WORKSPACE, runId) as Array<{ event_type: string; payload: string }>;
-    return rows.map((row) => ({ type: row.event_type, payload: JSON.parse(row.payload) }));
+    const journal = new EventJournalRepository(new SqliteTransactions(conn.db));
+    return journal.readFrom(workspaceId, runId, 0, 10_000).map((row) => ({
+      type: row.event_type,
+      payload: JSON.parse(row.payload) as Record<string, unknown>,
+    }));
   } finally {
     conn.close();
   }
@@ -289,23 +295,40 @@ interface WorkerRowRead {
   state: string;
 }
 
-/** Every task_workers row (all workspaces), read straight off the rows. */
-function readWorkerRows(dbPath: string): WorkerRowRead[] {
+/**
+ * One run's worker rows, read through the repository on a second connection
+ * (same boundary discipline as readRunJournal — no SQL outside the adapter).
+ */
+function readRunWorkerRows(
+  dbPath: string,
+  runId: string,
+  workspaceId: string = WORKSPACE,
+): WorkerRowRead[] {
   const conn = openDatabase(dbPath);
   try {
-    return conn.db
-      .prepare(`SELECT run_id, worker_id, pid, state FROM task_workers ORDER BY started_at`)
-      .all() as unknown as WorkerRowRead[];
+    return new TaskWorkersRepository(new SqliteTransactions(conn.db))
+      .listByRun(workspaceId, runId)
+      .map((row) => ({
+        run_id: row.run_id,
+        worker_id: row.worker_id,
+        pid: row.pid,
+        state: row.state,
+      }));
   } finally {
     conn.close();
   }
 }
 
-/** A pid that is (almost) certainly gone: spawn a child and wait for its exit. */
+/**
+ * A pid that is (almost) certainly gone: spawn the EXCEPTED fake task worker
+ * (zero steps — it exits on its own right after the handshake) and wait for
+ * its exit. Process spawning stays inside adapters/process + the named
+ * test-double exceptions (the AC7 boundary contract).
+ */
 async function collectDeadPid(): Promise<number> {
-  const child = spawn(process.execPath, ["-e", "process.exit(0)"], { stdio: "ignore" });
-  await new Promise<void>((resolveExit) => child.on("exit", () => resolveExit()));
-  return child.pid!;
+  const handle = spawnFakeTaskWorker({ steps: 0 });
+  await handle.waitForExit();
+  return handle.child.pid!;
 }
 
 // ---------------------------------------------------------------------------
@@ -436,7 +459,7 @@ describe("S16 run wiring (harness-configured composition)", () => {
       (await runStateOf(runtime.origin, operationId, runId)) === "SUCCEEDED" ? true : undefined,
     );
 
-    const rows = readWorkerRows(runtime.dbPath);
+    const rows = readRunWorkerRows(runtime.dbPath, runId);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ run_id: runId, state: "exited" });
 
@@ -457,14 +480,14 @@ describe("S16 run wiring (harness-configured composition)", () => {
 
     runtime.runtime.operations.applyRunState(WORKSPACE, operationId, runId, "RUNNING");
     await until(async () =>
-      readWorkerRows(runtime.dbPath).some((row) => row.run_id === runId && row.state === "running")
+      readRunWorkerRows(runtime.dbPath, runId).some((row) => row.state === "running")
         ? true
         : undefined,
     );
 
     runtime.runtime.operations.applyRunState(WORKSPACE, operationId, runId, "CANCELLING");
     await until(async () =>
-      readWorkerRows(runtime.dbPath).some((row) => row.run_id === runId && row.state === "killed")
+      readRunWorkerRows(runtime.dbPath, runId).some((row) => row.state === "killed")
         ? true
         : undefined,
     );
@@ -495,9 +518,7 @@ describe("S16 run wiring (harness-configured composition)", () => {
     // First run: admitted, its worker goes live.
     runtime.runtime.operations.applyRunState(WORKSPACE, op.operationId, op.runId, "RUNNING");
     await until(async () =>
-      readWorkerRows(runtime.dbPath).some(
-        (row) => row.run_id === op.runId && row.state === "running",
-      )
+      readRunWorkerRows(runtime.dbPath, op.runId).some((row) => row.state === "running")
         ? true
         : undefined,
     );
@@ -576,7 +597,7 @@ describe("S16 worker-less composition (G4 fallback)", () => {
     runtime.runtime.operations.applyRunState(WORKSPACE, operationId, runId, "RUNNING");
     expect(await runStateOf(runtime.origin, operationId, runId)).toBe("RUNNING");
 
-    expect(readWorkerRows(runtime.dbPath)).toHaveLength(0);
+    expect(readRunWorkerRows(runtime.dbPath, runId)).toHaveLength(0);
     expect(readRunJournal(runtime.dbPath, runId).map((event) => event.type)).toEqual([]);
 
     const readout = await getJson(
@@ -769,18 +790,9 @@ describe("S16 restart reconciliation (dead pids reaped, QUEUED re-queued, RECOVE
   }
 
   function readJournalEvents(dbPath: string, runId: string): JournalRow[] {
-    const conn = openDatabase(dbPath);
-    try {
-      const rows = conn.db
-        .prepare(
-          `SELECT event_type, payload FROM event_journal
-           WHERE workspace_id = 'ws-reconcile' AND stream_id = ? ORDER BY sequence`,
-        )
-        .all(runId) as Array<{ event_type: string; payload: string }>;
-      return rows.map((row) => ({ type: row.event_type, payload: JSON.parse(row.payload) }));
-    } finally {
-      conn.close();
-    }
+    // The shared repository-based reader, pinned to the reconcile workspace
+    // (no SQL outside adapters/sqlite — the AC7 boundary contract).
+    return readRunJournal(dbPath, runId, "ws-reconcile");
   }
 
   afterEach(async () => {

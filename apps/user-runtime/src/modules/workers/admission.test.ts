@@ -768,6 +768,16 @@ describe("S16 chunk 2 — kernel enforcement: prlimit --as / --nproc on the spaw
       },
       spawnMode: "prlimit",
       spawnSpec: () => ({ steps: 2, stepDelayMs: 20, allocateMb: 4096 }),
+      // TEST-LOCAL RACE FIX (kernel timing, no supervisor change): the hoard
+      // blocks the child's event loop, so no heartbeats flow while it fills
+      // ~2 GB of address space before the kernel denial lands. The suite's
+      // ms-scale watchdog window (50 ms x 20 = 1 s) can expire first on a
+      // loaded machine — the full-suite run saw the STALL watchdog win with
+      // cause "hang" instead of the kernel exit. Widening ONLY this test's
+      // window to 10 s gives the wall-clock-bound allocation room to lose to
+      // the KERNEL (exit(1) → "unexpected_exit") on any ordinary host, which
+      // is the behavior under test.
+      policy: { missedHeartbeatLimit: 200 },
     });
     const runA = createRun(harness, WS);
 

@@ -35,6 +35,13 @@ export function isBrowserRuntimePath(method: string, path: string): boolean {
       // one worker surface a browser may read; every worker mutation stays
       // runtime-internal (agents propose; the runtime validates and executes).
       path === "/v1/workers/admission")
+      // S15 launch preview reads (D30): the pinned pack's definition
+      // summaries and the eight-group preview. Strictly GET — the preview is
+      // the safety gate where NOTHING executes before confirmation, and
+      // chunk 3's launch route (the only mutation this slice introduces) is
+      // deliberately absent here until it lands.
+      path === "/v1/operation-definitions" ||
+      /^\/v1\/operation-definitions\/[a-zA-Z0-9_-]+\/preview$/.test(path))
   );
 }
 

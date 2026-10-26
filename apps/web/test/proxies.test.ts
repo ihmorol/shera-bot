@@ -675,6 +675,9 @@ describe("runtime proxy — S13 Operation surfaces (allowlist additions)", () =>
 describe("runtime proxy — S16 worker admission readout (allowlist addition)", () => {
   /** The stubbed fetch answer for a forwarded worker-readout call. */
   function admissionResponse(): Response {
+describe("runtime proxy — S15 launch preview surfaces (allowlist additions)", () => {
+  /** The stubbed fetch answer for a forwarded preview call. */
+  function previewResponse(): Response {
     return new Response(JSON.stringify({ ok: true }), {
       status: 200,
       headers: { "content-type": "application/json" },
@@ -698,6 +701,44 @@ describe("runtime proxy — S16 worker admission readout (allowlist addition)", 
   });
 
   it("still refuses worker mutations — the browser renders pressure, never authors it", async () => {
+  it("forwards the pinned pack's operation definitions read", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const { calls } = stubFetch(previewResponse);
+
+    const request = new Request(
+      "http://web.test/api/runtime/v1/operation-definitions?workspace_id=ws_1",
+    );
+    const response = await proxyToLocalApi(request, "/v1/operation-definitions");
+
+    expect(response.status).toBe(200);
+    expect(calls.at(-1)?.input).toBe(
+      `${CONTROL_BASE}/api/runtime/local/v1/operation-definitions?workspace_id=ws_1`,
+    );
+  });
+
+  it("forwards the D30 launch preview read with its optional override params", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const { calls } = stubFetch(previewResponse);
+
+    const request = new Request(
+      "http://web.test/api/runtime/v1/operation-definitions/operation_research_paper/preview" +
+        "?workspace_id=ws_1&roster_agent_ids=agent_researcher,agent_citation_manager&coordinator_agent_id=none",
+    );
+    const response = await proxyToLocalApi(
+      request,
+      "/v1/operation-definitions/operation_research_paper/preview",
+    );
+
+    expect(response.status).toBe(200);
+    expect(calls.at(-1)?.input).toBe(
+      `${CONTROL_BASE}/api/runtime/local/v1/operation-definitions/operation_research_paper/preview` +
+        "?workspace_id=ws_1&roster_agent_ids=agent_researcher,agent_citation_manager&coordinator_agent_id=none",
+    );
+  });
+
+  it("still refuses every mutation on the definitions prefix — the preview is GET-only (D30)", async () => {
     process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
     process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
     const calls: FetchCall[] = [];
@@ -738,6 +779,21 @@ describe("runtime proxy — S16 worker admission readout (allowlist addition)", 
       });
       const response = await proxyToLocalApi(request, path);
       expect(response.status, path).toBe(404);
+    for (const [method, path] of [
+      ["POST", "/v1/operation-definitions"],
+      [
+        "POST",
+        "/v1/operation-definitions/operation_research_paper/preview",
+      ],
+      ["DELETE", "/v1/operation-definitions/operation_research_paper"],
+    ] as const) {
+      const request = new Request(`http://web.test/api/runtime${path}`, {
+        method,
+        body: JSON.stringify({ workspace_id: "ws_1" }),
+        headers: { "content-type": "application/json" },
+      });
+      const response = await proxyToLocalApi(request, path);
+      expect(response.status, `${method} ${path}`).toBe(404);
     }
     expect(calls).toHaveLength(0);
   });

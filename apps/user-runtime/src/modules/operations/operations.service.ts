@@ -538,7 +538,7 @@ export class OperationsService {
    * definitions) is pinned — the routes still answer 200 with an empty list,
    * exactly like the pack summary does without a pack.
    */
-  listOperationDefinitions(_workspaceId: string): OperationDefinitionSummary[] {
+  listOperationDefinitions(): OperationDefinitionSummary[] {
     return (this.catalog.operation_definitions ?? []).map((definition) => ({
       operation_definition_id: definition.operation_id,
       version: definition.version,

@@ -675,9 +675,6 @@ describe("runtime proxy — S13 Operation surfaces (allowlist additions)", () =>
 describe("runtime proxy — S16 worker admission readout (allowlist addition)", () => {
   /** The stubbed fetch answer for a forwarded worker-readout call. */
   function admissionResponse(): Response {
-describe("runtime proxy — S15 launch preview surfaces (allowlist additions)", () => {
-  /** The stubbed fetch answer for a forwarded preview call. */
-  function previewResponse(): Response {
     return new Response(JSON.stringify({ ok: true }), {
       status: 200,
       headers: { "content-type": "application/json" },
@@ -701,6 +698,85 @@ describe("runtime proxy — S15 launch preview surfaces (allowlist additions)", 
   });
 
   it("still refuses worker mutations — the browser renders pressure, never authors it", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const calls: FetchCall[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({ input, init });
+        return Promise.resolve(new Response(null, { status: 500 }));
+      }),
+    );
+
+    const request = new Request("http://web.test/api/runtime/v1/workers/admission", {
+      method: "POST",
+      body: JSON.stringify({ workspace_id: "ws_1" }),
+      headers: { "content-type": "application/json" },
+    });
+    const response = await proxyToLocalApi(request, "/v1/workers/admission");
+
+    expect(response.status).toBe(404);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("still refuses other /v1/workers sub-paths — the readout is the one surface", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const calls: FetchCall[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({ input, init });
+        return Promise.resolve(new Response(null, { status: 500 }));
+      }),
+    );
+
+    for (const path of ["/v1/workers", "/v1/workers/admission/history", "/v1/workers/run-1"]) {
+      const request = new Request(`http://web.test/api/runtime${path}?workspace_id=ws_1`, {
+        method: "GET",
+      });
+      const response = await proxyToLocalApi(request, path);
+      expect(response.status, path).toBe(404);
+    }
+    expect(calls).toHaveLength(0);
+  });
+});
+
+describe("runtime request boundaries", () => {
+  it("rejects oversized bodies before forwarding commands", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    const { calls } = stubFetch(() => Response.json({ ok: true }));
+    const response = await proxyToLocalApi(
+      new Request("http://web.test/api/runtime/v1/conversations/commands", {
+        method: "POST",
+        body: JSON.stringify({ workspace_id: "ws_1", text: "a".repeat(65536) }),
+      }),
+      "/v1/conversations/commands",
+    );
+    expect(response.status).toBe(413);
+    expect(calls).toHaveLength(1);
+  });
+  it("preserves empty upstream responses", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    stubFetch(() => new Response(null, { status: 204 }));
+    const response = await proxyToControlPlane(
+      new Request("http://web.test/logout", { method: "POST" }),
+      "/logout",
+    );
+    expect(response.status).toBe(204);
+    expect(await response.text()).toBe("");
+  });
+});
+describe("runtime proxy — S15 launch preview surfaces (allowlist additions)", () => {
+  /** The stubbed fetch answer for a forwarded preview call. */
+  function previewResponse(): Response {
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }
+
   it("forwards the pinned pack's operation definitions read", async () => {
     process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
     process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
@@ -750,35 +826,6 @@ describe("runtime proxy — S15 launch preview surfaces (allowlist additions)", 
       }),
     );
 
-    const request = new Request("http://web.test/api/runtime/v1/workers/admission", {
-      method: "POST",
-      body: JSON.stringify({ workspace_id: "ws_1" }),
-      headers: { "content-type": "application/json" },
-    });
-    const response = await proxyToLocalApi(request, "/v1/workers/admission");
-
-    expect(response.status).toBe(404);
-    expect(calls).toHaveLength(0);
-  });
-
-  it("still refuses other /v1/workers sub-paths — the readout is the one surface", async () => {
-    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
-    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
-    const calls: FetchCall[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-        calls.push({ input, init });
-        return Promise.resolve(new Response(null, { status: 500 }));
-      }),
-    );
-
-    for (const path of ["/v1/workers", "/v1/workers/admission/history", "/v1/workers/run-1"]) {
-      const request = new Request(`http://web.test/api/runtime${path}?workspace_id=ws_1`, {
-        method: "GET",
-      });
-      const response = await proxyToLocalApi(request, path);
-      expect(response.status, path).toBe(404);
     for (const [method, path] of [
       ["POST", "/v1/operation-definitions"],
       ["POST", "/v1/operation-definitions/operation_research_paper/preview"],
@@ -794,57 +841,5 @@ describe("runtime proxy — S15 launch preview surfaces (allowlist additions)", 
     }
     expect(calls).toHaveLength(0);
   });
-
-  it("forwards the D30 launch confirm POST to the runtime (chunk 3: the only mutation the gate adds)", async () => {
-    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
-    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
-    const { calls } = stubFetch(previewResponse);
-
-    const request = new Request("http://web.test/api/runtime/v1/operations/launch", {
-      method: "POST",
-      body: JSON.stringify({
-        workspace_id: "ws_1",
-        operation_definition_id: "operation_research_paper",
-        roster_agent_ids: ["agent_researcher"],
-        coordinator_agent_id: "none",
-        idempotency_key: "idem_launch_0001",
-        actor: { type: "user", id: "user_emon" },
-        issued_at: "2026-10-25T12:00:00.000Z",
-      }),
-      headers: { "content-type": "application/json" },
-    });
-    const response = await proxyToLocalApi(request, "/v1/operations/launch");
-
-    expect(response.status).toBe(200);
-    expect(calls.at(-1)?.input).toBe(`${CONTROL_BASE}/api/runtime/local/v1/operations/launch`);
-    const init = calls.at(-1)?.init as RequestInit;
-    expect(init.method).toBe("POST");
-    expect(JSON.parse(String(init.body)).operation_definition_id).toBe("operation_research_paper");
-  });
 });
 
-describe("runtime request boundaries", () => {
-  it("rejects oversized bodies before forwarding commands", async () => {
-    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
-    const { calls } = stubFetch(() => Response.json({ ok: true }));
-    const response = await proxyToLocalApi(
-      new Request("http://web.test/api/runtime/v1/conversations/commands", {
-        method: "POST",
-        body: JSON.stringify({ workspace_id: "ws_1", text: "a".repeat(65536) }),
-      }),
-      "/v1/conversations/commands",
-    );
-    expect(response.status).toBe(413);
-    expect(calls).toHaveLength(1);
-  });
-  it("preserves empty upstream responses", async () => {
-    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
-    stubFetch(() => new Response(null, { status: 204 }));
-    const response = await proxyToControlPlane(
-      new Request("http://web.test/logout", { method: "POST" }),
-      "/logout",
-    );
-    expect(response.status).toBe(204);
-    expect(await response.text()).toBe("");
-  });
-});

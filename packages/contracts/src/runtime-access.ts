@@ -41,7 +41,7 @@ export function isBrowserRuntimePath(method: string, path: string): boolean {
       // waiting and why" resource read (UI_DESIGN S11 resource states). The
       // one worker surface a browser may read; every worker mutation stays
       // runtime-internal (agents propose; the runtime validates and executes).
-      path === "/v1/workers/admission")
+      path === "/v1/workers/admission" ||
       // S15 launch preview reads (D30): the pinned pack's definition
       // summaries and the eight-group preview. Strictly GET — the preview is
       // the safety gate where NOTHING executes before confirmation; the one

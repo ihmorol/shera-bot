@@ -1002,15 +1002,6 @@ export function createLocalApi(deps: LocalApiDeps): Express {
     if (!query.success) {
       const { status, body } = contractValidationResponse(
         "The worker admission request is not valid: a workspace_id is required.",
-   * S15 — the pinned pack's operation definitions (the D30 launch menu):
-   * id, version, title, and the purpose verbatim. Read-only; empty when no
-   * pack (or a pack without definitions) is pinned.
-   */
-  app.get(LIST_OPERATION_DEFINITIONS_PATH, (req, res) => {
-    const query = OperationWorkspaceQuery.safeParse(req.query);
-    if (!query.success) {
-      const { status, body } = contractValidationResponse(
-        "The operation definitions request is not valid: a workspace_id is required.",
       );
       res.status(status).json(body);
       return;
@@ -1025,11 +1016,26 @@ export function createLocalApi(deps: LocalApiDeps): Express {
             queued_runs: [],
           },
     );
-    res
-      .status(200)
-      .json({ definitions: deps.operations.listOperationDefinitions(query.data.workspace_id) });
   });
 
+  /**
+   * S15 — the pinned pack's operation definitions (the D30 launch menu):
+   * id, version, title, and the purpose verbatim. Read-only; empty when no
+   * pack (or a pack without definitions) is pinned. The workspace_id query
+   * stays required (every read is workspace-scoped at the transport), while
+   * the listing itself is the pinned pack's — runtime-global by pinning.
+   */
+  app.get(LIST_OPERATION_DEFINITIONS_PATH, (req, res) => {
+    const query = OperationWorkspaceQuery.safeParse(req.query);
+    if (!query.success) {
+      const { status, body } = contractValidationResponse(
+        "The operation definitions request is not valid: a workspace_id is required.",
+      );
+      res.status(status).json(body);
+      return;
+    }
+    res.status(200).json({ definitions: deps.operations.listOperationDefinitions() });
+  });
   /**
    * S15 — the D30 Operation launch preview (READ MODEL): the eight groups
    * (purpose, recommended roster with the coordinator marked, per-Agent

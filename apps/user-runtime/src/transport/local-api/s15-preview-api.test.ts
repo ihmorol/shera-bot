@@ -120,7 +120,7 @@ async function composeOn(dbPath: string): Promise<RunningRuntime> {
 async function fetchAny(origin: string, path: string) {
   const response = await fetch(`${origin}${path}`);
   const text = await response.text();
-  let json: Record<string, unknown> | null = null;
+  let json: Record<string, unknown> | null;
   try {
     json = JSON.parse(text) as Record<string, unknown>;
   } catch {
@@ -137,7 +137,7 @@ async function postAny(origin: string, path: string, body: unknown) {
     body: JSON.stringify(body),
   });
   const text = await response.text();
-  let json: Record<string, unknown> | null = null;
+  let json: Record<string, unknown> | null;
   try {
     json = JSON.parse(text) as Record<string, unknown>;
   } catch {

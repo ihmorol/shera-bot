@@ -842,4 +842,3 @@ describe("runtime proxy — S15 launch preview surfaces (allowlist additions)", 
     expect(calls).toHaveLength(0);
   });
 });
-

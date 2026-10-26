@@ -29,7 +29,12 @@ export function isBrowserRuntimePath(method: string, path: string): boolean {
       // S13 reads: the operations list, the detail read model, and the merged
       // thread. Run/event sub-reads stay private to the runtime surfaces.
       path === "/v1/operations" ||
-      /^\/v1\/operations\/[a-zA-Z0-9_-]+(?:\/thread)?$/.test(path))
+      /^\/v1\/operations\/[a-zA-Z0-9_-]+(?:\/thread)?$/.test(path) ||
+      // S16 (D32 layer 3, E1): the admission readout — the honest "who is
+      // waiting and why" resource read (UI_DESIGN S11 resource states). The
+      // one worker surface a browser may read; every worker mutation stays
+      // runtime-internal (agents propose; the runtime validates and executes).
+      path === "/v1/workers/admission")
   );
 }
 

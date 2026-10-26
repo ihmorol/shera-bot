@@ -573,28 +573,26 @@ function wire(
     if (operations instanceof RunFlowOperationsService) {
       operations.runFlow = {
         startRunWorker: (workspaceId, runId) => {
-          void supervisor.startWorker(workspaceId, runId, specForRun(workspaceId, runId)).catch(
-            (error: unknown) => {
+          void supervisor
+            .startWorker(workspaceId, runId, specForRun(workspaceId, runId))
+            .catch((error: unknown) => {
               logFault("task_run_worker_start_failed", {
                 workspace_id: workspaceId,
                 run_id: runId,
                 name: error instanceof Error ? error.name : "Error",
                 message: error instanceof Error ? error.message : String(error),
               });
-            },
-          );
+            });
         },
         stopRunWorker: (workspaceId, runId) => {
-          void supervisor.stopWorker(workspaceId, runId, "requested").catch(
-            (error: unknown) => {
-              logFault("task_run_worker_stop_failed", {
-                workspace_id: workspaceId,
-                run_id: runId,
-                name: error instanceof Error ? error.name : "Error",
-                message: error instanceof Error ? error.message : String(error),
-              });
-            },
-          );
+          void supervisor.stopWorker(workspaceId, runId, "requested").catch((error: unknown) => {
+            logFault("task_run_worker_stop_failed", {
+              workspace_id: workspaceId,
+              run_id: runId,
+              name: error instanceof Error ? error.name : "Error",
+              message: error instanceof Error ? error.message : String(error),
+            });
+          });
         },
         logFault: (event, fields) => logFault(event, fields),
       };
@@ -617,20 +615,19 @@ function wire(
   // verbatim refusal, scoped to the reading workspace. Without a worker
   // system the endpoint answers the honest not-configured shape (the route
   // owns that default).
-  const workerAdmission: ((workspaceId: string) => WorkerAdmissionReadout) | undefined =
-    workers
-      ? (workspaceId) => {
-          const pressure = workers.supervisor.admissionPressure();
-          return {
-            configured: pressure.configured,
-            limits: pressure.limits,
-            live_workers: pressure.liveWorkers,
-            queued_runs: workers.supervisor
-              .queuedRuns()
-              .filter((entry) => entry.workspace_id === workspaceId),
-          };
-        }
-      : undefined;
+  const workerAdmission: ((workspaceId: string) => WorkerAdmissionReadout) | undefined = workers
+    ? (workspaceId) => {
+        const pressure = workers.supervisor.admissionPressure();
+        return {
+          configured: pressure.configured,
+          limits: pressure.limits,
+          live_workers: pressure.liveWorkers,
+          queued_runs: workers.supervisor
+            .queuedRuns()
+            .filter((entry) => entry.workspace_id === workspaceId),
+        };
+      }
+    : undefined;
 
   const replay = new ReplayService({
     journal,

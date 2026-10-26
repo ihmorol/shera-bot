@@ -103,7 +103,10 @@ export interface TaskWorkerHarnessConfig {
 }
 
 /** Substitute the documented per-spawn placeholders into the static args. */
-export function workerHarnessArgs(config: TaskWorkerHarnessConfig, request: TaskWorkerSpawnRequest): string[] {
+export function workerHarnessArgs(
+  config: TaskWorkerHarnessConfig,
+  request: TaskWorkerSpawnRequest,
+): string[] {
   return (config.args ?? []).map((arg) =>
     arg
       .replaceAll("{run_id}", request.run_id)

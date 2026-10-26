@@ -30,7 +30,7 @@
  *
  * Governing records: D32, D10, D8, E1, D27, G4, E12; AC25.
  */
-import { readFileSync, readdirSync } from "node:fs";
+import { readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -70,9 +70,6 @@ import {
 
 const here = dirname(fileURLToPath(import.meta.url));
 const PACKS_ROOT = resolve(here, "../../../../../agent-packs");
-const STUDENT_MANIFEST = JSON.parse(
-  readFileSync(resolve(PACKS_ROOT, "student/v1/manifest.json"), "utf8"),
-) as { pack_id: string; version: string };
 
 const WORKSPACE = DEFAULT_WORKSPACE_ID;
 const GENERAL = "agent_general_assistant";

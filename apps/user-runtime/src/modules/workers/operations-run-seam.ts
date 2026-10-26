@@ -17,10 +17,7 @@
  */
 import type { RunState } from "@shera-bot/contracts";
 
-import {
-  TaskWorkerError,
-  type TaskRunOperationsSeam,
-} from "./task-worker-supervisor.service.ts";
+import { TaskWorkerError, type TaskRunOperationsSeam } from "./task-worker-supervisor.service.ts";
 import type { OperationsService } from "../operations/operations.service.ts";
 
 export class OperationsRunSeam implements TaskRunOperationsSeam {

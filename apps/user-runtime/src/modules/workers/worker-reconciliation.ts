@@ -98,7 +98,9 @@ function defaultIsPidAlive(pid: number): boolean {
 }
 
 /** The worker spec a re-driven run carries: the run row's provider snapshot. */
-function specFromRun(run: OperationRun): { providerSnapshot: { provider_id: string; model: string } } | undefined {
+function specFromRun(
+  run: OperationRun,
+): { providerSnapshot: { provider_id: string; model: string } } | undefined {
   if (run.provider_snapshot === undefined) {
     return undefined;
   }

@@ -794,6 +794,33 @@ describe("runtime proxy — S15 launch preview surfaces (allowlist additions)", 
     }
     expect(calls).toHaveLength(0);
   });
+
+  it("forwards the D30 launch confirm POST to the runtime (chunk 3: the only mutation the gate adds)", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const { calls } = stubFetch(previewResponse);
+
+    const request = new Request("http://web.test/api/runtime/v1/operations/launch", {
+      method: "POST",
+      body: JSON.stringify({
+        workspace_id: "ws_1",
+        operation_definition_id: "operation_research_paper",
+        roster_agent_ids: ["agent_researcher"],
+        coordinator_agent_id: "none",
+        idempotency_key: "idem_launch_0001",
+        actor: { type: "user", id: "user_emon" },
+        issued_at: "2026-10-25T12:00:00.000Z",
+      }),
+      headers: { "content-type": "application/json" },
+    });
+    const response = await proxyToLocalApi(request, "/v1/operations/launch");
+
+    expect(response.status).toBe(200);
+    expect(calls.at(-1)?.input).toBe(`${CONTROL_BASE}/api/runtime/local/v1/operations/launch`);
+    const init = calls.at(-1)?.init as RequestInit;
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(String(init.body)).operation_definition_id).toBe("operation_research_paper");
+  });
 });
 
 describe("runtime request boundaries", () => {

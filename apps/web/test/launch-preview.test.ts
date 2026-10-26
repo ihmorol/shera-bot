@@ -2,7 +2,8 @@ import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { OperationLaunchPreview } from "@shera-bot/contracts";
+import { OperationLaunchCommand, OperationLaunchPreview } from "@shera-bot/contracts";
+import { QueryClient } from "@tanstack/react-query";
 
 import {
   OperationLaunchMenu,
@@ -11,6 +12,7 @@ import {
 import type { AgentRosterSummary } from "../lib/agent-api";
 import { RuntimeApiError } from "../lib/runtime-client";
 import {
+  launchOperation,
   fetchOperationDefinitions,
   fetchOperationLaunchPreview,
   type OperationDefinitionSummary,
@@ -18,9 +20,11 @@ import {
 import {
   isPreviewOverrideFailure,
   operationDefinitionsQueryOptions,
+  operationLaunchMutationOptions,
   operationLaunchPreviewQueryOptions,
   previewSurfaceState,
   safeDefinitionsMessage,
+  safeLaunchMessage,
   safePreviewMessage,
 } from "../lib/operation-preview-data";
 import { readFileSync } from "node:fs";
@@ -272,6 +276,9 @@ function renderModal(props: Record<string, unknown> = {}, preview = PREVIEW): st
       onCoordinatorChange: () => undefined,
       onResetOverrides: () => undefined,
       onClose: () => undefined,
+      launchPending: false,
+      launchErrorMessage: null,
+      onLaunch: () => undefined,
       ...props,
     }),
   );
@@ -769,12 +776,176 @@ describe("Launch preview modal — states and the footer", () => {
     expect(html).toMatch(/class="[^"]*lg:rounded/);
   });
 
-  it("the footer renders Cancel (side-effect free close) and an inert Launch marker for chunk 3", () => {
+  it("the footer renders Cancel (side-effect free close) and the LIVE Launch control (chunk 3)", () => {
     const html = renderModal();
-    expect(html).toContain(">Cancel</button>");
-    expect(html).toContain('data-testid="launch-inert"');
-    expect(html).toContain('title="Launch wiring lands with the confirm flow"');
+    // The chunk-2 inert marker is GONE — chunk 3 replaced it.
+    expect(html).not.toContain('data-testid="launch-inert"');
+    expect(html).not.toContain("Launch wiring lands with the confirm flow");
+    // The confirm control is a live button with its test id.
+    expect(html).toContain('data-testid="launch-confirm"');
+    expect(html).toContain(">Launch Operation</button>");
     // The gate's headline promise rides the modal itself.
     expect(html).toContain("Nothing runs until you confirm");
+  });
+
+  it("CANCEL is side-effect free: the gate renders in every state with ZERO network traffic, no form, and a plain close button", () => {
+    // Rendering the gate (any state) never fetches; cancel is a pure close.
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    for (const props of [
+      { state: "ready" as const, preview: PREVIEW },
+      { state: "loading" as const, preview: null },
+      {
+        state: "error" as const,
+        preview: null,
+        safeErrorMessage: "The launch preview could not be loaded.",
+      },
+      { launchPending: true },
+      { launchErrorMessage: "The launch was not accepted." },
+    ]) {
+      renderModal(props);
+    }
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    // The only mutation path is the explicit confirm control: the modal
+    // carries no <form> (no implicit submit) and Cancel is a plain button.
+    const html = renderModal();
+    expect(html).not.toContain("<form");
+    expect(html).toMatch(/<button[^>]*>Cancel<\/button>/);
+  });
+
+  it("the confirm control goes pending during launch: Launch disabled with the honest in-flight copy, Cancel closed to it", () => {
+    const pending = renderModal({ launchPending: true });
+    expect(pending).toContain("Launching…");
+    expect(pending).toMatch(
+      /data-testid="launch-confirm"[^>]*disabled=""|disabled=""[^>]*data-testid="launch-confirm"/,
+    );
+    expect(pending).toMatch(/<button[^>]*disabled=""[^>]*>Cancel<\/button>/);
+    // The idle render is enabled with the steady-state copy.
+    const idle = renderModal();
+    expect(idle).toContain(">Launch Operation</button>");
+    expect(idle).not.toContain("Launching…");
+  });
+
+  it("a refused launch surfaces its safe copy as an alert while the gate stays open and re-armable", () => {
+    const html = renderModal({
+      launchErrorMessage: "The launch was not accepted: an Agent is outside the pinned pack.",
+    });
+    expect(html).toContain('data-testid="launch-error"');
+    expect(html).toMatch(
+      /role="alert"[^>]*data-testid="launch-error"|data-testid="launch-error"[^>]*role="alert"/,
+    );
+    expect(html).toContain("The launch was not accepted: an Agent is outside the pinned pack.");
+    // The error does not disable the confirm control (re-armable after a fix).
+    expect(html).not.toMatch(/data-testid="launch-confirm"[^>]*disabled/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7. Chunk 3 — the launch client (the confirm POST) and the mutation wiring
+// ---------------------------------------------------------------------------
+
+describe("Operation launch client (the confirm POST)", () => {
+  const LAUNCH_RESULT = {
+    operation_id: "0b1f2c3d-0000-4000-8000-000000000001",
+    run_id: "0b1f2c3d-0000-4000-8000-000000000002",
+    chat_conversation_id: "0b1f2c3d-0000-4000-8000-000000000003",
+  };
+
+  it("launchOperation POSTs the contracts envelope to /v1/operations/launch and parses the ids", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(201, LAUNCH_RESULT));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await launchOperation(WORKSPACE, PREVIEW);
+    expect(result).toEqual(LAUNCH_RESULT);
+
+    const [path, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(path).toBe("/api/runtime/v1/operations/launch");
+    expect(init.method).toBe("POST");
+    const body = JSON.parse(String(init.body));
+    // The envelope parses through the SAME contracts schema the runtime
+    // enforces — a malformed launch fails at build time, never on the wire.
+    const envelope = OperationLaunchCommand.parse(body);
+    expect(envelope).toMatchObject({
+      workspace_id: WORKSPACE,
+      operation_definition_id: DEFINITION_ID,
+      roster_agent_ids: PREVIEW.roster.agents.map((agent) => agent.agent_id),
+      coordinator_agent_id: PREVIEW.roster.coordinator_agent_id,
+      actor: { type: "user" },
+    });
+    expect(typeof envelope.issued_at).toBe("string");
+    expect(envelope.idempotency_key.length).toBeGreaterThanOrEqual(8);
+  });
+
+  it("launchOperation launches WHAT THE PREVIEW SHOWS — the effective overrides ride along, never a stale roster", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(201, LAUNCH_RESULT));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await launchOperation(WORKSPACE, PREVIEW_OVERRIDE);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const envelope = OperationLaunchCommand.parse(JSON.parse(String(init.body)));
+    expect(envelope.roster_agent_ids).toEqual([RESEARCHER.agent_id, CITATION.agent_id]);
+    expect(envelope.coordinator_agent_id).toBe("none");
+  });
+
+  it("a refused launch (400/404) raises typed with the runtime's safe copy", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(400, {
+          code: "OPERATION_COMMAND_INVALID",
+          category: "validation",
+          safe_message: "The Operation request is malformed.",
+          retryable: false,
+          user_action: null,
+          internal_details: null,
+          correlation_id: "44444444-4444-4444-8444-444444444446",
+        }),
+      ),
+    );
+    await expect(launchOperation(WORKSPACE, PREVIEW)).rejects.toMatchObject({
+      sheraError: { code: "OPERATION_COMMAND_INVALID" },
+    });
+  });
+
+  it("safeLaunchMessage surfaces the runtime's safe copy and a generic fallback otherwise", () => {
+    const typed = new RuntimeApiError({
+      code: "OPERATION_DEFINITION_NOT_FOUND",
+      category: "state",
+      safe_message: "That Operation definition does not exist in the pinned pack.",
+      retryable: false,
+      user_action: null,
+      internal_details: null,
+      correlation_id: "44444444-4444-4444-8444-444444444447",
+    });
+    expect(safeLaunchMessage(typed)).toBe(
+      "That Operation definition does not exist in the pinned pack.",
+    );
+    expect(safeLaunchMessage(new Error("socket hung up"))).toBe(
+      "The Operation could not be launched.",
+    );
+  });
+});
+
+describe("Launch mutation (testable contract — the S14 invalidation/navigate pattern)", () => {
+  it("the mutation POSTs the launch and onSuccess invalidates the workspace's operations list", async () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(["operations", WORKSPACE], [{ stale: true }]);
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(201, {
+        operation_id: "0b1f2c3d-0000-4000-8000-000000000001",
+        run_id: "0b1f2c3d-0000-4000-8000-000000000002",
+        chat_conversation_id: "0b1f2c3d-0000-4000-8000-000000000003",
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const options = operationLaunchMutationOptions(queryClient, WORKSPACE);
+    const result = await options.mutationFn(PREVIEW);
+    expect(result.operation_id).toBe("0b1f2c3d-0000-4000-8000-000000000001");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await options.onSuccess(result, PREVIEW, undefined);
+    expect(queryClient.getQueryState(["operations", WORKSPACE])?.isInvalidated).toBe(true);
   });
 });

@@ -34,6 +34,9 @@
  * paths:
  *   GET /v1/operation-definitions
  *   GET /v1/operation-definitions/:operation_definition_id/preview
+ * and chunk 3's confirm step rides the same distinct namespace:
+ *   POST /v1/operations/launch
+ * (a POST, so the GET :operation_id capture cannot swallow it either).
  */
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -116,6 +119,23 @@ async function composeOn(dbPath: string): Promise<RunningRuntime> {
 
 async function fetchAny(origin: string, path: string) {
   const response = await fetch(`${origin}${path}`);
+  const text = await response.text();
+  let json: Record<string, unknown> | null = null;
+  try {
+    json = JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    json = null;
+  }
+  return { status: response.status, text, json };
+}
+
+/** Chunk 3: POST a JSON body and read back the typed answer. */
+async function postAny(origin: string, path: string, body: unknown) {
+  const response = await fetch(`${origin}${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
   const text = await response.text();
   let json: Record<string, unknown> | null = null;
   try {
@@ -508,5 +528,261 @@ describe("S15 operation launch preview (chunk 1: read model)", () => {
         expect(count, `table ${table} must stay empty for a preview-only call`).toBe(0);
       }
     }
+  });
+});
+
+/**
+ * S15 chunk 3 — THE CONFIRM STEP: POST /v1/operations/launch. The route lives
+ * under the operation-definitions namespace's sibling (a DISTINCT path from
+ * /v1/operations/:operation_id — the same capture argument as chunk 1's
+ * route-shape note), and it is the ONLY path in this slice that creates
+ * anything: one Operation (through the SAME createOperation machinery with
+ * the definition_ref + pinning snapshot), its chat binding, and THE FIRST RUN
+ * (D30/AC23: confirm creates exactly one chat and one first run).
+ *
+ * The launch NEVER trusts the preview: the confirmed envelope is RE-RESOLVED
+ * from the pinned pack (an unknown definition is the typed 404) and the
+ * roster/coordinator are RE-VALIDATED against the pack catalog (D36) by the
+ * same createOperation validation the ad-hoc flow uses. Idempotency rides the
+ * command receipts seam (D23 rule 6): a replayed (workspace_id,
+ * idempotency_key) returns the ORIGINAL operation/run/chat without creating
+ * duplicates; a key already spent on a different command family is the typed
+ * conflict.
+ */
+describe("S15 chunk 3 — the launch confirm flow (POST /v1/operations/launch)", () => {
+  const LAUNCH_PATH = "/v1/operations/launch";
+  const ACTOR = { type: "user", id: "user_emon" } as const;
+
+  let launchCounter = 0;
+  function launchBody(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    launchCounter += 1;
+    return {
+      workspace_id: WORKSPACE,
+      operation_definition_id: RESEARCH_PAPER!.operation_id,
+      roster_agent_ids: [RESEARCHER, CITATION],
+      coordinator_agent_id: CITATION,
+      idempotency_key: `idem_launch_${launchCounter.toString().padStart(4, "0")}`,
+      actor: ACTOR,
+      issued_at: "2026-10-25T12:00:00.000Z",
+      ...overrides,
+    };
+  }
+
+  /** The row count of one user table (the probe's counts view). */
+  function countOf(dbPath: string, table: string): number {
+    const counts = tableCounts(dbPath);
+    expect(counts, `table ${table} exists`).toHaveProperty(table);
+    return counts[table]!;
+  }
+
+  it("confirm creates EXACTLY one Operation chat and one first run (D30/AC23) with the confirmed overrides persisted", async () => {
+    const { origin, dbPath } = await composeOn(makeDbPath());
+
+    // The user saw the preview (the modal's read) before confirming.
+    const preview = await fetchAny(origin, previewPath(RESEARCH_PAPER!.operation_id));
+    expect(preview.status).toBe(200);
+    const previewBody = preview.json as Record<string, unknown>;
+
+    const response = await postAny(origin, LAUNCH_PATH, launchBody());
+    expect(response.status).toBe(201);
+    expect(response.json).not.toBeNull();
+    const result = response.json as Record<string, unknown>;
+    expect(typeof result.operation_id).toBe("string");
+    expect(typeof result.run_id).toBe("string");
+    expect(typeof result.chat_conversation_id).toBe("string");
+
+    // The Operation record: definition_ref + pinning snapshot from the PINNED
+    // pack, the definition's title as the name, the CONFIRMED roster and
+    // coordinator (the preview's effective overrides are what launch persists).
+    const detail = await fetchAny(
+      origin,
+      `/v1/operations/${String(result.operation_id)}?workspace_id=${WORKSPACE}`,
+    );
+    expect(detail.status).toBe(200);
+    const detailBody = detail.json as Record<string, unknown>;
+    const operation = detailBody.operation as Record<string, unknown>;
+    expect(operation.definition_ref).toBe(previewBody.definition_ref);
+    expect(operation.name).toBe(RESEARCH_PAPER!.title);
+    expect(operation.coordinator_agent_id).toBe(CITATION);
+    const pinning = operation.pinning as Record<string, unknown>;
+    expect(pinning.pack_id).toBe(STUDENT_MANIFEST.pack_id);
+    expect(pinning.pack_version).toBe(STUDENT_MANIFEST.version);
+    expect(pinning.roster_agent_ids).toEqual([RESEARCHER, CITATION]);
+    const roster = detailBody.roster as Array<Record<string, unknown>>;
+    expect(roster.map((member) => member.agent_id).sort()).toEqual([CITATION, RESEARCHER].sort());
+
+    // THE FIRST RUN (D30/AC23): exactly one, D8 CREATED, cursor 0.
+    const runs = await fetchAny(
+      origin,
+      `/v1/operations/${String(result.operation_id)}/runs?workspace_id=${WORKSPACE}`,
+    );
+    expect(runs.status).toBe(200);
+    const runRows = (runs.json as Record<string, unknown>).runs as Array<Record<string, unknown>>;
+    expect(runRows).toHaveLength(1);
+    expect(runRows[0]!.run_id).toBe(result.run_id);
+    expect(runRows[0]!.state).toBe("CREATED");
+    expect(runRows[0]!.events_seq_cursor).toBe(0);
+
+    // The chat binding: the response's conversation id IS the Operation's
+    // bound chat (created by the confirm, not lazily by a thread read).
+    expect(detailBody.chat_conversation_id).toBe(result.chat_conversation_id);
+
+    // And the database holds EXACTLY one of each — no more.
+    expect(countOf(dbPath, "operations")).toBe(1);
+    expect(countOf(dbPath, "operation_runs")).toBe(1);
+    expect(countOf(dbPath, "operation_chats")).toBe(1);
+    expect(countOf(dbPath, "conversations")).toBe(1);
+  });
+
+  it("the launch RE-RESOLVES the definition and RE-VALIDATES the roster against the pinned pack — preview edits are never trusted (D36)", async () => {
+    const { origin, dbPath } = await composeOn(makeDbPath());
+    const before = dbFingerprint(dbPath);
+
+    // An unknown definition: the typed 404-class state failure, nothing created.
+    const unknown = await postAny(
+      origin,
+      LAUNCH_PATH,
+      launchBody({ operation_definition_id: "operation_does_not_exist" }),
+    );
+    expect(unknown.status).toBe(404);
+    expect((unknown.json as Record<string, unknown>).code).toBe("OPERATION_DEFINITION_NOT_FOUND");
+
+    // A roster naming an Agent outside the pinned pack: the typed 400.
+    const foreign = await postAny(
+      origin,
+      LAUNCH_PATH,
+      launchBody({ roster_agent_ids: [RESEARCHER, "agent_not_in_any_pack"] }),
+    );
+    expect(foreign.status).toBe(400);
+    expect((foreign.json as Record<string, unknown>).code).toBe("OPERATION_COMMAND_INVALID");
+
+    // A coordinator outside the pinned pack: the same re-validation.
+    const foreignCoordinator = await postAny(
+      origin,
+      LAUNCH_PATH,
+      launchBody({ coordinator_agent_id: "agent_not_in_any_pack" }),
+    );
+    expect(foreignCoordinator.status).toBe(400);
+    expect((foreignCoordinator.json as Record<string, unknown>).code).toBe(
+      "OPERATION_COMMAND_INVALID",
+    );
+
+    // An empty roster: the launch envelope requires at least one Agent.
+    const empty = await postAny(origin, LAUNCH_PATH, launchBody({ roster_agent_ids: [] }));
+    expect(empty.status).toBe(400);
+
+    // A malformed envelope (missing fields, unknown fields): the typed 400.
+    const malformed = await postAny(origin, LAUNCH_PATH, { workspace_id: WORKSPACE });
+    expect(malformed.status).toBe(400);
+    expect((malformed.json as Record<string, unknown>).code).toBe("CONTRACT_VALIDATION_FAILED");
+    const extra = await postAny(origin, LAUNCH_PATH, launchBody({ surprise: true }));
+    expect(extra.status).toBe(400);
+
+    // NOTHING above persisted anything — the refusals leave no trace.
+    expect(dbFingerprint(dbPath)).toBe(before);
+    expect(countOf(dbPath, "operations")).toBe(0);
+  });
+
+  it("idempotency: a replayed (workspace_id, idempotency_key) returns the ORIGINAL operation/run/chat — no duplicates (D23 rule 6)", async () => {
+    const { origin, dbPath } = await composeOn(makeDbPath());
+
+    const body = launchBody({ idempotency_key: "idem_launch_replay_0001" });
+    const first = await postAny(origin, LAUNCH_PATH, body);
+    expect(first.status).toBe(201);
+    const firstResult = first.json as Record<string, unknown>;
+
+    const replay = await postAny(origin, LAUNCH_PATH, {
+      ...body,
+      issued_at: "2026-10-25T12:00:01.000Z",
+    });
+    expect(replay.status).toBe(200);
+    expect(replay.json).toEqual(firstResult);
+
+    // Still exactly one of each — the replay created nothing.
+    expect(countOf(dbPath, "operations")).toBe(1);
+    expect(countOf(dbPath, "operation_runs")).toBe(1);
+    expect(countOf(dbPath, "operation_chats")).toBe(1);
+    expect(countOf(dbPath, "conversations")).toBe(1);
+
+    // A DIFFERENT key is a different launch decision: a second Operation.
+    const second = await postAny(
+      origin,
+      LAUNCH_PATH,
+      launchBody({ idempotency_key: "idem_launch_replay_0002" }),
+    );
+    expect(second.status).toBe(201);
+    expect((second.json as Record<string, unknown>).operation_id).not.toBe(
+      firstResult.operation_id,
+    );
+    expect(countOf(dbPath, "operations")).toBe(2);
+    expect(countOf(dbPath, "operation_runs")).toBe(2);
+    expect(countOf(dbPath, "operation_chats")).toBe(2);
+  });
+
+  it("an idempotency_key already spent on a DIFFERENT command family is the typed conflict (D23 rule 6)", async () => {
+    const { origin } = await composeOn(makeDbPath());
+    const launched = await postAny(origin, LAUNCH_PATH, launchBody());
+    expect(launched.status).toBe(201);
+    const result = launched.json as Record<string, unknown>;
+
+    // Spend the key on the message-send family inside the launched Operation.
+    const message = await postAny(
+      origin,
+      `/v1/operations/${String(result.operation_id)}/thread/messages`,
+      {
+        workspace_id: WORKSPACE,
+        idempotency_key: "idem_launch_cross_family_key",
+        sender: { kind: "user", display_name: "Emon" },
+        text: "before the cross-family attempt",
+      },
+    );
+    expect(message.status).toBe(201);
+
+    // Reusing THAT key for a launch is the typed conflict — never a duplicated
+    // effect, never a silent retarget of the earlier command.
+    const conflict = await postAny(
+      origin,
+      LAUNCH_PATH,
+      launchBody({ idempotency_key: "idem_launch_cross_family_key" }),
+    );
+    expect(conflict.status).toBe(400);
+    expect((conflict.json as Record<string, unknown>).code).toBe("OPERATION_COMMAND_INVALID");
+    expect((conflict.json as Record<string, unknown>).category).toBe("conflict");
+  });
+
+  it("THE GATE THROUGH THE CONFIRM LENS: modal open (reads) + close leaves the database byte-identical; LAUNCH creates exactly one of each", async () => {
+    const { origin, dbPath } = await composeOn(makeDbPath());
+    const bootFingerprint = dbFingerprint(dbPath);
+
+    // "Open the modal": the definitions read + the preview read with the
+    // user's edits (the override refetches) — all GETs, all read-only.
+    const definitions = await fetchAny(origin, LIST_DEFINITIONS);
+    expect(definitions.status).toBe(200);
+    const edited = await fetchAny(
+      origin,
+      previewPath(
+        RESEARCH_PAPER!.operation_id,
+        `&roster_agent_ids=${RESEARCHER},${CITATION}&coordinator_agent_id=${CITATION}`,
+      ),
+    );
+    expect(edited.status).toBe(200);
+
+    // "Close the modal": NO request exists for cancel — the close is a pure
+    // client-side state change. Nothing was written by the open+edit+close.
+    const beforeCounts = tableCounts(dbPath);
+    expect(dbFingerprint(dbPath)).toBe(bootFingerprint);
+    for (const [table, count] of Object.entries(beforeCounts)) {
+      if (/operation|conversation|chat|task_run|runs/i.test(table)) {
+        expect(count, `table ${table} stays empty before confirmation`).toBe(0);
+      }
+    }
+
+    // "Confirm": exactly one Operation, one chat, one run — no more.
+    const launched = await postAny(origin, LAUNCH_PATH, launchBody());
+    expect(launched.status).toBe(201);
+    expect(countOf(dbPath, "operations")).toBe(1);
+    expect(countOf(dbPath, "operation_runs")).toBe(1);
+    expect(countOf(dbPath, "operation_chats")).toBe(1);
+    expect(countOf(dbPath, "conversations")).toBe(1);
   });
 });

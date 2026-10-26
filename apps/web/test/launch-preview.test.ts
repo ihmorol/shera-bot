@@ -638,7 +638,8 @@ describe("Launch preview modal — the eight groups (§S5, D30/D38/D20/D35)", ()
     // The S15 payload is regex-audited at the backend; the UI mirrors the
     // audit over its FULL rendered output — a preview is a read model (D30),
     // and no copy may promise execution before the confirm step exists.
-    const outcomePromise = /\bwill\s+(execute|install|send|merge|create|delete|run|launch)\b/i;
+    const outcomePromise =
+      /\bwill (merge|send|post|submit|publish|execute|commit|install|connect|run|create|delete|launch)\b/i;
     for (const preview of [PREVIEW, PREVIEW_OVERRIDE]) {
       const html = renderModal({}, preview);
       const match = outcomePromise.exec(html);

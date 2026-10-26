@@ -175,7 +175,7 @@ function dbFingerprint(dbPath: string): string {
 function expectNoOutcomePromises(preview: Record<string, unknown>) {
   const serialized = JSON.stringify(preview);
   expect(serialized).not.toMatch(
-    /\bwill (merge|send|post|submit|publish|execute|commit|install|connect|run)\b/i,
+    /\bwill (merge|send|post|submit|publish|execute|commit|install|connect|run|create|delete|launch)\b/i,
   );
 }
 
@@ -524,7 +524,7 @@ describe("S15 operation launch preview (chunk 1: read model)", () => {
     // Named proof points (D30): zero operation rows, zero task-run rows,
     // zero Operation-chat rows, zero conversations created.
     for (const [table, count] of Object.entries(afterCounts)) {
-      if (/operation|conversation|chat|task_run|runs/i.test(table)) {
+      if (/operation|conversation|chat|task_run|task_workers|runs/i.test(table)) {
         expect(count, `table ${table} must stay empty for a preview-only call`).toBe(0);
       }
     }
@@ -780,7 +780,7 @@ describe("S15 chunk 3 — the launch confirm flow (POST /v1/operations/launch)",
     const beforeCounts = tableCounts(dbPath);
     expect(dbFingerprint(dbPath)).toBe(bootFingerprint);
     for (const [table, count] of Object.entries(beforeCounts)) {
-      if (/operation|conversation|chat|task_run|runs/i.test(table)) {
+      if (/operation|conversation|chat|task_run|task_workers|runs/i.test(table)) {
         expect(count, `table ${table} stays empty before confirmation`).toBe(0);
       }
     }

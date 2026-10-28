@@ -160,19 +160,39 @@ describe("S17 v9 migration: workspace storage tables", () => {
   it("enforces scope/agent coherence, directory content coherence, and name sanity at the schema level", () => {
     const conn = openMigratedDb(newTempDbPath());
     try {
-      const base = {
+      interface InsertRow {
+        id: string;
+        workspace_id: string;
+        scope: string;
+        agent_id: string | null;
+        parent_id: string | null;
+        name: string;
+        is_directory: number;
+        size: number;
+        mime_type: string | null;
+        content: Uint8Array | null;
+        created_by_type: string;
+        created_by_id: string;
+        created_at: string;
+        updated_at: string;
+      }
+      const base: InsertRow = {
         id: "n1",
         workspace_id: "ws_default",
+        scope: "workspace",
+        agent_id: null,
         parent_id: null,
+        name: "f.txt",
         is_directory: 0,
         size: 1,
         mime_type: "text/plain",
+        content: null,
         created_by_type: "user",
         created_by_id: "user-1",
         created_at: "2026-10-28T00:00:00.000Z",
         updated_at: "2026-10-28T00:00:00.000Z",
       };
-      const insert = (over: Record<string, unknown>) => {
+      const insert = (over: Partial<InsertRow>) => {
         const row = { ...base, ...over };
         return conn.db
           .prepare(

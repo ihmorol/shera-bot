@@ -26,15 +26,20 @@ import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 
 import { APPROVAL_REMINDER_SCHEDULE_SECONDS } from "@shera-bot/contracts";
-import type { TaskPolicy, TaskRun } from "@shera-bot/contracts";
+import type { ApprovalChoice, OperationRun, TaskPolicy, TaskRun } from "@shera-bot/contracts";
 
 import { ApprovalsRepository } from "../../adapters/sqlite/approvals-repository.ts";
 import { openDatabase, type SqliteConnection } from "../../adapters/sqlite/connection.ts";
 import { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
 import { applyMigrations } from "../../adapters/sqlite/migrations.ts";
+import { OperationsRepository } from "../../adapters/sqlite/operations-repository.ts";
 import { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import { EventsService } from "../events/events.service.ts";
-import { ApprovalsService, type TypedToolProposal } from "./approvals.service.ts";
+import {
+  ApprovalsService,
+  ApprovalsServiceError,
+  type TypedToolProposal,
+} from "./approvals.service.ts";
 
 const WS = "ws_default_01";
 const NOW = "2026-10-28T12:00:00.000Z";
@@ -48,6 +53,7 @@ function newRuntime(): {
   runtime: SqliteConnection;
   journal: EventJournalRepository;
   approvals: ApprovalsRepository;
+  operations: OperationsRepository;
   service: ApprovalsService;
   setNow: (iso: string) => void;
 } {
@@ -59,18 +65,21 @@ function newRuntime(): {
   const journal = new EventJournalRepository(tx);
   const events = new EventsService(journal, tx);
   const approvals = new ApprovalsRepository(tx);
+  const operations = new OperationsRepository(tx);
   const clock = { now: NOW };
   const service = new ApprovalsService({
     tx,
     journal,
     events,
     approvals,
+    operations,
     clock: () => clock.now,
   });
   return {
     runtime,
     journal,
     approvals,
+    operations,
     service,
     setNow: (iso: string) => {
       clock.now = iso;
@@ -239,5 +248,407 @@ describe("approvals service: a gated typed proposal pauses the run (S20 chunk 1)
     expect(sideEffect.ran).toBe(false);
     expect(env.approvals.listRequestsByTask(WS, run.task_id)).toHaveLength(0);
     expect(env.journal.listStream(`task:${run.task_id}`, WS)).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// S20 chunk 2 — applying a decision (issue #21; D9, PRD §8, G5/G6)
+// ---------------------------------------------------------------------------
+
+const USER = { type: "user", id: "user_001" } as const;
+
+/** Pause one run once and return the paused outcome plus the original run. */
+function pauseOnce(env: ReturnType<typeof newRuntime>, run: TaskRun) {
+  const result = env.service.createRequestFromTypedProposal({
+    proposal: gatedProposal(),
+    run,
+    execute: () => {
+      throw new Error("a gated proposal must not execute pre-decision");
+    },
+  });
+  if (result.outcome !== "paused_for_approval") throw new Error("expected a paused outcome");
+  return result;
+}
+
+function childRun(overrides: Partial<OperationRun> = {}): OperationRun {
+  return {
+    run_id: "run_child_001",
+    workspace_id: WS,
+    operation_id: "op_001",
+    parent_task_id: "task_001",
+    state: "RUNNING",
+    events_seq_cursor: 0,
+    credits: {},
+    artifacts: [],
+    created_at: NOW,
+    updated_at: NOW,
+    ...overrides,
+  };
+}
+
+function catchCode(run: () => void): ApprovalsServiceError {
+  try {
+    run();
+  } catch (error) {
+    if (error instanceof ApprovalsServiceError) {
+      return error;
+    }
+    throw error;
+  }
+  throw new Error("expected the decision to be refused with a typed error");
+}
+
+describe("approvals service: the five choices do exactly what they say (S20 chunk 2)", () => {
+  it("approve-this-execution-only: one-time Agent-principal grant, run resumed via approval_granted, callback executed", () => {
+    const env = newRuntime();
+    const run = makeRun();
+    const pause = pauseOnce(env, run);
+    const sideEffect = { ran: false };
+
+    const result = env.service.applyDecision({
+      approval_id: pause.approval_id,
+      choice: "approve-this-execution-only",
+      decided_by: USER,
+      run: pause.run,
+      execute: () => {
+        sideEffect.ran = true;
+      },
+    });
+
+    expect(result.outcome).toBe("approved");
+    if (result.outcome !== "approved") throw new Error("expected an approved outcome");
+    expect(sideEffect.ran).toBe(true);
+    expect(result.run.state).toBe("RUNNING");
+    expect(result.run.version).toBe(run.version + 2);
+
+    // The one-time grant (D9): bound to the REQUESTER's own principal (the
+    // proposing Agent), pinned to the exact tool version + digest.
+    expect(env.approvals.listGrants(WS)).toHaveLength(1);
+    const grant = env.approvals.listGrants(WS)[0]!;
+    expect(result.grant).toEqual(grant);
+    expect(grant.source_choice).toBe("approve-this-execution-only");
+    expect(grant.one_time).toBe(true);
+    expect(grant.principal_type).toBe("agent");
+    expect(grant.principal_id).toBe("agent_general_assistant");
+    expect(grant.tool_id).toBe("tool_repo_push");
+    expect(grant.tool_version).toBe("1.2.0");
+    expect(grant.capability).toBe("repo.push");
+    expect(grant.resource_scope).toBe("workspace://notes/draft.md");
+    expect(grant.conversation_scope).toBe("conv_001");
+    expect(grant.workspace_scope).toBe(WS);
+    expect(grant.created_by).toEqual(USER);
+    expect(grant.approved_at).toBe(NOW);
+    expect(grant.revoked_at).toBeNull();
+    expect(grant.args_digest).toBe(`sha256:${"b".repeat(64)}`);
+
+    // The request is resolved with the deciding choice.
+    const request = env.approvals.getRequest(WS, pause.approval_id);
+    expect(request?.status).toBe("approved");
+    expect(request?.resolved_by_choice).toBe("approve-this-execution-only");
+    expect(request?.resolved_at).toBe(NOW);
+
+    // The resume went through the D8 machinery (G2), journalled with the
+    // approval id in the payload.
+    const stream = env.journal.listStream(`task:${run.task_id}`, WS);
+    const granted = stream.find((row) => row.event_type === "task.approval_granted");
+    expect(granted).toBeDefined();
+    const envelope = JSON.parse(granted!.payload) as {
+      payload: { approval_id?: string; to_state?: string; from_state?: string };
+    };
+    expect(envelope.payload.approval_id).toBe(pause.approval_id);
+    expect(envelope.payload.from_state).toBe("WAITING_FOR_APPROVAL");
+    expect(envelope.payload.to_state).toBe("RUNNING");
+  });
+
+  it("always-approve-this-tool: reusable grant scoped to the requesting TASK and the CURRENT conversation — 'any' is never implicit", () => {
+    const env = newRuntime();
+    const run = makeRun();
+    const pause = pauseOnce(env, run);
+    const sideEffect = { ran: false };
+
+    const result = env.service.applyDecision({
+      approval_id: pause.approval_id,
+      choice: "always-approve-this-tool",
+      decided_by: USER,
+      run: pause.run,
+      execute: () => {
+        sideEffect.ran = true;
+      },
+    });
+
+    expect(result.outcome).toBe("approved");
+    expect(sideEffect.ran).toBe(true);
+    expect(result.run.state).toBe("RUNNING");
+
+    expect(env.approvals.listGrants(WS)).toHaveLength(1);
+    const grant = env.approvals.listGrants(WS)[0]!;
+    expect(grant.source_choice).toBe("always-approve-this-tool");
+    expect(grant.one_time).toBe(false);
+    expect(grant.principal_type).toBe("task");
+    expect(grant.principal_id).toBe("task_001");
+    expect(grant.conversation_scope).toBe("conv_001");
+    expect(grant.conversation_scope).not.toBe("any");
+    // A reusable grant does not pin the arguments.
+    expect(grant.args_digest).toBeNull();
+  });
+
+  it("always-approve-this-tool-for-this-agent: reusable grant bound to the requesting Agent", () => {
+    const env = newRuntime();
+    const pause = pauseOnce(env, makeRun());
+
+    const result = env.service.applyDecision({
+      approval_id: pause.approval_id,
+      choice: "always-approve-this-tool-for-this-agent",
+      decided_by: USER,
+      run: pause.run,
+      execute: () => {},
+    });
+
+    expect(result.outcome).toBe("approved");
+    const grant = env.approvals.listGrants(WS)[0]!;
+    expect(grant.source_choice).toBe("always-approve-this-tool-for-this-agent");
+    expect(grant.one_time).toBe(false);
+    expect(grant.principal_type).toBe("agent");
+    expect(grant.principal_id).toBe("agent_general_assistant");
+    expect(grant.conversation_scope).toBe("conv_001");
+  });
+
+  it("reject-this-action: request rejected, run resumed via approval_rejected, the action NEVER executes, no grant", () => {
+    const env = newRuntime();
+    const run = makeRun();
+    const pause = pauseOnce(env, run);
+    const sideEffect = { ran: false };
+
+    const result = env.service.applyDecision({
+      approval_id: pause.approval_id,
+      choice: "reject-this-action",
+      decided_by: USER,
+      run: pause.run,
+      execute: () => {
+        sideEffect.ran = true;
+      },
+    });
+
+    expect(result.outcome).toBe("action_rejected");
+    if (result.outcome !== "action_rejected") throw new Error("expected an action_rejected outcome");
+    // The denied action does not resume into execution.
+    expect(sideEffect.ran).toBe(false);
+    // "Reject this action" denies the ACTION, not the task (D8 vocabulary):
+    // the run returns to RUNNING via the legal approval_rejected row.
+    expect(result.run.state).toBe("RUNNING");
+    expect(result.run.version).toBe(run.version + 2);
+
+    const request = env.approvals.getRequest(WS, pause.approval_id);
+    expect(request?.status).toBe("rejected");
+    expect(request?.resolved_by_choice).toBe("reject-this-action");
+    expect(request?.resolved_at).toBe(NOW);
+
+    const stream = env.journal.listStream(`task:${run.task_id}`, WS);
+    const rejected = stream.find((row) => row.event_type === "task.approval_rejected");
+    expect(rejected).toBeDefined();
+    const envelope = JSON.parse(rejected!.payload) as {
+      payload: { approval_id?: string; to_state?: string };
+    };
+    expect(envelope.payload.approval_id).toBe(pause.approval_id);
+    expect(envelope.payload.to_state).toBe("RUNNING");
+
+    // Only the three approve choices create grants — a rejection creates none.
+    expect(env.approvals.listGrants(WS)).toHaveLength(0);
+  });
+
+  it("cancel-the-task: request cancelled, run CANCELLING -> CANCELLED, child runs cancelled in the same transaction", () => {
+    const env = newRuntime();
+    const run = makeRun();
+    const pause = pauseOnce(env, run);
+    env.operations.createRun(WS, childRun());
+    env.operations.createRun(WS, childRun({ run_id: "run_child_002", state: "SUCCEEDED" }));
+    const sideEffect = { ran: false };
+
+    const result = env.service.applyDecision({
+      approval_id: pause.approval_id,
+      choice: "cancel-the-task",
+      decided_by: USER,
+      run: pause.run,
+      execute: () => {
+        sideEffect.ran = true;
+      },
+    });
+
+    expect(result.outcome).toBe("task_cancelled");
+    if (result.outcome !== "task_cancelled") throw new Error("expected a task_cancelled outcome");
+    expect(sideEffect.ran).toBe(false);
+    // A real cancelled state, not a silent failure: both D8 steps journalled.
+    expect(result.run.state).toBe("CANCELLED");
+    expect(result.run.version).toBe(run.version + 3);
+    expect(result.cancelled_child_run_ids).toEqual(["run_child_001"]);
+
+    const request = env.approvals.getRequest(WS, pause.approval_id);
+    expect(request?.status).toBe("cancelled");
+    expect(request?.resolved_by_choice).toBe("cancel-the-task");
+
+    // The non-terminal child is cancelled; the already-terminal child is untouched.
+    expect(env.operations.getRun(WS, "op_001", "run_child_001")?.state).toBe("CANCELLED");
+    expect(env.operations.getRun(WS, "op_001", "run_child_002")?.state).toBe("SUCCEEDED");
+
+    const stream = env.journal.listStream(`task:${run.task_id}`, WS);
+    const types = stream.map((row) => row.event_type);
+    expect(types).toContain("task.cancelling");
+    expect(types).toContain("task.cancelled");
+
+    expect(env.approvals.listGrants(WS)).toHaveLength(0);
+  });
+});
+
+describe("approvals service: decision refusals (S20 chunk 2, D9/G6)", () => {
+  it("an Agent cannot approve its own request — AGENT_CANNOT_SELF_APPROVE, and a prompt-shaped input creates NO grant", () => {
+    const env = newRuntime();
+    const run = makeRun();
+    const pause = pauseOnce(env, run);
+
+    const error = catchCode(() =>
+      env.service.applyDecision({
+        approval_id: pause.approval_id,
+        choice: "approve-this-execution-only",
+        decided_by: { type: "agent", id: "agent_general_assistant" },
+        run: pause.run,
+        execute: () => {},
+      }),
+    );
+
+    expect(error.code).toBe("AGENT_CANNOT_SELF_APPROVE");
+
+    // Nothing moved: the request is still pending, no grant exists (a prompt
+    // cannot create a grant — G6), the run still waits, nothing journalled.
+    expect(env.approvals.getRequest(WS, pause.approval_id)?.status).toBe("pending");
+    expect(env.approvals.listGrants(WS)).toHaveLength(0);
+    expect(env.journal.listStream(`task:${run.task_id}`, WS)).toHaveLength(2);
+  });
+
+  it("an Agent that is NOT the requester still cannot decide — AGENT_CANNOT_DECIDE_APPROVAL", () => {
+    const env = newRuntime();
+    const pause = pauseOnce(env, makeRun());
+
+    const error = catchCode(() =>
+      env.service.applyDecision({
+        approval_id: pause.approval_id,
+        choice: "approve-this-execution-only",
+        decided_by: { type: "agent", id: "agent_other_observer" },
+        run: pause.run,
+        execute: () => {},
+      }),
+    );
+
+    expect(error.code).toBe("AGENT_CANNOT_DECIDE_APPROVAL");
+    expect(env.approvals.listGrants(WS)).toHaveLength(0);
+    expect(env.approvals.getRequest(WS, pause.approval_id)?.status).toBe("pending");
+  });
+
+  it("a decision on an already-resolved request is refused — APPROVAL_ALREADY_RESOLVED, no duplicate grant", () => {
+    const env = newRuntime();
+    const pause = pauseOnce(env, makeRun());
+
+    const first = env.service.applyDecision({
+      approval_id: pause.approval_id,
+      choice: "approve-this-execution-only",
+      decided_by: USER,
+      run: pause.run,
+      execute: () => {},
+    });
+    expect(first.outcome).toBe("approved");
+
+    env.setNow("2026-10-28T13:00:00.000Z");
+    const error = catchCode(() =>
+      env.service.applyDecision({
+        approval_id: pause.approval_id,
+        choice: "reject-this-action",
+        decided_by: USER,
+        run: pause.run,
+        execute: () => {},
+      }),
+    );
+
+    expect(error.code).toBe("APPROVAL_ALREADY_RESOLVED");
+    // The first decision stands untouched — decisions are immutable (D9).
+    expect(env.approvals.listGrants(WS)).toHaveLength(1);
+    const request = env.approvals.getRequest(WS, pause.approval_id);
+    expect(request?.status).toBe("approved");
+    expect(request?.resolved_at).toBe(NOW);
+  });
+
+  it("an unknown choice is refused typed — APPROVAL_DECISION_INVALID, nothing persisted", () => {
+    const env = newRuntime();
+    const run = makeRun();
+    const pause = pauseOnce(env, run);
+
+    const error = catchCode(() =>
+      env.service.applyDecision({
+        approval_id: pause.approval_id,
+        // Raw API input can carry anything; the enum guards it typed.
+        choice: "approve-everything" as ApprovalChoice,
+        decided_by: USER,
+        run: pause.run,
+        execute: () => {},
+      }),
+    );
+
+    expect(error.code).toBe("APPROVAL_DECISION_INVALID");
+    expect(env.approvals.getRequest(WS, pause.approval_id)?.status).toBe("pending");
+    expect(env.approvals.listGrants(WS)).toHaveLength(0);
+    expect(env.journal.listStream(`task:${run.task_id}`, WS)).toHaveLength(2);
+  });
+
+  it("a stale run projection surfaces the typed transition rejection and persists NOTHING (no grant without a resume)", () => {
+    const env = newRuntime();
+    const pause = pauseOnce(env, makeRun());
+
+    const result = env.service.applyDecision({
+      approval_id: pause.approval_id,
+      choice: "approve-this-execution-only",
+      decided_by: USER,
+      run: { ...pause.run, version: pause.run.version - 1 },
+      execute: () => {},
+    });
+
+    expect(result.outcome).toBe("transition_rejected");
+    if (result.outcome !== "transition_rejected") throw new Error("expected a typed rejection");
+    expect(result.rejection.kind).toBe("version_conflict");
+    expect(env.approvals.getRequest(WS, pause.approval_id)?.status).toBe("pending");
+    expect(env.approvals.listGrants(WS)).toHaveLength(0);
+  });
+
+  it("a decision naming an unknown approval id is refused — APPROVAL_REQUEST_NOT_FOUND", () => {
+    const env = newRuntime();
+
+    const error = catchCode(() =>
+      env.service.applyDecision({
+        approval_id: "apr_does_not_exist",
+        choice: "approve-this-execution-only",
+        decided_by: USER,
+        run: makeRun(),
+        execute: () => {},
+      }),
+    );
+
+    expect(error.code).toBe("APPROVAL_REQUEST_NOT_FOUND");
+    expect(env.approvals.listGrants(WS)).toHaveLength(0);
+  });
+
+  it("a decision run that does not belong to the request's task is refused — APPROVAL_REQUEST_RUN_MISMATCH", () => {
+    const env = newRuntime();
+    const pause = pauseOnce(env, makeRun());
+
+    const error = catchCode(() =>
+      env.service.applyDecision({
+        approval_id: pause.approval_id,
+        choice: "approve-this-execution-only",
+        decided_by: USER,
+        run: makeRun({ task_id: "task_other_001" }),
+        execute: () => {},
+      }),
+    );
+
+    expect(error.code).toBe("APPROVAL_REQUEST_RUN_MISMATCH");
+    expect(env.approvals.getRequest(WS, pause.approval_id)?.status).toBe("pending");
+    expect(env.approvals.listGrants(WS)).toHaveLength(0);
   });
 });

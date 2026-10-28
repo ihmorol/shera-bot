@@ -47,7 +47,7 @@ interface Fixture {
   recorder: TerminalRecorder;
 }
 
-function makeFixture(now: () => string = () => clock): Fixture {
+function makeFixture(now?: () => string): Fixture {
   const dir = mkdtempSync(join(tmpdir(), "shera-s18-recorder-"));
   tempDirs.push(dir);
   const conn = openDatabase(join(dir, "runtime.db"));

@@ -227,6 +227,38 @@
  * requires the deciding user actor and stamps its id. Muting is a user
  * notification decision (the G6 family): the row is the audit record of WHO
  * silenced which reminders.
+ *
+ * v14 — terminal event storage (S18 chunk 1; PRD §4.3, §19 AC19/AC21, §20,
+ * D10, D27, E12, G3): the durable rows behind the read-only terminal live
+ * view. One table, journal-shaped: a terminal execution is an ordered stream
+ * of record kinds — one `started` row (the command, working directory,
+ * resource policy, and approval state at record time), `output` rows (the
+ * streamed output chunks, already REDACTED by the boundary layer before any
+ * write — G3), and one `exit` row (code and/or signal). The primary key is
+ * (workspace_id, terminal_id, sequence): per-terminal sequences are 1-based
+ * and gapless, another workspace's execution with the same terminal_id is an
+ * independent row space (E12), and the replay read is one ordered scan.
+ *
+ * The column-family CHECKs make a misrecorded row unrepresentable: each kind
+ * carries exactly its own fields (a started row always has command, workdir,
+ * resource policy, and approval state and never chunk/exit fields; an output
+ * row always has stream + chunk and nothing else; an exit row only the exit
+ * fields). approval_state's vocabulary is the record-time approval posture —
+ * not_required | pending | approved | rejected — so the panel can show it
+ * truthfully (AC: "each streamed item shows command, working directory,
+ * resource policy, and approval state truthfully"). resource_policy_json is
+ * validated JSON; chunk is bounded (8192 chars — the same cap the session
+ * supervisor applies per incarnation) and arrives pre-redacted (G3). The
+ * current enforcement truth is recorded, not assumed: os_resource_limits may
+ * be null (no OS-level limits are enforced on session harness children in
+ * this slice — D27's restricted child processes arrive with the execution
+ * slices), so dressing the policy up would be a lie.
+ *
+ * This table records what the runtime observes at the spawn seams. The D14
+ * protocol has no terminal frame, so real Agent-initiated shell executions
+ * cannot yet be observed; the execution slices (S26) will write through the
+ * same recorder/repository, and the read-only surface never offers control
+ * (PRD §4.3, §20 — no takeover affordance).
  */
 import type { DatabaseSync } from "node:sqlite";
 
@@ -701,6 +733,50 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
     name: "approval-mute-creator",
     sql: `
       ALTER TABLE approval_mutes ADD COLUMN created_by TEXT;
+    `,
+  },
+  {
+    version: 14,
+    name: "terminal-events",
+    sql: `
+      CREATE TABLE IF NOT EXISTS terminal_events (
+        workspace_id         TEXT    NOT NULL,
+        terminal_id          TEXT    NOT NULL,
+        agent_id             TEXT    NOT NULL,
+        session_id           TEXT,
+        kind                 TEXT    NOT NULL CHECK (kind IN ('started', 'output', 'exit')),
+        sequence             INTEGER NOT NULL CHECK (sequence >= 1),
+        command              TEXT,
+        workdir              TEXT,
+        resource_policy_json TEXT    CHECK (resource_policy_json IS NULL OR json_valid(resource_policy_json)),
+        approval_state       TEXT    CHECK (approval_state IS NULL OR approval_state IN (
+          'not_required', 'pending', 'approved', 'rejected')),
+        stream               TEXT    CHECK (stream IS NULL OR stream IN ('stdout', 'stderr')),
+        chunk                TEXT    CHECK (chunk IS NULL OR length(chunk) <= 8192),
+        exit_code            INTEGER,
+        exit_signal          TEXT,
+        recorded_at          TEXT    NOT NULL,
+        PRIMARY KEY (workspace_id, terminal_id, sequence),
+        CHECK (
+          (kind = 'started'
+            AND command IS NOT NULL AND workdir IS NOT NULL
+            AND resource_policy_json IS NOT NULL AND approval_state IS NOT NULL
+            AND stream IS NULL AND chunk IS NULL
+            AND exit_code IS NULL AND exit_signal IS NULL)
+          OR (kind = 'output'
+            AND command IS NULL AND workdir IS NULL
+            AND resource_policy_json IS NULL AND approval_state IS NULL
+            AND stream IS NOT NULL AND chunk IS NOT NULL
+            AND exit_code IS NULL AND exit_signal IS NULL)
+          OR (kind = 'exit'
+            AND command IS NULL AND workdir IS NULL
+            AND resource_policy_json IS NULL AND approval_state IS NULL
+            AND stream IS NULL AND chunk IS NULL)
+        )
+      ) STRICT;
+
+      CREATE INDEX IF NOT EXISTS terminal_events_by_agent_idx
+        ON terminal_events (workspace_id, agent_id);
     `,
   },
 ];

@@ -52,7 +52,6 @@ import {
   WriteLeaseConflictError,
   WriteLeaseRequiredError,
   WriteLeasesRepository,
-  type WriteLease,
 } from "./write-leases-repository.ts";
 
 const tempDirs: string[] = [];

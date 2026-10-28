@@ -209,6 +209,15 @@
  * argument set invalidates a one-time approval — D9). Reusable grants store
  * NULL: they are deliberately argument-agnostic ("always approve this tool").
  * The digest-only rule holds (G3 — never raw arguments).
+ *
+ * v11 — approval grant consumption (S20 chunk 3; D9): a nullable consumed_at
+ * stamp on approval_grants. A ONE-TIME grant is consumed durably once the
+ * approved execution completes — after the withheld execute callback resolves
+ * — so a one-time approval can never be used twice, not even across a runtime
+ * restart (an in-memory counter would reset with the container). Reusable
+ * grants keep NULL forever. The stamp is write-once (the writer only updates
+ * rows whose consumed_at is still NULL), mirroring the immutability of
+ * decisions themselves (D9).
  */
 import type { DatabaseSync } from "node:sqlite";
 
@@ -669,6 +678,13 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
     name: "approval-grant-digest",
     sql: `
       ALTER TABLE approval_grants ADD COLUMN args_digest TEXT;
+    `,
+  },
+  {
+    version: 11,
+    name: "approval-grant-consumption",
+    sql: `
+      ALTER TABLE approval_grants ADD COLUMN consumed_at TEXT;
     `,
   },
 ];

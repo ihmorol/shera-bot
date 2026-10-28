@@ -358,7 +358,10 @@ describe("approvals service: the five choices do exactly what they say (S20 chun
     // proposing Agent), pinned to the exact tool version + digest.
     expect(env.approvals.listGrants(WS)).toHaveLength(1);
     const grant = env.approvals.listGrants(WS)[0]!;
-    expect(result.grant).toEqual(grant);
+    // The decision result carries the grant AS CREATED (unconsumed); the
+    // durable row additionally carries the consumption stamp the approved
+    // execution's completion wrote (chunk 3 — consumed_at).
+    expect(result.grant).toEqual({ ...grant, consumed_at: null });
     expect(grant.source_choice).toBe("approve-this-execution-only");
     expect(grant.one_time).toBe(true);
     expect(grant.principal_type).toBe("agent");
@@ -873,6 +876,7 @@ describe("approvals service: findActiveGrant matches deterministically (S20 chun
       approved_at: NOW,
       revoked_at: null,
       args_digest: null,
+      consumed_at: null,
     });
 
     // NOW (12:00) is before expiry: the grant is active.
@@ -1024,11 +1028,13 @@ describe("approvals service: checkExecutionAllowed — the AC26 gate (S20 chunk 
       approved_at: NOW,
       revoked_at: null,
       args_digest: null,
+      consumed_at: null,
     });
     const anyHit = env.service.checkExecutionAllowed(
       recheckInput({
         principal: TASK_PRINCIPAL,
         tool_id: "tool_other_push",
+        tool_version: "1.0.0",
         capability: "other.push",
         resource_scope: "workspace://other/target",
         acting_conversation_id: "conv_totally_other",

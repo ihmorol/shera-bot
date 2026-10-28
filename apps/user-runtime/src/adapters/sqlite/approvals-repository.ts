@@ -24,6 +24,13 @@
  * untouched; `ApprovalGrantRecord` = contract record + the digest. Requests
  * gain `resolveRequest`, the one writer that stamps status + resolved_at +
  * resolved_by_choice (decisions are immutable — D9).
+ *
+ * Chunk-3 additions (S20; D9, E3): grants carry a nullable `consumed_at`
+ * stamp (v11) — `consumeGrant` is the ONE writer that sets it, and only on
+ * rows whose stamp is still NULL (write-once, like the decision resolution).
+ * Reminders gain the due-scan accessor (`listDueUndeliveredReminders`) and the
+ * delivery stamp (`markReminderDelivered`, write-once as well) the service's
+ * reminder scan fires through.
  */
 import type { DatabaseSync } from "node:sqlite";
 
@@ -37,9 +44,14 @@ export type ApprovalRequestStatus = ApprovalRequest["status"];
 /**
  * One durable approval grant: the contracts ApprovalGrant record plus the
  * v10 args_digest adjacency column (null for reusable grants — they are
- * deliberately argument-agnostic; digest-only even here, never raw args — G3).
+ * deliberately argument-agnostic; digest-only even here, never raw args — G3)
+ * and the v11 consumption stamp (set once, when the approved execution of a
+ * ONE-TIME grant completes; reusable grants stay NULL forever).
  */
-export type ApprovalGrantRecord = ApprovalGrant & { args_digest: string | null };
+export type ApprovalGrantRecord = ApprovalGrant & {
+  args_digest: string | null;
+  consumed_at: string | null;
+};
 
 /** The resolution a decision stamps on one request (status moves off pending). */
 export interface ApprovalRequestResolution {
@@ -80,7 +92,7 @@ const GRANT_COLUMNS = `
   workspace_id, grant_id, source_choice, principal_type, principal_id,
   tool_id, tool_version, capability, resource_scope, conversation_scope,
   workspace_scope, expires_at, one_time, created_by_json, approved_at, revoked_at,
-  args_digest`;
+  args_digest, consumed_at`;
 
 function requestRowToRecord(row: Record<string, unknown>): ApprovalRequest {
   return {
@@ -124,6 +136,7 @@ function grantRowToRecord(row: Record<string, unknown>): ApprovalGrantRecord {
     approved_at: row.approved_at as string,
     revoked_at: (row.revoked_at as string | null) ?? null,
     args_digest: (row.args_digest as string | null) ?? null,
+    consumed_at: (row.consumed_at as string | null) ?? null,
   };
 }
 
@@ -245,7 +258,7 @@ export class ApprovalsRepository {
     db.prepare(
       `INSERT INTO approval_grants
          (${GRANT_COLUMNS})
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       record.workspace_id,
       record.grant_id,
@@ -264,6 +277,7 @@ export class ApprovalsRepository {
       record.approved_at,
       record.revoked_at,
       record.args_digest,
+      record.consumed_at,
     );
     return record;
   }
@@ -297,6 +311,25 @@ export class ApprovalsRepository {
          WHERE workspace_id = ? AND grant_id = ?`,
       )
       .run(revokedAt, workspaceId, grantId);
+    return result.changes > 0;
+  }
+
+  /**
+   * Stamp consumed_at on one ONE-TIME grant (S20 chunk 3): the durable record
+   * that its approved execution completed, so the grant can never authorize a
+   * second execution — not even across a runtime restart. Write-once: only a
+   * row whose stamp is still NULL is updated (the first stamp wins; the
+   * consumption of a grant is as immutable as the decision that created it —
+   * D9). False when no row matched or the grant was already consumed.
+   */
+  consumeGrant(workspaceId: string, grantId: string, consumedAt: string, exec?: DatabaseSync): boolean {
+    const db = exec ?? this.tx.connection();
+    const result = db
+      .prepare(
+        `UPDATE approval_grants SET consumed_at = ?
+         WHERE workspace_id = ? AND grant_id = ? AND consumed_at IS NULL`,
+      )
+      .run(consumedAt, workspaceId, grantId);
     return result.changes > 0;
   }
 

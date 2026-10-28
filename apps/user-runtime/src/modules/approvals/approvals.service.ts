@@ -66,6 +66,38 @@
  * so no grant can ever exist without its resumed run — then grant +
  * resolution + journal events as one commit. The withheld execute callback
  * runs ONLY on the approve path and ONLY after that commit.
+ *
+ * ---------------------------------------------------------------------------
+ * Chunk 3 — the execution gate, consumption, reminders, mutes (S20; D9, D32,
+ * E3, G3)
+ *
+ * `checkExecutionAllowed` is the AC26 gate EVERY execution consults — a grant
+ * never skips the deterministic policy check. It layers the chunk-2
+ * deterministic lookup (revocation, expiry, principal, tool identity, one-time
+ * digest pin — all against the injected clock) with what only the recheck
+ * layer knows: the ACTING conversation (a grant's conversation_scope is
+ * applied on top of the returned grant — the lookup itself carries no
+ * conversation parameter) and the one-time consumption state. A miss is a
+ * typed reason, never a silent pass; when the first deterministic match fails
+ * a later check the gate refuses (fail-closed, G5 — it never scans for a
+ * "better" grant behind the deterministic pick).
+ *
+ * One-time consumption: the grant row carries a durable consumed_at stamp
+ * (v11) written ONCE, after the approved execution's callback resolves — a
+ * one-time grant can never authorize a second execution, and the stamp
+ * survives a runtime restart. The gate consult INSIDE the approved execution
+ * still passes: consumption marks COMPLETION, not the decision.
+ *
+ * Reminder firing (`dueReminders`) scans the durable v9 reminder rows
+ * (delivered_at IS NULL, due_at <= now on the injected clock), enforces the
+ * mute scopes, and stamps delivered_at — the durable delivery record. It
+ * NEVER touches run state: no transition, no journal event, nothing but the
+ * reminder rows themselves (E3; the D32 invariant — an approval waits
+ * indefinitely, sibling runs are never killed while one waits — is preserved
+ * by construction and pinned by test). NOTE: the contracts event vocabulary
+ * has no approval-reminder event type (packages/contracts is untouchable), so
+ * the delivery record IS the stamped reminder row, queryable via
+ * listRemindersByApproval; delivery is not journalled as an event.
  */
 import { randomUUID } from "node:crypto";
 
@@ -107,6 +139,8 @@ export type ApprovalsServiceFailureCode =
   | "APPROVAL_REQUEST_NOT_FOUND"
   | "APPROVAL_REQUEST_RUN_MISMATCH"
   | "APPROVAL_ALREADY_RESOLVED"
+  | "APPROVAL_RECHECK_INVALID"
+  | "APPROVAL_MUTE_INVALID"
   | "AGENT_CANNOT_SELF_APPROVE"
   | "AGENT_CANNOT_DECIDE_APPROVAL";
 
@@ -527,8 +561,22 @@ export class ApprovalsService {
     // decision transaction has COMMITTED: a callback failure can never roll
     // back an approval the user gave, and no side effect can precede its
     // durable grant + resume record (the S20 AC, on the decision side).
+    //
+    // One-time consumption (S20 chunk 3): when the approved execution
+    // COMPLETES, the one-time grant is consumed durably — stamped once, after
+    // the callback resolves, so the gate consult inside that execution still
+    // passes but no second execution ever can (the stamp survives restarts; a
+    // failed callback leaves the grant unconsumed — the user simply
+    // re-decides). Reusable grants are never consumed.
     if (committed.outcome === "approved") {
       input.execute();
+      if (committed.grant.one_time) {
+        this.deps.approvals.consumeGrant(
+          committed.grant.workspace_id,
+          committed.grant.grant_id,
+          this.now(),
+        );
+      }
     }
     return committed;
   }
@@ -845,6 +893,9 @@ export class ApprovalsService {
       // G3: the digest, never raw arguments. Reusable grants are deliberately
       // argument-agnostic ("always approve this tool") and store NULL.
       args_digest: oneTime ? request.args_digest : null,
+      // A fresh grant is unconsumed; the stamp lands only when a ONE-TIME
+      // grant's approved execution completes (chunk 3).
+      consumed_at: null,
     };
 
     // 1. The durable grant row — created here ONLY, inside the runtime
@@ -939,11 +990,117 @@ export class ApprovalsService {
       ? { ok: false, reason: "no_active_grant" }
       : { ok: true, grant: match };
   }
+
+  // -------------------------------------------------------------------------
+  // The execution gate (S20 chunk 3 — AC26; D9, G5)
+  // -------------------------------------------------------------------------
+
+  /**
+   * The AC26 gate EVERY execution consults: a matching reusable grant lets the
+   * same action execute without another prompt WHILE STILL passing the full
+   * deterministic policy check — a grant never skips it. A mid-flight
+   * revocation, a changed tool version, a changed argument set, a foreign
+   * conversation, or a consumed one-time grant each refuse the execution with
+   * a typed reason (nothing throws for the state-based misses — the caller
+   * branches on the result).
+   *
+   * Check order:
+   *  (a) the deterministic policy fields are present and coherent — a
+   *      malformed input (e.g. a non-digest args_digest) is a typed
+   *      APPROVAL_RECHECK_INVALID refusal BEFORE any grant is consulted;
+   *  (c) the chunk-2 deterministic lookup — principal + tool identity +
+   *      capability + resource_scope exact match, NOT revoked, NOT expired
+   *      (compared on the injected clock, (d)), and the one-time args_digest
+   *      pin — a miss answers `no_active_grant`;
+   *  (b) the acting-conversation check on top of the RETURNED grant (the
+   *      lookup deliberately carries no conversation parameter — chunk 2): a
+   *      grant scoped to one conversation is refused from any other; an
+   *      explicit "any" passes everywhere;
+   *  (c') the one-time consumption state — a consumed one-time grant answers
+   *      `grant_consumed` even for identical arguments.
+   *
+   * Fail-closed (G5): the FIRST deterministic match decides — the gate never
+   * rescans for a grant that would pass a later check, and it never widens a
+   * grant. It also never mutates anything: the gate is a pure consult (the
+   * consumption stamp is written by the decision path, after execution
+   * completes).
+   */
+  checkExecutionAllowed(input: ExecutionRecheckInput): ExecutionRecheckResult {
+    const verdict = ExecutionRecheckInput.safeParse(input);
+    if (!verdict.success) {
+      throw new ApprovalsServiceError(
+        "APPROVAL_RECHECK_INVALID",
+        "validation",
+        "the execution recheck input is not coherent typed policy data",
+      );
+    }
+    const query = verdict.data;
+
+    const lookup = this.findActiveGrant(
+      query.workspace_id,
+      query.principal,
+      query.tool_id,
+      query.tool_version,
+      query.capability,
+      query.resource_scope,
+      query.args_digest,
+    );
+    if (!lookup.ok) {
+      return { allowed: false, reason: "no_active_grant" };
+    }
+    const grant = lookup.grant;
+
+    if (grant.conversation_scope !== "any" && grant.conversation_scope !== query.acting_conversation_id) {
+      return { allowed: false, reason: "conversation_scope_mismatch" };
+    }
+
+    if (grant.one_time && grant.consumed_at !== null) {
+      return { allowed: false, reason: "grant_consumed" };
+    }
+
+    return { allowed: true, grant_id: grant.grant_id };
+  }
 }
 
 /** The deterministic lookup's typed result: the matching grant or one typed miss. */
 export type GrantLookupResult =
   { ok: true; grant: ApprovalGrantRecord } | { ok: false; reason: "no_active_grant" };
+
+/**
+ * The gate's input (G2): the same deterministic policy fields the proposal
+ * carried, plus the ACTING principal and the conversation the execution runs
+ * in. The resource_scope and args_digest are compared EXACTLY against the
+ * recorded values — the recorded values are the redacted ones (the boundary
+ * redaction pass is deterministic), so callers recheck with the scope as
+ * recorded; a raw secret-bearing scope fails closed as a typed miss.
+ */
+export const ExecutionRecheckInput = z.strictObject({
+  workspace_id: z.string().min(1).max(128),
+  principal: z.strictObject({
+    type: z.enum(["user", "agent", "task"]),
+    id: z.string().min(1).max(256),
+  }),
+  tool_id: z.string().min(1).max(256),
+  tool_version: z.string().min(1).max(64),
+  capability: z.string().min(1).max(128),
+  resource_scope: z.string().min(1).max(512),
+  args_digest: ArgsDigest,
+  acting_conversation_id: Id,
+});
+export type ExecutionRecheckInput = z.infer<typeof ExecutionRecheckInput>;
+
+/**
+ * The gate's typed answer: allowed (with the grant that authorizes it) or one
+ * of the typed refusal reasons. No match / revoked / expired / one-time
+ * digest mismatch fold into `no_active_grant` (the lookup's own answer); the
+ * recheck layer adds the conversation and consumption reasons.
+ */
+export type ExecutionRecheckResult =
+  | { allowed: true; grant_id: string }
+  | {
+      allowed: false;
+      reason: "no_active_grant" | "conversation_scope_mismatch" | "grant_consumed";
+    };
 
 /** Everything one decision touches, passed from the transaction into a branch. */
 interface DecisionContext {

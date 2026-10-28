@@ -62,6 +62,7 @@ import { EventsService } from "../events/events.service.ts";
 import {
   ApprovalsService,
   ApprovalsServiceError,
+  redactSecrets,
   type SetMuteInput,
   type TypedToolProposal,
 } from "./approvals.service.ts";
@@ -1444,5 +1445,57 @@ describe("approvals service: the proposal boundary scrubs secrets (S20 chunk 3, 
       "Pushes local commits to the configured remote repository.",
     );
     expect(request.resource_scope).toBe("workspace://notes/draft.md");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// S20 review fix F5 — the redaction pass's per-shape pins (pure function)
+// ---------------------------------------------------------------------------
+
+describe("redactSecrets: per-shape pins (S20 review, G3)", () => {
+  it("redacts URL userinfo credentials — the password component only; scheme and host stay useful", () => {
+    // A short, low-entropy password the entropy scan cannot see: only the
+    // userinfo pattern catches it (F5).
+    expect(redactSecrets("postgres://admin:p4ss@db/prod")).toBe(
+      "postgres://admin:[REDACTED]@db/prod",
+    );
+    // The redacted scope keeps its scheme and host, so the resource stays
+    // readable and grant-matching stays useful.
+    const redacted = redactSecrets("mysql://root:hunter2@db.internal:3306/appdb");
+    expect(redacted).toBe("mysql://root:[REDACTED]@db.internal:3306/appdb");
+  });
+
+  it("leaves a clean URL untouched — no userinfo, no redaction", () => {
+    expect(redactSecrets("https://example.com/path/to/resource")).toBe(
+      "https://example.com/path/to/resource",
+    );
+    expect(redactSecrets("postgres://db.internal/prod")).toBe("postgres://db.internal/prod");
+  });
+
+  it("redacts a JSON Web Token whole — all three segments (pin)", () => {
+    const jwt =
+      "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+    const redacted = redactSecrets(`Connect with ${jwt} to continue.`);
+    expect(redacted).not.toContain("SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c");
+    expect(redacted).not.toContain("eyJhbGciOiJIUzI1NiJ9");
+    expect(redacted).toContain("[REDACTED]");
+  });
+
+  it("redacts an AWS access key id (pin)", () => {
+    const redacted = redactSecrets("Deploy key AKIAIOSFODNN7EXAMPLE on the bucket.");
+    expect(redacted).not.toContain("AKIAIOSFODNN7EXAMPLE");
+    expect(redacted).toContain("[REDACTED]");
+  });
+
+  it("redacts an sk- prefixed provider key (pin)", () => {
+    const redacted = redactSecrets("sk-proj-abcdef0123456789 in the header");
+    expect(redacted).not.toContain("sk-proj-abcdef0123456789");
+    expect(redacted).toContain("[REDACTED]");
+  });
+
+  it("redacts a Slack xox token (pin)", () => {
+    const redacted = redactSecrets("Bot token xoxb-123456789012-abcdefghij stored.");
+    expect(redacted).not.toContain("xoxb-123456789012-abcdefghij");
+    expect(redacted).toContain("[REDACTED]");
   });
 });

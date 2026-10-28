@@ -793,6 +793,29 @@ describe("runtime proxy — S20 approval decision actor binding (server-side)", 
     });
   });
 
+  it("binds the mute's created_by to the authenticated session too (F2)", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const { calls } = stubFetch(() => Response.json({ ok: true }));
+
+    const request = new Request("http://web.test/api/runtime/v1/approvals/mutes", {
+      method: "POST",
+      body: JSON.stringify({
+        workspace_id: "ws_1",
+        scope: "all",
+        created_by: { type: "user", id: "body-asserted-subject" },
+      }),
+      headers: { "content-type": "application/json" },
+    });
+    const response = await proxyToLocalApi(request, "/v1/approvals/mutes");
+
+    expect(response.status).toBe(200);
+    expect(JSON.parse(String(calls.at(-1)!.init?.body))["created_by"]).toEqual({
+      type: "user",
+      id: "google-account-1",
+    });
+  });
+
   it("the binding stays scoped to the decision route — other bodies forward verbatim", async () => {
     process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
     process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;

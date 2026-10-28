@@ -6,7 +6,8 @@
  *
  * What is pinned here:
  * - v9 migration: workspace_nodes (the real file tree behind the Files tab),
- *   write_leases + artifact_refs (created here; semantics land in chunk 2).
+ *   write_leases + artifact_refs (their semantics are pinned by
+ *   write-leases-repository.test.ts and artifacts-repository.test.ts).
  * - Scoped URI resolution: `workspace://<relative-path>` and
  *   `agent://<agent_id>/<relative-path>` — traversal, encoded traversal,
  *   backslash tricks, null bytes and absolute paths are typed rejections.
@@ -20,6 +21,13 @@
  *   (AGENT_DELETE_REQUIRES_APPROVAL) in every scope — only the user path
  *   deletes. User deletes work; non-empty directories refuse non-recursive
  *   deletion.
+ * - Write-lease gating (D6, chunk 2): every workspace:// or agent:// WRITE
+ *   goes through the write-lease gate — an Agent write requires an active
+ *   lease held by its own task (WRITE_LEASE_REQUIRED otherwise), and a user
+ *   write is blocked while an Agent holds an active lease on the exact path
+ *   (WRITE_LEASE_CONFLICT carrying the tooltip data). Reads, lists, and
+ *   resolves are NEVER gated — concurrent reads are always allowed. The lease
+ *   semantics themselves live in write-leases-repository.test.ts.
  * - Persistence (AC16 partial): files written before a close are readable
  *   after reopening the same database file.
  */
@@ -34,6 +42,11 @@ import { openDatabase } from "./connection.ts";
 import { applyMigrations, MIGRATIONS, sqliteTableExists } from "./migrations.ts";
 import { SqliteTransactions } from "./transactions.ts";
 import {
+  WriteLeaseConflictError,
+  WriteLeaseRequiredError,
+  WriteLeasesRepository,
+} from "./write-leases-repository.ts";
+import {
   AgentDeleteRefusedError,
   PrivateScopeDeniedError,
   WorkspaceDirectoryNotEmptyError,
@@ -41,6 +54,7 @@ import {
   WorkspaceNodeNotFoundError,
   WorkspacePathError,
   WorkspaceNodeTypeError,
+  type WorkspaceFileContent,
   type WorkspaceStorageActor,
 } from "./workspace-files-repository.ts";
 
@@ -66,15 +80,42 @@ function openMigratedDb(path: string) {
 
 function makeRepo() {
   const conn = openMigratedDb(newTempDbPath());
+  // Repositories share ONE SqliteTransactions instance (transactions.ts
+  // composition discipline): the files repository and its write-lease gate
+  // must see the same transactional connection.
+  const tx = new SqliteTransactions(conn.db);
+  const leases = new WriteLeasesRepository(tx);
   return {
     conn,
-    repo: new WorkspaceFilesRepository(new SqliteTransactions(conn.db)),
+    tx,
+    leases,
+    repo: new WorkspaceFilesRepository(tx, leases),
   };
 }
 
 const USER: WorkspaceStorageActor = { type: "user", id: "user-1" };
 const ALICE: WorkspaceStorageActor = { type: "agent", id: "alice" };
 const BOB: WorkspaceStorageActor = { type: "agent", id: "bob" };
+
+const LEASE_TTL = 60_000;
+
+/**
+ * The agent write path: acquire the task-scoped lease first (D6), then write
+ * through the gated repository with that task attached.
+ */
+function writeAsAgent(
+  repo: WorkspaceFilesRepository,
+  leases: WriteLeasesRepository,
+  workspaceId: string,
+  uri: string,
+  actor: WorkspaceStorageActor,
+  content: Uint8Array,
+  mimeType: string | null,
+  taskId = "task-1",
+): WorkspaceFileContent {
+  leases.acquireLease(workspaceId, uri, taskId, actor, LEASE_TTL);
+  return repo.write(workspaceId, uri, actor, content, mimeType, { task_id: taskId });
+}
 
 function tableColumns(db: ReturnType<typeof openDatabase>["db"], table: string): string[] {
   return (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(
@@ -403,7 +444,7 @@ describe("read/write/list/mkdir over workspace_nodes (user actor)", () => {
     }
   });
 
-  it("overwrites file content on rewrite without deleting the node (D6 lease gating arrives in chunk 2)", () => {
+  it("overwrites file content on rewrite without deleting the node (first writer's provenance preserved)", () => {
     const { conn, repo } = makeRepo();
     try {
       const first = repo.write("ws_default", "workspace://log.txt", USER, new Uint8Array([1, 2]), "text/plain");
@@ -439,9 +480,9 @@ describe("read/write/list/mkdir over workspace_nodes (user actor)", () => {
 
 describe("private folder rules (D39)", () => {
   it("lets an Agent read, write, and list its OWN private folder", () => {
-    const { conn, repo } = makeRepo();
+    const { conn, repo, leases } = makeRepo();
     try {
-      repo.write("ws_default", "agent://alice/notes.txt", ALICE, new Uint8Array([7]), "text/plain");
+      writeAsAgent(repo, leases, "ws_default", "agent://alice/notes.txt", ALICE, new Uint8Array([7]), "text/plain");
 
       const read = repo.read("ws_default", "agent://alice/notes.txt", ALICE);
       expect(read.scope).toBe("agent");
@@ -458,9 +499,9 @@ describe("private folder rules (D39)", () => {
   });
 
   it("denies an Agent another Agent's private folder in every operation (runtime-level)", () => {
-    const { conn, repo } = makeRepo();
+    const { conn, repo, leases } = makeRepo();
     try {
-      repo.write("ws_default", "agent://alice/notes.txt", ALICE, new Uint8Array([7]), "text/plain");
+      writeAsAgent(repo, leases, "ws_default", "agent://alice/notes.txt", ALICE, new Uint8Array([7]), "text/plain");
 
       expect(() => repo.read("ws_default", "agent://alice/notes.txt", BOB)).toThrow(
         PrivateScopeDeniedError,
@@ -483,9 +524,9 @@ describe("private folder rules (D39)", () => {
   });
 
   it("lets the user actor read both scopes (the panel viewer is user-facing)", () => {
-    const { conn, repo } = makeRepo();
+    const { conn, repo, leases } = makeRepo();
     try {
-      repo.write("ws_default", "agent://alice/notes.txt", ALICE, new Uint8Array([7]), "text/plain");
+      writeAsAgent(repo, leases, "ws_default", "agent://alice/notes.txt", ALICE, new Uint8Array([7]), "text/plain");
       expect(repo.read("ws_default", "agent://alice/notes.txt", USER).size).toBe(1);
       expect(repo.list("ws_default", "agent://alice", USER)).toHaveLength(1);
     } finally {
@@ -494,10 +535,10 @@ describe("private folder rules (D39)", () => {
   });
 
   it("keeps private folders workspace-scoped (E12): same agent, two workspaces", () => {
-    const { conn, repo } = makeRepo();
+    const { conn, repo, leases } = makeRepo();
     try {
-      repo.write("ws_a", "agent://alice/notes.txt", ALICE, new Uint8Array([1]), "text/plain");
-      repo.write("ws_b", "agent://alice/notes.txt", ALICE, new Uint8Array([2]), "text/plain");
+      writeAsAgent(repo, leases, "ws_a", "agent://alice/notes.txt", ALICE, new Uint8Array([1]), "text/plain");
+      writeAsAgent(repo, leases, "ws_b", "agent://alice/notes.txt", ALICE, new Uint8Array([2]), "text/plain");
 
       expect(Buffer.from(repo.read("ws_a", "agent://alice/notes.txt", ALICE).content)).toEqual(
         Buffer.from([1]),
@@ -513,10 +554,10 @@ describe("private folder rules (D39)", () => {
 
 describe("delete rules (G6, D6)", () => {
   it("refuses agent-driven delete with a typed approval-path refusal in every scope", () => {
-    const { conn, repo } = makeRepo();
+    const { conn, repo, leases } = makeRepo();
     try {
       repo.write("ws_default", "workspace://shared.txt", USER, new Uint8Array([1]), "text/plain");
-      repo.write("ws_default", "agent://alice/own.txt", ALICE, new Uint8Array([2]), "text/plain");
+      writeAsAgent(repo, leases, "ws_default", "agent://alice/own.txt", ALICE, new Uint8Array([2]), "text/plain");
 
       // Shared workspace file: agents never delete; the approval path does.
       expect(() => repo.delete("ws_default", "workspace://shared.txt", ALICE)).toThrow(
@@ -536,9 +577,9 @@ describe("delete rules (G6, D6)", () => {
   });
 
   it("denies an agent cross-private delete before the delete rule (scope first)", () => {
-    const { conn, repo } = makeRepo();
+    const { conn, repo, leases } = makeRepo();
     try {
-      repo.write("ws_default", "agent://alice/own.txt", ALICE, new Uint8Array([2]), "text/plain");
+      writeAsAgent(repo, leases, "ws_default", "agent://alice/own.txt", ALICE, new Uint8Array([2]), "text/plain");
       expect(() => repo.delete("ws_default", "agent://alice/own.txt", BOB)).toThrow(
         PrivateScopeDeniedError,
       );
@@ -577,6 +618,139 @@ describe("delete rules (G6, D6)", () => {
   });
 });
 
+describe("write-lease gating on the storage write path (D6)", () => {
+  it("blocks a user write while an Agent holds an active lease, with the tooltip data attached; reads NEVER block", () => {
+    const { conn, repo, leases } = makeRepo();
+    try {
+      writeAsAgent(repo, leases, "ws_default", "workspace://plan.md", ALICE, new Uint8Array([1]), "text/plain", "task-4");
+
+      // Concurrent reads are ALWAYS allowed — they never touch the lease table.
+      expect(repo.read("ws_default", "workspace://plan.md", USER).size).toBe(1);
+      expect(repo.list("ws_default", "workspace://", USER).map((node) => node.name)).toEqual([
+        "plan.md",
+      ]);
+      expect(repo.resolve("ws_default", "workspace://plan.md", USER)?.size).toBe(1);
+
+      // The user write is blocked, and the conflict names the holding Agent
+      // and its task — the "Developer is editing this file · task #4" data.
+      expect(() =>
+        repo.write("ws_default", "workspace://plan.md", USER, new Uint8Array([2, 2]), "text/plain"),
+      ).toThrow(WriteLeaseConflictError);
+      try {
+        repo.write("ws_default", "workspace://plan.md", USER, new Uint8Array([2, 2]), "text/plain");
+        expect.unreachable();
+      } catch (error) {
+        const conflict = error as WriteLeaseConflictError;
+        expect(conflict.holdingAgentId).toBe("alice");
+        expect(conflict.taskId).toBe("task-4");
+      }
+      // The blocked overwrite left the file untouched (no silent overwrite, G5).
+      expect(repo.read("ws_default", "workspace://plan.md", USER).size).toBe(1);
+
+      // After the lease is released, the user write succeeds.
+      const lease: WriteLease = leases
+        .acquireLease("ws_default", "workspace://plan.md", "task-4", ALICE, 60_000);
+      leases.releaseLease(lease.lease_id, "task-4");
+      const overwritten = repo.write(
+        "ws_default",
+        "workspace://plan.md",
+        USER,
+        new Uint8Array([2, 2]),
+        "text/plain",
+      );
+      expect(overwritten.size).toBe(2);
+    } finally {
+      conn.close();
+    }
+  });
+
+  it("requires an Agent write to carry its own task's active lease (WRITE_LEASE_REQUIRED)", () => {
+    const { conn, repo, leases } = makeRepo();
+    try {
+      // No task id at all: an agent write cannot even name a lease holder task.
+      expect(() =>
+        repo.write("ws_default", "workspace://plan.md", ALICE, new Uint8Array([1]), "text/plain"),
+      ).toThrow(WriteLeaseRequiredError);
+      // A task id without a lease: still refused.
+      expect(() =>
+        repo.write("ws_default", "workspace://plan.md", ALICE, new Uint8Array([1]), "text/plain", {
+          task_id: "task-4",
+        }),
+      ).toThrow(WriteLeaseRequiredError);
+      // With the task's own lease: the write lands.
+      leases.acquireLease("ws_default", "workspace://plan.md", "task-4", ALICE, 60_000);
+      const written = repo.write(
+        "ws_default",
+        "workspace://plan.md",
+        ALICE,
+        new Uint8Array([1]),
+        "text/plain",
+        { task_id: "task-4" },
+      );
+      expect(written.created_by_id).toBe("alice");
+    } finally {
+      conn.close();
+    }
+  });
+
+  it("refuses an agent write when another task holds the lease, and keeps leases workspace-scoped", () => {
+    const { conn, repo, leases } = makeRepo();
+    try {
+      leases.acquireLease("ws_default", "workspace://plan.md", "task-4", ALICE, 60_000);
+
+      // Bob's task-9 has no lease on the path: refused even though a lease exists.
+      expect(() =>
+        repo.write("ws_default", "workspace://plan.md", BOB, new Uint8Array([3]), "text/plain", {
+          task_id: "task-9",
+        }),
+      ).toThrow(WriteLeaseRequiredError);
+      // Alice with a DIFFERENT task id: also refused (task-scoped, not agent-scoped).
+      expect(() =>
+        repo.write("ws_default", "workspace://plan.md", ALICE, new Uint8Array([3]), "text/plain", {
+          task_id: "task-9",
+        }),
+      ).toThrow(WriteLeaseRequiredError);
+      // A lease in ws_a does not authorize a write in ws_b (E12 for leases too).
+      leases.acquireLease("ws_a", "workspace://plan.md", "task-4", ALICE, 60_000);
+      expect(() =>
+        repo.write("ws_b", "workspace://plan.md", ALICE, new Uint8Array([4]), "text/plain", {
+          task_id: "task-4",
+        }),
+      ).toThrow(WriteLeaseRequiredError);
+      // ...and the ws_a lease DOES authorize the ws_a write.
+      const written = repo.write("ws_a", "workspace://plan.md", ALICE, new Uint8Array([4]), "text/plain", {
+        task_id: "task-4",
+      });
+      expect(written.workspace_id).toBe("ws_a");
+    } finally {
+      conn.close();
+    }
+  });
+
+  it("frees agent-leased paths when the task goes terminal (releaseLeasesForTask)", () => {
+    const { conn, repo, leases } = makeRepo();
+    try {
+      writeAsAgent(repo, leases, "ws_default", "workspace://plan.md", ALICE, new Uint8Array([1]), "text/plain", "task-4");
+      expect(() =>
+        repo.write("ws_default", "workspace://plan.md", USER, new Uint8Array([2]), "text/plain"),
+      ).toThrow(WriteLeaseConflictError);
+
+      // The task reaches a terminal state: its leases die with it.
+      leases.releaseLeasesForTask("task-4");
+      const overwritten = repo.write(
+        "ws_default",
+        "workspace://plan.md",
+        USER,
+        new Uint8Array([2]),
+        "text/plain",
+      );
+      expect(overwritten.size).toBe(1);
+    } finally {
+      conn.close();
+    }
+  });
+});
+
 describe("persistence across restart (AC16 partial)", () => {
   it("reads back files written before the database was closed, after reopening the same file", () => {
     const path = newTempDbPath();
@@ -586,9 +760,19 @@ describe("persistence across restart (AC16 partial)", () => {
     const first = openMigratedDb(path);
     let writtenIds: { shared: string; private: string };
     try {
-      const repo = new WorkspaceFilesRepository(new SqliteTransactions(first.db));
+      const tx = new SqliteTransactions(first.db);
+      const leases = new WriteLeasesRepository(tx);
+      const repo = new WorkspaceFilesRepository(tx, leases);
       const shared = repo.write("ws_default", "workspace://docs/report.bin", USER, sharedBytes, "application/octet-stream");
-      const priv = repo.write("ws_default", "agent://alice/scratch.bin", ALICE, privateBytes, "application/octet-stream");
+      leases.acquireLease("ws_default", "agent://alice/scratch.bin", "task-alice", ALICE, 60_000);
+      const priv = repo.write(
+        "ws_default",
+        "agent://alice/scratch.bin",
+        ALICE,
+        privateBytes,
+        "application/octet-stream",
+        { task_id: "task-alice" },
+      );
       writtenIds = { shared: shared.id, private: priv.id };
     } finally {
       first.close();
@@ -597,7 +781,8 @@ describe("persistence across restart (AC16 partial)", () => {
     // Reopen the SAME database file; the committed chain is idempotent.
     const second = openMigratedDb(path);
     try {
-      const repo = new WorkspaceFilesRepository(new SqliteTransactions(second.db));
+      const tx = new SqliteTransactions(second.db);
+      const repo = new WorkspaceFilesRepository(tx, new WriteLeasesRepository(tx));
 
       const shared = repo.read("ws_default", "workspace://docs/report.bin", USER);
       expect(shared.id).toBe(writtenIds.shared);

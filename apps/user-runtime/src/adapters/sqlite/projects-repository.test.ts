@@ -165,7 +165,7 @@ describe("S19 projects repository", () => {
     expect(repo.findProject(OTHER_WS, "prj_001")).toBeNull();
     expect(repo.listProjects(OTHER_WS)).toEqual([]);
     expect(repo.listProjects(WS)).toHaveLength(1);
-    expect(repo.requireProject(OTHER_WS, "prj_001")).toThrow(ProjectNotFoundError);
+    expect(() => repo.requireProject(OTHER_WS, "prj_001")).toThrow(ProjectNotFoundError);
   });
 
   it("replaces the restricted-access Agent allowlist as a whole", () => {
@@ -219,20 +219,23 @@ describe("S19 projects repository", () => {
   });
 
   it("enforces at most one ACTIVE worktree per project and records queue rows with reasons", () => {
-    const wt = (overrides: Partial<ProjectWorktreeRow> = {}): ProjectWorktreeRow => ({
-      workspace_id: WS,
-      project_id: "prj_001",
-      worktree_id: "wt_001",
-      task_id: "task_A",
-      agent_id: "agent_dev_1",
-      branch_name: "shera/task/task_A",
-      worktree_path: join(tempDirs[0] ?? ".", "projects", "prj_001", "worktrees", "task_A"),
-      status: "active",
-      queue_reason: null,
-      created_at: NOW,
-      updated_at: NOW,
-      ...overrides,
-    });
+    const wt = (overrides: Partial<ProjectWorktreeRow> = {}): ProjectWorktreeRow => {
+      const worktreeId = overrides.worktree_id ?? "wt_001";
+      return {
+        workspace_id: WS,
+        project_id: "prj_001",
+        worktree_id: worktreeId,
+        task_id: "task_A",
+        agent_id: "agent_dev_1",
+        branch_name: "shera/task/task_A",
+        worktree_path: join(tempDirs[0] ?? ".", "projects", "prj_001", "worktrees", worktreeId),
+        status: "active",
+        queue_reason: null,
+        created_at: NOW,
+        updated_at: NOW,
+        ...overrides,
+      };
+    };
 
     repo.insertProject(projectRow());
     repo.insertWorktree(wt());

@@ -34,7 +34,7 @@ import { EventJournalRepository } from "../../adapters/sqlite/event-journal-repo
 import { applyMigrations } from "../../adapters/sqlite/migrations.ts";
 import { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import { EventsService } from "../events/events.service.ts";
-import { ApprovalsService } from "./approvals.service.ts";
+import { ApprovalsService, type TypedToolProposal } from "./approvals.service.ts";
 
 const WS = "ws_default_01";
 const NOW = "2026-10-28T12:00:00.000Z";
@@ -101,7 +101,7 @@ function makeRun(overrides: Partial<TaskRun> = {}): TaskRun {
   };
 }
 
-function gatedProposal(overrides: Record<string, unknown> = {}) {
+function gatedProposal(overrides: Partial<TypedToolProposal> = {}): TypedToolProposal {
   return {
     workspace_id: WS,
     task_id: "task_001",
@@ -163,13 +163,14 @@ describe("approvals service: a gated typed proposal pauses the run (S20 chunk 1)
     // The durable request row is pending and digest-only.
     const rows = env.approvals.listRequestsByTask(WS, run.task_id);
     expect(rows).toHaveLength(1);
-    expect(rows[0].status).toBe("pending");
-    expect(rows[0].args_digest).toBe(`sha256:${"b".repeat(64)}`);
-    expect(rows[0].tool_version).toBe("1.2.0");
-    expect(rows[0].risk_class).toBe("EXTERNAL_WRITE");
-    expect(rows[0].requested_by).toEqual({ type: "agent", id: "agent_general_assistant" });
-    expect(rows[0].resolved_at).toBeUndefined();
-    expect(rows[0].resolved_by_choice).toBeUndefined();
+    const request = rows[0]!;
+    expect(request.status).toBe("pending");
+    expect(request.args_digest).toBe(`sha256:${"b".repeat(64)}`);
+    expect(request.tool_version).toBe("1.2.0");
+    expect(request.risk_class).toBe("EXTERNAL_WRITE");
+    expect(request.requested_by).toEqual({ type: "agent", id: "agent_general_assistant" });
+    expect(request.resolved_at).toBeUndefined();
+    expect(request.resolved_by_choice).toBeUndefined();
   });
 
   it("schedules all five reminder rows immediately on the injected clock (E3)", () => {
@@ -190,10 +191,11 @@ describe("approvals service: a gated typed proposal pauses the run (S20 chunk 1)
     ).toEqual([0, 1, 2, 3, 4]);
     for (const row of reminders) {
       expect(row.delivered_at).toBeNull();
-      const expected = new Date(
-        new Date(NOW).getTime() + APPROVAL_REMINDER_SCHEDULE_SECONDS[row.reminder_index] * 1000,
-      ).toISOString();
-      expect(row.due_at).toBe(expected);
+      const offset = APPROVAL_REMINDER_SCHEDULE_SECONDS.at(row.reminder_index);
+      if (offset === undefined) {
+        throw new Error(`no reminder schedule slot ${row.reminder_index}`);
+      }
+      expect(row.due_at).toBe(new Date(new Date(NOW).getTime() + offset * 1000).toISOString());
     }
   });
 

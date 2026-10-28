@@ -33,8 +33,11 @@ import {
   workspaceUriForPath,
   workspaceUriSegments,
 } from "../lib/workspace-api";
+import { workspaceTabFromParam } from "../lib/workspace-panel";
 import { FilesTabView } from "../components/workspace/files-tab";
+import { WorkspacePanelBody } from "../components/workspace/workspace-panel";
 import { WORKSPACE_TABS } from "../components/workspace/panel-tabs";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { WorkspaceNode } from "../lib/workspace-api";
 
 /**
@@ -671,6 +674,75 @@ describe("panel host routes", () => {
     const routes = readFileSync(join(APP_DIR, "lib/routes.ts"), "utf8");
     expect(routes).toContain("workspace:");
     expect(routes).toContain("workspaceFull:");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 11. Full-page tab deep link — ?tab= selects the tab (F3 review fix)
+// ---------------------------------------------------------------------------
+
+describe("full-page tab deep link (?tab=)", () => {
+  it("validates the tab query param against the four S7 tabs; anything else is Files", () => {
+    expect(workspaceTabFromParam("files")).toBe("files");
+    expect(workspaceTabFromParam("editor")).toBe("editor");
+    expect(workspaceTabFromParam("private")).toBe("private");
+    expect(workspaceTabFromParam("artifacts")).toBe("artifacts");
+    // Unknown ids, empty values, missing params, and repeated params (the
+    // searchParams array shape) all land on Files — the honest default.
+    expect(workspaceTabFromParam("bogus")).toBe("files");
+    expect(workspaceTabFromParam("")).toBe("files");
+    expect(workspaceTabFromParam(undefined)).toBe("files");
+    expect(workspaceTabFromParam(["editor", "files"])).toBe("files");
+  });
+
+  it("the panel body opens the deep-linked tab instead of Files", () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const html = render(
+      createElement(
+        QueryClientProvider,
+        { client },
+        createElement(WorkspacePanelBody, { workspaceId: WORKSPACE, initialTab: "artifacts" }),
+      ),
+    );
+    // The Artifacts tab is selected on the strip and rendered as the body.
+    expect(html).toMatch(/aria-selected="true"[^>]*aria-label="Artifacts tab"/);
+    expect(html).toContain('data-testid="artifacts-skeleton"');
+    expect(html).not.toContain('data-testid="workspace-nodes-skeleton"');
+  });
+
+  it("without a deep link the body still opens Files", () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const html = render(
+      createElement(
+        QueryClientProvider,
+        { client },
+        createElement(WorkspacePanelBody, { workspaceId: WORKSPACE }),
+      ),
+    );
+    expect(html).toMatch(/aria-selected="true"[^>]*aria-label="Files tab"/);
+    expect(html).toContain('data-testid="workspace-nodes-skeleton"');
+  });
+
+  it("the full-page route reads and validates the tab query param server-side", () => {
+    const page = readFileSync(
+      join(APP_DIR, "app/app/chat/[chatId]/workspace/full/page.tsx"),
+      "utf8",
+    );
+    expect(page).toMatch(/searchParams/);
+    expect(page).toMatch(/workspaceTabFromParam/);
+  });
+
+  it("in-panel tab switches are reflected in the URL with a replace (no history spam)", () => {
+    const surface = readFileSync(
+      join(APP_DIR, "components/workspace/workspace-routes.tsx"),
+      "utf8",
+    );
+    expect(surface).toMatch(/router\.replace/);
+    expect(surface).toMatch(/\?tab=/);
+    expect(surface).toMatch(/scroll: false/);
+    const host = readFileSync(join(APP_DIR, "components/workspace/workspace-panel.tsx"), "utf8");
+    expect(host).toMatch(/initialTab/);
+    expect(host).toMatch(/onTabChange/);
   });
 });
 

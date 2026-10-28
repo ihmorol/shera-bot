@@ -297,11 +297,7 @@ export function WorkspacePanelBody({
       className={cn("flex h-full min-h-0 flex-col bg-surface", className)}
     >
       <div className="flex shrink-0 items-stretch border-b border-line">
-        <TabStrip
-          active={activeTab}
-          onChange={changeTab}
-          className="min-w-0 flex-1 border-b-0"
-        />
+        <TabStrip active={activeTab} onChange={changeTab} className="min-w-0 flex-1 border-b-0" />
         {onClose ? (
           <button
             type="button"

@@ -108,7 +108,9 @@ describe("insertArtifact / getArtifact", () => {
     const { conn, repo } = makeArtifacts();
     try {
       const bytes = new Uint8Array(Buffer.from([0x00, 0x01, 0xff, 0x00, 0xfe, 0x80]));
-      const stored = repo.insertArtifact(insert({ content: bytes, mime_type: "application/octet-stream" }));
+      const stored = repo.insertArtifact(
+        insert({ content: bytes, mime_type: "application/octet-stream" }),
+      );
 
       const loaded = repo.getArtifact("ws_default", stored.artifact_id);
       expect(loaded).not.toBeNull();
@@ -139,9 +141,7 @@ describe("insertArtifact / getArtifact", () => {
       const firstCreatedAt = first.created_at;
 
       clock.tick();
-      repo.insertArtifact(
-        insert({ producer_agent_id: "bob", producer_task_id: "task-5" }),
-      );
+      repo.insertArtifact(insert({ producer_agent_id: "bob", producer_task_id: "task-5" }));
 
       const reloaded = repo.getArtifact("ws_default", first.artifact_id);
       expect(reloaded).not.toBeNull();
@@ -173,8 +173,12 @@ describe("listArtifactsByRun — the run's artifact count matches reality", () =
     try {
       const runFour = [
         repo.insertArtifact(insert({ name: "a.pdf", producer_task_id: "task-4" })),
-        repo.insertArtifact(insert({ name: "b.pdf", producer_task_id: "task-4", producer_agent_id: "bob" })),
-        repo.insertArtifact(insert({ name: "c.bin", producer_task_id: "task-4", producer_agent_id: null })),
+        repo.insertArtifact(
+          insert({ name: "b.pdf", producer_task_id: "task-4", producer_agent_id: "bob" }),
+        ),
+        repo.insertArtifact(
+          insert({ name: "c.bin", producer_task_id: "task-4", producer_agent_id: null }),
+        ),
       ];
       repo.insertArtifact(insert({ name: "d.pdf", producer_task_id: "task-5" }));
 

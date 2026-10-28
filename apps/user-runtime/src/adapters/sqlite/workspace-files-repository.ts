@@ -158,7 +158,9 @@ export class AgentDeleteRefusedError extends Error {
   readonly category = "unauthorized" as const;
 
   constructor(actorAgentId: string) {
-    super(`agent ${actorAgentId} cannot delete workspace files; delete requires the user approval path`);
+    super(
+      `agent ${actorAgentId} cannot delete workspace files; delete requires the user approval path`,
+    );
     this.name = "AgentDeleteRefusedError";
   }
 }
@@ -209,7 +211,11 @@ export function parseScopedWorkspaceUri(uri: string): ParsedScopedUri {
   if (hasControlCharacter(uri)) throw new WorkspacePathError();
 
   if (uri.startsWith("workspace://")) {
-    return { scope: "workspace", agent_id: null, segments: parseSegments(uri.slice("workspace://".length)) };
+    return {
+      scope: "workspace",
+      agent_id: null,
+      segments: parseSegments(uri.slice("workspace://".length)),
+    };
   }
   if (uri.startsWith("agent://")) {
     const afterScheme = uri.slice("agent://".length);
@@ -742,11 +748,7 @@ export class WorkspaceFilesRepository {
     ).map(toNode);
   }
 
-  private readFileContent(
-    db: DatabaseSync,
-    workspaceId: string,
-    id: string,
-  ): WorkspaceFileContent {
+  private readFileContent(db: DatabaseSync, workspaceId: string, id: string): WorkspaceFileContent {
     const row = db
       .prepare(
         `SELECT ${NODE_COLUMNS}, content FROM workspace_nodes

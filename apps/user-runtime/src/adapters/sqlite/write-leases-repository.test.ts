@@ -86,7 +86,12 @@ function makeClock(startIso = "2026-10-28T10:00:00.000Z") {
   };
 }
 
-function seedAgent(db: ReturnType<typeof openDatabase>["db"], agentId: string, displayName: string): void {  const now = "2026-10-28T09:00:00.000Z";
+function seedAgent(
+  db: ReturnType<typeof openDatabase>["db"],
+  agentId: string,
+  displayName: string,
+): void {
+  const now = "2026-10-28T09:00:00.000Z";
   db.prepare(
     `INSERT INTO agents (
        agent_id, workspace_id, display_name, role_description, avatar_hue,
@@ -94,7 +99,19 @@ function seedAgent(db: ReturnType<typeof openDatabase>["db"], agentId: string, d
        user_instructions, capabilities_json, private_folder_path,
        is_seeded_from_pack, created_at, updated_at
      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, '{}', ?, 1, ?, ?)`,
-  ).run(agentId, "ws_default", displayName, "test agent", 120, "A", "provider", "model", `agent://${agentId}`, now, now);
+  ).run(
+    agentId,
+    "ws_default",
+    displayName,
+    "test agent",
+    120,
+    "A",
+    "provider",
+    "model",
+    `agent://${agentId}`,
+    now,
+    now,
+  );
 }
 
 function makeLeases() {
@@ -124,7 +141,13 @@ describe("acquireLease", () => {
   it("acquires an exclusive lease and returns holder, task, canonical path, and expiry", () => {
     const { conn, clock, leases } = makeLeases();
     try {
-      const lease = leases.acquireLease("ws_default", "workspace://docs/plan.md", "task-4", ALICE, TTL);
+      const lease = leases.acquireLease(
+        "ws_default",
+        "workspace://docs/plan.md",
+        "task-4",
+        ALICE,
+        TTL,
+      );
 
       expect(lease.lease_id.startsWith("lease_")).toBe(true);
       expect(lease.workspace_id).toBe("ws_default");
@@ -213,7 +236,13 @@ describe("acquireLease", () => {
   it("steal-by-expiry: an expired lease no longer blocks acquire; the new acquirer wins and the lapsed row is released", () => {
     const { conn, clock, leases } = makeLeases();
     try {
-      const lapsed = leases.acquireLease("ws_default", "workspace://plan.md", "task-4", ALICE, 1_000);
+      const lapsed = leases.acquireLease(
+        "ws_default",
+        "workspace://plan.md",
+        "task-4",
+        ALICE,
+        1_000,
+      );
       clock.advance(2_000);
 
       const winner = leases.acquireLease("ws_default", "workspace://plan.md", "task-5", BOB, TTL);
@@ -235,12 +264,12 @@ describe("acquireLease", () => {
       expect(() => leases.acquireLease("ws_default", "workspace://", "task-4", ALICE, TTL)).toThrow(
         WorkspaceNodeTypeError,
       );
-      expect(() => leases.acquireLease("ws_default", "agent://alice", "task-4", ALICE, TTL)).toThrow(
-        WorkspaceNodeTypeError,
-      );
-      expect(() => leases.acquireLease("ws_default", "agent://alice/", "task-4", ALICE, TTL)).toThrow(
-        WorkspaceNodeTypeError,
-      );
+      expect(() =>
+        leases.acquireLease("ws_default", "agent://alice", "task-4", ALICE, TTL),
+      ).toThrow(WorkspaceNodeTypeError);
+      expect(() =>
+        leases.acquireLease("ws_default", "agent://alice/", "task-4", ALICE, TTL),
+      ).toThrow(WorkspaceNodeTypeError);
     } finally {
       conn.close();
     }
@@ -263,11 +292,13 @@ describe("acquireLease", () => {
       expect(() =>
         leases.acquireLease("ws_default", "workspace://../secret", "task-4", ALICE, TTL),
       ).toThrow(WorkspacePathError);
-      expect(() =>
-        leases.acquireLease("ws_default", "team://notes", "task-4", ALICE, TTL),
-      ).toThrow(WorkspacePathError);
+      expect(() => leases.acquireLease("ws_default", "team://notes", "task-4", ALICE, TTL)).toThrow(
+        WorkspacePathError,
+      );
 
-      const count = conn.db.prepare(`SELECT COUNT(*) AS n FROM write_leases`).get() as { n: number };
+      const count = conn.db.prepare(`SELECT COUNT(*) AS n FROM write_leases`).get() as {
+        n: number;
+      };
       expect(count.n).toBe(0);
     } finally {
       conn.close();
@@ -312,9 +343,9 @@ describe("renewLease", () => {
 
       expect(() => leases.renewLease(lease.lease_id, "task-9", TTL)).toThrow(LeaseNotHeldError);
       // The refused renewal did not free the path: the user write stays blocked.
-      expect(() =>
-        leases.assertWriteAllowed("ws_default", "workspace://plan.md", USER),
-      ).toThrow(WriteLeaseConflictError);
+      expect(() => leases.assertWriteAllowed("ws_default", "workspace://plan.md", USER)).toThrow(
+        WriteLeaseConflictError,
+      );
     } finally {
       conn.close();
     }
@@ -323,7 +354,13 @@ describe("renewLease", () => {
   it("refuses renewal after expiry with LEASE_EXPIRED; the path is then free for a new acquirer", () => {
     const { conn, clock, leases } = makeLeases();
     try {
-      const lease = leases.acquireLease("ws_default", "workspace://plan.md", "task-4", ALICE, 1_000);
+      const lease = leases.acquireLease(
+        "ws_default",
+        "workspace://plan.md",
+        "task-4",
+        ALICE,
+        1_000,
+      );
       clock.advance(2_000);
 
       expect(() => leases.renewLease(lease.lease_id, "task-4", TTL)).toThrow(LeaseExpiredError);
@@ -370,9 +407,9 @@ describe("releaseLease", () => {
     const { conn, leases } = makeLeases();
     try {
       const lease = leases.acquireLease("ws_default", "workspace://plan.md", "task-4", ALICE, TTL);
-      expect(() =>
-        leases.assertWriteAllowed("ws_default", "workspace://plan.md", USER),
-      ).toThrow(WriteLeaseConflictError);
+      expect(() => leases.assertWriteAllowed("ws_default", "workspace://plan.md", USER)).toThrow(
+        WriteLeaseConflictError,
+      );
 
       leases.releaseLease(lease.lease_id, "task-4");
       expect(leases.assertWriteAllowed("ws_default", "workspace://plan.md", USER)).toBeUndefined();
@@ -387,9 +424,9 @@ describe("releaseLease", () => {
       const lease = leases.acquireLease("ws_default", "workspace://plan.md", "task-4", ALICE, TTL);
 
       expect(() => leases.releaseLease(lease.lease_id, "task-9")).toThrow(LeaseNotHeldError);
-      expect(() =>
-        leases.assertWriteAllowed("ws_default", "workspace://plan.md", USER),
-      ).toThrow(WriteLeaseConflictError);
+      expect(() => leases.assertWriteAllowed("ws_default", "workspace://plan.md", USER)).toThrow(
+        WriteLeaseConflictError,
+      );
     } finally {
       conn.close();
     }
@@ -409,7 +446,13 @@ describe("releaseLease", () => {
   it("lets the holder release an expired lease (cleanup) without error", () => {
     const { conn, clock, leases } = makeLeases();
     try {
-      const lease = leases.acquireLease("ws_default", "workspace://plan.md", "task-4", ALICE, 1_000);
+      const lease = leases.acquireLease(
+        "ws_default",
+        "workspace://plan.md",
+        "task-4",
+        ALICE,
+        1_000,
+      );
       clock.advance(5_000);
       expect(() => leases.releaseLease(lease.lease_id, "task-4")).not.toThrow();
     } finally {
@@ -424,9 +467,9 @@ describe("assertWriteAllowed — the D6 write gate", () => {
     try {
       leases.acquireLease("ws_default", "workspace://plan.md", "task-4", ALICE, TTL);
 
-      expect(() =>
-        leases.assertWriteAllowed("ws_default", "workspace://plan.md", USER),
-      ).toThrow(WriteLeaseConflictError);
+      expect(() => leases.assertWriteAllowed("ws_default", "workspace://plan.md", USER)).toThrow(
+        WriteLeaseConflictError,
+      );
       try {
         leases.assertWriteAllowed("ws_default", "workspace://plan.md", USER);
         expect.unreachable();
@@ -511,9 +554,9 @@ describe("assertWriteAllowed — the D6 write gate", () => {
   it("refuses an agent write that carries no task id at all with WRITE_LEASE_REQUIRED", () => {
     const { conn, leases } = makeLeases();
     try {
-      expect(() =>
-        leases.assertWriteAllowed("ws_default", "workspace://plan.md", ALICE),
-      ).toThrow(WriteLeaseRequiredError);
+      expect(() => leases.assertWriteAllowed("ws_default", "workspace://plan.md", ALICE)).toThrow(
+        WriteLeaseRequiredError,
+      );
     } finally {
       conn.close();
     }
@@ -600,9 +643,9 @@ describe("releaseLeasesForTask — a lease cannot outlive its task", () => {
       expect(leases.assertWriteAllowed("ws_default", "workspace://a.md", USER)).toBeUndefined();
       expect(leases.assertWriteAllowed("ws_default", "workspace://b.md", USER)).toBeUndefined();
       // task-5's lease survives, still blocking.
-      expect(() =>
-        leases.assertWriteAllowed("ws_default", "workspace://c.md", USER),
-      ).toThrow(WriteLeaseConflictError);
+      expect(() => leases.assertWriteAllowed("ws_default", "workspace://c.md", USER)).toThrow(
+        WriteLeaseConflictError,
+      );
 
       const released = conn.db
         .prepare(

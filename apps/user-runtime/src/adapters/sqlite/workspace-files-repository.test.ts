@@ -287,18 +287,47 @@ describe("S17 v9 migration: workspace storage tables", () => {
       };
 
       // scope='agent' requires agent_id; scope='workspace' forbids it.
-      expect(() => insert({ scope: "agent", agent_id: null, name: "f.txt", content: new Uint8Array(1) })).toThrow();
-      expect(() => insert({ scope: "workspace", agent_id: "alice", name: "f.txt", content: new Uint8Array(1) })).toThrow();
+      expect(() =>
+        insert({ scope: "agent", agent_id: null, name: "f.txt", content: new Uint8Array(1) }),
+      ).toThrow();
+      expect(() =>
+        insert({
+          scope: "workspace",
+          agent_id: "alice",
+          name: "f.txt",
+          content: new Uint8Array(1),
+        }),
+      ).toThrow();
 
       // Directories carry no content; files always carry content.
-      expect(() => insert({ scope: "workspace", agent_id: null, name: "d", is_directory: 1, size: 0, mime_type: null, content: new Uint8Array(1) })).toThrow();
-      expect(() => insert({ scope: "workspace", agent_id: null, name: "f.txt", content: null })).toThrow();
+      expect(() =>
+        insert({
+          scope: "workspace",
+          agent_id: null,
+          name: "d",
+          is_directory: 1,
+          size: 0,
+          mime_type: null,
+          content: new Uint8Array(1),
+        }),
+      ).toThrow();
+      expect(() =>
+        insert({ scope: "workspace", agent_id: null, name: "f.txt", content: null }),
+      ).toThrow();
 
       // Name sanity: traversal segments and separators are unrepresentable.
-      expect(() => insert({ scope: "workspace", agent_id: null, name: "..", content: new Uint8Array(1) })).toThrow();
-      expect(() => insert({ scope: "workspace", agent_id: null, name: ".", content: new Uint8Array(1) })).toThrow();
-      expect(() => insert({ scope: "workspace", agent_id: null, name: "a/b", content: new Uint8Array(1) })).toThrow();
-      expect(() => insert({ scope: "workspace", agent_id: null, name: "a\\b", content: new Uint8Array(1) })).toThrow();
+      expect(() =>
+        insert({ scope: "workspace", agent_id: null, name: "..", content: new Uint8Array(1) }),
+      ).toThrow();
+      expect(() =>
+        insert({ scope: "workspace", agent_id: null, name: ".", content: new Uint8Array(1) }),
+      ).toThrow();
+      expect(() =>
+        insert({ scope: "workspace", agent_id: null, name: "a/b", content: new Uint8Array(1) }),
+      ).toThrow();
+      expect(() =>
+        insert({ scope: "workspace", agent_id: null, name: "a\\b", content: new Uint8Array(1) }),
+      ).toThrow();
 
       // One happy row: a plain workspace-scope file inserts cleanly.
       expect(() =>
@@ -343,9 +372,9 @@ describe("scoped URI resolution and path safety", () => {
         );
       }
       // Invalid percent-encoding is a path rejection, not a crash.
-      expect(() => repo.write("ws_default", "workspace://a%ZZb", USER, new Uint8Array([1]), null)).toThrow(
-        WorkspacePathError,
-      );
+      expect(() =>
+        repo.write("ws_default", "workspace://a%ZZb", USER, new Uint8Array([1]), null),
+      ).toThrow(WorkspacePathError);
       // Nothing was written by any rejected attempt.
       expect(repo.list("ws_default", "workspace://", USER)).toEqual([]);
     } finally {
@@ -369,7 +398,9 @@ describe("scoped URI resolution and path safety", () => {
       expect(repo.resolve("ws_default", "workspace://reports/q4.md", USER)?.id).toBe(file.id);
       expect(repo.resolve("ws_default", "workspace://reports/missing.md", USER)).toBeNull();
       // The resolved tree rows carry metadata; content travels only via read().
-      expect(repo.resolve("ws_default", "workspace://reports/q4.md", USER)).not.toHaveProperty("content");
+      expect(repo.resolve("ws_default", "workspace://reports/q4.md", USER)).not.toHaveProperty(
+        "content",
+      );
       // The scope roots themselves resolve once something exists under them.
       expect(repo.resolve("ws_default", "workspace://", USER)?.is_directory).toBe(1);
     } finally {
@@ -404,7 +435,13 @@ describe("read/write/list/mkdir over workspace_nodes (user actor)", () => {
   it("auto-creates missing parent directories on write and lists children", () => {
     const { conn, repo } = makeRepo();
     try {
-      repo.write("ws_default", "workspace://reports/2026/q4.md", USER, new Uint8Array([9]), "text/markdown");
+      repo.write(
+        "ws_default",
+        "workspace://reports/2026/q4.md",
+        USER,
+        new Uint8Array([9]),
+        "text/markdown",
+      );
 
       const rootChildren = repo.list("ws_default", "workspace://", USER);
       expect(rootChildren.map((node) => node.name)).toEqual(["reports"]);
@@ -450,7 +487,9 @@ describe("read/write/list/mkdir over workspace_nodes (user actor)", () => {
       );
 
       repo.mkdir("ws_default", "workspace://docs", USER);
-      expect(() => repo.read("ws_default", "workspace://docs", USER)).toThrow(WorkspaceNodeTypeError);
+      expect(() => repo.read("ws_default", "workspace://docs", USER)).toThrow(
+        WorkspaceNodeTypeError,
+      );
       repo.write("ws_default", "workspace://file.txt", USER, new Uint8Array([1]), "text/plain");
       expect(() => repo.list("ws_default", "workspace://file.txt", USER)).toThrow(
         WorkspaceNodeTypeError,
@@ -472,8 +511,20 @@ describe("read/write/list/mkdir over workspace_nodes (user actor)", () => {
   it("overwrites file content on rewrite without deleting the node (first writer's provenance preserved)", () => {
     const { conn, repo } = makeRepo();
     try {
-      const first = repo.write("ws_default", "workspace://log.txt", USER, new Uint8Array([1, 2]), "text/plain");
-      const second = repo.write("ws_default", "workspace://log.txt", USER, new Uint8Array([1, 2, 3, 4]), "text/plain");
+      const first = repo.write(
+        "ws_default",
+        "workspace://log.txt",
+        USER,
+        new Uint8Array([1, 2]),
+        "text/plain",
+      );
+      const second = repo.write(
+        "ws_default",
+        "workspace://log.txt",
+        USER,
+        new Uint8Array([1, 2, 3, 4]),
+        "text/plain",
+      );
 
       expect(second.id).toBe(first.id);
       expect(second.size).toBe(4);
@@ -507,7 +558,15 @@ describe("private folder rules (D39)", () => {
   it("lets an Agent read, write, and list its OWN private folder", () => {
     const { conn, repo, leases } = makeRepo();
     try {
-      writeAsAgent(repo, leases, "ws_default", "agent://alice/notes.txt", ALICE, new Uint8Array([7]), "text/plain");
+      writeAsAgent(
+        repo,
+        leases,
+        "ws_default",
+        "agent://alice/notes.txt",
+        ALICE,
+        new Uint8Array([7]),
+        "text/plain",
+      );
 
       const read = repo.read("ws_default", "agent://alice/notes.txt", ALICE);
       expect(read.scope).toBe("agent");
@@ -526,7 +585,15 @@ describe("private folder rules (D39)", () => {
   it("denies an Agent another Agent's private folder in every operation (runtime-level)", () => {
     const { conn, repo, leases } = makeRepo();
     try {
-      writeAsAgent(repo, leases, "ws_default", "agent://alice/notes.txt", ALICE, new Uint8Array([7]), "text/plain");
+      writeAsAgent(
+        repo,
+        leases,
+        "ws_default",
+        "agent://alice/notes.txt",
+        ALICE,
+        new Uint8Array([7]),
+        "text/plain",
+      );
 
       expect(() => repo.read("ws_default", "agent://alice/notes.txt", BOB)).toThrow(
         PrivateScopeDeniedError,
@@ -551,7 +618,15 @@ describe("private folder rules (D39)", () => {
   it("lets the user actor read both scopes (the panel viewer is user-facing)", () => {
     const { conn, repo, leases } = makeRepo();
     try {
-      writeAsAgent(repo, leases, "ws_default", "agent://alice/notes.txt", ALICE, new Uint8Array([7]), "text/plain");
+      writeAsAgent(
+        repo,
+        leases,
+        "ws_default",
+        "agent://alice/notes.txt",
+        ALICE,
+        new Uint8Array([7]),
+        "text/plain",
+      );
       expect(repo.read("ws_default", "agent://alice/notes.txt", USER).size).toBe(1);
       expect(repo.list("ws_default", "agent://alice", USER)).toHaveLength(1);
     } finally {
@@ -562,8 +637,24 @@ describe("private folder rules (D39)", () => {
   it("keeps private folders workspace-scoped (E12): same agent, two workspaces", () => {
     const { conn, repo, leases } = makeRepo();
     try {
-      writeAsAgent(repo, leases, "ws_a", "agent://alice/notes.txt", ALICE, new Uint8Array([1]), "text/plain");
-      writeAsAgent(repo, leases, "ws_b", "agent://alice/notes.txt", ALICE, new Uint8Array([2]), "text/plain");
+      writeAsAgent(
+        repo,
+        leases,
+        "ws_a",
+        "agent://alice/notes.txt",
+        ALICE,
+        new Uint8Array([1]),
+        "text/plain",
+      );
+      writeAsAgent(
+        repo,
+        leases,
+        "ws_b",
+        "agent://alice/notes.txt",
+        ALICE,
+        new Uint8Array([2]),
+        "text/plain",
+      );
 
       expect(Buffer.from(repo.read("ws_a", "agent://alice/notes.txt", ALICE).content)).toEqual(
         Buffer.from([1]),
@@ -582,7 +673,15 @@ describe("delete rules (G6, D6)", () => {
     const { conn, repo, leases } = makeRepo();
     try {
       repo.write("ws_default", "workspace://shared.txt", USER, new Uint8Array([1]), "text/plain");
-      writeAsAgent(repo, leases, "ws_default", "agent://alice/own.txt", ALICE, new Uint8Array([2]), "text/plain");
+      writeAsAgent(
+        repo,
+        leases,
+        "ws_default",
+        "agent://alice/own.txt",
+        ALICE,
+        new Uint8Array([2]),
+        "text/plain",
+      );
 
       // Shared workspace file: agents never delete; the approval path does.
       expect(() => repo.delete("ws_default", "workspace://shared.txt", ALICE)).toThrow(
@@ -604,7 +703,15 @@ describe("delete rules (G6, D6)", () => {
   it("denies an agent cross-private delete before the delete rule (scope first)", () => {
     const { conn, repo, leases } = makeRepo();
     try {
-      writeAsAgent(repo, leases, "ws_default", "agent://alice/own.txt", ALICE, new Uint8Array([2]), "text/plain");
+      writeAsAgent(
+        repo,
+        leases,
+        "ws_default",
+        "agent://alice/own.txt",
+        ALICE,
+        new Uint8Array([2]),
+        "text/plain",
+      );
       expect(() => repo.delete("ws_default", "agent://alice/own.txt", BOB)).toThrow(
         PrivateScopeDeniedError,
       );
@@ -647,7 +754,16 @@ describe("delete lease gating (D6, F1 review fix)", () => {
   it("blocks a USER delete while an Agent holds an active lease on the path, with the tooltip data", () => {
     const { conn, repo, leases } = makeRepo();
     try {
-      writeAsAgent(repo, leases, "ws_default", "workspace://plan.md", ALICE, new Uint8Array([1]), "text/plain", "task-4");
+      writeAsAgent(
+        repo,
+        leases,
+        "ws_default",
+        "workspace://plan.md",
+        ALICE,
+        new Uint8Array([1]),
+        "text/plain",
+        "task-4",
+      );
 
       expect(() => repo.delete("ws_default", "workspace://plan.md", USER)).toThrow(
         WriteLeaseConflictError,
@@ -671,7 +787,13 @@ describe("delete lease gating (D6, F1 review fix)", () => {
   it("blocks a recursive directory delete when a leased path sits in the subtree, naming the child's holder", () => {
     const { conn, repo, leases } = makeRepo();
     try {
-      repo.write("ws_default", "workspace://docs/sub/deep.md", USER, new Uint8Array([1]), "text/plain");
+      repo.write(
+        "ws_default",
+        "workspace://docs/sub/deep.md",
+        USER,
+        new Uint8Array([1]),
+        "text/plain",
+      );
       leases.acquireLease("ws_default", "workspace://docs/sub/deep.md", "task-9", ALICE, LEASE_TTL);
 
       expect(() =>
@@ -740,11 +862,23 @@ describe("delete lease gating (D6, F1 review fix)", () => {
       repo.write("ws_default", "workspace://tmp/b/c.txt", USER, new Uint8Array([2]), "text/plain");
       // A RELEASED row on a file, an EXPIRED row on a nested file, and a
       // RELEASED row on the directory itself: history, not holdings.
-      const released = leases.acquireLease("ws_default", "workspace://tmp/a.txt", "task-1", ALICE, LEASE_TTL);
+      const released = leases.acquireLease(
+        "ws_default",
+        "workspace://tmp/a.txt",
+        "task-1",
+        ALICE,
+        LEASE_TTL,
+      );
       leases.releaseLease(released.lease_id, "task-1");
       leases.acquireLease("ws_default", "workspace://tmp/b/c.txt", "task-2", ALICE, LEASE_TTL);
       nowMs += 2 * LEASE_TTL; // task-2's lease lapses: expired, never released
-      const releasedDir = leases.acquireLease("ws_default", "workspace://tmp", "task-3", ALICE, LEASE_TTL);
+      const releasedDir = leases.acquireLease(
+        "ws_default",
+        "workspace://tmp",
+        "task-3",
+        ALICE,
+        LEASE_TTL,
+      );
       leases.releaseLease(releasedDir.lease_id, "task-3");
 
       // No ACTIVE agent lease remains on the deleted paths: the delete proceeds.
@@ -763,9 +897,16 @@ describe("delete lease gating (D6, F1 review fix)", () => {
       // The stale lease cannot resurrect: task-2's row is gone, so its write
       // is refused (WRITE_LEASE_REQUIRED) instead of re-materializing tmp/b/.
       expect(() =>
-        repo.write("ws_default", "workspace://tmp/b/c.txt", ALICE, new Uint8Array([3]), "text/plain", {
-          task_id: "task-2",
-        }),
+        repo.write(
+          "ws_default",
+          "workspace://tmp/b/c.txt",
+          ALICE,
+          new Uint8Array([3]),
+          "text/plain",
+          {
+            task_id: "task-2",
+          },
+        ),
       ).toThrow(WriteLeaseRequiredError);
       expect(repo.resolve("ws_default", "workspace://tmp", USER)).toBeNull();
     } finally {
@@ -776,7 +917,16 @@ describe("delete lease gating (D6, F1 review fix)", () => {
   it("keeps the agent delete refusal BEFORE the gate: an active lease changes nothing (G6)", () => {
     const { conn, repo, leases } = makeRepo();
     try {
-      writeAsAgent(repo, leases, "ws_default", "workspace://plan.md", ALICE, new Uint8Array([1]), "text/plain", "task-4");
+      writeAsAgent(
+        repo,
+        leases,
+        "ws_default",
+        "workspace://plan.md",
+        ALICE,
+        new Uint8Array([1]),
+        "text/plain",
+        "task-4",
+      );
       expect(() => repo.delete("ws_default", "workspace://plan.md", ALICE)).toThrow(
         AgentDeleteRefusedError,
       );
@@ -792,7 +942,13 @@ describe("write-lease gating on the storage write path (D6)", () => {
   it("blocks a user write while an Agent holds an active lease, with the tooltip data attached; reads NEVER block", () => {
     const { conn, repo, leases } = makeRepo();
     try {
-      const lease = leases.acquireLease("ws_default", "workspace://plan.md", "task-4", ALICE, LEASE_TTL);
+      const lease = leases.acquireLease(
+        "ws_default",
+        "workspace://plan.md",
+        "task-4",
+        ALICE,
+        LEASE_TTL,
+      );
       repo.write("ws_default", "workspace://plan.md", ALICE, new Uint8Array([1]), "text/plain", {
         task_id: "task-4",
       });
@@ -889,9 +1045,16 @@ describe("write-lease gating on the storage write path (D6)", () => {
         }),
       ).toThrow(WriteLeaseRequiredError);
       // ...and the ws_a lease DOES authorize the ws_a write.
-      const written = repo.write("ws_a", "workspace://plan.md", ALICE, new Uint8Array([4]), "text/plain", {
-        task_id: "task-4",
-      });
+      const written = repo.write(
+        "ws_a",
+        "workspace://plan.md",
+        ALICE,
+        new Uint8Array([4]),
+        "text/plain",
+        {
+          task_id: "task-4",
+        },
+      );
       expect(written.workspace_id).toBe("ws_a");
     } finally {
       conn.close();
@@ -901,7 +1064,16 @@ describe("write-lease gating on the storage write path (D6)", () => {
   it("frees agent-leased paths when the task goes terminal (releaseLeasesForTask)", () => {
     const { conn, repo, leases } = makeRepo();
     try {
-      writeAsAgent(repo, leases, "ws_default", "workspace://plan.md", ALICE, new Uint8Array([1]), "text/plain", "task-4");
+      writeAsAgent(
+        repo,
+        leases,
+        "ws_default",
+        "workspace://plan.md",
+        ALICE,
+        new Uint8Array([1]),
+        "text/plain",
+        "task-4",
+      );
       expect(() =>
         repo.write("ws_default", "workspace://plan.md", USER, new Uint8Array([2]), "text/plain"),
       ).toThrow(WriteLeaseConflictError);
@@ -936,8 +1108,20 @@ describe("persistence across restart (AC16 partial)", () => {
       const leases = new WriteLeasesRepository(tx);
       const repo = new WorkspaceFilesRepository(tx, leases);
       const artifacts = new ArtifactsRepository(tx);
-      const shared = repo.write("ws_default", "workspace://docs/report.bin", USER, sharedBytes, "application/octet-stream");
-      const lease = leases.acquireLease("ws_default", "agent://alice/scratch.bin", "task-alice", ALICE, 60_000);
+      const shared = repo.write(
+        "ws_default",
+        "workspace://docs/report.bin",
+        USER,
+        sharedBytes,
+        "application/octet-stream",
+      );
+      const lease = leases.acquireLease(
+        "ws_default",
+        "agent://alice/scratch.bin",
+        "task-alice",
+        ALICE,
+        60_000,
+      );
       const priv = repo.write(
         "ws_default",
         "agent://alice/scratch.bin",
@@ -1003,7 +1187,9 @@ describe("persistence across restart (AC16 partial)", () => {
       expect(artifact?.producer_agent_id).toBe("alice");
       expect(artifact?.producer_task_id).toBe("task-alice");
       expect(artifact?.size).toBe(artifactBytes.byteLength);
-      expect(Buffer.compare(Buffer.from(artifact?.content as Uint8Array), Buffer.from(artifactBytes))).toBe(0);
+      expect(
+        Buffer.compare(Buffer.from(artifact?.content as Uint8Array), Buffer.from(artifactBytes)),
+      ).toBe(0);
 
       // The tree and the private-folder rules survived the restart too.
       expect(repo.list("ws_default", "workspace://docs", USER).map((node) => node.name)).toEqual([

@@ -131,9 +131,7 @@ function RuntimeAgentDirectChat({
   useWorkspacePanelRegistration(real.directChatId, workspaceId);
 
   const workspaceToggle =
-    real.directChatId !== null ? (
-      <WorkspacePanelToggle chatId={real.directChatId} />
-    ) : undefined;
+    real.directChatId !== null ? <WorkspacePanelToggle chatId={real.directChatId} /> : undefined;
 
   if (liveEnabled) {
     return (

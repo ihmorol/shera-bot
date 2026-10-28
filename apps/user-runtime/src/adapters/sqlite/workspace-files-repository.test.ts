@@ -29,7 +29,18 @@
  *   resolves are NEVER gated — concurrent reads are always allowed. The lease
  *   semantics themselves live in write-leases-repository.test.ts.
  * - Persistence (AC16 partial): files written before a close are readable
- *   after reopening the same database file.
+ *   after reopening the same database file — including an ACTIVE lease
+ *   (renewable after the restart) and an artifact's bytes (byte-exact).
+ * - Delete lease gating (D6, F1 review fix): the USER delete goes through the
+ *   write-lease gate like every write — an ACTIVE agent-held lease on the
+ *   deleted path (or on any path under a deleted directory, including a
+ *   non-recursive empty-directory delete) blocks with the same typed
+ *   WRITE_LEASE_CONFLICT carrying holder + task; user-held leases never block
+ *   the panel user; a passing delete purges released-or-expired lease rows on
+ *   the deleted paths so no stale lease can resurrect deleted content; and the
+ *   agent delete stays the typed AGENT_DELETE_REQUIRES_APPROVAL refusal before
+ *   any gate. mkdir stays deliberately ungated (structural, creates-only) and
+ *   is documented as the one asymmetric mutation.
  */
 import { Buffer } from "node:buffer";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -85,6 +96,19 @@ function makeRepo() {
   // must see the same transactional connection.
   const tx = new SqliteTransactions(conn.db);
   const leases = new WriteLeasesRepository(tx);
+  return {
+    conn,
+    tx,
+    leases,
+    repo: new WorkspaceFilesRepository(tx, leases),
+  };
+}
+
+/** makeRepo with an injectable lease clock (expiry and purge timing tests). */
+function makeRepoWithClock(now: () => Date) {
+  const conn = openMigratedDb(newTempDbPath());
+  const tx = new SqliteTransactions(conn.db);
+  const leases = new WriteLeasesRepository(tx, { now });
   return {
     conn,
     tx,
@@ -612,6 +636,151 @@ describe("delete rules (G6, D6)", () => {
 
       // The scope root itself is structural and cannot be deleted.
       expect(() => repo.delete("ws_default", "workspace://", USER)).toThrow(WorkspaceNodeTypeError);
+    } finally {
+      conn.close();
+    }
+  });
+});
+
+describe("delete lease gating (D6, F1 review fix)", () => {
+  it("blocks a USER delete while an Agent holds an active lease on the path, with the tooltip data", () => {
+    const { conn, repo, leases } = makeRepo();
+    try {
+      writeAsAgent(repo, leases, "ws_default", "workspace://plan.md", ALICE, new Uint8Array([1]), "text/plain", "task-4");
+
+      expect(() => repo.delete("ws_default", "workspace://plan.md", USER)).toThrow(
+        WriteLeaseConflictError,
+      );
+      try {
+        repo.delete("ws_default", "workspace://plan.md", USER);
+        expect.unreachable();
+      } catch (error) {
+        const conflict = error as WriteLeaseConflictError;
+        expect(conflict.holdingAgentId).toBe("alice");
+        expect(conflict.holdingAgentName).toBe("alice");
+        expect(conflict.taskId).toBe("task-4");
+      }
+      // The refused delete left the leased file in place.
+      expect(repo.read("ws_default", "workspace://plan.md", USER).size).toBe(1);
+    } finally {
+      conn.close();
+    }
+  });
+
+  it("blocks a recursive directory delete when a leased path sits in the subtree, naming the child's holder", () => {
+    const { conn, repo, leases } = makeRepo();
+    try {
+      repo.write("ws_default", "workspace://docs/sub/deep.md", USER, new Uint8Array([1]), "text/plain");
+      leases.acquireLease("ws_default", "workspace://docs/sub/deep.md", "task-9", ALICE, LEASE_TTL);
+
+      expect(() =>
+        repo.delete("ws_default", "workspace://docs", USER, { recursive: true }),
+      ).toThrow(WriteLeaseConflictError);
+      try {
+        repo.delete("ws_default", "workspace://docs", USER, { recursive: true });
+        expect.unreachable();
+      } catch (error) {
+        const conflict = error as WriteLeaseConflictError;
+        expect(conflict.holdingAgentId).toBe("alice");
+        expect(conflict.taskId).toBe("task-9");
+      }
+      // The refused recursive delete left the whole subtree in place.
+      expect(repo.read("ws_default", "workspace://docs/sub/deep.md", USER).size).toBe(1);
+    } finally {
+      conn.close();
+    }
+  });
+
+  it("blocks deleting an empty directory while an Agent holds an active lease on a path under it (resurrection guard)", () => {
+    const { conn, repo, leases } = makeRepo();
+    try {
+      repo.mkdir("ws_default", "workspace://empty", USER);
+      // A lease needs no node behind it: the Agent claimed the path before
+      // writing. Deleting the directory would strand the live lease over
+      // vanished content — a later lease-gated write would re-materialize
+      // the parents under it.
+      leases.acquireLease("ws_default", "workspace://empty/ghost.txt", "task-11", ALICE, LEASE_TTL);
+
+      expect(() => repo.delete("ws_default", "workspace://empty", USER)).toThrow(
+        WriteLeaseConflictError,
+      );
+      expect(repo.resolve("ws_default", "workspace://empty", USER)?.is_directory).toBe(1);
+    } finally {
+      conn.close();
+    }
+  });
+
+  it("never blocks the panel user on USER-held leases; a live user row survives until its task goes terminal", () => {
+    const { conn, repo, leases } = makeRepo();
+    try {
+      repo.write("ws_default", "workspace://mine.txt", USER, new Uint8Array([1]), "text/plain");
+      leases.acquireLease("ws_default", "workspace://mine.txt", "task-user", USER, LEASE_TTL);
+
+      // User-held leases never block the panel user — the same rule as the write gate.
+      repo.delete("ws_default", "workspace://mine.txt", USER);
+      expect(repo.resolve("ws_default", "workspace://mine.txt", USER)).toBeNull();
+      // The live holding is not dangling history: it still belongs to its
+      // task and dies only through the task-terminal force-release.
+      expect(leases.listActiveLeases("ws_default").map((lease) => lease.task_id)).toEqual([
+        "task-user",
+      ]);
+      expect(leases.releaseLeasesForTask("task-user")).toBe(1);
+      expect(leases.listActiveLeases("ws_default")).toEqual([]);
+    } finally {
+      conn.close();
+    }
+  });
+
+  it("purges released-or-expired lease rows on the deleted paths, so no stale lease resurrects deleted content", () => {
+    let nowMs = Date.parse("2026-10-28T00:00:00.000Z");
+    const { conn, repo, leases } = makeRepoWithClock(() => new Date(nowMs));
+    try {
+      repo.write("ws_default", "workspace://tmp/a.txt", USER, new Uint8Array([1]), "text/plain");
+      repo.write("ws_default", "workspace://tmp/b/c.txt", USER, new Uint8Array([2]), "text/plain");
+      // A RELEASED row on a file, an EXPIRED row on a nested file, and a
+      // RELEASED row on the directory itself: history, not holdings.
+      const released = leases.acquireLease("ws_default", "workspace://tmp/a.txt", "task-1", ALICE, LEASE_TTL);
+      leases.releaseLease(released.lease_id, "task-1");
+      leases.acquireLease("ws_default", "workspace://tmp/b/c.txt", "task-2", ALICE, LEASE_TTL);
+      nowMs += 2 * LEASE_TTL; // task-2's lease lapses: expired, never released
+      const releasedDir = leases.acquireLease("ws_default", "workspace://tmp", "task-3", ALICE, LEASE_TTL);
+      leases.releaseLease(releasedDir.lease_id, "task-3");
+
+      // No ACTIVE agent lease remains on the deleted paths: the delete proceeds.
+      repo.delete("ws_default", "workspace://tmp", USER, { recursive: true });
+      expect(repo.resolve("ws_default", "workspace://tmp", USER)).toBeNull();
+
+      // Every lease row on the deleted paths is gone — no dangling row survives.
+      const leftover = conn.db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM write_leases
+           WHERE path = 'workspace://tmp' OR path LIKE 'workspace://tmp/%'`,
+        )
+        .get() as { n: number };
+      expect(leftover.n).toBe(0);
+
+      // The stale lease cannot resurrect: task-2's row is gone, so its write
+      // is refused (WRITE_LEASE_REQUIRED) instead of re-materializing tmp/b/.
+      expect(() =>
+        repo.write("ws_default", "workspace://tmp/b/c.txt", ALICE, new Uint8Array([3]), "text/plain", {
+          task_id: "task-2",
+        }),
+      ).toThrow(WriteLeaseRequiredError);
+      expect(repo.resolve("ws_default", "workspace://tmp", USER)).toBeNull();
+    } finally {
+      conn.close();
+    }
+  });
+
+  it("keeps the agent delete refusal BEFORE the gate: an active lease changes nothing (G6)", () => {
+    const { conn, repo, leases } = makeRepo();
+    try {
+      writeAsAgent(repo, leases, "ws_default", "workspace://plan.md", ALICE, new Uint8Array([1]), "text/plain", "task-4");
+      expect(() => repo.delete("ws_default", "workspace://plan.md", ALICE)).toThrow(
+        AgentDeleteRefusedError,
+      );
+      // The refusal — not a lease conflict — and the file is untouched.
+      expect(repo.read("ws_default", "workspace://plan.md", USER).size).toBe(1);
     } finally {
       conn.close();
     }

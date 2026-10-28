@@ -18,6 +18,30 @@
  *
  * G3: approval records carry args_digest, never raw arguments — the typed
  * proposal input has no raw-arguments field at all.
+ *
+ * ---------------------------------------------------------------------------
+ * S20 chunk 3 — the AC26 recheck gate, consumption, reminders, mutes,
+ * idempotency, and boundary redaction (issue #21; D9, D32, E3, G3):
+ *
+ *   6. checkExecutionAllowed is the gate EVERY execution consults — a grant
+ *      never skips the deterministic policy check: revoking the grant
+ *      mid-flight or changing the tool version refuses the execution (AC26),
+ *      and the grant's conversation scope is applied on top of the lookup
+ *      (chunk-2 note: the lookup itself carries no conversation parameter).
+ *   7. A one-time grant is durably consumed once the approved execution
+ *      completes — a second identical recheck is refused, and the consumption
+ *      survives a runtime restart.
+ *   8. Reminders fire at the five E3 points (0/15m/45m/3h/24h), never after;
+ *      firing and muting NEVER change run state (D32 — an approval waits
+ *      indefinitely; sibling runs are untouched).
+ *   9. Mutes suppress NOTIFICATIONS only: undelivered reminder rows stay for
+ *      audit and the approval stays pending.
+ *  10. The same decision replayed from a second tab is idempotent (typed
+ *      already_decided — no double grant, no second event, no re-execution);
+ *      a DIFFERENT choice on a resolved request stays the typed refusal.
+ *  11. Secret-shaped material in side_effect_summary / resource_scope is
+ *      scrubbed to [REDACTED] at the proposal boundary — before any record or
+ *      journal event is written (G3).
  */
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -49,16 +73,24 @@ const POLICY: TaskPolicy = { max_retries: 3 };
 
 const tempDirs: string[] = [];
 
-function newRuntime(): {
+/**
+ * Open one approval runtime. `reuseDir` re-opens the SAME database file — the
+ * restart-durability test consumes a grant, closes the connection, and checks
+ * the gate again on a fresh service over the same file.
+ */
+function newRuntime(reuseDir?: string): {
   runtime: SqliteConnection;
+  dir: string;
   journal: EventJournalRepository;
   approvals: ApprovalsRepository;
   operations: OperationsRepository;
   service: ApprovalsService;
   setNow: (iso: string) => void;
 } {
-  const dir = mkdtempSync(join(tmpdir(), "shera-runtime-approvals-"));
-  tempDirs.push(dir);
+  const dir = reuseDir ?? mkdtempSync(join(tmpdir(), "shera-runtime-approvals-"));
+  if (reuseDir === undefined) {
+    tempDirs.push(dir);
+  }
   const runtime = openDatabase(join(dir, "runtime.db"));
   applyMigrations(runtime.db);
   const tx = new SqliteTransactions(runtime.db);
@@ -77,6 +109,7 @@ function newRuntime(): {
   });
   return {
     runtime,
+    dir,
     journal,
     approvals,
     operations,
@@ -850,5 +883,521 @@ describe("approvals service: findActiveGrant matches deterministically (S20 chun
     expect(expired.ok).toBe(false);
     if (expired.ok !== false) throw new Error("expected a typed miss");
     expect(expired.reason).toBe("no_active_grant");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// S20 chunk 3 — the AC26 execution recheck gate (issue #21; D9, G5/G6)
+// ---------------------------------------------------------------------------
+
+/**
+ * A well-formed recheck input for the approved tool. Overrides replace whole
+ * fields — the gate validates the full deterministic field set every time.
+ */
+function recheckInput(
+  overrides: Partial<{
+    workspace_id: string;
+    principal: { type: "user" | "agent" | "task"; id: string };
+    tool_id: string;
+    tool_version: string;
+    capability: string;
+    resource_scope: string;
+    args_digest: string;
+    acting_conversation_id: string;
+  }> = {},
+) {
+  return {
+    workspace_id: WS,
+    principal: { type: "agent", id: "agent_general_assistant" } as const,
+    tool_id: APPROVED_TOOL.toolId,
+    tool_version: APPROVED_TOOL.toolVersion,
+    capability: APPROVED_TOOL.capability,
+    resource_scope: APPROVED_TOOL.resourceScope,
+    args_digest: ARGS,
+    acting_conversation_id: "conv_001",
+    ...overrides,
+  };
+}
+
+const TASK_PRINCIPAL = { type: "task", id: "task_001" } as const;
+
+/** Approve the default paused request as a reusable task-principal grant. */
+function approveReusable(env: ReturnType<typeof newRuntime>) {
+  const pause = pauseOnce(env, makeRun());
+  const decision = env.service.applyDecision({
+    approval_id: pause.approval_id,
+    choice: "always-approve-this-tool",
+    decided_by: USER,
+    run: pause.run,
+    execute: () => {},
+  });
+  if (decision.outcome !== "approved") throw new Error("expected an approved outcome");
+  return { pause, decision };
+}
+
+describe("approvals service: checkExecutionAllowed — the AC26 gate (S20 chunk 3)", () => {
+  it("allows execution on an active grant — the gate returns the grant_id", () => {
+    const env = newRuntime();
+    const { decision } = approveReusable(env);
+
+    const result = env.service.checkExecutionAllowed(recheckInput({ principal: TASK_PRINCIPAL }));
+    expect(result.allowed).toBe(true);
+    if (result.allowed !== true) throw new Error("expected the gate to allow");
+    expect(result.grant_id).toBe(decision.grant.grant_id);
+  });
+
+  it("a grant revoked MID-FLIGHT refuses the execution — the grant never skips the policy check (AC26)", () => {
+    const env = newRuntime();
+    const { decision } = approveReusable(env);
+
+    expect(env.service.checkExecutionAllowed(recheckInput({ principal: TASK_PRINCIPAL })).allowed).toBe(true);
+    expect(env.approvals.revokeGrant(WS, decision.grant.grant_id, "2026-10-28T12:01:00.000Z")).toBe(true);
+
+    const refused = env.service.checkExecutionAllowed(recheckInput({ principal: TASK_PRINCIPAL }));
+    expect(refused).toEqual({ allowed: false, reason: "no_active_grant" });
+  });
+
+  it("a CHANGED tool version refuses the execution through the gate (AC26)", () => {
+    const env = newRuntime();
+    approveReusable(env);
+
+    const refused = env.service.checkExecutionAllowed(
+      recheckInput({ principal: TASK_PRINCIPAL, tool_version: "2.0.0" }),
+    );
+    expect(refused).toEqual({ allowed: false, reason: "no_active_grant" });
+  });
+
+  it("a CHANGED args_digest on a one-time grant refuses — consulted inside the approved execution, BEFORE consumption", () => {
+    const env = newRuntime();
+    const pause = pauseOnce(env, makeRun());
+    const gates: unknown[] = [];
+
+    env.service.applyDecision({
+      approval_id: pause.approval_id,
+      choice: "approve-this-execution-only",
+      decided_by: USER,
+      run: pause.run,
+      execute: () => {
+        // The approved execution consults the gate as it starts: identical
+        // args pass, a changed argument set is refused — the one-time pin.
+        gates.push(env.service.checkExecutionAllowed(recheckInput()));
+        gates.push(
+          env.service.checkExecutionAllowed(
+            recheckInput({ args_digest: `sha256:${"c".repeat(64)}` }),
+          ),
+        );
+      },
+    });
+
+    expect(gates[0]).toMatchObject({ allowed: true });
+    expect(gates[1]).toEqual({ allowed: false, reason: "no_active_grant" });
+  });
+
+  it("a grant scoped to one conversation is refused from another — conversation_scope_mismatch; 'any' passes from any conversation", () => {
+    const env = newRuntime();
+    approveReusable(env); // conversation_scope = conv_001 (never implicit)
+
+    const refused = env.service.checkExecutionAllowed(
+      recheckInput({ principal: TASK_PRINCIPAL, acting_conversation_id: "conv_other_001" }),
+    );
+    expect(refused).toEqual({ allowed: false, reason: "conversation_scope_mismatch" });
+
+    // The recorded conversation still passes.
+    expect(env.service.checkExecutionAllowed(recheckInput({ principal: TASK_PRINCIPAL })).allowed).toBe(true);
+
+    // An explicit 'any' grant passes from ANY conversation.
+    env.approvals.insertGrant({
+      grant_id: "grt_any_scope_001",
+      workspace_id: WS,
+      source_choice: "always-approve-this-tool",
+      principal_type: "task",
+      principal_id: "task_001",
+      tool_id: "tool_other_push",
+      tool_version: "1.0.0",
+      capability: "other.push",
+      resource_scope: "workspace://other/target",
+      conversation_scope: "any",
+      workspace_scope: WS,
+      expires_at: null,
+      one_time: false,
+      created_by: USER,
+      approved_at: NOW,
+      revoked_at: null,
+      args_digest: null,
+    });
+    const anyHit = env.service.checkExecutionAllowed(
+      recheckInput({
+        principal: TASK_PRINCIPAL,
+        tool_id: "tool_other_push",
+        capability: "other.push",
+        resource_scope: "workspace://other/target",
+        acting_conversation_id: "conv_totally_other",
+      }),
+    );
+    expect(anyHit.allowed).toBe(true);
+  });
+
+  it("incoherent deterministic fields are refused typed — APPROVAL_RECHECK_INVALID, before any grant is consulted", () => {
+    const env = newRuntime();
+
+    const badDigest = catchCode(() =>
+      env.service.checkExecutionAllowed(recheckInput({ args_digest: "not-a-digest" })),
+    );
+    expect(badDigest.code).toBe("APPROVAL_RECHECK_INVALID");
+
+    const emptyTool = catchCode(() =>
+      env.service.checkExecutionAllowed(recheckInput({ tool_id: "" })),
+    );
+    expect(emptyTool.code).toBe("APPROVAL_RECHECK_INVALID");
+
+    // A WELL-FORMED input over an empty grant table answers the typed miss.
+    expect(env.service.checkExecutionAllowed(recheckInput())).toEqual({
+      allowed: false,
+      reason: "no_active_grant",
+    });
+  });
+});
+
+describe("approvals service: one-time consumption (S20 chunk 3, D9)", () => {
+  it("consumes a one-time grant durably once the approved execution completes — a second identical recheck is refused", () => {
+    const env = newRuntime();
+    const pause = pauseOnce(env, makeRun());
+    let gateDuringExecution: unknown = null;
+
+    env.service.applyDecision({
+      approval_id: pause.approval_id,
+      choice: "approve-this-execution-only",
+      decided_by: USER,
+      run: pause.run,
+      execute: () => {
+        // The gate consult INSIDE the approved execution still passes — the
+        // grant is consumed only when the execution COMPLETES.
+        gateDuringExecution = env.service.checkExecutionAllowed(recheckInput());
+      },
+    });
+
+    expect(gateDuringExecution).toMatchObject({ allowed: true });
+
+    const after = env.service.checkExecutionAllowed(recheckInput());
+    expect(after).toEqual({ allowed: false, reason: "grant_consumed" });
+
+    // The durable stamp lives on the grant row.
+    const grant = env.approvals.listGrants(WS)[0]!;
+    expect(grant.one_time).toBe(true);
+    expect(grant.consumed_at).toBe(NOW);
+  });
+
+  it("a consumed one-time grant does not survive a runtime restart for a second use", () => {
+    const env = newRuntime();
+    const pause = pauseOnce(env, makeRun());
+    env.service.applyDecision({
+      approval_id: pause.approval_id,
+      choice: "approve-this-execution-only",
+      decided_by: USER,
+      run: pause.run,
+      execute: () => {},
+    });
+    expect(env.service.checkExecutionAllowed(recheckInput())).toEqual({
+      allowed: false,
+      reason: "grant_consumed",
+    });
+
+    // Close the database and re-open the SAME file: the consumption stamp
+    // must survive (a one-time grant is never replayed across a restart).
+    env.runtime.close();
+    const restarted = newRuntime(env.dir);
+    expect(restarted.service.checkExecutionAllowed(recheckInput())).toEqual({
+      allowed: false,
+      reason: "grant_consumed",
+    });
+  });
+
+  it("a reusable grant is never consumed by an approved execution — it keeps allowing", () => {
+    const env = newRuntime();
+    approveReusable(env);
+
+    expect(env.service.checkExecutionAllowed(recheckInput({ principal: TASK_PRINCIPAL })).allowed).toBe(true);
+    const grant = env.approvals.listGrants(WS)[0]!;
+    expect(grant.one_time).toBe(false);
+    expect(grant.consumed_at).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// S20 chunk 3 — reminder firing and mutes (issue #21; E3, D32)
+// ---------------------------------------------------------------------------
+
+describe("approvals service: reminder firing on the fake clock (S20 chunk 3, E3)", () => {
+  it("fires exactly five deliveries at 0/15m/45m/3h/24h — and NOTHING after 24h", () => {
+    const env = newRuntime();
+    const pause = pauseOnce(env, makeRun());
+
+    const scanAt = (iso: string) => {
+      env.setNow(iso);
+      return env.service.dueReminders(WS);
+    };
+
+    // t+0 (immediate), then each later slot fires exactly once, at its point.
+    expect(scanAt(NOW).map((e) => e.reminder_index)).toEqual([0]);
+    expect(scanAt("2026-10-28T12:15:00.000Z").map((e) => e.reminder_index)).toEqual([1]);
+    expect(scanAt("2026-10-28T12:45:00.000Z").map((e) => e.reminder_index)).toEqual([2]);
+    expect(scanAt("2026-10-28T15:00:00.000Z").map((e) => e.reminder_index)).toEqual([3]);
+    expect(scanAt("2026-10-29T12:00:00.000Z").map((e) => e.reminder_index)).toEqual([4]);
+
+    // Past the last slot: the scan delivers NOTHING, however far it runs.
+    expect(scanAt("2026-10-29T18:00:00.000Z")).toEqual([]);
+    expect(scanAt("2026-11-05T12:00:00.000Z")).toEqual([]);
+
+    // Every delivery was durably stamped at its scan time, in schedule order.
+    const rows = env.approvals.listRemindersByApproval(WS, pause.approval_id);
+    expect(rows.map((r) => r.delivered_at)).toEqual([
+      NOW,
+      "2026-10-28T12:15:00.000Z",
+      "2026-10-28T12:45:00.000Z",
+      "2026-10-28T15:00:00.000Z",
+      "2026-10-29T12:00:00.000Z",
+    ]);
+  });
+
+  it("delivers nothing early — a slot not yet due stays undelivered", () => {
+    const env = newRuntime();
+    const pause = pauseOnce(env, makeRun());
+
+    env.setNow("2026-10-28T12:00:01.000Z");
+    const entries = env.service.dueReminders(WS);
+    expect(entries.map((e) => e.reminder_index)).toEqual([0]);
+
+    const rows = env.approvals.listRemindersByApproval(WS, pause.approval_id);
+    expect(rows.filter((r) => r.delivered_at !== null)).toHaveLength(1);
+  });
+
+  it("firing and muting NEVER change run state — a WAITING_FOR_APPROVAL run keeps waiting and sibling runs are untouched (D32)", () => {
+    const env = newRuntime();
+    env.operations.createRun(WS, childRun()); // a sibling run shares the workspace
+    const pause = pauseOnce(env, makeRun());
+    expect(env.journal.listStream(`task:${pause.run.task_id}`, WS)).toHaveLength(2);
+
+    env.service.setMute({ workspace_id: WS, scope: "task", target_id: "task_001" });
+    env.setNow("2026-10-30T12:00:00.000Z"); // well past every slot
+    env.service.dueReminders(WS);
+    // A recheck consult is equally stateless toward runs.
+    env.service.checkExecutionAllowed(recheckInput());
+
+    // No journal event, no resolution, no sibling mutation: the run simply
+    // keeps waiting (an approval waits indefinitely — D32).
+    expect(env.journal.listStream(`task:${pause.run.task_id}`, WS)).toHaveLength(2);
+    expect(env.approvals.getRequest(WS, pause.approval_id)?.status).toBe("pending");
+    expect(env.operations.getRun(WS, "op_001", "run_child_001")?.state).toBe("RUNNING");
+  });
+});
+
+describe("approvals service: mutes stop NOTIFICATIONS only (S20 chunk 3, E3)", () => {
+  it("an approval-scoped mute suppresses that approval's deliveries — reminder rows stay undelivered for audit, the approval stays pending", () => {
+    const env = newRuntime();
+    const pause = pauseOnce(env, makeRun());
+
+    env.service.setMute({ workspace_id: WS, scope: "approval", target_id: pause.approval_id });
+    env.setNow("2026-10-29T12:00:00.000Z");
+    const entries = env.service.dueReminders(WS);
+
+    expect(entries).toHaveLength(5);
+    expect(entries.every((e) => e.outcome === "muted")).toBe(true);
+
+    // The reminder rows REMAIN (audit), undelivered; the run-side record is
+    // untouched: the approval stays pending, the pause holds.
+    const rows = env.approvals.listRemindersByApproval(WS, pause.approval_id);
+    expect(rows).toHaveLength(5);
+    expect(rows.every((r) => r.delivered_at === null)).toBe(true);
+    expect(env.approvals.getRequest(WS, pause.approval_id)?.status).toBe("pending");
+  });
+
+  it("an approval-scoped mute is targeted — another approval of the same task keeps delivering; a later task mute silences it too", () => {
+    const env = newRuntime();
+    const a = pauseOnce(env, makeRun());
+    const b = pauseOnce(env, makeRun());
+
+    env.service.setMute({ workspace_id: WS, scope: "approval", target_id: a.approval_id });
+    env.setNow("2026-10-28T12:15:00.000Z"); // slots 0 and 1 are due for both
+    let entries = env.service.dueReminders(WS);
+    expect(entries.filter((e) => e.approval_id === a.approval_id).every((e) => e.outcome === "muted")).toBe(true);
+    expect(entries.filter((e) => e.approval_id === b.approval_id).every((e) => e.outcome === "delivered")).toBe(true);
+
+    // The task mute widens the silence to B's remaining slots.
+    env.service.setMute({ workspace_id: WS, scope: "task", target_id: "task_001" });
+    env.setNow("2026-10-29T18:00:00.000Z");
+    entries = env.service.dueReminders(WS);
+    expect(entries.filter((e) => e.approval_id === b.approval_id).every((e) => e.outcome === "muted")).toBe(true);
+
+    // B delivered exactly its two pre-mute slots — muting is not retroactive.
+    const bRows = env.approvals.listRemindersByApproval(WS, b.approval_id);
+    expect(bRows.filter((r) => r.delivered_at !== null)).toHaveLength(2);
+  });
+
+  it("an 'all' scope mute silences every reminder in the workspace", () => {
+    const env = newRuntime();
+    const a = pauseOnce(env, makeRun());
+    const b = pauseOnce(env, makeRun());
+
+    env.service.setMute({ workspace_id: WS, scope: "all" });
+    env.setNow("2026-10-29T12:00:00.000Z");
+    const entries = env.service.dueReminders(WS);
+
+    expect(entries).toHaveLength(10);
+    expect(entries.every((e) => e.outcome === "muted")).toBe(true);
+    expect(env.approvals.listRemindersByApproval(WS, a.approval_id).every((r) => r.delivered_at === null)).toBe(true);
+    expect(env.approvals.listRemindersByApproval(WS, b.approval_id).every((r) => r.delivered_at === null)).toBe(true);
+  });
+
+  it("an incoherent mute is refused typed — APPROVAL_MUTE_INVALID", () => {
+    const env = newRuntime();
+
+    expect(catchCode(() => env.service.setMute({ workspace_id: WS, scope: "approval" })).code).toBe(
+      "APPROVAL_MUTE_INVALID",
+    );
+    expect(
+      catchCode(() => env.service.setMute({ workspace_id: WS, scope: "all", target_id: "task_001" }))
+        .code,
+    ).toBe("APPROVAL_MUTE_INVALID");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// S20 chunk 3 — idempotent decisions (issue #21; D9)
+// ---------------------------------------------------------------------------
+
+describe("approvals service: decisions are idempotent across tabs (S20 chunk 3, D9)", () => {
+  it("the SAME choice replayed from a second tab returns the stored resolution — no double grant, no second event, no re-execution", () => {
+    const env = newRuntime();
+    const run = makeRun();
+    const pause = pauseOnce(env, run);
+    const sideEffect = { ran: false };
+
+    const first = env.service.applyDecision({
+      approval_id: pause.approval_id,
+      choice: "approve-this-execution-only",
+      decided_by: USER,
+      run: pause.run,
+      execute: () => {
+        sideEffect.ran = true;
+      },
+    });
+    expect(first.outcome).toBe("approved");
+    sideEffect.ran = false;
+
+    // Tab 2 still holds the PRE-decision projection and re-applies the SAME
+    // choice: the stored resolution comes back typed, the callback is NOT
+    // re-run, and no effect is duplicated.
+    const replay = env.service.applyDecision({
+      approval_id: pause.approval_id,
+      choice: "approve-this-execution-only",
+      decided_by: USER,
+      run: pause.run,
+      execute: () => {
+        sideEffect.ran = true;
+      },
+    });
+
+    expect(replay.outcome).toBe("already_decided");
+    if (replay.outcome !== "already_decided") throw new Error("expected an idempotent replay");
+    expect(replay.request.status).toBe("approved");
+    expect(replay.request.resolved_by_choice).toBe("approve-this-execution-only");
+    expect(sideEffect.ran).toBe(false);
+
+    expect(env.approvals.listGrants(WS)).toHaveLength(1);
+    const stream = env.journal.listStream(`task:${run.task_id}`, WS);
+    expect(stream.filter((row) => row.event_type === "task.approval_granted")).toHaveLength(1);
+  });
+
+  it("a reject replay is idempotent too; a DIFFERENT choice on a resolved request keeps the ALREADY_RESOLVED refusal", () => {
+    const env = newRuntime();
+    const pause = pauseOnce(env, makeRun());
+    const first = env.service.applyDecision({
+      approval_id: pause.approval_id,
+      choice: "reject-this-action",
+      decided_by: USER,
+      run: pause.run,
+      execute: () => {},
+    });
+    expect(first.outcome).toBe("action_rejected");
+
+    const replay = env.service.applyDecision({
+      approval_id: pause.approval_id,
+      choice: "reject-this-action",
+      decided_by: USER,
+      run: pause.run,
+      execute: () => {},
+    });
+    expect(replay.outcome).toBe("already_decided");
+    if (replay.outcome !== "already_decided") throw new Error("expected an idempotent replay");
+    expect(replay.request.status).toBe("rejected");
+
+    const error = catchCode(() =>
+      env.service.applyDecision({
+        approval_id: pause.approval_id,
+        choice: "cancel-the-task",
+        decided_by: USER,
+        run: pause.run,
+        execute: () => {},
+      }),
+    );
+    expect(error.code).toBe("APPROVAL_ALREADY_RESOLVED");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// S20 chunk 3 — boundary secret redaction (issue #21; G3)
+// ---------------------------------------------------------------------------
+
+describe("approvals service: the proposal boundary scrubs secrets (S20 chunk 3, G3)", () => {
+  it("redacts secret-shaped material in side_effect_summary and resource_scope before any record or journal event is written", () => {
+    const env = newRuntime();
+    const password = "s3cr3t-v4lue-0f-the-day-42";
+    const bearer = "ghp_AAAABBBBCCCCDDDDEEEEFFFF1234";
+
+    const result = env.service.createRequestFromTypedProposal({
+      proposal: gatedProposal({
+        resource_scope: `postgres://admin:${password}@db.internal/prod`,
+        side_effect_summary: `Pushes using Bearer ${bearer} and api_key=super-secret-value-1234567890-abcdef to the registry.`,
+      }),
+      run: makeRun(),
+      execute: () => {},
+    });
+    expect(result.outcome).toBe("paused_for_approval");
+    if (result.outcome !== "paused_for_approval") throw new Error("expected a paused outcome");
+
+    // The durable request row: scrubbed, digest intact.
+    const request = env.approvals.getRequest(WS, result.approval_id)!;
+    expect(request.resource_scope).not.toContain(password);
+    expect(request.resource_scope).toContain("[REDACTED]");
+    expect(request.side_effect_summary).not.toContain(bearer);
+    expect(request.side_effect_summary).not.toContain("super-secret-value-1234567890-abcdef");
+    expect(request.side_effect_summary).toContain("[REDACTED]");
+    expect(request.args_digest).toBe(`sha256:${"b".repeat(64)}`);
+
+    // The journal event carries the same scrubbed scope.
+    const event = env.journal
+      .listStream(`task:${"task_001"}`, WS)
+      .find((row) => row.event_type === "approval.requested");
+    expect(event).toBeDefined();
+    const envelope = JSON.parse(event!.payload) as { payload: { resource_scope: string } };
+    expect(envelope.payload.resource_scope).not.toContain(password);
+    expect(envelope.payload.resource_scope).toContain("[REDACTED]");
+  });
+
+  it("leaves clean summaries and scopes verbatim — no over-redaction of ordinary text", () => {
+    const env = newRuntime();
+    const result = env.service.createRequestFromTypedProposal({
+      proposal: gatedProposal(),
+      run: makeRun(),
+      execute: () => {},
+    });
+    expect(result.outcome).toBe("paused_for_approval");
+    if (result.outcome !== "paused_for_approval") throw new Error("expected a paused outcome");
+
+    const request = env.approvals.getRequest(WS, result.approval_id)!;
+    expect(request.side_effect_summary).toBe(
+      "Pushes local commits to the configured remote repository.",
+    );
+    expect(request.resource_scope).toBe("workspace://notes/draft.md");
   });
 });

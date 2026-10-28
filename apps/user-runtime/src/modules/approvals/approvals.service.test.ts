@@ -1183,7 +1183,7 @@ describe("approvals service: reminder firing on the fake clock (S20 chunk 3, E3)
     const pause = pauseOnce(env, makeRun());
     expect(env.journal.listStream(`task:${pause.run.task_id}`, WS)).toHaveLength(2);
 
-    env.service.setMute({ workspace_id: WS, scope: "task", target_id: "task_001" });
+    env.service.setMute({ workspace_id: WS, scope: "task", target_id: "task_001", created_by: USER });
     env.setNow("2026-10-30T12:00:00.000Z"); // well past every slot
     env.service.dueReminders(WS);
     // A recheck consult is equally stateless toward runs.
@@ -1202,7 +1202,7 @@ describe("approvals service: mutes stop NOTIFICATIONS only (S20 chunk 3, E3)", (
     const env = newRuntime();
     const pause = pauseOnce(env, makeRun());
 
-    env.service.setMute({ workspace_id: WS, scope: "approval", target_id: pause.approval_id });
+    env.service.setMute({ workspace_id: WS, scope: "approval", target_id: pause.approval_id, created_by: USER });
     env.setNow("2026-10-29T12:00:00.000Z");
     const entries = env.service.dueReminders(WS);
 
@@ -1229,7 +1229,7 @@ describe("approvals service: mutes stop NOTIFICATIONS only (S20 chunk 3, E3)", (
     expect(entries.filter((e) => e.approval_id === b.approval_id).every((e) => e.outcome === "delivered")).toBe(true);
 
     // The task mute widens the silence to B's remaining slots.
-    env.service.setMute({ workspace_id: WS, scope: "task", target_id: "task_001" });
+    env.service.setMute({ workspace_id: WS, scope: "task", target_id: "task_001", created_by: USER });
     env.setNow("2026-10-29T18:00:00.000Z");
     entries = env.service.dueReminders(WS);
     expect(entries.filter((e) => e.approval_id === b.approval_id).every((e) => e.outcome === "muted")).toBe(true);
@@ -1244,7 +1244,7 @@ describe("approvals service: mutes stop NOTIFICATIONS only (S20 chunk 3, E3)", (
     const a = pauseOnce(env, makeRun());
     const b = pauseOnce(env, makeRun());
 
-    env.service.setMute({ workspace_id: WS, scope: "all" });
+    env.service.setMute({ workspace_id: WS, scope: "all", created_by: USER });
     env.setNow("2026-10-29T12:00:00.000Z");
     const entries = env.service.dueReminders(WS);
 
@@ -1257,13 +1257,51 @@ describe("approvals service: mutes stop NOTIFICATIONS only (S20 chunk 3, E3)", (
   it("an incoherent mute is refused typed — APPROVAL_MUTE_INVALID", () => {
     const env = newRuntime();
 
-    expect(catchCode(() => env.service.setMute({ workspace_id: WS, scope: "approval" })).code).toBe(
-      "APPROVAL_MUTE_INVALID",
-    );
     expect(
-      catchCode(() => env.service.setMute({ workspace_id: WS, scope: "all", target_id: "task_001" }))
+      catchCode(() => env.service.setMute({ workspace_id: WS, scope: "approval", created_by: USER }))
         .code,
     ).toBe("APPROVAL_MUTE_INVALID");
+    expect(
+      catchCode(() =>
+        env.service.setMute({ workspace_id: WS, scope: "all", target_id: "task_001", created_by: USER }),
+      ).code,
+    ).toBe("APPROVAL_MUTE_INVALID");
+  });
+
+  it("a mute without a deciding user actor is refused typed (S20 review fix F2)", () => {
+    const env = newRuntime();
+
+    // No actor at all: the mute input is not coherent typed data.
+    expect(catchCode(() => env.service.setMute({ workspace_id: WS, scope: "all" })).code).toBe(
+      "APPROVAL_MUTE_INVALID",
+    );
+    // An Agent actor can never record a mute either — muting is a USER
+    // notification decision (the G6 family: prompt-shaped input owns nothing).
+    expect(
+      catchCode(() =>
+        env.service.setMute({
+          workspace_id: WS,
+          scope: "all",
+          created_by: { type: "agent", id: "agent_general_assistant" },
+        }),
+      ).code,
+    ).toBe("APPROVAL_MUTE_INVALID");
+    expect(env.approvals.listMutes(WS)).toHaveLength(0);
+  });
+
+  it("the recorded mute row carries its creator for audit (S20 review fix F2)", () => {
+    const env = newRuntime();
+
+    const mute = env.service.setMute({
+      workspace_id: WS,
+      scope: "task",
+      target_id: "task_001",
+      created_by: USER,
+    });
+    expect(mute.created_by).toBe("user_001");
+    expect(env.approvals.listMutes(WS)).toEqual([
+      expect.objectContaining({ mute_id: mute.mute_id, scope: "task", created_by: "user_001" }),
+    ]);
   });
 });
 

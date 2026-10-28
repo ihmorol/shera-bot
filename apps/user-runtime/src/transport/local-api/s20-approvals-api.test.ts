@@ -639,32 +639,65 @@ describe("S20 approvals API: mutes and due reminders", () => {
     }
   });
 
-  it("records and lists mutes per workspace", async () => {
+  it("records and lists mutes per workspace, with their creating user actor (S20 review fix F2)", async () => {
     env = await composeOn(GATED_TOOL);
     const mute = await postJson(env.origin, "/v1/approvals/mutes", {
       workspace_id: WORKSPACE,
       scope: "task",
       target_id: "task_evt_s20_trig_1",
+      created_by: USER,
     });
     expect(mute.status).toBe(201);
-    expect(mute.body).toMatchObject({ workspace_id: WORKSPACE, scope: "task", target_id: "task_evt_s20_trig_1" });
+    expect(mute.body).toMatchObject({
+      workspace_id: WORKSPACE,
+      scope: "task",
+      target_id: "task_evt_s20_trig_1",
+      created_by: "user_001",
+    });
 
     const all = await postJson(env.origin, "/v1/approvals/mutes", {
       workspace_id: WORKSPACE,
       scope: "all",
+      created_by: USER,
     });
     expect(all.status).toBe(201);
     expect(all.body["target_id"]).toBeNull();
 
     // A task-scope mute without its target id is the typed 400.
     expect(
-      (await postJson(env.origin, "/v1/approvals/mutes", { workspace_id: WORKSPACE, scope: "task" }))
+      (await postJson(env.origin, "/v1/approvals/mutes", { workspace_id: WORKSPACE, scope: "task", created_by: USER }))
         .status,
     ).toBe(400);
 
     const list = await getJson(env.origin, `/v1/approvals/mutes?workspace_id=${WORKSPACE}`);
     expect(list.status).toBe(200);
-    expect(list.body["mutes"]).toHaveLength(2);
+    const mutes = list.body["mutes"] as Array<Record<string, unknown>>;
+    expect(mutes).toHaveLength(2);
+    // The audit record: every mute row names the user actor that created it.
+    expect(mutes.every((row) => row["created_by"] === "user_001")).toBe(true);
+  });
+
+  it("refuses a mute without a user actor (typed 400) — the browser path binds it server-side from the session", async () => {
+    env = await composeOn(GATED_TOOL);
+
+    // No actor at all.
+    const actorless = await postJson(env.origin, "/v1/approvals/mutes", {
+      workspace_id: WORKSPACE,
+      scope: "all",
+    });
+    expect(actorless.status).toBe(400);
+    expect(actorless.body["code"]).toBe("CONTRACT_VALIDATION_FAILED");
+
+    // An Agent actor is refused by the service (only users mute — G6 family).
+    const agent = await postJson(env.origin, "/v1/approvals/mutes", {
+      workspace_id: WORKSPACE,
+      scope: "all",
+      created_by: { type: "agent", id: GATED_AGENT },
+    });
+    expect(agent.status).toBe(400);
+    expect(agent.body["code"]).toBe("APPROVAL_MUTE_INVALID");
+
+    expect(((await getJson(env.origin, `/v1/approvals/mutes?workspace_id=${WORKSPACE}`)).body["mutes"] ?? [])).toHaveLength(0);
   });
 
   it("fires due reminders (delivered_at stamped), enforces mutes, and NEVER changes run state", async () => {
@@ -680,6 +713,7 @@ describe("S20 approvals API: mutes and due reminders", () => {
       workspace_id: WORKSPACE,
       scope: "task",
       target_id: run.taskId,
+      created_by: USER,
     });
 
     // The immediate slot (0) is due at the pause time; the scan answers it.

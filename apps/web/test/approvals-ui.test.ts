@@ -356,19 +356,24 @@ describe("Approvals client (proxy paths)", () => {
     });
   });
 
-  it("createApprovalMute posts the scope with its target (approval / task / all)", async () => {
+  it("createApprovalMute posts the scope with its target and the user actor (S20 review fix F2)", async () => {
     const mute: ApprovalMuteRecord = {
       workspace_id: WORKSPACE,
       mute_id: "mute_01",
       scope: "task",
       target_id: "task_run_01",
       created_at: "2026-10-28T10:06:00.000Z",
+      created_by: "user-1",
     };
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(201, mute));
     vi.stubGlobal("fetch", fetchMock);
 
-    const created = await createApprovalMute(WORKSPACE, muteTargetFor("task", PENDING_APPROVAL));
-    expect(created).toMatchObject({ mute_id: "mute_01", scope: "task" });
+    const created = await createApprovalMute(
+      WORKSPACE,
+      muteTargetFor("task", PENDING_APPROVAL),
+      { type: "user", id: "user-1" },
+    );
+    expect(created).toMatchObject({ mute_id: "mute_01", scope: "task", created_by: "user-1" });
     const [path, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(path).toBe("/api/runtime/v1/approvals/mutes");
     expect(init.method).toBe("POST");
@@ -376,6 +381,7 @@ describe("Approvals client (proxy paths)", () => {
       workspace_id: WORKSPACE,
       scope: "task",
       target_id: "task_run_01",
+      created_by: { type: "user", id: "user-1" },
     });
   });
 
@@ -403,6 +409,7 @@ describe("Approvals client (proxy paths)", () => {
               scope: "all",
               target_id: null,
               created_at: "2026-10-28T10:06:00.000Z",
+              created_by: "user-1",
             },
           ],
         }),
@@ -410,6 +417,7 @@ describe("Approvals client (proxy paths)", () => {
     );
     const mutes = await fetchApprovalMutes(WORKSPACE);
     expect(mutes).toHaveLength(1);
+    expect(mutes[0]).toMatchObject({ mute_id: "mute_01", created_by: "user-1" });
     const [mutesPath] = vi.mocked(globalThis.fetch).mock.calls[0] as [string];
     expect(mutesPath).toBe(`/api/runtime/v1/approvals/mutes?workspace_id=${WORKSPACE}`);
 
@@ -810,6 +818,7 @@ const MUTE: ApprovalMuteRecord = {
   scope: "task",
   target_id: "task_run_01",
   created_at: "2026-10-28T10:06:00.000Z",
+  created_by: "user-1",
 };
 
 function renderPermissions(props: Record<string, unknown> = {}): string {

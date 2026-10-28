@@ -2,14 +2,26 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { AGENT_SETTINGS_USER_ACTOR } from "@/lib/agent-api";
 import { RuntimeApiError } from "@/lib/runtime-client";
 import {
   WorkspaceLeaseConflictError,
   createWorkspaceDirectory,
   deleteWorkspaceNode,
   fetchWorkspaceNodes,
+  fetchWorkspaceNodesAs,
+  fetchWorkspaceArtifacts,
+  isTextMime,
+  readWorkspaceFile,
+  readWorkspaceFileAs,
+  readWorkspaceArtifact,
   uploadWorkspaceFile,
+  writeWorkspaceFile,
+  type WorkspaceArtifact,
+  type WorkspaceArtifactContent,
+  type WorkspaceFileContent,
   type WorkspaceNode,
+  type WorkspaceReadActor,
 } from "@/lib/workspace-api";
 
 /**
@@ -162,4 +174,182 @@ export function useDeleteWorkspaceNode(workspaceId: string): {
 export function joinWorkspaceUri(directoryUri: string, name: string): string {
   const base = directoryUri === "workspace://" ? "workspace://" : `${directoryUri}/`;
   return `${base}${encodeURIComponent(name)}`;
+}
+
+// ---------------------------------------------------------------------------
+// Chunk 5 hooks — the Editor tab's read/save seam, the Private files tab's
+// agent:// listing (the actor-parameterized read), and the Artifacts list.
+// ---------------------------------------------------------------------------
+
+export interface WorkspaceEditorFile {
+  state: "idle" | "loading" | "ready" | "error";
+  safeErrorMessage: string | undefined;
+  refetch: () => void;
+  file: WorkspaceFileContent | null;
+  /** The decoded text for the editor (text mimes only; null for binary). */
+  content: string | null;
+  isText: boolean;
+}
+
+/** The Editor tab's file read. A null path idles — nothing open, nothing fetched. */
+export function useWorkspaceEditorFile(
+  workspaceId: string,
+  path: string | null,
+): WorkspaceEditorFile {
+  const enabled = path !== null;
+  const query = useQuery({
+    queryKey: ["workspace-editor-file", workspaceId, path],
+    queryFn: () => readWorkspaceFile(workspaceId, path as string),
+    enabled,
+    retry: false,
+  });
+  const file = query.data ?? null;
+  const isText = file === null ? true : isTextMime(file.mime_type);
+  return {
+    state: !enabled ? "idle" : query.isPending ? "loading" : query.isError ? "error" : "ready",
+    safeErrorMessage: query.isError ? safeWorkspaceMessage(query.error) : undefined,
+    refetch: () => {
+      void query.refetch();
+    },
+    file,
+    // Concurrent reads stay allowed while an Agent holds the lease (D6) —
+    // the editor renders the loaded content even after a conflict.
+    content: file !== null && isText ? new TextDecoder().decode(file.bytes) : null,
+    isText,
+  };
+}
+
+/** The Editor tab's save: the user's own edit is a user action (D4 actor, D6 gate). */
+export function useSaveWorkspaceFile(
+  workspaceId: string,
+  path: string | null,
+): {
+  saveFile: (content: string) => Promise<WorkspaceNode>;
+  savePending: boolean;
+} {
+  const invalidate = useInvalidateNodes(workspaceId);
+  const mutation = useMutation({
+    mutationFn: async (content: string) => {
+      if (path === null) throw new Error("No file is open.");
+      return writeWorkspaceFile(workspaceId, path, content);
+    },
+    onSuccess: invalidate,
+  });
+  return {
+    saveFile: (content: string) => mutation.mutateAsync(content),
+    savePending: mutation.isPending,
+  };
+}
+
+/**
+ * The Private files tab's listing: the agent://<id>/ scope read AS the owning
+ * Agent (D39). Null agent idles — no Agent selected, nothing fetched. The
+ * path may sit deeper in the scope after navigation; it defaults to the
+ * scope root.
+ */
+export function useAgentWorkspaceNodes(
+  workspaceId: string,
+  agentId: string | null,
+  path?: string | null,
+): {
+  nodes: WorkspaceNode[];
+  state: "idle" | "loading" | "ready" | "error";
+  safeErrorMessage: string | undefined;
+  refetch: () => void;
+} {
+  const scopePath = path ?? (agentId !== null ? `agent://${agentId}/` : null);
+  const enabled = agentId !== null && scopePath !== null;
+  const query = useQuery({
+    queryKey: ["workspace-agent-nodes", workspaceId, agentId, scopePath],
+    queryFn: () =>
+      fetchWorkspaceNodesAs(workspaceId, scopePath as string, {
+        type: "agent",
+        id: agentId as string,
+      }),
+    enabled,
+    retry: false,
+  });
+  return {
+    nodes: query.data ?? [],
+    state: !enabled ? "idle" : query.isPending ? "loading" : query.isError ? "error" : "ready",
+    safeErrorMessage: query.isError ? safeWorkspaceMessage(query.error) : undefined,
+    refetch: () => {
+      void query.refetch();
+    },
+  };
+}
+
+/**
+ * The download handoff (bytes → Blob → the browser's save affordance) with a
+ * caller-chosen read actor: the user for workspace:// files, the owning Agent
+ * for agent:// files. The byte decoding is the workspace client's; only the
+ * DOM handoff lives here.
+ */
+export function useWorkspaceFileDownload(
+  workspaceId: string,
+  actor: WorkspaceReadActor | null,
+): {
+  downloadNode: (path: string, node: WorkspaceNode) => Promise<void>;
+} {
+  const read = actor ?? AGENT_SETTINGS_USER_ACTOR;
+  return {
+    downloadNode: async (path, node) => {
+      const file = await readWorkspaceFileAs(workspaceId, path, read);
+      const blob = new Blob([file.bytes as BlobPart], {
+        type: file.mime_type ?? "application/octet-stream",
+      });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = node.name;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    },
+  };
+}
+
+/** The Artifacts tab's E12 list (by workspace; by run when task context exists). */
+export function useWorkspaceArtifacts(workspaceId: string): {
+  artifacts: WorkspaceArtifact[];
+  state: "loading" | "ready" | "error";
+  safeErrorMessage: string | undefined;
+  refetch: () => void;
+} {
+  const query = useQuery({
+    queryKey: ["workspace-artifacts", workspaceId],
+    queryFn: () => fetchWorkspaceArtifacts(workspaceId),
+    retry: false,
+  });
+  return {
+    artifacts: query.data ?? [],
+    state: query.isPending ? "loading" : query.isError ? "error" : "ready",
+    safeErrorMessage: query.isError ? safeWorkspaceMessage(query.error) : undefined,
+    refetch: () => {
+      void query.refetch();
+    },
+  };
+}
+
+/**
+ * The artifact actions: open previews the REAL bytes (the caller decides the
+ * inline-vs-binary rendering); download hands the byte-exact read to the
+ * browser's save affordance. Provenance is immutable — these are reads only.
+ */
+export function useWorkspaceArtifactActions(workspaceId: string): {
+  openArtifact: (artifact: WorkspaceArtifact) => Promise<WorkspaceArtifactContent>;
+  downloadArtifact: (artifact: WorkspaceArtifact) => Promise<void>;
+} {
+  return {
+    openArtifact: (artifact) => readWorkspaceArtifact(workspaceId, artifact.artifact_id),
+    downloadArtifact: async (artifact) => {
+      const content = await readWorkspaceArtifact(workspaceId, artifact.artifact_id);
+      const blob = new Blob([content.bytes as BlobPart], { type: content.mime_type });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = artifact.name;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    },
+  };
 }

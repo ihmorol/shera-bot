@@ -65,7 +65,6 @@ function makeArtifact(overrides: Partial<WorkspaceArtifact> & { name: string }):
   return {
     artifact_id: `artifact_${overrides.name}`,
     workspace_id: WORKSPACE,
-    name: overrides.name,
     artifact_type: "document",
     size: 2048,
     mime_type: "text/markdown",
@@ -449,10 +448,12 @@ describe("Editor tab view", () => {
     expect(html).toContain("Retry");
   });
 
-  it("wires the save path through writeWorkspaceFile and a Mod-s keymap (source)", () => {
+  it("wires the save path through the write client and a Mod-s keymap (source)", () => {
     const source = readFileSync(join(APP_DIR, "components/workspace/editor-tab.tsx"), "utf8");
-    // The user's own save is the PUT client call with the editor's content.
-    expect(source).toMatch(/writeWorkspaceFile\(/);
+    // The user's own save rides the save hook (the PUT lives in the data seam).
+    expect(source).toMatch(/useSaveWorkspaceFile\(/);
+    const data = readFileSync(join(APP_DIR, "lib/workspace-data.ts"), "utf8");
+    expect(data).toMatch(/writeWorkspaceFile\(/);
     // Cmd/Ctrl+S saves from inside the editor (preventDefault — no browser dialog).
     expect(source).toMatch(/Mod-s/);
     expect(source).toMatch(/preventDefault:\s*true/);
@@ -463,10 +464,7 @@ describe("Editor tab view", () => {
   });
 
   it("mounts CodeMirror 6 client-only and disposes the view (source)", () => {
-    const cm = readFileSync(
-      join(APP_DIR, "components/workspace/codemirror-editor.tsx"),
-      "utf8",
-    );
+    const cm = readFileSync(join(APP_DIR, "components/workspace/codemirror-editor.tsx"), "utf8");
     expect(cm).toMatch(/from "@codemirror\/state"/);
     expect(cm).toMatch(/from "@codemirror\/view"/);
     expect(cm).toMatch(/EditorView\.editable\.of\(/);
@@ -551,11 +549,17 @@ describe("Private files tab view", () => {
   });
 
   it("loads through the actor-parameterized client + roster (source)", () => {
-    const source = readFileSync(join(APP_DIR, "components/workspace/private-files-tab.tsx"), "utf8");
-    expect(source).toMatch(/fetchWorkspaceNodesAs\(/);
+    const source = readFileSync(
+      join(APP_DIR, "components/workspace/private-files-tab.tsx"),
+      "utf8",
+    );
+    expect(source).toMatch(/useAgentWorkspaceNodes\(/);
     expect(source).toMatch(/agent:\/\/\$\{/);
-    expect(source).toMatch(/type: "agent"/);
     expect(source).toMatch(/useAgentRoster\(/);
+    // The agent actor is constructed at the data seam.
+    const data = readFileSync(join(APP_DIR, "lib/workspace-data.ts"), "utf8");
+    expect(data).toMatch(/fetchWorkspaceNodesAs\(/);
+    expect(data).toMatch(/type: "agent"/);
   });
 });
 
@@ -585,7 +589,8 @@ describe("Artifacts tab view", () => {
     expect(html).toContain("sources-digest.md");
     expect(html).toContain("bibliography.tex");
     expect(html).toContain("screenshot.png");
-    expect(html).toMatch(/data-testid="artifact-count">3 artifacts</);
+    // The count line IS the list's length (3 here), and one card per row.
+    expect(html).toMatch(/artifact-count[^>]*>3 artifacts</);
     expect(html.match(/data-testid="artifact-card"/g)?.length).toBe(3);
   });
 
@@ -648,9 +653,12 @@ describe("Artifacts tab view", () => {
 
   it("downloads the real bytes through the artifact read (source)", () => {
     const source = readFileSync(join(APP_DIR, "components/workspace/artifacts-tab.tsx"), "utf8");
-    expect(source).toMatch(/readWorkspaceArtifact\(/);
-    expect(source).toMatch(/anchor\.download/);
-    expect(source).toMatch(/URL\.createObjectURL/);
+    // The actions ride the data seam; the byte-exact read lives there.
+    expect(source).toMatch(/useWorkspaceArtifactActions\(/);
+    const data = readFileSync(join(APP_DIR, "lib/workspace-data.ts"), "utf8");
+    expect(data).toMatch(/readWorkspaceArtifact\(/);
+    expect(data).toMatch(/anchor\.download/);
+    expect(data).toMatch(/URL\.createObjectURL/);
   });
 });
 
@@ -701,6 +709,9 @@ describe("craft-floor pins (chunk-5 fixes)", () => {
     expect(routes).toMatch(/workspaceFullBackMarkerKey/);
     expect(routes).toMatch(/sessionStorage\.getItem/);
     expect(routes).toMatch(/router\.back\(\)/);
-    expect(routes).toContain("Go to dashboard");
+    // The deep-link copy lives on the button (it must say what it does).
+    const host = readFileSync(join(APP_DIR, "components/workspace/workspace-panel.tsx"), "utf8");
+    expect(host).toContain("Go to dashboard");
+    expect(host).toContain("Back to chat");
   });
 });

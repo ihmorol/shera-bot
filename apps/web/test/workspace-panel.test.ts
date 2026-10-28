@@ -34,7 +34,7 @@ import {
   workspaceUriSegments,
 } from "../lib/workspace-api";
 import { FilesTabView } from "../components/workspace/files-tab";
-import { TabComingSoon, WORKSPACE_TABS } from "../components/workspace/panel-tabs";
+import { WORKSPACE_TABS } from "../components/workspace/panel-tabs";
 import type { WorkspaceNode } from "../lib/workspace-api";
 
 /**
@@ -603,11 +603,11 @@ describe("delete confirmation gate", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 9. Panel chrome — the tab strip and the honest not-yet tabs
+// 9. Panel chrome — the tab strip (all four S7 tabs shipped in chunk 5)
 // ---------------------------------------------------------------------------
 
-describe("panel chrome (tab strip + honest empty tabs)", () => {
-  it("exposes exactly the chunk-4 tab set with accessible names", () => {
+describe("panel chrome (tab strip)", () => {
+  it("exposes exactly the S7 tab set with accessible names", () => {
     expect(WORKSPACE_TABS.map((tab) => tab.id)).toEqual([
       "files",
       "editor",
@@ -620,13 +620,6 @@ describe("panel chrome (tab strip + honest empty tabs)", () => {
       "Private files",
       "Artifacts",
     ]);
-  });
-
-  it("the not-yet tabs render a designed lands-next-increment state, not a stub box", () => {
-    const html = render(createElement(TabComingSoon, { tabLabel: "Editor" }));
-    expect(html).toContain("Editor");
-    expect(html).toContain("lands in the next build increment");
-    expect(html).not.toContain("placeholder");
   });
 });
 

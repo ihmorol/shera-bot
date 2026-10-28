@@ -198,6 +198,37 @@ export function browserPanelStorage(): Storage | null {
 }
 
 // ---------------------------------------------------------------------------
+// Full-page Back affordance (chunk 5): "Back to chat" must not fire
+// history.back() on a fresh deep link — there, back exits the app and the
+// dashboard copy would lie about where the button goes. The in-app open path
+// (the chat-header toggle) marks the session; the full-page surface reads the
+// mark to pick the honest affordance: history back when this session opened
+// it, a dashboard push (with that copy) when it did not.
+// ---------------------------------------------------------------------------
+
+export function workspaceFullBackMarkerKey(chatId: string): string {
+  return `shera.workspace-full.${chatId}`;
+}
+
+function browserSessionStorage(): Storage | null {
+  try {
+    if (typeof window === "undefined" || window.sessionStorage === null) return null;
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+/** The chat-header toggle calls this right before pushing the full page. */
+export function markWorkspaceFullOpened(chatId: string): void {
+  browserSessionStorage()?.setItem(workspaceFullBackMarkerKey(chatId), "1");
+}
+
+export function clearWorkspaceFullMarker(chatId: string): void {
+  browserSessionStorage()?.removeItem(workspaceFullBackMarkerKey(chatId));
+}
+
+// ---------------------------------------------------------------------------
 // Viewport mode — the mobile bottom sheet (< 768px) is a presentation, not a
 // width state; the host picks the presentation from this matchMedia probe
 // (injected for tests).

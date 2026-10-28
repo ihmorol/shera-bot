@@ -20,6 +20,8 @@ import { UNREACHABLE_ERROR, typedErrorFromPayload } from "@/lib/typed-error";
  *   POST  /v1/workspace/directories    mkdir (structural, ungated)
  *   POST  /v1/workspace/delete         user-only delete (G6: the UI confirms)
  *   GET   /v1/workspace/leases         the workspace's active write leases (D6)
+ *   GET   /v1/workspace/artifacts      the E12 artifact list (by workspace or run)
+ *   GET   /v1/workspace/artifacts/:id  the byte-exact artifact download
  *
  * The actor is the S01 fixture user, the established D4 convention for the
  * request-carried actor (AGENT_SETTINGS_USER_ACTOR — no invented auth, G4).
@@ -32,6 +34,10 @@ import { UNREACHABLE_ERROR, typedErrorFromPayload } from "@/lib/typed-error";
  */
 
 /** One workspace_nodes row (the route's nodeJson shape, content never rides it). */
+const BooleanFlag = z
+  .union([z.boolean(), z.literal(0), z.literal(1)])
+  .transform((value) => value === true || value === 1);
+
 export const WorkspaceNodeSchema = z.strictObject({
   id: z.string().min(1),
   workspace_id: z.string().min(1),
@@ -39,7 +45,9 @@ export const WorkspaceNodeSchema = z.strictObject({
   agent_id: z.string().nullable(),
   parent_id: z.string().nullable(),
   name: z.string().min(1),
-  is_directory: z.boolean(),
+  // The storage layer answers the INTEGER flag as 0|1 on the wire; the read
+  // model normalizes it so the tree and editor never drift on real data.
+  is_directory: BooleanFlag,
   size: z.number().int().min(0),
   mime_type: z.string().nullable(),
   created_by_type: z.string().min(1),
@@ -70,6 +78,35 @@ export const WorkspaceLeaseSchema = z.strictObject({
 export type WorkspaceLease = z.infer<typeof WorkspaceLeaseSchema>;
 
 const WorkspaceLeasesResponse = z.strictObject({ leases: z.array(WorkspaceLeaseSchema) });
+
+/**
+ * One artifact_refs row WITHOUT content (the E12 list/ref shape) — the
+ * provenance fields are the §5 card's data: the producing Agent (nullable —
+ * the user/runtime can produce too) and the producing run (NOT NULL).
+ */
+export const WorkspaceArtifactSchema = z.strictObject({
+  artifact_id: z.string().min(1),
+  workspace_id: z.string().min(1),
+  name: z.string().min(1),
+  artifact_type: z.string().min(1),
+  size: z.number().int().min(0),
+  mime_type: z.string().min(1),
+  producer_agent_id: z.string().nullable(),
+  producer_task_id: z.string().min(1),
+  created_at: z.string().min(1),
+});
+export type WorkspaceArtifact = z.infer<typeof WorkspaceArtifactSchema>;
+
+const WorkspaceArtifactsResponse = z.strictObject({
+  artifacts: z.array(WorkspaceArtifactSchema),
+});
+
+const WorkspaceArtifactResponse = z.strictObject({
+  artifact: WorkspaceArtifactSchema,
+  mime_type: z.string().min(1),
+  size: z.number().int().min(0),
+  content_base64: z.string().min(1),
+});
 
 /**
  * The D6 conflict, parsed from the typed failure's internal_details — exactly
@@ -173,12 +210,28 @@ async function requestWorkspace<T>(
 // Reads
 // ---------------------------------------------------------------------------
 
+/** The request-carried read actor (D4): the user by default, an Agent for its own private scope. */
+export type WorkspaceReadActor = { type: "user" | "agent"; id: string };
+
 export function fetchWorkspaceNodes(workspaceId: string, path: string): Promise<WorkspaceNode[]> {
+  return fetchWorkspaceNodesAs(workspaceId, path, AGENT_SETTINGS_USER_ACTOR);
+}
+
+/**
+ * The actor-parameterized read (chunk 5): the Private files tab lists
+ * agent://<id>/ scopes AS the owning Agent (actor_type=agent&actor_id=<id>).
+ * The API supports the same query params on GET nodes/files.
+ */
+export function fetchWorkspaceNodesAs(
+  workspaceId: string,
+  path: string,
+  actor: WorkspaceReadActor,
+): Promise<WorkspaceNode[]> {
   const query = new URLSearchParams({
     workspace_id: workspaceId,
     path,
-    actor_type: AGENT_SETTINGS_USER_ACTOR.type,
-    actor_id: AGENT_SETTINGS_USER_ACTOR.id,
+    actor_type: actor.type,
+    actor_id: actor.id,
   });
   return requestWorkspace(
     `/api/runtime/v1/workspace/nodes?${query.toString()}`,
@@ -197,11 +250,20 @@ export function readWorkspaceFile(
   workspaceId: string,
   path: string,
 ): Promise<WorkspaceFileContent> {
+  return readWorkspaceFileAs(workspaceId, path, AGENT_SETTINGS_USER_ACTOR);
+}
+
+/** The actor-parameterized file read (the Private tab's read/download path). */
+export function readWorkspaceFileAs(
+  workspaceId: string,
+  path: string,
+  actor: WorkspaceReadActor,
+): Promise<WorkspaceFileContent> {
   const query = new URLSearchParams({
     workspace_id: workspaceId,
     path,
-    actor_type: AGENT_SETTINGS_USER_ACTOR.type,
-    actor_id: AGENT_SETTINGS_USER_ACTOR.id,
+    actor_type: actor.type,
+    actor_id: actor.id,
   });
   return requestWorkspace(`/api/runtime/v1/workspace/files?${query.toString()}`, (payload) => {
     const parsed = WorkspaceFileResponse.parse(payload);
@@ -212,6 +274,52 @@ export function readWorkspaceFile(
       bytes: base64ToBytes(parsed.content_base64),
     };
   });
+}
+
+/**
+ * The E12 artifact list: by workspace (the Artifacts tab's default), or by
+ * producing run when the task context exists. The count IS the list's — the
+ * card grid never invents or drops rows.
+ */
+export function fetchWorkspaceArtifacts(
+  workspaceId: string,
+  taskId?: string,
+): Promise<WorkspaceArtifact[]> {
+  const query = new URLSearchParams({
+    workspace_id: workspaceId,
+    ...(taskId !== undefined ? { task_id: taskId } : {}),
+  });
+  return requestWorkspace(
+    `/api/runtime/v1/workspace/artifacts?${query.toString()}`,
+    (payload) => WorkspaceArtifactsResponse.parse(payload).artifacts,
+  );
+}
+
+export interface WorkspaceArtifactContent {
+  artifact: WorkspaceArtifact;
+  mime_type: string;
+  size: number;
+  bytes: Uint8Array;
+}
+
+/** The byte-exact artifact read (open-preview + download both ride it). */
+export function readWorkspaceArtifact(
+  workspaceId: string,
+  artifactId: string,
+): Promise<WorkspaceArtifactContent> {
+  const query = new URLSearchParams({ workspace_id: workspaceId });
+  return requestWorkspace(
+    `/api/runtime/v1/workspace/artifacts/${encodeURIComponent(artifactId)}?${query.toString()}`,
+    (payload) => {
+      const parsed = WorkspaceArtifactResponse.parse(payload);
+      return {
+        artifact: parsed.artifact,
+        mime_type: parsed.mime_type,
+        size: parsed.size,
+        bytes: base64ToBytes(parsed.content_base64),
+      };
+    },
+  );
 }
 
 export function listWorkspaceLeases(workspaceId: string): Promise<WorkspaceLease[]> {
@@ -327,10 +435,38 @@ export function deleteWorkspaceNode(
 // shared scope only this chunk; agent:// listing is chunk 5)
 // ---------------------------------------------------------------------------
 
+/**
+ * The editor's text boundary: text mimes and the common structured-text types
+ * edit as text. An UNKNOWN mime (null) attempts text honestly — the storage
+ * only refuses when the bytes are proven binary. Proven binary (image/*, pdf,
+ * octet-stream, …) renders the honest read-only notice instead.
+ */
+const BINARY_MIME_PATTERN =
+  /^(image\/|audio\/|video\/|application\/(?:pdf|zip|gzip|x-tar|octet-stream|wasm|sqlite|vnd\.)|font\/)/;
+
+export function isTextMime(mimeType: string | null): boolean {
+  if (mimeType === null) return true;
+  if (mimeType.startsWith("text/")) return true;
+  if (BINARY_MIME_PATTERN.test(mimeType)) return false;
+  // Common structured-text types that are not text/*.
+  return /^(application\/(?:json|javascript|xml|x-yaml|yaml|toml|x-sh|sql|x-httpd-php|x-python)|\+xml$)/.test(
+    mimeType,
+  );
+}
+
+/** The byte budget for inline artifact previews (small text only). */
+export const ARTIFACT_PREVIEW_MAX_BYTES = 64 * 1024;
+
 /** The workspace:// URI for a segment path (root keeps the // marker). */
 export function workspaceUriForPath(segments: string[]): string {
   if (segments.length === 0) return "workspace://";
   return `workspace://${segments.map(encodeURIComponent).join("/")}`;
+}
+
+/** Join an agent:// scope root or subfolder with one child segment. */
+export function joinAgentUri(scopeRoot: string, name: string): string {
+  const base = scopeRoot.endsWith("/") ? scopeRoot : `${scopeRoot}/`;
+  return `${base}${encodeURIComponent(name)}`;
 }
 
 /** The display segments of a workspace:// URI (decoded). */

@@ -1,30 +1,36 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import type { ReactElement } from "react";
+import { useCallback, useSyncExternalStore, type ReactElement } from "react";
 
 import { ContainerGate } from "@/components/shell/container-gate";
 import { BackToChatButton, WorkspacePanelHost } from "@/components/workspace/workspace-panel";
 import { useContainerResolution } from "@/lib/container-connection";
 import { routes } from "@/lib/routes";
+import { clearWorkspaceFullMarker, workspaceFullBackMarkerKey } from "@/lib/workspace-panel";
 
 /**
  * The per-conversation workspace route surfaces (UI_DESIGN §3.1 S7): the
  * inline variant renders the panel body standalone (deep link), the full-page
- * variant adds the Back-to-chat chrome and more width. Both mount only once
- * the container gate reports the workspace ready — the gate owns the honest
+ * variant adds the Back chrome and more width. Both mount only once the
+ * container gate reports the workspace ready — the gate owns the honest
  * lifecycle states; a panel that reads a workspace it cannot resolve is a
  * guaranteed typed failure pretending to be app state (G4).
  */
 
 /**
- * "Back to chat": in-app history back when this session navigated here;
- * the dashboard is the honest fallback for a fresh deep link. The panel
- * state itself is persisted per conversation, so returning to the chat
- * restores the prior width and membership either way.
+ * "Back to chat": history back when THIS SESSION navigated here (the chat-
+ * header toggle marks it), the dashboard push for a fresh deep link — the
+ * deep-link back would exit the app, so the affordance says what it does.
+ * The panel state itself is persisted per conversation, so the chat restores
+ * the prior width and membership either way.
  */
-export function goBackToChat(router: ReturnType<typeof useRouter>): void {
-  if (typeof window !== "undefined" && window.history.length > 1) {
+export function goBackToChat(router: ReturnType<typeof useRouter>, chatId: string): void {
+  if (
+    typeof window !== "undefined" &&
+    window.sessionStorage.getItem(workspaceFullBackMarkerKey(chatId)) === "1"
+  ) {
+    clearWorkspaceFullMarker(chatId);
     router.back();
     return;
   }
@@ -58,9 +64,29 @@ export function WorkspaceInlineSurface({ chatId }: { chatId: string }): ReactEle
   );
 }
 
-/** The full-page route: same tabs, more width, Back-to-chat chrome. */
+/**
+ * Whether THIS SESSION opened the full page in-app (the chat-header toggle
+ * marks the session; a fresh deep link carries no mark). Read through
+ * useSyncExternalStore so SSR/hydration renders the deep-link default and the
+ * client corrects once the session mark is readable — the first paint never
+ * guesses, and no effect-driven cascade re-render.
+ */
+const noopSubscribe = () => () => undefined;
+
+export function useWorkspaceFullOpenedInApp(chatId: string): boolean {
+  const getSnapshot = useCallback(
+    () =>
+      typeof window !== "undefined" &&
+      window.sessionStorage.getItem(workspaceFullBackMarkerKey(chatId)) === "1",
+    [chatId],
+  );
+  return useSyncExternalStore(noopSubscribe, getSnapshot, () => false);
+}
+
+/** The full-page route: same tabs, more width, the state-aware Back chrome. */
 export function WorkspaceFullSurface({ chatId }: { chatId: string }): ReactElement {
   const router = useRouter();
+  const cameFromApp = useWorkspaceFullOpenedInApp(chatId);
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-line bg-surface px-4 lg:px-6">
@@ -70,7 +96,7 @@ export function WorkspaceFullSurface({ chatId }: { chatId: string }): ReactEleme
           </h1>
           <p className="truncate font-mono text-xs text-muted">Conversation {chatId} · full page</p>
         </div>
-        <BackToChatButton onBack={() => goBackToChat(router)} />
+        <BackToChatButton cameFromApp={cameFromApp} onBack={() => goBackToChat(router, chatId)} />
       </header>
       <ReadyWorkspace>
         {(workspaceId) => (

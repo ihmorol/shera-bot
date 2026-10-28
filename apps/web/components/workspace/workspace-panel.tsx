@@ -16,12 +16,10 @@ import {
 import type { PanelImperativeHandle, PanelSize } from "react-resizable-panels";
 
 import { FilesTab } from "@/components/workspace/files-tab";
-import {
-  TabComingSoon,
-  TabStrip,
-  WORKSPACE_TABS,
-  type WorkspaceTabId,
-} from "@/components/workspace/panel-tabs";
+import { EditorTab } from "@/components/workspace/editor-tab";
+import { ArtifactsTab } from "@/components/workspace/artifacts-tab";
+import { PrivateFilesTab } from "@/components/workspace/private-files-tab";
+import { TabStrip, type WorkspaceTabId } from "@/components/workspace/panel-tabs";
 import { routes } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import {
@@ -29,6 +27,7 @@ import {
   initialPanelState,
   isMobileViewport,
   loadPanelPrefs,
+  markWorkspaceFullOpened,
   mobileViewportQuery,
   panelReducer,
   prefsFromState,
@@ -253,7 +252,7 @@ function WorkspaceBottomSheet({ workspaceId }: { workspaceId: string }): ReactEl
       data-testid="workspace-panel-sheet"
       role="complementary"
       aria-label="Workspace panel"
-      className="fixed inset-x-0 bottom-0 z-40 flex h-[70vh] flex-col rounded-t-2xl border-t border-line bg-surface shadow-[0_-16px_48px_rgba(0,0,0,0.5)]"
+      className="animate-sheet-up fixed inset-x-0 bottom-0 z-40 flex h-[70vh] flex-col rounded-t-2xl border-t border-line bg-surface shadow-[0_-16px_48px_rgba(0,0,0,0.5)]"
     >
       <div
         className="flex shrink-0 cursor-grab justify-center rounded-t-2xl py-2"
@@ -282,7 +281,6 @@ export function WorkspacePanelBody({
   className?: string | undefined;
 }): ReactElement {
   const [activeTab, setActiveTab] = useState<WorkspaceTabId>("files");
-  const activeLabel = WORKSPACE_TABS.find((tab) => tab.id === activeTab)?.label ?? "Files";
   return (
     <section
       aria-label="Workspace panel"
@@ -309,8 +307,12 @@ export function WorkspacePanelBody({
       <div className="min-h-0 flex-1">
         {activeTab === "files" ? (
           <FilesTab workspaceId={workspaceId} />
+        ) : activeTab === "editor" ? (
+          <EditorTab workspaceId={workspaceId} />
+        ) : activeTab === "private" ? (
+          <PrivateFilesTab workspaceId={workspaceId} />
         ) : (
-          <TabComingSoon tabLabel={activeLabel} />
+          <ArtifactsTab workspaceId={workspaceId} />
         )}
       </div>
     </section>
@@ -339,7 +341,10 @@ export function WorkspacePanelToggle({ chatId }: { chatId: string }): ReactEleme
           else host.chatHeaderToggle();
           return;
         }
-        host.chatHeaderToggle(() => router.push(routes.workspaceFull(chatId)));
+        host.chatHeaderToggle(() => {
+          markWorkspaceFullOpened(chatId);
+          router.push(routes.workspaceFull(chatId));
+        });
       }}
       className={cn(
         "shrink-0 rounded-lg p-2 transition-colors duration-150 hover:bg-surface-elevated",
@@ -355,15 +360,26 @@ export function WorkspacePanelToggle({ chatId }: { chatId: string }): ReactEleme
   );
 }
 
-/** The full-page header's Back-to-chat control (the behavior lives with the route surface). */
-export function BackToChatButton({ onBack }: { onBack: () => void }): ReactElement {
+/**
+ * The full-page header's Back control. The copy is state-aware (chunk 5 craft
+ * fix): the in-app open path marks the session, so an in-app arrival says
+ * "Back to chat" and goes back; a fresh deep link says "Go to dashboard" and
+ * MEANS it (history back there would exit the app).
+ */
+export function BackToChatButton({
+  cameFromApp,
+  onBack,
+}: {
+  cameFromApp: boolean;
+  onBack: () => void;
+}): ReactElement {
   return (
     <button
       type="button"
       onClick={onBack}
       className="shrink-0 rounded-lg border border-line px-3 py-1.5 text-sm text-text transition-colors duration-150 hover:border-line-accent hover:bg-surface-elevated"
     >
-      Back to chat
+      {cameFromApp ? "Back to chat" : "Go to dashboard"}
     </button>
   );
 }

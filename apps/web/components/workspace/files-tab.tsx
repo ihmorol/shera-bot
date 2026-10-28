@@ -184,7 +184,7 @@ function FilesToolbar({
   const [creating, setCreating] = useState(false);
   const [folderName, setFolderName] = useState("");
   return (
-    <div className="shrink-0 border-b border-line px-3 pb-2.5 pt-3">
+    <div className="shrink-0 border-b border-line px-3 pb-2 pt-3">
       <div className="flex items-center justify-between gap-2">
         <h3 className="min-w-0 truncate font-mono text-xs uppercase tracking-[0.16em] text-muted">
           Shared workspace

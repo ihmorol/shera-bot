@@ -18,7 +18,9 @@ import type { PanelImperativeHandle, PanelSize } from "react-resizable-panels";
 import { FilesTab } from "@/components/workspace/files-tab";
 import { EditorTab } from "@/components/workspace/editor-tab";
 import { ArtifactsTab } from "@/components/workspace/artifacts-tab";
+import { BrowserTab } from "@/components/workspace/browser-tab";
 import { PrivateFilesTab } from "@/components/workspace/private-files-tab";
+import { TerminalTab } from "@/components/workspace/terminal-tab";
 import { TabStrip, type WorkspaceTabId } from "@/components/workspace/panel-tabs";
 import { routes } from "@/lib/routes";
 import { cn } from "@/lib/utils";
@@ -61,6 +63,13 @@ export type PanelPresentation = "docked" | "page";
 interface PanelRegistration {
   chatId: string;
   workspaceId: string;
+  /**
+   * The conversation's Agent (S18): the terminal live view is PER-AGENT —
+   * the journal streams and the terminal API are agent-scoped. Direct chats
+   * always bind one; a null keeps the terminal tab honest (it shows that no
+   * Agent is bound instead of guessing one, G4).
+   */
+  agentId: string | null;
 }
 
 interface WorkspacePanelContextValue {
@@ -183,7 +192,10 @@ export function WorkspacePanelHostProvider({ children }: { children: ReactNode }
     >
       {children}
       {mobile && registration !== null && state.widthState.kind === "inline" ? (
-        <WorkspaceBottomSheet workspaceId={registration.workspaceId} />
+        <WorkspaceBottomSheet
+          workspaceId={registration.workspaceId}
+          agentId={registration.agentId}
+        />
       ) : null}
     </WorkspacePanelContext.Provider>
   );
@@ -212,26 +224,30 @@ export function useWorkspacePanelRegionWiring(): {
 
 /**
  * The conversation-side registration hook: mounts/unmounts the chat's panel
- * membership. Call with the conversation id once the direct-chat binding
- * resolves; while it is null the panel is released (never a half-registered
- * control).
+ * membership. Call with the conversation id (and the conversation's Agent,
+ * S18) once the direct-chat binding resolves; while it is null the panel is
+ * released (never a half-registered control).
  */
 export function useWorkspacePanelRegistration(
   chatId: string | null,
   workspaceId: string | null,
+  agentId: string | null = null,
 ): void {
   const register = useWorkspacePanelHost().register;
-  const key = chatId !== null && workspaceId !== null ? `${chatId}\u0000${workspaceId}` : null;
+  const key =
+    chatId !== null && workspaceId !== null
+      ? `${chatId}\u0000${workspaceId}\u0000${agentId}`
+      : null;
   useEffect(() => {
     if (key === null || chatId === null || workspaceId === null) {
       register(null);
       return;
     }
-    register({ chatId, workspaceId });
+    register({ chatId, workspaceId, agentId });
     return () => {
       register(null);
     };
-  }, [key, chatId, workspaceId, register]);
+  }, [key, chatId, workspaceId, agentId, register]);
 }
 
 /** The shell's reserved workspace region renders this inside its Panel. */
@@ -241,11 +257,23 @@ export function WorkspacePanelSlot(): ReactElement {
     // The region stays an honest reserved slot — nothing pretends to be open.
     return <div aria-hidden="true" />;
   }
-  return <WorkspacePanelBody workspaceId={registration.workspaceId} onClose={close} />;
+  return (
+    <WorkspacePanelBody
+      workspaceId={registration.workspaceId}
+      agentId={registration.agentId}
+      onClose={close}
+    />
+  );
 }
 
 /** The §2.2 mobile shell: the panel becomes a fixed bottom sheet with a grab handle. */
-function WorkspaceBottomSheet({ workspaceId }: { workspaceId: string }): ReactElement {
+function WorkspaceBottomSheet({
+  workspaceId,
+  agentId,
+}: {
+  workspaceId: string;
+  agentId: string | null;
+}): ReactElement {
   const { close } = useWorkspacePanelHost();
   return (
     <div
@@ -261,7 +289,7 @@ function WorkspaceBottomSheet({ workspaceId }: { workspaceId: string }): ReactEl
         <span className="h-1 w-10 rounded-full bg-line" />
       </div>
       <div className="min-h-0 flex-1">
-        <WorkspacePanelBody workspaceId={workspaceId} onClose={close} />
+        <WorkspacePanelBody workspaceId={workspaceId} agentId={agentId} onClose={close} />
       </div>
     </div>
   );
@@ -273,12 +301,19 @@ function WorkspaceBottomSheet({ workspaceId }: { workspaceId: string }): ReactEl
 
 export function WorkspacePanelBody({
   workspaceId,
+  agentId = null,
   onClose,
   className,
   initialTab,
   onTabChange,
 }: {
   workspaceId: string;
+  /**
+   * The conversation's Agent binding (S18) — the Terminal tab's stream scope.
+   * Defaults to null: a surface that cannot bind an Agent gets the honest
+   * unbound terminal state, never a guessed stream.
+   */
+  agentId?: string | null | undefined;
   onClose?: (() => void) | undefined;
   className?: string | undefined;
   /** The deep-linked initial tab (F3): the full-page route validates ?tab= and passes it down; absent → Files. */
@@ -315,6 +350,10 @@ export function WorkspacePanelBody({
           <FilesTab workspaceId={workspaceId} />
         ) : activeTab === "editor" ? (
           <EditorTab workspaceId={workspaceId} />
+        ) : activeTab === "terminal" ? (
+          <TerminalTab workspaceId={workspaceId} agentId={agentId} />
+        ) : activeTab === "browser" ? (
+          <BrowserTab workspaceId={workspaceId} />
         ) : activeTab === "private" ? (
           <PrivateFilesTab workspaceId={workspaceId} />
         ) : (
@@ -398,12 +437,15 @@ export function BackToChatButton({
  */
 export function WorkspacePanelHost({
   workspaceId,
+  agentId = null,
   initialTab,
   onTabChange,
 }: {
   chatId: string;
   workspaceId: string;
   presentation: PanelPresentation;
+  /** The S18 Agent binding for the Terminal tab (absent on deep links → the honest unbound state). */
+  agentId?: string | null | undefined;
   initialTab?: WorkspaceTabId | undefined;
   onTabChange?: ((tab: WorkspaceTabId) => void) | undefined;
 }): ReactElement {
@@ -411,6 +453,7 @@ export function WorkspacePanelHost({
     <div data-testid="workspace-panel-page" className="h-full min-h-0">
       <WorkspacePanelBody
         workspaceId={workspaceId}
+        agentId={agentId}
         initialTab={initialTab}
         onTabChange={onTabChange}
       />

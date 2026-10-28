@@ -606,7 +606,8 @@ describe("delete confirmation gate", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 9. Panel chrome — the tab strip (all four S7 tabs shipped in chunk 5)
+// 9. Panel chrome — the tab strip (S17's four tabs + S18's read-only live
+// views; the S7 order is Files, Editor, Terminal, Browser, …, Private files)
 // ---------------------------------------------------------------------------
 
 describe("panel chrome (tab strip)", () => {
@@ -614,12 +615,16 @@ describe("panel chrome (tab strip)", () => {
     expect(WORKSPACE_TABS.map((tab) => tab.id)).toEqual([
       "files",
       "editor",
+      "terminal",
+      "browser",
       "private",
       "artifacts",
     ]);
     expect(WORKSPACE_TABS.map((tab) => tab.label)).toEqual([
       "Files",
       "Editor",
+      "Terminal",
+      "Browser",
       "Private files",
       "Artifacts",
     ]);

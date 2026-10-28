@@ -118,6 +118,41 @@ describe("workspace panel allowlist (S17, D6/D39/G6)", () => {
     ] as const)
       expect(isBrowserRuntimePath(method, path)).toBe(false);
   });
+
+  it("allowlists the S19 merge-review reads and its two mutations — nothing more", () => {
+    // The web UI's projects seam (§S9 Git & repositories, PRD §10): the
+    // project list, one project's detail, the worktree ledger, and the
+    // merge-request queue are GETs; the runtime's validation run and the PRD
+    // §10 decision are POSTs. Deliberately ABSENT (Agent/runtime-owned
+    // surfaces, G2/G6): project import/clone, credential store/revoke,
+    // worktree allocation/release, merge-request preparation — and there is
+    // no secret read-back at all (D22).
+    for (const path of [
+      "/v1/projects",
+      "/v1/projects/prj_demo_01",
+      "/v1/projects/prj_demo_01/worktrees",
+      "/v1/projects/prj_demo_01/merge-requests",
+    ])
+      expect(isBrowserRuntimePath("GET", path), `GET ${path}`).toBe(true);
+    for (const path of [
+      "/v1/projects/prj_demo_01/merge-requests/mr_01/decision",
+      "/v1/projects/prj_demo_01/merge-requests/mr_01/validation",
+    ])
+      expect(isBrowserRuntimePath("POST", path), `POST ${path}`).toBe(true);
+    for (const [method, path] of [
+      ["POST", "/v1/projects"],
+      ["POST", "/v1/projects/prj_demo_01/worktrees"],
+      ["POST", "/v1/projects/prj_demo_01/credentials"],
+      ["POST", "/v1/projects/prj_demo_01/credentials/cred_1/revoke"],
+      ["POST", "/v1/projects/prj_demo_01/worktrees/wt_1/release"],
+      ["POST", "/v1/projects/prj_demo_01/merge-requests"],
+      ["GET", "/v1/projects/prj_demo_01/credentials"],
+      ["GET", "/v1/projects/prj_demo_01/merge-requests/mr_01"],
+      ["GET", "/v1/projects/prj_demo_01/merge-requests/../.."],
+      ["POST", "/v1/projects/prj_demo_01/merge-requests/mr_01/decide"],
+    ] as const)
+      expect(isBrowserRuntimePath(method, path), `${method} ${path}`).toBe(false);
+  });
 });
 
 describe("live views allowlist (S18, G6 — read-only, no takeover)", () => {

@@ -53,7 +53,18 @@ export function isBrowserRuntimePath(method: string, path: string): boolean {
       /^\/v1\/approvals\/[a-zA-Z0-9_-]+\/decision$/.test(path) ||
       path === "/v1/approvals/grants/revoke" ||
       path === "/v1/approvals/mutes" ||
-      path === "/v1/approvals/due-reminders"
+      path === "/v1/approvals/due-reminders" ||
+      // S19 chunk 2 (PRD §10, G2/G6): the merge-review surface's two
+      // mutations — the runtime's validation run for one merge request (G2:
+      // agents propose; the runtime validates and attaches the result) and
+      // one PRD §10 decision (approve / reject / request-changes), relayed
+      // into the S20 approval machinery with the acting user bound
+      // SERVER-SIDE by the proxy (agents never decide, G6). Merge-request
+      // PREPARATION stays Agent/runtime-owned; there is no browser path for
+      // project import/clone, credential store/revoke, or worktree
+      // allocation.
+      /^\/v1\/projects\/[a-zA-Z0-9_-]+\/merge-requests\/[a-zA-Z0-9_-]+\/decision$/.test(path) ||
+      /^\/v1\/projects\/[a-zA-Z0-9_-]+\/merge-requests\/[a-zA-Z0-9_-]+\/validation$/.test(path)
     );
   }
   if (method === "PUT") {
@@ -124,6 +135,16 @@ export function isBrowserRuntimePath(method: string, path: string): boolean {
       /^\/v1\/terminals\/[a-zA-Z0-9_-]+$/.test(path) ||
       path === "/v1/browser/view" ||
       path === "/v1/browser/state")
+      // S19 chunk 2 (PRD §10, E6, G3/G5): the merge-review surface's reads.
+      // The workspace's project list, one project's detail (worktrees + merge
+      // requests + credential METADATA — masked hints only; no read-back
+      // route exists for secrets, D22), the worktree ledger (the G5 queue is
+      // visible), and the merge-request queue. There is deliberately NO
+      // browser path for project import/clone, credential store/revoke, or
+      // worktree allocation: those ride the Agent/runtime surfaces, never a
+      // direct browser write.
+      path === "/v1/projects" ||
+      /^\/v1\/projects\/[a-zA-Z0-9_-]+(?:\/worktrees|\/merge-requests)?$/.test(path))
   );
 }
 

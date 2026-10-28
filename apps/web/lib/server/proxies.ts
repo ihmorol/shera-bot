@@ -16,6 +16,13 @@ import { Session, isBrowserRuntimePath, runtimeWorkspaceMatches } from "@shera-b
 const SESSION_ACTOR_BINDINGS: ReadonlyArray<{ pathPattern: RegExp; bodyField: string }> = [
   { pathPattern: /^\/v1\/approvals\/[a-zA-Z0-9_-]+\/decision$/, bodyField: "decided_by" },
   { pathPattern: /^\/v1\/approvals\/mutes$/, bodyField: "created_by" },
+  // S19 chunk 2 (PRD §10, G6): the merge-review decision binds the session's
+  // user server-side exactly like the approval decision — agents never
+  // decide, and a client-chosen identity never reaches the runtime.
+  {
+    pathPattern: /^\/v1\/projects\/[a-zA-Z0-9_-]+\/merge-requests\/[a-zA-Z0-9_-]+\/decision$/,
+    bodyField: "decided_by",
+  },
 ];
 
 /** The 401 failure shape for a request whose session carries no usable identity. */

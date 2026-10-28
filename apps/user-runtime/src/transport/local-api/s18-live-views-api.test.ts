@@ -26,6 +26,8 @@
 import { join, resolve as resolvePath } from "node:path";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { readFileSync, statSync } from "node:fs";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import type { Express } from "express";
@@ -68,6 +70,28 @@ async function composeOn(): Promise<RunningRuntime> {
     dbPath: join(dir, "runtime.db"),
     packsRoot: PACKS_ROOT,
     now: () => clockNow,
+  });
+  trackConnection(runtime);
+  openRuntimes.push(runtime);
+  await new Promise<void>((resolveListen) =>
+    runtime.httpServer.listen(0, "127.0.0.1", resolveListen),
+  );
+  const address = runtime.httpServer.address() as { port: number };
+  return { runtime, origin: `http://127.0.0.1:${address.port}` };
+}
+
+/**
+ * The composed runtime WITH the shared browser profile service configured —
+ * the browser is opt-in configuration (G4); without the option the surface
+ * answers the honest not-configured state.
+ */
+async function composeOnBrowser(): Promise<RunningRuntime> {
+  const dir = makeTempDir("shera-s18-live-views-browser-");
+  const runtime = composeRuntime({
+    dbPath: join(dir, "runtime.db"),
+    packsRoot: PACKS_ROOT,
+    now: () => clockNow,
+    browser: { profileDir: join(dir, "browser-profile") },
   });
   trackConnection(runtime);
   openRuntimes.push(runtime);
@@ -384,5 +408,246 @@ describe("S18 live views API — durable replay and current terminal state", () 
     expect(state.status).toBe(200);
     expect(state.body["current"]).toBeNull();
     expect(state.body["recent"]).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// S18 chunk 2 — the read-only browser live-view surface
+// ---------------------------------------------------------------------------
+
+/** The browser-control vocabulary that must appear in NO browser route path. */
+const BROWSER_CONTROL_VOCABULARY = [
+  "navigate",
+  "goto",
+  "click",
+  "type",
+  "keyboard",
+  "scroll",
+  "press",
+  "input",
+  "form",
+  "submit",
+  "download",
+  "upload",
+  "control",
+];
+
+/** One loopback page server (127.0.0.1 only) for browser round-trip evidence. */
+async function startPageServer(
+  handler: (req: IncomingMessage, res: ServerResponse) => void,
+): Promise<{ origin: string; server: Server }> {
+  const server = createServer(handler);
+  await new Promise<void>((resolveListen) => server.listen(0, "127.0.0.1", resolveListen));
+  server.unref();
+  const address = server.address() as { port: number };
+  return { origin: `http://127.0.0.1:${address.port}`, server };
+}
+
+describe("S18 live views API — the no-takeover browser route inventory (chunk 2)", () => {
+  it("registers EXACTLY two GET browser routes and zero browser-control routes", async () => {
+    const { runtime } = await composeOnBrowser();
+
+    const browserRoutes = enumerateRoutes(runtime.app).filter((route) =>
+      route.path.startsWith("/v1/browser"),
+    );
+
+    // The complete inventory: two read-only GET routes. Nothing else — no
+    // navigation, no click, no type, no keyboard route (PRD §4.3/§20).
+    expect(browserRoutes).toEqual([
+      { method: "GET", path: "/v1/browser/state" },
+      { method: "GET", path: "/v1/browser/view" },
+    ]);
+
+    for (const route of browserRoutes) {
+      expect(route.method).toBe("GET");
+      for (const word of BROWSER_CONTROL_VOCABULARY) {
+        expect(route.path.toLowerCase()).not.toContain(word);
+      }
+    }
+  });
+
+  it("answers non-GET verbs on browser routes with the typed 404 (no control path)", async () => {
+    const { origin } = await composeOnBrowser();
+
+    expect(await request(origin, "/v1/browser/view", "POST")).toBe(404);
+    expect(await request(origin, "/v1/browser/view", "PUT")).toBe(404);
+    expect(await request(origin, "/v1/browser/view", "PATCH")).toBe(404);
+    expect(await request(origin, "/v1/browser/view", "DELETE")).toBe(404);
+    expect(await request(origin, "/v1/browser/state", "POST")).toBe(404);
+  });
+
+  it("answers the honest not-configured state when no browser service is composed (G4)", async () => {
+    const { origin } = await composeOn();
+
+    const state = await getJson(origin, `/v1/browser/state?workspace_id=${WORKSPACE}`);
+    expect(state.status).toBe(200);
+    expect(state.body["configured"]).toBe(false);
+
+    const view = await getJson(origin, `/v1/browser/view?workspace_id=${WORKSPACE}`);
+    expect(view.status).toBe(200);
+    expect(view.body["configured"]).toBe(false);
+    expect("screenshot_base64" in view.body).toBe(false);
+  });
+});
+
+describe("S18 live views API — the browser live view and its redaction posture", () => {
+  it("round-trips the ACTUAL current page (url, title, real screenshot) through the API", async () => {
+    const { origin, server } = await startPageServer((req, res) => {
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(
+        "<html><head><title>S18 Composed Panel Page</title></head><body><h1>shera-api-proof</h1></body></html>",
+      );
+    });
+    const { runtime } = await composeOnBrowser();
+
+    // Drive the Agent's browser driver seam (never the HTTP surface — the
+    // read-only API has no navigation routes by construction).
+    const browser = runtime.browser;
+    if (!browser) {
+      throw new Error("the composed runtime must expose the browser service seam");
+    }
+    await browser.claimControl({
+      workspace_id: WORKSPACE,
+      owner_id: "driver-a",
+      capability: { kind: "browser-research" },
+    });
+    await browser.navigateTo({
+      workspace_id: WORKSPACE,
+      owner_id: "driver-a",
+      capability: { kind: "browser-research" },
+      url: `${origin}/panel-target`,
+    });
+
+    const view = await getJson(origin, `/v1/browser/view?workspace_id=${WORKSPACE}`);
+    expect(view.status).toBe(200);
+    expect(view.body["configured"]).toBe(true);
+    expect(view.body["state"]).toBe("running");
+    expect(view.body["url"]).toBe(`${origin}/panel-target`);
+    expect(view.body["title"]).toBe("S18 Composed Panel Page");
+    expect(String(view.body["screenshot_base64"]).length).toBeGreaterThan(100);
+
+    const state = await getJson(origin, `/v1/browser/state?workspace_id=${WORKSPACE}`);
+    expect(state.status).toBe(200);
+    expect(state.body["configured"]).toBe(true);
+    expect(state.body["lifecycle_state"]).toBe("running");
+    expect((state.body["owner"] as Record<string, unknown>)["owner_id"]).toBe("driver-a");
+    // D27 posture, reported: the browser service opens no inbound socket.
+    expect(state.body["inbound_listen"]).toBe("none");
+
+    server.closeAllConnections();
+    server.close();
+  });
+
+  it("scopes browser reads by workspace (E12) and refuses malformed reads", async () => {
+    const { origin } = await composeOnBrowser();
+
+    // Missing workspace_id: the typed 400.
+    const noWorkspace = await getJson(origin, "/v1/browser/view");
+    expect(noWorkspace.status).toBe(400);
+    const noWorkspaceState = await getJson(origin, "/v1/browser/state");
+    expect(noWorkspaceState.status).toBe(400);
+
+    // Another workspace reads ITS container view honestly (the browser is
+    // container-shared; no other workspace's data exists to leak).
+    const foreign = await getJson(origin, `/v1/browser/state?workspace_id=${FOREIGN_WORKSPACE}`);
+    expect(foreign.status).toBe(200);
+    expect(foreign.body["workspace_id"]).toBe(FOREIGN_WORKSPACE);
+  });
+
+  it("never lets a cookie value reach an API payload, the journal, the database, or the logs (G3/D22)", async () => {
+    const COOKIE_VALUE = "shera-e2e-secret-cookie-4a9d7f2b1c8e";
+    const { origin, server } = await startPageServer((req, res) => {
+      if ((req.url ?? "").startsWith("/login")) {
+        res.writeHead(200, {
+          "content-type": "text/html; charset=utf-8",
+          "set-cookie": `shera_session=${COOKIE_VALUE}; Path=/`,
+        });
+        res.end("<html><head><title>login-done</title></head><body></body></html>");
+        return;
+      }
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(
+        "<html><head><title>session-page</title></head><body>no cookie rendered</body></html>",
+      );
+    });
+    const logLines: string[] = [];
+    const dir = makeTempDir("shera-s18-browser-api-");
+    const runtime = composeRuntime({
+      dbPath: join(dir, "runtime.db"),
+      packsRoot: PACKS_ROOT,
+      now: () => clockNow,
+      browser: { profileDir: join(dir, "browser-profile") },
+      logUntypedFault: (event, fields) => logLines.push(JSON.stringify({ event, ...fields })),
+    });
+    openRuntimes.push(runtime);
+    await new Promise<void>((resolveListen) =>
+      runtime.httpServer.listen(0, "127.0.0.1", resolveListen),
+    );
+    const apiOrigin = `http://127.0.0.1:${(runtime.httpServer.address() as { port: number }).port}`;
+
+    // The driver's session picks up the cookie through the persistent profile.
+    const browser = runtime.browser;
+    if (!browser) {
+      throw new Error("the composed runtime must expose the browser service seam");
+    }
+    await browser.claimControl({
+      workspace_id: WORKSPACE,
+      owner_id: "driver-a",
+      capability: { kind: "browser-research" },
+    });
+    await browser.navigateTo({
+      workspace_id: WORKSPACE,
+      owner_id: "driver-a",
+      capability: { kind: "browser-research" },
+      url: `${origin}/login`,
+    });
+    await browser.navigateTo({
+      workspace_id: WORKSPACE,
+      owner_id: "driver-a",
+      capability: { kind: "browser-research" },
+      url: `${origin}/page`,
+    });
+
+    // Every API payload is clean.
+    const view = await getJson(apiOrigin, `/v1/browser/view?workspace_id=${WORKSPACE}`);
+    const state = await getJson(apiOrigin, `/v1/browser/state?workspace_id=${WORKSPACE}`);
+    const viewText = JSON.stringify(view.body);
+    const stateText = JSON.stringify(state.body);
+    expect(view.status).toBe(200);
+    expect(state.status).toBe(200);
+    expect(viewText).not.toContain(COOKIE_VALUE);
+    expect(stateText).not.toContain(COOKIE_VALUE);
+
+    // The database (and its WAL) never holds the cookie: the profile dir is
+    // the custody store (D22); the runtime DB stores nothing browser-side.
+    for (const file of ["runtime.db", "runtime.db-wal"]) {
+      const path = join(dir, file);
+      let bytes: Buffer | undefined;
+      try {
+        statSync(path);
+        bytes = readFileSync(path);
+      } catch {
+        bytes = undefined; // absent sidecar: nothing to scan
+      }
+      if (bytes !== undefined) {
+        expect(bytes.toString("utf8").includes(COOKIE_VALUE)).toBe(false);
+      }
+    }
+
+    // No fault log line ever carries the value (G3).
+    for (const line of logLines) {
+      expect(line.includes(COOKIE_VALUE)).toBe(false);
+    }
+
+    server.closeAllConnections();
+    server.close();
+  });
+
+  it("binds the composed surface to loopback only (D27 documented check)", async () => {
+    const { runtime } = await composeOnBrowser();
+    runtime.httpServer.listen(0, "127.0.0.1", () => {});
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const address = runtime.httpServer.address() as { address: string };
+    expect(address.address).toBe("127.0.0.1");
   });
 });

@@ -420,11 +420,20 @@ const CreateMuteBody = z.strictObject({
   scope: z.enum(["approval", "task", "all"]),
   /** The service owns the scope/target coherence ('task'/'approval' need one). */
   target_id: z.string().min(1).max(256).nullish(),
+  /**
+   * The deciding USER actor (S20 review fix F2) — required, recorded on the
+   * mute row as its audit creator; the service refuses any non-user actor.
+   * Direct API callers relay the body actor; the BROWSER path is bound
+   * server-side by the web proxy from the authenticated session (F1/F2), so a
+   * client-asserted value never survives to the runtime there.
+   */
+  created_by: Actor,
 });
 
 const SetMuteInputFrom = (body: z.infer<typeof CreateMuteBody>): SetMuteInput => ({
   workspace_id: body.workspace_id,
   scope: body.scope,
+  created_by: body.created_by,
   ...(body.target_id !== undefined && body.target_id !== null ? { target_id: body.target_id } : {}),
 });
 
@@ -489,14 +498,20 @@ export function registerApprovalsRoutes(app: Express, deps: ApprovalsApiHandle):
   });
 
   // POST /v1/approvals/mutes — record one reminder-silencing mute (E3). The
-  // service owns the typed scope/target coherence (400 on violation) and
-  // muting never touches requests, runs, or grants.
+  // body requires the deciding USER actor (F2 — the row's audit creator; the
+  // browser path binds it server-side in the web proxy). The service owns the
+  // typed scope/target coherence (400 on violation) and muting never touches
+  // requests, runs, or grants.
   app.post(APPROVAL_MUTES_PATH, (req, res) => {
     const body = CreateMuteBody.safeParse(req.body);
     if (!body.success) {
       res
         .status(400)
-        .json(validationFailure("The mute request is not valid: a workspace_id and a scope are required."));
+        .json(
+          validationFailure(
+            "The mute request is not valid: a workspace_id, a scope, and a user actor are required.",
+          ),
+        );
       return;
     }
     res.status(201).json(deps.setMute(SetMuteInputFrom(body.data)));

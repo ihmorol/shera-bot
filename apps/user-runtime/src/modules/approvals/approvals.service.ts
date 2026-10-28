@@ -109,6 +109,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
 import {
+  Actor,
   ApprovalChoice,
   ApprovalGrant,
   ApprovalRequest,
@@ -118,7 +119,6 @@ import {
   Id,
   RISK_CLASSES,
   RiskClass,
-  type Actor,
   type RunState,
   type TaskPolicy,
   type TaskRejection,
@@ -1243,8 +1243,10 @@ export class ApprovalsService {
   /**
    * Record one reminder-silencing mute (E3). Strictly typed (G2): the
    * 'approval' and 'task' scopes REQUIRE their target id; the 'all' scope
-   * takes none. Muting is a NOTIFICATION concern only — it never touches the
-   * request, the run, or any grant.
+   * takes none. Muting is a USER notification decision (the G6 family) — the
+   * input requires the deciding user actor, recorded on the row for audit
+   * (v12 `created_by`); an Agent actor is refused, and muting never touches
+   * the request, the run, or any grant.
    */
   setMute(input: SetMuteInput): ApprovalMuteRow {
     const verdict = SetMuteInputSchema.safeParse(input);
@@ -1255,7 +1257,7 @@ export class ApprovalsService {
         "the mute input is not coherent typed data",
       );
     }
-    const { workspace_id, scope } = verdict.data;
+    const { workspace_id, scope, created_by } = verdict.data;
     const target_id = verdict.data.target_id ?? null;
     if (scope === "all" && target_id !== null) {
       throw new ApprovalsServiceError(
@@ -1271,12 +1273,20 @@ export class ApprovalsService {
         `the '${scope}' mute scope requires a target_id`,
       );
     }
+    if (created_by.type !== "user") {
+      throw new ApprovalsServiceError(
+        "APPROVAL_MUTE_INVALID",
+        "validation",
+        "only a user actor records a mute",
+      );
+    }
     const row: ApprovalMuteRow = {
       workspace_id,
       mute_id: `mut_${randomUUID()}`,
       scope,
       target_id,
       created_at: this.now(),
+      created_by: created_by.id,
     };
     return this.deps.approvals.insertMute(row);
   }
@@ -1318,12 +1328,16 @@ const SetMuteInputSchema = z.strictObject({
   workspace_id: z.string().min(1).max(128),
   scope: z.enum(["approval", "task", "all"]),
   target_id: z.string().min(1).max(256).nullish(),
+  /** The deciding USER actor (S20 review fix F2) — recorded on the row. */
+  created_by: Actor,
 });
 export type SetMuteInput = {
   workspace_id: string;
   scope: ApprovalMuteScope;
   /** Required for the 'approval' and 'task' scopes; refused for 'all'. */
   target_id?: string | null;
+  /** Required USER actor — the mute's audit creator (an Agent is refused). */
+  created_by: Actor;
 };
 
 /** The deterministic lookup's typed result: the matching grant or one typed miss. */

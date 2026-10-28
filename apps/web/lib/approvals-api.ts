@@ -113,6 +113,8 @@ export const ApprovalMuteRecord = z.strictObject({
   scope: z.enum(["approval", "task", "all"]),
   target_id: z.string().nullable(),
   created_at: z.string(),
+  /** The creating user actor's id (the mute's audit record; legacy rows null). */
+  created_by: z.string().nullable(),
 });
 export type ApprovalMuteRecord = z.infer<typeof ApprovalMuteRecord>;
 
@@ -302,9 +304,16 @@ export function muteTargetFor(
   }
 }
 
+/**
+ * Record one reminder-silencing mute (E3). The mute requires the deciding
+ * USER actor (F2) — the session's identity is sent as `created_by`; the web
+ * proxy additionally binds it server-side from the authenticated session, so
+ * the audit record is the runtime's truth either way.
+ */
 export function createApprovalMute(
   workspaceId: string,
   target: { scope: "approval" | "task" | "all"; target_id?: string },
+  createdBy: Actor,
 ): Promise<ApprovalMuteRecord> {
   return requestRuntime(
     "/api/runtime/v1/approvals/mutes",
@@ -314,6 +323,7 @@ export function createApprovalMute(
       body: JSON.stringify({
         workspace_id: workspaceId,
         scope: target.scope,
+        created_by: createdBy,
         ...(target.target_id !== undefined ? { target_id: target.target_id } : {}),
       }),
     },

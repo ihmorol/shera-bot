@@ -17,6 +17,7 @@ import {
   type ApprovalChoice,
 } from "@/lib/approvals-api";
 import { RuntimeApiError } from "@/lib/runtime-client";
+import { useSessionIdentity } from "@/lib/container-connection";
 import type { Actor } from "@shera-bot/contracts";
 
 /**
@@ -200,14 +201,25 @@ export function useApprovalDecision(workspaceId: string) {
   });
 }
 
-/** One reminder-silencing mute (E3: notifications only). */
+/**
+ * One reminder-silencing mute (E3: notifications only). The mutation sends
+ * the session's user identity as the mute's `created_by` (F2); the web proxy
+ * binds the same identity server-side, so the audit row is the session's
+ * truth. The button is only reachable in a signed-in session.
+ */
 export function useApprovalsMute(workspaceId: string) {
   const queryClient = useQueryClient();
+  const session = useSessionIdentity();
   return useMutation({
     mutationFn: (input: {
       scope: "approval" | "task" | "all";
       approval: Pick<ApprovalCardData, "approval_id" | "task_id">;
-    }) => createApprovalMute(workspaceId, muteTargetFor(input.scope, input.approval)),
+    }) =>
+      createApprovalMute(
+        workspaceId,
+        muteTargetFor(input.scope, input.approval),
+        { type: "user", id: session.data?.google_sub ?? "" },
+      ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["approval-mutes", workspaceId] });
     },

@@ -218,6 +218,15 @@
  * grants keep NULL forever. The stamp is write-once (the writer only updates
  * rows whose consumed_at is still NULL), mirroring the immutability of
  * decisions themselves (D9).
+ *
+ * v12 — approval mute creator (S20 review round; F2): a nullable created_by
+ * column on approval_mutes, holding the user actor id that recorded the mute.
+ * Nullable, following the v10/v11 ALTER TABLE style (no NOT NULL DEFAULT —
+ * STRICT tables backfill nothing), so pre-existing creatorless mute rows keep
+ * reading NULL; every NEW mute is written only through the service, which
+ * requires the deciding user actor and stamps its id. Muting is a user
+ * notification decision (the G6 family): the row is the audit record of WHO
+ * silenced which reminders.
  */
 import type { DatabaseSync } from "node:sqlite";
 
@@ -685,6 +694,13 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
     name: "approval-grant-consumption",
     sql: `
       ALTER TABLE approval_grants ADD COLUMN consumed_at TEXT;
+    `,
+  },
+  {
+    version: 12,
+    name: "approval-mute-creator",
+    sql: `
+      ALTER TABLE approval_mutes ADD COLUMN created_by TEXT;
     `,
   },
 ];

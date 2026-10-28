@@ -62,6 +62,7 @@ import { EventsService } from "../events/events.service.ts";
 import {
   ApprovalsService,
   ApprovalsServiceError,
+  type SetMuteInput,
   type TypedToolProposal,
 } from "./approvals.service.ts";
 
@@ -1222,7 +1223,7 @@ describe("approvals service: mutes stop NOTIFICATIONS only (S20 chunk 3, E3)", (
     const a = pauseOnce(env, makeRun());
     const b = pauseOnce(env, makeRun());
 
-    env.service.setMute({ workspace_id: WS, scope: "approval", target_id: a.approval_id });
+    env.service.setMute({ workspace_id: WS, scope: "approval", target_id: a.approval_id, created_by: USER });
     env.setNow("2026-10-28T12:15:00.000Z"); // slots 0 and 1 are due for both
     let entries = env.service.dueReminders(WS);
     expect(entries.filter((e) => e.approval_id === a.approval_id).every((e) => e.outcome === "muted")).toBe(true);
@@ -1272,9 +1273,9 @@ describe("approvals service: mutes stop NOTIFICATIONS only (S20 chunk 3, E3)", (
     const env = newRuntime();
 
     // No actor at all: the mute input is not coherent typed data.
-    expect(catchCode(() => env.service.setMute({ workspace_id: WS, scope: "all" })).code).toBe(
-      "APPROVAL_MUTE_INVALID",
-    );
+    expect(
+      catchCode(() => env.service.setMute({ workspace_id: WS, scope: "all" } as SetMuteInput)).code,
+    ).toBe("APPROVAL_MUTE_INVALID");
     // An Agent actor can never record a mute either — muting is a USER
     // notification decision (the G6 family: prompt-shaped input owns nothing).
     expect(

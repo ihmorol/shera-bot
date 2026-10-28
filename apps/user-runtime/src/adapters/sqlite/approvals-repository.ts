@@ -31,6 +31,10 @@
  * Reminders gain the due-scan accessor (`listDueUndeliveredReminders`) and the
  * delivery stamp (`markReminderDelivered`, write-once as well) the service's
  * reminder scan fires through.
+ *
+ * Review-round addition (S20; F2): mutes gain a nullable `created_by` audit
+ * column (v12) — every new mute is recorded with its creating user actor's id
+ * (the service refuses actorless or non-user mutes); legacy rows read NULL.
  */
 import type { DatabaseSync } from "node:sqlite";
 
@@ -73,7 +77,11 @@ export interface ApprovalReminderRow {
 /** The reminder-silencing scope of one mute (chunk 3 enforces it). */
 export type ApprovalMuteScope = "approval" | "task" | "all";
 
-/** One row of the v9 approval_mutes table. */
+/**
+ * One row of the v9 approval_mutes table. The v12 audit column records the
+ * creating user actor's id (the service requires it on every new mute);
+ * pre-v12 creatorless rows read NULL — a legacy mute is never attributed.
+ */
 export interface ApprovalMuteRow {
   workspace_id: string;
   mute_id: string;
@@ -81,6 +89,8 @@ export interface ApprovalMuteRow {
   /** The approval/task id the mute targets; null only for the 'all' scope. */
   target_id: string | null;
   created_at: string;
+  /** The creating user actor's id (v12 audit); null only on legacy rows. */
+  created_by: string | null;
 }
 
 const REQUEST_COLUMNS = `
@@ -416,9 +426,9 @@ export class ApprovalsRepository {
     const db = exec ?? this.tx.connection();
     db.prepare(
       `INSERT INTO approval_mutes
-         (workspace_id, mute_id, scope, target_id, created_at)
-       VALUES (?, ?, ?, ?, ?)`,
-    ).run(row.workspace_id, row.mute_id, row.scope, row.target_id, row.created_at);
+         (workspace_id, mute_id, scope, target_id, created_at, created_by)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run(row.workspace_id, row.mute_id, row.scope, row.target_id, row.created_at, row.created_by);
     return row;
   }
 
@@ -427,7 +437,7 @@ export class ApprovalsRepository {
     const db = exec ?? this.tx.connection();
     return db
       .prepare(
-        `SELECT workspace_id, mute_id, scope, target_id, created_at
+        `SELECT workspace_id, mute_id, scope, target_id, created_at, created_by
          FROM approval_mutes
          WHERE workspace_id = ?
          ORDER BY created_at, mute_id`,

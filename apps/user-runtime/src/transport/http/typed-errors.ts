@@ -186,7 +186,8 @@ const APPROVALS_REJECTIONS: Record<
   },
   APPROVAL_MUTE_INVALID: {
     status: 400,
-    safe_message: "The mute request is not coherent typed data for its scope.",
+    safe_message:
+      "The mute request is not coherent typed data for its scope, or its actor is not a user.",
     user_action: null,
   },
   APPROVAL_GRANT_NOT_FOUND: {

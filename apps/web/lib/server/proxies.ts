@@ -1,6 +1,31 @@
 import { randomUUID } from "node:crypto";
 import { Session, isBrowserRuntimePath, runtimeWorkspaceMatches } from "@shera-bot/contracts";
 
+/**
+ * The S20 review fix (F1): on the BROWSER path the approval decision's acting
+ * user is bound SERVER-SIDE from the authenticated session — the body-asserted
+ * `decided_by` is overwritten, so the decision's audit trail is the session's
+ * google_sub, never a client-chosen identity. Direct runtime-API callers (no
+ * proxy) are the documented systemic exception: the local route still relays
+ * its body actor (the pre-existing prototype pattern). The session contract
+ * guarantees google_sub once Session parses; the explicit typed 401 below is
+ * the defensive answer for a session-shaped body that somehow carries no
+ * identity — the same UNAUTHENTICATED failure shape the control plane serves.
+ */
+const SESSION_ACTOR_BINDINGS: ReadonlyArray<{ pathPattern: RegExp; bodyField: string }> = [
+  { pathPattern: /^\/v1\/approvals\/[a-zA-Z0-9_-]+\/decision$/, bodyField: "decided_by" },
+];
+
+/** The 401 failure shape for a request whose session carries no usable identity. */
+const SESSION_IDENTITY_REQUIRED: TypedFailure = {
+  code: "UNAUTHENTICATED",
+  category: "authentication",
+  safe_message: "Sign in to continue.",
+  retryable: false,
+  user_action: "Sign in with Google.",
+  internal_details: null,
+};
+
 /** Browser requests pass through the authenticated control plane, which owns
  * per-account runtime routing. No browser request selects an internal endpoint. */
 interface TypedFailure {
@@ -142,6 +167,26 @@ export async function proxyToLocalApi(request: Request, upstreamPath: string): P
   }
   if (!runtimeWorkspaceMatches(request.method, url.searchParams, body, session.data.workspace_id))
     return tenantMismatch();
+  // F1: the session-bound actor overrides the body's on the browser path for
+  // the approval mutations that name one. The request is rebuilt with the
+  // bound body — the runtime sees ONLY the session identity.
+  const binding = SESSION_ACTOR_BINDINGS.find((entry) => entry.pathPattern.test(upstreamPath));
+  if (binding && request.method === "POST") {
+    const googleSub = session.data.google_sub;
+    if (!googleSub) {
+      return typedFailure(SESSION_IDENTITY_REQUIRED, 401);
+    }
+    const boundBody: Record<string, unknown> = {
+      ...(typeof body === "object" && body !== null ? (body as Record<string, unknown>) : {}),
+      [binding.bodyField]: { type: "user", id: googleSub },
+    };
+    body = boundBody;
+    request = new Request(request.url, {
+      method: request.method,
+      headers: request.headers,
+      body: JSON.stringify(boundBody),
+    });
+  }
   return forward(request, base, `/api/runtime/local${upstreamPath}`);
 }
 

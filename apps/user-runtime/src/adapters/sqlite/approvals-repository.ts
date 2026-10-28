@@ -364,6 +364,50 @@ export class ApprovalsRepository {
       .all(workspaceId, approvalId) as unknown as ApprovalReminderRow[];
   }
 
+  /**
+   * The reminder-scan accessor (S20 chunk 3, E3): every UNDELIVERED slot of
+   * the workspace whose due_at has arrived (due_at <= now, compared
+   * lexicographically — every stamp is a UTC ISO-8601 string from the same
+   * clock), oldest due first. Muting is NOT applied here — the service's scan
+   * enforces it and leaves muted rows untouched (rows are the audit record).
+   */
+  listDueUndeliveredReminders(workspaceId: string, nowIso: string, exec?: DatabaseSync) {
+    const db = exec ?? this.tx.connection();
+    return db
+      .prepare(
+        `SELECT workspace_id, approval_id, reminder_index, due_at, delivered_at
+         FROM approval_reminders
+         WHERE workspace_id = ? AND delivered_at IS NULL AND due_at <= ?
+         ORDER BY due_at, approval_id, reminder_index`,
+      )
+      .all(workspaceId, nowIso) as unknown as ApprovalReminderRow[];
+  }
+
+  /**
+   * Stamp delivered_at on one reminder slot (S20 chunk 3, E3) — the durable
+   * delivery record. Write-once: only an UNDELIVERED row is updated, so a
+   * repeated scan can never double-deliver. False when no undelivered row
+   * matched. Delivery NEVER touches task state (E3) — this writer cannot:
+   * only approval_reminders columns are in its UPDATE.
+   */
+  markReminderDelivered(
+    workspaceId: string,
+    approvalId: string,
+    reminderIndex: number,
+    deliveredAt: string,
+    exec?: DatabaseSync,
+  ): boolean {
+    const db = exec ?? this.tx.connection();
+    const result = db
+      .prepare(
+        `UPDATE approval_reminders SET delivered_at = ?
+         WHERE workspace_id = ? AND approval_id = ? AND reminder_index = ?
+           AND delivered_at IS NULL`,
+      )
+      .run(deliveredAt, workspaceId, approvalId, reminderIndex);
+    return result.changes > 0;
+  }
+
   // -------------------------------------------------------------------------
   // Approval mutes (reminder silencing; enforcement is a later chunk)
   // -------------------------------------------------------------------------

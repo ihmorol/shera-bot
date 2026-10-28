@@ -123,6 +123,8 @@ import {
 import {
   ApprovalsRepository,
   type ApprovalGrantRecord,
+  type ApprovalMuteRow,
+  type ApprovalMuteScope,
 } from "../../adapters/sqlite/approvals-repository.ts";
 import type { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
 import type { OperationsRepository } from "../../adapters/sqlite/operations-repository.ts";
@@ -1060,7 +1062,170 @@ export class ApprovalsService {
 
     return { allowed: true, grant_id: grant.grant_id };
   }
+
+  // -------------------------------------------------------------------------
+  // Reminder firing + mutes (S20 chunk 3 — E3, D32)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Fire every due, undelivered reminder of one workspace (E3): the durable
+   * v9 reminder rows are scanned at the INJECTED clock time (delivered_at IS
+   * NULL, due_at <= now) inside one transaction; each due slot is either
+   * DELIVERED (delivered_at stamped — the write-once durable delivery record)
+   * or suppressed by a mute. The schedule itself has no slot after 24h, so a
+   * scan past the last point delivers nothing, however often it runs.
+   *
+   * Delivery NEVER changes run state (E3): this scan writes nothing but the
+   * reminder rows' delivered_at stamps — no transition, no journal event, no
+   * run mutation of any kind. The D32 invariant (an approval waits
+   * indefinitely; sibling runs are never killed while one waits) holds by
+   * construction here and is pinned by test.
+   *
+   * Mute precedence (approval_id mute > task mute > all): ANY matching mute
+   * suppresses delivery. A muted slot keeps its reminder row UNDELIVERED for
+   * audit (muting stops NOTIFICATIONS only — it never resolves, cancels, or
+   * resumes anything), and the entries answer `muted` so the caller can see
+   * the suppression rather than a silent nothing (G5).
+   */
+  dueReminders(workspaceId: string): ReminderScanEntry[] {
+    const now = this.now();
+    return this.deps.tx.transaction((exec) => {
+      const scopedExec = exec as SqliteExec;
+      const mutes = this.deps.approvals.listMutes(workspaceId, scopedExec);
+      const entries: ReminderScanEntry[] = [];
+      for (const reminder of this.deps.approvals.listDueUndeliveredReminders(
+        workspaceId,
+        now,
+        scopedExec,
+      )) {
+        // The request supplies the task_id a task-scoped mute is matched
+        // against. Rows are created atomically with their request (chunk 1),
+        // so a missing request cannot occur; an orphan would stay undelivered
+        // and resurface rather than be silently resolved (G5).
+        const request = this.deps.approvals.getRequest(
+          workspaceId,
+          reminder.approval_id,
+          scopedExec,
+        );
+        if (request === null) {
+          continue;
+        }
+        if (reminderMuted(request, mutes)) {
+          entries.push({
+            workspace_id: workspaceId,
+            approval_id: reminder.approval_id,
+            reminder_index: reminder.reminder_index,
+            due_at: reminder.due_at,
+            outcome: "muted",
+            delivered_at: null,
+          });
+          continue;
+        }
+        this.deps.approvals.markReminderDelivered(
+          workspaceId,
+          reminder.approval_id,
+          reminder.reminder_index,
+          now,
+          scopedExec,
+        );
+        entries.push({
+          workspace_id: workspaceId,
+          approval_id: reminder.approval_id,
+          reminder_index: reminder.reminder_index,
+          due_at: reminder.due_at,
+          outcome: "delivered",
+          delivered_at: now,
+        });
+      }
+      return entries;
+    });
+  }
+
+  /**
+   * Record one reminder-silencing mute (E3). Strictly typed (G2): the
+   * 'approval' and 'task' scopes REQUIRE their target id; the 'all' scope
+   * takes none. Muting is a NOTIFICATION concern only — it never touches the
+   * request, the run, or any grant.
+   */
+  setMute(input: SetMuteInput): ApprovalMuteRow {
+    const verdict = SetMuteInputSchema.safeParse(input);
+    if (!verdict.success) {
+      throw new ApprovalsServiceError(
+        "APPROVAL_MUTE_INVALID",
+        "validation",
+        "the mute input is not coherent typed data",
+      );
+    }
+    const { workspace_id, scope } = verdict.data;
+    const target_id = verdict.data.target_id ?? null;
+    if (scope === "all" && target_id !== null) {
+      throw new ApprovalsServiceError(
+        "APPROVAL_MUTE_INVALID",
+        "validation",
+        "the 'all' mute scope takes no target id",
+      );
+    }
+    if (scope !== "all" && target_id === null) {
+      throw new ApprovalsServiceError(
+        "APPROVAL_MUTE_INVALID",
+        "validation",
+        `the '${scope}' mute scope requires a target_id`,
+      );
+    }
+    const row: ApprovalMuteRow = {
+      workspace_id,
+      mute_id: `mut_${randomUUID()}`,
+      scope,
+      target_id,
+      created_at: this.now(),
+    };
+    return this.deps.approvals.insertMute(row);
+  }
 }
+
+/**
+ * One entry of a reminder scan: a due slot that was either delivered (stamped)
+ * or suppressed by a mute (row untouched, stays undelivered for audit).
+ */
+export interface ReminderScanEntry {
+  workspace_id: string;
+  approval_id: string;
+  reminder_index: number;
+  due_at: string;
+  outcome: "delivered" | "muted";
+  /** The scan-time stamp written to the row; null when muted. */
+  delivered_at: string | null;
+}
+
+/**
+ * Mute enforcement for one reminder (pure): ANY matching mute suppresses —
+ * the approval-scoped mute targeting THIS approval, the task-scoped mute
+ * targeting the request's task, or a workspace-wide 'all' mute.
+ */
+function reminderMuted(request: ApprovalRequest, mutes: ApprovalMuteRow[]): boolean {
+  return mutes.some((mute) => {
+    if (mute.scope === "approval") {
+      return mute.target_id === request.approval_id;
+    }
+    if (mute.scope === "task") {
+      return mute.target_id === request.task_id;
+    }
+    return true;
+  });
+}
+
+/** The typed setMute input (validated again inside the service — raw input). */
+const SetMuteInputSchema = z.strictObject({
+  workspace_id: z.string().min(1).max(128),
+  scope: z.enum(["approval", "task", "all"]),
+  target_id: z.string().min(1).max(256).nullish(),
+});
+export type SetMuteInput = {
+  workspace_id: string;
+  scope: ApprovalMuteScope;
+  /** Required for the 'approval' and 'task' scopes; refused for 'all'. */
+  target_id?: string | null;
+};
 
 /** The deterministic lookup's typed result: the matching grant or one typed miss. */
 export type GrantLookupResult =

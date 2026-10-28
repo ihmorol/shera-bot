@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 
 import { AgentSettingsSurface } from "@/components/settings/agent-settings";
+import { PermissionsSettingsSurface } from "@/components/settings/permissions-settings";
 import { WorkersSettingsSurface } from "@/components/settings/worker-admission-readout";
 import { SurfaceFrame } from "@/components/shell/surface-frame";
 import { findAgent } from "@/lib/navigation";
@@ -54,6 +55,18 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
     );
   }
 
+  // S20 (§S9, D9/D35): the grants review — every active grant with scope,
+  // tool + version, expiry, creator, and revoke, plus the reminder mutes.
+  if (section?.length === 1 && section[0] === "permissions") {
+    return (
+      <SurfaceFrame title="Settings" meta="Permissions & approvals">
+        <div className="mx-auto max-w-xl">
+          <PermissionsSettingsSurface />
+        </div>
+      </SurfaceFrame>
+    );
+  }
+
   const sectionLabel = section?.length ? section.join(" / ") : "Overview";
 
   return (
@@ -70,6 +83,15 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
               className="text-sm text-text underline underline-offset-4 hover:text-cool-highlight"
             >
               Workers
+            </Link>
+            <span className="font-mono text-xs uppercase tracking-[0.16em] text-muted">open</span>
+          </li>
+          <li className="flex items-center justify-between rounded-xl border border-line bg-surface px-4 py-3">
+            <Link
+              href={routes.settings("permissions")}
+              className="text-sm text-text underline underline-offset-4 hover:text-cool-highlight"
+            >
+              Permissions &amp; approvals
             </Link>
             <span className="font-mono text-xs uppercase tracking-[0.16em] text-muted">open</span>
           </li>

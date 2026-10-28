@@ -35,6 +35,7 @@ import {
   type TaskPolicy,
   type TaskRejection,
   type TaskRun,
+  type TaskTriggerEventType,
   type TypedExecutionEvent,
 } from "@shera-bot/contracts";
 
@@ -72,6 +73,27 @@ export interface HarnessRunServiceDeps {
   workspace_id: string;
   policy: TaskPolicy;
   now?: () => string;
+  /**
+   * S20 chunk 4: the scripted tool-proposal delegate — the G4 scripted-harness
+   * seam for the approval lifecycle. When the (scripted) adapter proposes a
+   * TYPED `tool.proposed` journal event, the gateway journals it through the
+   * UNCHANGED D26 path (the durable typed proposal) and then hands the
+   * envelope plus the run's LIVE projection to this delegate, which runs the
+   * approvals boundary (createRequestFromTypedProposal) INSIDE the same
+   * atomic unit — a gated proposal pauses the run as part of startRun's
+   * transaction, exactly like any other applied proposal. The delegate is a
+   * composition concern (the typed tool definition is authored configuration,
+   * never a classification of the proposal text — G2). WITHOUT the delegate
+   * the event is journalled exactly as before and nothing pauses (G4).
+   */
+  approvals?: {
+    onToolProposed(
+      event: TypedExecutionEvent & {
+        payload: { tool_id: string; tool_version: string; args_digest: string };
+      },
+      run: TaskRun,
+    ): TaskRun;
+  };
 }
 
 export type HarnessStartRunResult =
@@ -132,8 +154,10 @@ export class HarnessRunService {
     const appliedKeys = new Set<string>();
     // Occurrence counters per journal-event type: event ids stay stable across
     // deterministic replays (the Nth progress report of a run is always the
-    // Nth) while repeated reports of one type remain distinct events.
-    const journalEventCounts = new Map<TaskJournalEventType, number>();
+    // Nth) while repeated reports of one type remain distinct events. The
+    // key spans the execution-journal AND trigger vocabularies (S20: a
+    // scripted mid-run tool.proposed rides the journal_event path).
+    const journalEventCounts = new Map<TaskJournalEventType | TaskTriggerEventType, number>();
 
     this.deps.tx.transaction((exec) => {
       // Creation event first (idempotent by event_id on a replayed trigger).
@@ -196,7 +220,7 @@ export class HarnessRunService {
   private applyProposal(
     run: TaskRun,
     appliedKeys: Set<string>,
-    journalEventCounts: Map<TaskJournalEventType, number>,
+    journalEventCounts: Map<TaskJournalEventType | TaskTriggerEventType, number>,
     proposal: HarnessProposal,
     exec: SqliteExec,
     published: EventEnvelope[],
@@ -302,7 +326,26 @@ export class HarnessRunService {
     // cast is justified because the envelope schema IS the D26 contract for
     // this event type — the parse just proved it.
     const envelope = parsedEnvelope.data as TypedExecutionEvent;
-    this.appendContractEvent(envelope, envelope.event_id, exec, published);
+    const appended = this.appendContractEvent(envelope, envelope.event_id, exec, published);
+    // S20 chunk 4: the scripted approval trigger rides THIS seam — a TYPED
+    // tool.proposed proposal, freshly journalled (an idempotent replay
+    // appends nothing and must not re-trigger), hands the run's LIVE
+    // projection to the approvals boundary inside the same atomic unit. The
+    // returned projection (possibly paused at WAITING_FOR_APPROVAL) advances
+    // the run exactly like any other applied proposal; the script's
+    // subsequent commands are evaluated against the paused state and recorded
+    // as typed rejections (an approval waits — G5). Without the delegate:
+    // unchanged behavior (G4).
+    if (
+      appended !== null &&
+      envelope.event_type === "tool.proposed" &&
+      this.deps.approvals !== undefined
+    ) {
+      // The parse above proved the payload conforms to the D26
+      // ToolProposedPayload (tool_id, tool_version, args_digest, summary);
+      // the payload narrowing is that proof, restated for the delegate.
+      return this.deps.approvals.onToolProposed(envelope, run);
+    }
     return run;
   }
 

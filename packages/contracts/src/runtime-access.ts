@@ -40,7 +40,20 @@ export function isBrowserRuntimePath(method: string, path: string): boolean {
       path === "/v1/workspace/delete" ||
       path === "/v1/workspace/leases" ||
       /^\/v1\/workspace\/leases\/[a-zA-Z0-9_-]+\/renew$/.test(path) ||
-      path === "/v1/workspace/artifacts"
+      path === "/v1/workspace/artifacts" ||
+      // S20 chunk 5 (D9/PRD §8, G6): the approval mutations the web UI
+      // offers — one of the five decisions (the acting user is bound
+      // SERVER-SIDE by the proxy from the authenticated session), one grant
+      // revoke, one reminder mute, and the due-reminder scan (S20 review fix
+      // F3: the scan MOVED from GET to POST — it stamps delivered_at, a state
+      // mutation no GET may carry; the S15 command-convention precedent).
+      // Approval CREATION stays runtime-internal (grants are runtime objects,
+      // never prompt- or browser-created); there is deliberately no un-mute
+      // or un-revoke path (write-once semantics live in the runtime).
+      /^\/v1\/approvals\/[a-zA-Z0-9_-]+\/decision$/.test(path) ||
+      path === "/v1/approvals/grants/revoke" ||
+      path === "/v1/approvals/mutes" ||
+      path === "/v1/approvals/due-reminders"
     );
   }
   if (method === "PUT") {
@@ -62,6 +75,17 @@ export function isBrowserRuntimePath(method: string, path: string): boolean {
       // thread. Run/event sub-reads stay private to the runtime surfaces.
       path === "/v1/operations" ||
       /^\/v1\/operations\/[a-zA-Z0-9_-]+(?:\/thread)?$/.test(path) ||
+      // S20 chunk 5 (§S8, E3) approvals reads: the pending D9 cards, one
+      // detail card (with its reminder slots + run projection), the ACTIVE
+      // grants list, and the reminder mutes list. The detail capture EXCLUDES
+      // the reserved literal segments (grants/mutes/due-reminders are their
+      // own allowlist entries — and due-reminders must NOT answer a GET: the
+      // scan is a POST mutation, S20 review fix F3). Every answer is
+      // workspace-scoped (E12).
+      path === "/v1/approvals/pending" ||
+      /^\/v1\/approvals\/(?!grants$|mutes$|due-reminders$)[a-zA-Z0-9_-]+$/.test(path) ||
+      path === "/v1/approvals/grants" ||
+      path === "/v1/approvals/mutes" ||
       // S16 (D32 layer 3, E1): the admission readout — the honest "who is
       // waiting and why" resource read (UI_DESIGN S11 resource states). The
       // one worker surface a browser may read; every worker mutation stays

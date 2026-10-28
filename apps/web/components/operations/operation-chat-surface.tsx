@@ -11,6 +11,7 @@ import { OperationRosterPanel } from "@/components/operations/operation-roster-p
 import { OperationRunsPanel } from "@/components/operations/operation-runs-panel";
 import { OperationThreadView } from "@/components/operations/operation-thread";
 import { OperationPackLauncher } from "@/components/operations/launch-preview";
+import { PendingApprovals } from "@/components/chat/pending-approvals";
 import { ContainerGate } from "@/components/shell/container-gate";
 import { EmptyState, SurfaceFrame } from "@/components/shell/surface-frame";
 import type { AgentRosterSummary } from "@/lib/agent-api";
@@ -323,6 +324,9 @@ function RuntimeOperationChat({
           composerValue={composerValue}
           onComposerChange={setComposerValue}
           sendPending={sendMessage.isPending}
+          // S20 (§S8): the workspace's pending approval cards render in the
+          // thread flow, polled on the app's cadence (lib/approvals-data.ts).
+          approvals={<PendingApprovals workspaceId={workspaceId} />}
           onSend={() => {
             const text = composerValue.trim();
             if (!text || sendMessage.isPending) return;

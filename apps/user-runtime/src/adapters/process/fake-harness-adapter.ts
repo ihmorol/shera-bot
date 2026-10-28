@@ -7,6 +7,13 @@
  * order for the same run request, so later slices and tests run the gateway
  * deterministically without any real harness. The process-backed Pi adapter
  * is a later slice.
+ *
+ * S20 chunk 4: an OPTIONAL scripted TYPED tool proposal (G2) can be
+ * configured — when present the script additionally proposes one durable
+ * `tool.proposed` journal event while the run is RUNNING (right after start).
+ * What the proposal authorizes is the GATEWAY's decision (the approvals seam
+ * in HarnessRunService), never this adapter's; without the option the script
+ * is exactly the pre-S20 one (G4).
  */
 import type {
   HarnessAdapter,
@@ -15,10 +22,23 @@ import type {
   HarnessRunRequest,
 } from "./harness-adapter.ts";
 
+/** The scripted tool proposal's D26 payload fields (digest-only — G3). */
+export interface FakeHarnessToolProposal {
+  tool_id: string;
+  tool_version: string;
+  args_digest: string;
+  proposal_summary: string;
+}
+
 export class FakeHarnessAdapter implements HarnessAdapter {
   readonly harness: HarnessName = "fake";
 
-  constructor(private readonly options: { now?: () => string } = {}) {}
+  constructor(
+    private readonly options: {
+      now?: () => string;
+      toolProposal?: FakeHarnessToolProposal;
+    } = {},
+  ) {}
 
   driveRun(request: HarnessRunRequest, sink: HarnessEventSink): void {
     const issued_at = this.options.now ? this.options.now() : new Date().toISOString();
@@ -52,6 +72,17 @@ export class FakeHarnessAdapter implements HarnessAdapter {
         ...base,
       },
     });
+    // S20 chunk 4: the scripted TYPED tool proposal, proposed while the run is
+    // RUNNING (v3). A gated risk class then pauses the run through the
+    // gateway's approvals seam; the script's complete_task below is rejected
+    // as typed data (an approval waits — G5) and the run stays paused.
+    if (this.options.toolProposal) {
+      sink.propose({
+        kind: "journal_event",
+        event_type: "tool.proposed",
+        payload: { ...this.options.toolProposal },
+      });
+    }
     sink.propose({
       kind: "journal_event",
       event_type: "progress.reported",

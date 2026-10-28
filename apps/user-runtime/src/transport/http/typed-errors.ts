@@ -49,6 +49,7 @@ import {
   WriteLeaseConflictError,
   WriteLeaseRequiredError,
 } from "../../adapters/sqlite/write-leases-repository.ts";
+import { ApprovalsServiceError } from "../../modules/approvals/approvals.service.ts";
 import {
   AgentFolderAccessDeniedError,
   AgentFolderUriInvalidError,
@@ -132,6 +133,76 @@ const AGENTS_REJECTIONS: Record<
   AGENT_NOT_FOUND: {
     status: 404,
     safe_message: "The agent does not exist in this workspace.",
+    user_action: null,
+  },
+};
+
+/**
+ * S20 chunk 4: the approvals boundary rejections (the module service's typed
+ * errors) — validation codes answer the 400 class, state codes the 404/409
+ * classes, and the G6 actor refusals the 403 class. The typed OUTCOMES that
+ * are answers rather than failures (already_decided, transition_rejected)
+ * never throw — they are 200/409 response bodies mapped by the approvals
+ * routes themselves.
+ */
+const APPROVALS_REJECTIONS: Record<
+  ApprovalsServiceError["code"],
+  { status: number; safe_message: string; user_action: string | null }
+> = {
+  APPROVAL_PROPOSAL_INVALID: {
+    status: 400,
+    safe_message: "The tool proposal is not coherent typed approval data.",
+    user_action: null,
+  },
+  APPROVAL_PROPOSAL_RUN_MISMATCH: {
+    status: 400,
+    safe_message: "The proposal does not match the task run it rides on.",
+    user_action: null,
+  },
+  APPROVAL_DECISION_INVALID: {
+    status: 400,
+    safe_message: "The decision choice is not one of the five approval choices.",
+    user_action: null,
+  },
+  APPROVAL_REQUEST_NOT_FOUND: {
+    status: 404,
+    safe_message: "The approval request does not exist in this workspace.",
+    user_action: null,
+  },
+  APPROVAL_REQUEST_RUN_MISMATCH: {
+    status: 400,
+    safe_message: "The approval request does not match the task run it is decided on.",
+    user_action: null,
+  },
+  APPROVAL_ALREADY_RESOLVED: {
+    status: 409,
+    safe_message: "This approval request was already decided; decisions are immutable.",
+    user_action: "Reload the approval to see the recorded resolution.",
+  },
+  APPROVAL_RECHECK_INVALID: {
+    status: 400,
+    safe_message: "The execution recheck input is not coherent typed policy data.",
+    user_action: null,
+  },
+  APPROVAL_MUTE_INVALID: {
+    status: 400,
+    safe_message:
+      "The mute request is not coherent typed data for its scope, or its actor is not a user.",
+    user_action: null,
+  },
+  APPROVAL_GRANT_NOT_FOUND: {
+    status: 404,
+    safe_message: "The grant does not exist in this workspace.",
+    user_action: null,
+  },
+  AGENT_CANNOT_SELF_APPROVE: {
+    status: 403,
+    safe_message: "An Agent cannot approve its own request.",
+    user_action: null,
+  },
+  AGENT_CANNOT_DECIDE_APPROVAL: {
+    status: 403,
+    safe_message: "Only user actors decide approvals.",
     user_action: null,
   },
 };
@@ -248,6 +319,24 @@ export function toSheraErrorResponse(error: unknown, correlationId?: string): Ht
         safe_message: mapping.safe_message,
         retryable: false,
         user_action: null,
+        internal_details: null,
+        correlation_id,
+      },
+    };
+  }
+
+  if (error instanceof ApprovalsServiceError) {
+    const mapping = APPROVALS_REJECTIONS[error.code];
+    return {
+      status: mapping.status,
+      body: {
+        code: error.code,
+        // The service's "forbidden" (G6 refusals) is the wire taxonomy's
+        // "policy" — a permission rule, not an authentication failure.
+        category: error.category === "forbidden" ? "policy" : error.category,
+        safe_message: mapping.safe_message,
+        retryable: false,
+        user_action: mapping.user_action,
         internal_details: null,
         correlation_id,
       },
@@ -633,6 +722,7 @@ function isUntypedFault(error: unknown): boolean {
   return (
     !(error instanceof ConversationsServiceError) &&
     !(error instanceof EventsServiceError) &&
+    !(error instanceof ApprovalsServiceError) &&
     !(error instanceof OperationsServiceError) &&
     !(error instanceof AgentNotFoundError) &&
     !(error instanceof AgentSettingsValidationError) &&

@@ -39,6 +39,7 @@ import { applyMigrations } from "../../adapters/sqlite/migrations.ts";
 import { AgentsRepository } from "../../adapters/sqlite/agents-repository.ts";
 import type { PackAgentSeed } from "../../adapters/sqlite/agents-repository.ts";
 import { ArtifactsRepository } from "../../adapters/sqlite/artifacts-repository.ts";
+import { ApprovalsRepository } from "../../adapters/sqlite/approvals-repository.ts";
 import { CommandReceiptsRepository } from "../../adapters/sqlite/command-receipts-repository.ts";
 import { ConversationsRepository } from "../../adapters/sqlite/conversations-repository.ts";
 import { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
@@ -70,6 +71,7 @@ import {
   OperationsService,
   type OperationPackCatalog,
 } from "../../modules/operations/operations.service.ts";
+import { ApprovalsService } from "../../modules/approvals/approvals.service.ts";
 import { HarnessRunService } from "../../modules/runtime/harness-run-service.ts";
 import { loadWorkspacePack, type WorkspacePack } from "../../modules/runtime/pack-pin.ts";
 import { seedAgentsFromPack } from "../../adapters/sqlite/agents-repository.ts";
@@ -102,6 +104,11 @@ import {
   type WorkerReconciliationReport,
 } from "../../modules/workers/worker-reconciliation.ts";
 import { createLocalApi } from "./app.ts";
+import {
+  applyScriptedToolProposal,
+  buildApprovalsApiHandle,
+  type ScriptedToolProposalConfig,
+} from "./s20-approvals-api.ts";
 import { consoleRedactedLogger, type RedactedLogger } from "../http/typed-errors.ts";
 import { attachWebSocketGateway, type WebSocketGatewayHandle } from "../websocket/gateway.ts";
 
@@ -132,10 +139,22 @@ export interface ComposeLocalApiOptions {
   retentionHorizon?: (workspaceId: string, streamId: string) => number;
   /** B-1: the redacted sink untyped HTTP faults are recorded to. Default: console.error JSON line. */
   logUntypedFault?: RedactedLogger;
+  /**
+   * Deterministic clock for the runtime's written timestamps — harness-run
+   * journal envelopes (composeRuntime) AND the approvals boundary's request,
+   * decision, reminder, and revoke stamps (both compositions). Default: wall
+   * clock; the E8 mock mode pins it so runs are byte-comparable.
+   */
+  now?: () => string;
 }
 
 export interface LocalApiHandle {
   app: Express;
+  /**
+   * S20 chunk 4: the approvals service seam — the boundary the API routes
+   * relay into; tests and operators may consult the AC26 gate directly.
+   */
+  approvals: ApprovalsService;
   /** Closes the SQLite connection. The caller owns the database file. */
   close(): void;
 }
@@ -166,10 +185,17 @@ export interface ComposeRuntimeOptions extends ComposeLocalApiOptions {
   /** S10: the pack version to load from `packsRoot`. Default: latest in the tree. */
   packVersion?: string;
   /**
-   * Deterministic clock for harness-run journal envelopes. Default: wall
-   * clock; the E8 mock mode pins it so runs are byte-comparable.
+   * S20 chunk 4: the scripted lifecycle trigger (G4 opt-in). When set, the
+   * composed FakeHarnessAdapter's script proposes ONE typed `tool.proposed`
+   * journal event per run while the run is RUNNING, and the gateway runs the
+   * approvals boundary over it with the execute callback withheld: any GATED
+   * risk class (every D9 class except the ladder's READ_ONLY) pauses the run
+   * (WAITING_FOR_APPROVAL) and files a pending approval; READ_ONLY runs
+   * automatically (G6). The tool definition is runtime-authored typed
+   * configuration (D38) — never a classification of proposal text (G2).
+   * Default: unset — the scripted runs behave exactly as before S20 (G4).
    */
-  now?: () => string;
+  scriptedToolProposal?: ScriptedToolProposalConfig;
   /**
    * S09 chunk 2: enable the scripted reply producer for conversation turns
    * (the mock/E2E "demo stream equivalent"). When set, every durable USER
@@ -279,6 +305,11 @@ export interface RuntimeHandle {
    * "not configured".
    */
   workers: TaskWorkerSystem | undefined;
+  /**
+   * S20 chunk 4: the approvals service seam — pause, decisions, the AC26
+   * gate, reminders, and mutes; the HTTP surface relays into it.
+   */
+  approvals: ApprovalsService;
   /** Closes the gateway (and with it the HTTP server), then SQLite. */
   close(): Promise<void>;
 }
@@ -297,6 +328,7 @@ interface Wired {
   sessionBridge: SessionReplyBridge | undefined;
   operations: OperationsService;
   workers: TaskWorkerSystem | undefined;
+  approvals: ApprovalsService;
   setPublisher(publisher: ConversationPublisher): void;
 }
 
@@ -660,6 +692,28 @@ function wire(
       }
     : undefined;
 
+  // S20 chunk 4: the approvals boundary over the SAME transaction, journal,
+  // event machinery, and operations repository every other writer uses — the
+  // pause, the five decisions, the AC26 gate, the reminder scan, and the
+  // mutes. The clock is the composition's injected one (tests pin it; the
+  // E3 reminder due times and every stamp agree with the journal). The HTTP
+  // facade is a pure relay into this service — no rule lives in the routes.
+  const approvalsRepository = new ApprovalsRepository(tx);
+  const approvals = new ApprovalsService({
+    tx,
+    journal,
+    events,
+    approvals: approvalsRepository,
+    operations: operationsRepository,
+    ...(options.now ? { clock: options.now } : {}),
+  });
+  const approvalsApi = buildApprovalsApiHandle({
+    approvals,
+    approvalsRepository,
+    journal,
+    now: options.now ?? (() => new Date().toISOString()),
+  });
+
   const replay = new ReplayService({
     journal,
     loadSnapshot: (workspaceId, streamId) => {
@@ -705,6 +759,7 @@ function wire(
       leases: writeLeases,
       artifacts: workspaceArtifacts,
     },
+    approvals: approvalsApi,
     ...(options.logUntypedFault ? { logUntypedFault: options.logUntypedFault } : {}),
   });
   return {
@@ -721,6 +776,7 @@ function wire(
     sessionBridge,
     operations,
     workers,
+    approvals,
     setPublisher(next) {
       publisher = next;
     },
@@ -729,7 +785,7 @@ function wire(
 
 export function composeLocalApi(options: ComposeLocalApiOptions): LocalApiHandle {
   const wired = wire(options);
-  return { app: wired.app, close: () => wired.conn.close() };
+  return { app: wired.app, approvals: wired.approvals, close: () => wired.conn.close() };
 }
 
 /**
@@ -813,8 +869,43 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
   // D51 seam wiring: adapters propose through the sink; the service validates
   // and executes into the journal; committed envelopes fan out on the WS task
   // stream through the same gateway rooms as every other stream.
+  //
+  // S20 chunk 4: when the scripted tool proposal is configured, the composed
+  // FakeHarnessAdapter's script carries ONE typed `tool.proposed` journal
+  // event per run (proposed while the run is RUNNING), and the gateway runs
+  // the approvals boundary over it through the delegate below — the SAME
+  // proposal path every scripted typed event already flows through (no new
+  // event path, no classification — G2/G4). Without the option both halves
+  // are absent and the runs behave exactly as before S20.
+  const scriptedToolProposal = options.scriptedToolProposal;
+  // S20 review fix F6e: the scripted proposal is carried by the composed
+  // FakeHarnessAdapter's script — a caller-supplied harnessAdapter replaces
+  // that adapter wholesale, so the option would be SILENTLY dropped (the
+  // proposal never fires, no approval ever pauses). Record the conflict
+  // through the established redacted fault-log seam instead of dropping it
+  // silently (G5); the runs then behave exactly as the custom adapter
+  // dictates.
+  if (scriptedToolProposal && options.harnessAdapter) {
+    logFault("approval_scripted_tool_proposal_ignored", {
+      reason:
+        "a custom harness adapter is configured; the scripted proposal script is not attached",
+      tool_id: scriptedToolProposal.tool.tool_id,
+    });
+  }
   const harness = new HarnessRunService({
-    adapter: options.harnessAdapter ?? new FakeHarnessAdapter(),
+    adapter:
+      options.harnessAdapter ??
+      (scriptedToolProposal
+        ? new FakeHarnessAdapter({
+            ...(options.now ? { now: options.now } : {}),
+            toolProposal: {
+              tool_id: scriptedToolProposal.tool.tool_id,
+              tool_version: scriptedToolProposal.tool.tool_version,
+              args_digest: scriptedToolProposal.args_digest,
+              proposal_summary: scriptedToolProposal.proposal_summary,
+            },
+          })
+        : new FakeHarnessAdapter()),
     tx: wired.tx,
     journal: wired.journal,
     events: wired.events,
@@ -833,6 +924,22 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     policy: { max_retries: 3 },
     publish: broadcast,
     ...(options.now ? { now: options.now } : {}),
+    ...(scriptedToolProposal
+      ? {
+          approvals: {
+            // The delegate runs INSIDE startRun's atomic unit: the pause and
+            // its journal events commit (or not) with the run's own writes.
+            onToolProposed: (event, run) =>
+              applyScriptedToolProposal(
+                wired.approvals,
+                scriptedToolProposal,
+                event,
+                run,
+                logFault,
+              ),
+          },
+        }
+      : {}),
   });
 
   // S16 (D32): boot-time restart reconciliation — live worker rows whose
@@ -867,6 +974,7 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     replyStreamer,
     sessions: wired.sessions,
     workers: wired.workers,
+    approvals: wired.approvals,
     close: async () => {
       replyStreamer?.stopAll();
       // S16: drain every live worker child through the escalation BEFORE the

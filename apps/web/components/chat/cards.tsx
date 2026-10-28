@@ -30,7 +30,11 @@ function riskClassClass(riskClass: string): string {
   }
 }
 
-function RiskBadge({ riskClass }: { riskClass: string }) {
+/**
+ * §5 risk-class badge — token classes only. Exported so the S20 approval card
+ * renders the exact same vocabulary (same shape, same colors, one affordance).
+ */
+export function RiskBadge({ riskClass }: { riskClass: string }) {
   return (
     <span
       className={cn(
@@ -127,7 +131,7 @@ export function ToolCallCard({ event }: { event: TypedExecutionEvent }) {
           <span className="size-1.5 rounded-full bg-approval" aria-hidden="true" />
           Pausing for your approval
           <span className="font-sans text-[11px] text-muted">
-            — the decision dialog arrives with the approvals surface (demo)
+            — demo data; real approvals decide from their own cards in the thread
           </span>
         </p>
       </CardShell>

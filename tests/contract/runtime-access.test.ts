@@ -13,6 +13,38 @@ describe("browser runtime trust boundary", () => {
       expect(isBrowserRuntimePath("GET", path)).toBe(false);
     expect(isBrowserRuntimePath("PATCH", "/v1/agents/a/instructions")).toBe(false);
   });
+  it("allowlists the S20 approvals reads and the three approval mutations", () => {
+    // The web UI's approvals seam (§S8): the pending list, the detail card,
+    // and the grants/mutes lists are GETs; the decision, the grant revoke,
+    // the mute, and the due-reminder scan are POSTs. Every route is
+    // workspace-scoped (E12) — the workspace selector check above still
+    // applies to all of them. (S20 review fix F3: the scan MOVED to POST — a
+    // GET that stamps delivered_at was a state mutation on a read verb, with
+    // no Origin check; the S15-precedent command-convention applies.)
+    for (const path of [
+      "/v1/approvals/pending",
+      "/v1/approvals/approval_pending_01",
+      "/v1/approvals/grants",
+      "/v1/approvals/mutes",
+    ])
+      expect(isBrowserRuntimePath("GET", path), `GET ${path}`).toBe(true);
+    expect(isBrowserRuntimePath("GET", "/v1/approvals/unknown%2f")).toBe(false);
+    for (const [method, path] of [
+      ["POST", "/v1/approvals/approval_pending_01/decision"],
+      ["POST", "/v1/approvals/grants/revoke"],
+      ["POST", "/v1/approvals/mutes"],
+      ["POST", "/v1/approvals/due-reminders"],
+    ] as const)
+      expect(isBrowserRuntimePath(method, path), `${method} ${path}`).toBe(true);
+    // No other mutation class opens up: no approval creation, no un-mute, no
+    // un-revoke (write-once semantics live in the runtime, not the browser),
+    // a decision stays POST-only, and the state-mutating reminder scan is no
+    // longer reachable as a GET.
+    expect(isBrowserRuntimePath("POST", "/v1/approvals/pending")).toBe(false);
+    expect(isBrowserRuntimePath("DELETE", "/v1/approvals/mutes/mute_01")).toBe(false);
+    expect(isBrowserRuntimePath("GET", "/v1/approvals/approval_pending_01/decision")).toBe(false);
+    expect(isBrowserRuntimePath("GET", "/v1/approvals/due-reminders")).toBe(false);
+  });
   it("rejects missing, conflicting and duplicate workspace selectors", () => {
     expect(
       runtimeWorkspaceMatches("GET", new URLSearchParams("workspace_id=ws_a"), null, "ws_a"),

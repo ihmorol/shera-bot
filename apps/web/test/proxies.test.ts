@@ -743,6 +743,98 @@ describe("runtime proxy — S16 worker admission readout (allowlist addition)", 
   });
 });
 
+describe("runtime proxy — S20 approval decision actor binding (server-side)", () => {
+  it("binds decided_by to the authenticated session — a body-asserted actor never reaches the runtime", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const { calls } = stubFetch(() => Response.json({ ok: true }));
+
+    const request = new Request("http://web.test/api/runtime/v1/approvals/apr_review_01/decision", {
+      method: "POST",
+      body: JSON.stringify({
+        workspace_id: "ws_1",
+        choice: "approve-this-execution-only",
+        // The attacker-chosen audit trail the proxy must overwrite.
+        decided_by: { type: "user", id: "body-asserted-subject" },
+      }),
+      headers: { "content-type": "application/json" },
+    });
+    const response = await proxyToLocalApi(request, "/v1/approvals/apr_review_01/decision");
+
+    expect(response.status).toBe(200);
+    const call = calls.at(-1)!;
+    expect(String(call.input)).toBe(
+      `${CONTROL_BASE}/api/runtime/local/v1/approvals/apr_review_01/decision`,
+    );
+    // The deciding actor arriving at the runtime IS the session identity
+    // (SESSION_BODY's google_sub) — the body value was overwritten.
+    expect(JSON.parse(String(call.init?.body))["decided_by"]).toEqual({
+      type: "user",
+      id: "google-account-1",
+    });
+  });
+
+  it("a decision body without any decided_by still forwards — the session supplies it", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const { calls } = stubFetch(() => Response.json({ ok: true }));
+
+    const request = new Request("http://web.test/api/runtime/v1/approvals/apr_review_01/decision", {
+      method: "POST",
+      body: JSON.stringify({ workspace_id: "ws_1", choice: "reject-this-action" }),
+      headers: { "content-type": "application/json" },
+    });
+    const response = await proxyToLocalApi(request, "/v1/approvals/apr_review_01/decision");
+
+    expect(response.status).toBe(200);
+    expect(JSON.parse(String(calls.at(-1)!.init?.body))["decided_by"]).toEqual({
+      type: "user",
+      id: "google-account-1",
+    });
+  });
+
+  it("binds the mute's created_by to the authenticated session too (F2)", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const { calls } = stubFetch(() => Response.json({ ok: true }));
+
+    const request = new Request("http://web.test/api/runtime/v1/approvals/mutes", {
+      method: "POST",
+      body: JSON.stringify({
+        workspace_id: "ws_1",
+        scope: "all",
+        created_by: { type: "user", id: "body-asserted-subject" },
+      }),
+      headers: { "content-type": "application/json" },
+    });
+    const response = await proxyToLocalApi(request, "/v1/approvals/mutes");
+
+    expect(response.status).toBe(200);
+    expect(JSON.parse(String(calls.at(-1)!.init?.body))["created_by"]).toEqual({
+      type: "user",
+      id: "google-account-1",
+    });
+  });
+
+  it("the binding stays scoped to the decision route — other bodies forward verbatim", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const { calls } = stubFetch(() => Response.json({ ok: true }));
+
+    const request = new Request("http://web.test/api/runtime/v1/operations/op_01/rename", {
+      method: "POST",
+      body: JSON.stringify({ workspace_id: "ws_1", name: "Unrelated" }),
+      headers: { "content-type": "application/json" },
+    });
+    await proxyToLocalApi(request, "/v1/operations/op_01/rename");
+
+    expect(JSON.parse(String(calls.at(-1)!.init?.body))).toEqual({
+      workspace_id: "ws_1",
+      name: "Unrelated",
+    });
+  });
+});
+
 describe("runtime request boundaries", () => {
   it("rejects oversized bodies before forwarding commands", async () => {
     process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;

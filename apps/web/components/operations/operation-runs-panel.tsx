@@ -11,7 +11,29 @@ import { cn } from "@/lib/utils";
  * (AC24): a delegated subrun is labeled by its parent task id (D34/D46) rather
  * than folded into the top-level run. The chat remains after tasks complete
  * for follow-ups, so "New run" is a first-class affordance (PRD §4.2).
+ *
+ * S20 (§S8): WAITING_FOR_APPROVAL renders in the §2.1 status vocabulary —
+ * the amber approval accent, the dot paired with text (§2.3: color never the
+ * only signal), and the honest pause line. The pause is the approval flow:
+ * the deciding card lives in the thread.
  */
+
+/** The run state chip's §2.1 status vocabulary — shared with cards.tsx. */
+function runStateClass(state: OperationRunType["state"]): string {
+  switch (state) {
+    case "RUNNING":
+    case "RETRYING":
+      return "text-sky";
+    case "WAITING_FOR_APPROVAL":
+      return "text-approval";
+    case "FAILED":
+    case "PAUSED":
+    case "RECOVERY_REQUIRED":
+      return "text-failed";
+    default:
+      return "text-muted";
+  }
+}
 export function OperationRunsPanel({
   runs,
   state,
@@ -72,14 +94,28 @@ export function OperationRunsPanel({
             >
               <p className="truncate font-mono text-xs text-text">{run.run_id}</p>
               <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted">
-                <span data-testid="operation-run-state" className="font-mono text-text">
+                <span
+                  data-testid="operation-run-state"
+                  className={cn("flex items-center gap-1.5 font-mono", runStateClass(run.state))}
+                >
+                  {run.state === "WAITING_FOR_APPROVAL" ? (
+                    <span className="size-1.5 rounded-full bg-approval" aria-hidden="true" />
+                  ) : null}
                   {run.state}
+                  {run.state === "WAITING_FOR_APPROVAL" ? (
+                    <span className="sr-only">— paused for your approval</span>
+                  ) : null}
                 </span>
                 <span>{run.events_seq_cursor} events</span>
                 <span>
                   {run.artifacts.length === 1 ? "1 artifact" : `${run.artifacts.length} artifacts`}
                 </span>
               </p>
+              {run.state === "WAITING_FOR_APPROVAL" ? (
+                <p className="mt-0.5 text-xs text-approval" data-testid="operation-run-waiting">
+                  Paused for your approval — decide from the card in the thread.
+                </p>
+              ) : null}
               {run.parent_task_id ? (
                 // D34/D46: a delegated subrun stays its own independently
                 // tracked run, labeled by the delegating task.

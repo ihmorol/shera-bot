@@ -51,6 +51,7 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import { openDatabase } from "./connection.ts";
 import { applyMigrations, MIGRATIONS, sqliteTableExists } from "./migrations.ts";
+import { ArtifactsRepository } from "./artifacts-repository.ts";
 import { SqliteTransactions } from "./transactions.ts";
 import {
   WriteLeaseConflictError,
@@ -922,19 +923,21 @@ describe("write-lease gating on the storage write path (D6)", () => {
 });
 
 describe("persistence across restart (AC16 partial)", () => {
-  it("reads back files written before the database was closed, after reopening the same file", () => {
+  it("reads back files, an ACTIVE lease (renewable), and an artifact written before the database was closed, after reopening the same file", () => {
     const path = newTempDbPath();
     const sharedBytes = new Uint8Array(Buffer.from("persist me", "utf8"));
     const privateBytes = new Uint8Array([0, 1, 2, 0, 255]);
+    const artifactBytes = new Uint8Array([255, 254, 0, 7, 7, 7, 42]);
 
     const first = openMigratedDb(path);
-    let writtenIds: { shared: string; private: string };
+    let writtenIds: { shared: string; private: string; artifact: string; lease: string };
     try {
       const tx = new SqliteTransactions(first.db);
       const leases = new WriteLeasesRepository(tx);
       const repo = new WorkspaceFilesRepository(tx, leases);
+      const artifacts = new ArtifactsRepository(tx);
       const shared = repo.write("ws_default", "workspace://docs/report.bin", USER, sharedBytes, "application/octet-stream");
-      leases.acquireLease("ws_default", "agent://alice/scratch.bin", "task-alice", ALICE, 60_000);
+      const lease = leases.acquireLease("ws_default", "agent://alice/scratch.bin", "task-alice", ALICE, 60_000);
       const priv = repo.write(
         "ws_default",
         "agent://alice/scratch.bin",
@@ -943,7 +946,21 @@ describe("persistence across restart (AC16 partial)", () => {
         "application/octet-stream",
         { task_id: "task-alice" },
       );
-      writtenIds = { shared: shared.id, private: priv.id };
+      const artifact = artifacts.insertArtifact({
+        workspace_id: "ws_default",
+        name: "run-output.bin",
+        artifact_type: "report",
+        mime_type: "application/octet-stream",
+        content: artifactBytes,
+        producer_agent_id: "alice",
+        producer_task_id: "task-alice",
+      });
+      writtenIds = {
+        shared: shared.id,
+        private: priv.id,
+        artifact: artifact.artifact_id,
+        lease: lease.lease_id,
+      };
     } finally {
       first.close();
     }
@@ -952,7 +969,9 @@ describe("persistence across restart (AC16 partial)", () => {
     const second = openMigratedDb(path);
     try {
       const tx = new SqliteTransactions(second.db);
-      const repo = new WorkspaceFilesRepository(tx, new WriteLeasesRepository(tx));
+      const leases = new WriteLeasesRepository(tx);
+      const repo = new WorkspaceFilesRepository(tx, leases);
+      const artifacts = new ArtifactsRepository(tx);
 
       const shared = repo.read("ws_default", "workspace://docs/report.bin", USER);
       expect(shared.id).toBe(writtenIds.shared);
@@ -961,6 +980,30 @@ describe("persistence across restart (AC16 partial)", () => {
       const priv = repo.read("ws_default", "agent://alice/scratch.bin", ALICE);
       expect(priv.id).toBe(writtenIds.private);
       expect(Buffer.compare(Buffer.from(priv.content), Buffer.from(privateBytes))).toBe(0);
+
+      // The ACTIVE lease survived the restart: it is still listed, still held
+      // by its task, and the reopened repository can RENEW it (the holder
+      // task's heartbeat keeps working across a process restart).
+      const active = leases.listActiveLeases("ws_default");
+      expect(active.map((row) => row.task_id)).toEqual(["task-alice"]);
+      expect(active[0]?.lease_id).toBe(writtenIds.lease);
+      expect(active[0]?.path).toBe("agent://alice/scratch.bin");
+      expect(active[0]?.holder_type).toBe("agent");
+      expect(active[0]?.holder_id).toBe("alice");
+      const renewed = leases.renewLease(writtenIds.lease, "task-alice", 120_000);
+      expect(renewed.renewed_at).not.toBeNull();
+      expect(Date.parse(renewed.expires_at)).toBeGreaterThan(
+        Date.parse(active[0]?.expires_at as string),
+      );
+
+      // The artifact's bytes re-open byte-exact with provenance intact.
+      const artifact = artifacts.getArtifact("ws_default", writtenIds.artifact);
+      expect(artifact).not.toBeNull();
+      expect(artifact?.name).toBe("run-output.bin");
+      expect(artifact?.producer_agent_id).toBe("alice");
+      expect(artifact?.producer_task_id).toBe("task-alice");
+      expect(artifact?.size).toBe(artifactBytes.byteLength);
+      expect(Buffer.compare(Buffer.from(artifact?.content as Uint8Array), Buffer.from(artifactBytes))).toBe(0);
 
       // The tree and the private-folder rules survived the restart too.
       expect(repo.list("ws_default", "workspace://docs", USER).map((node) => node.name)).toEqual([

@@ -196,7 +196,7 @@ export class ProjectsRepository {
       .prepare(
         `SELECT ${PROJECT_COLUMNS} FROM projects WHERE workspace_id = ? ORDER BY created_at, project_id`,
       )
-      .all(workspaceId) as ProjectRow[];
+      .all(workspaceId) as unknown as ProjectRow[];
   }
 
   updateProject(
@@ -360,7 +360,7 @@ export class ProjectsRepository {
         `SELECT ${CREDENTIAL_COLUMNS} FROM project_credentials
          WHERE workspace_id = ? AND project_id = ? ORDER BY created_at, credential_id`,
       )
-      .all(workspaceId, projectId) as ProjectCredentialRow[];
+      .all(workspaceId, projectId) as unknown as ProjectCredentialRow[];
   }
 
   /** Stamp revoked_at (write-once); false when no row matched in the workspace. */
@@ -498,7 +498,7 @@ export class ProjectsRepository {
         `SELECT ${WORKTREE_COLUMNS} FROM project_worktrees
          WHERE workspace_id = ? AND project_id = ? ORDER BY created_at, worktree_id`,
       )
-      .all(workspaceId, projectId) as ProjectWorktreeRow[];
+      .all(workspaceId, projectId) as unknown as ProjectWorktreeRow[];
   }
 
   /** Queue entries awaiting a free slot, oldest first. */
@@ -514,7 +514,7 @@ export class ProjectsRepository {
          WHERE workspace_id = ? AND project_id = ? AND status = 'queued'
          ORDER BY created_at, worktree_id`,
       )
-      .all(workspaceId, projectId) as ProjectWorktreeRow[];
+      .all(workspaceId, projectId) as unknown as ProjectWorktreeRow[];
   }
 
   markWorktreeStatus(
@@ -641,7 +641,7 @@ export class ProjectsRepository {
         `SELECT ${MERGE_REQUEST_COLUMNS} FROM merge_requests
          WHERE workspace_id = ? AND project_id = ? ORDER BY created_at, merge_request_id`,
       )
-      .all(workspaceId, projectId) as MergeRequestRow[];
+      .all(workspaceId, projectId) as unknown as MergeRequestRow[];
   }
 
   updateMergeRequest(

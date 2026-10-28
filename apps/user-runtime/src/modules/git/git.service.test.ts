@@ -183,8 +183,8 @@ async function commitFile(workDir: string, relPath: string, content: string, mes
   await git.commit(message);
 }
 
-function headOf(repoDir: string, ref: string): string {
-  return simpleGit(repoDir).revparse([ref]).trim();
+async function headOf(repoDir: string, ref: string): Promise<string> {
+  return String(await simpleGit(repoDir).revparse([ref])).trim();
 }
 
 function makeRun(taskId: string, overrides: Partial<TaskRun> = {}): TaskRun {
@@ -348,7 +348,7 @@ describe("git.service: task-scoped branch + worktree and the conflict queue", ()
     const base = makeTempDir("shera-s19-origin-");
     tempDirs.push(base);
     const project = await importDemo(env, base);
-    const mainBefore = headOf(project.repo_path, "main");
+    const mainBefore = await headOf(project.repo_path, "main");
 
     const allocation = await env.git.allocateWorktree({
       workspace_id: WS,
@@ -370,8 +370,8 @@ describe("git.service: task-scoped branch + worktree and the conflict queue", ()
 
     // The coding task commits on its branch; main does not move.
     await commitFile(worktree.worktree_path, "src/feature.ts", "export {};\n", "task A work");
-    expect(headOf(project.repo_path, "main")).toBe(mainBefore);
-    expect(headOf(worktree.worktree_path, "HEAD")).not.toBe(mainBefore);
+    expect(await headOf(project.repo_path, "main")).toBe(mainBefore);
+    expect(await headOf(worktree.worktree_path, "HEAD")).not.toBe(mainBefore);
 
     // Re-requesting the same task's worktree is idempotent (reacquire).
     const again = await env.git.allocateWorktree({
@@ -494,7 +494,7 @@ describe("git.service: merge requests and the PRD decisions", () => {
 
   it("approve performs the merge (no rebase, no force); the worktree releases and main advances", async () => {
     const { env, project, worktreePath, branchName } = await projectWithTaskWork();
-    const mainBefore = headOf(project.repo_path, "main");
+    const mainBefore = await headOf(project.repo_path, "main");
     const prepared = await env.git.prepareMergeRequest(prepareInput(project));
 
     // The user approves through the D9 decision; the runtime executes the
@@ -523,7 +523,7 @@ describe("git.service: merge requests and the PRD decisions", () => {
 
     // Real git state: main advanced with a merge commit; the working tree
     // carries the task's file; the worktree is gone; the branch is deleted.
-    const mainAfter = headOf(project.repo_path, "main");
+    const mainAfter = await headOf(project.repo_path, "main");
     expect(mainAfter).not.toBe(mainBefore);
     const log = await simpleGit(project.repo_path).log({ from: mainBefore, to: mainAfter });
     expect(log.total).toBeGreaterThanOrEqual(2);
@@ -542,7 +542,7 @@ describe("git.service: merge requests and the PRD decisions", () => {
 
   it("reject leaves the target branch untouched and records the rejection", async () => {
     const { env, project } = await projectWithTaskWork();
-    const mainBefore = headOf(project.repo_path, "main");
+    const mainBefore = await headOf(project.repo_path, "main");
     const prepared = await env.git.prepareMergeRequest(prepareInput(project));
 
     const decision = env.approvals.applyDecision({
@@ -562,7 +562,7 @@ describe("git.service: merge requests and the PRD decisions", () => {
       "rejected",
     );
 
-    expect(headOf(project.repo_path, "main")).toBe(mainBefore);
+    expect(await headOf(project.repo_path, "main")).toBe(mainBefore);
     const row = env.projects.findMergeRequest(
       WS,
       project.project_id,
@@ -573,7 +573,7 @@ describe("git.service: merge requests and the PRD decisions", () => {
 
   it("request-changes leaves the target branch untouched and records the revision state", async () => {
     const { env, project } = await projectWithTaskWork();
-    const mainBefore = headOf(project.repo_path, "main");
+    const mainBefore = await headOf(project.repo_path, "main");
     const prepared = await env.git.prepareMergeRequest(prepareInput(project));
 
     const decision = env.approvals.applyDecision({
@@ -593,7 +593,7 @@ describe("git.service: merge requests and the PRD decisions", () => {
       "changes_requested",
     );
 
-    expect(headOf(project.repo_path, "main")).toBe(mainBefore);
+    expect(await headOf(project.repo_path, "main")).toBe(mainBefore);
     const row = env.projects.findMergeRequest(
       WS,
       project.project_id,
@@ -604,7 +604,7 @@ describe("git.service: merge requests and the PRD decisions", () => {
 
   it("refuses to merge without an approved linked approval (the runtime guard)", async () => {
     const { env, project } = await projectWithTaskWork();
-    const mainBefore = headOf(project.repo_path, "main");
+    const mainBefore = await headOf(project.repo_path, "main");
     const prepared = await env.git.prepareMergeRequest(prepareInput(project));
     // The pending approval is never decided: the merge must refuse.
     await expect(
@@ -614,7 +614,7 @@ describe("git.service: merge requests and the PRD decisions", () => {
         merge_request_id: prepared.merge_request.merge_request_id,
       }),
     ).rejects.toThrow(GitServiceError);
-    expect(headOf(project.repo_path, "main")).toBe(mainBefore);
+    expect(await headOf(project.repo_path, "main")).toBe(mainBefore);
   });
 });
 

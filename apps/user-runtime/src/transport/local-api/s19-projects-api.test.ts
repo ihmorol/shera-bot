@@ -53,6 +53,8 @@ interface RunningRuntime {
   runtime: RuntimeHandle;
   origin: string;
   faults: Array<{ event: string; fields: Record<string, unknown> }>;
+  /** Monotonic scripted-run counter: unique event ids + conversations. */
+  runCounter: number;
   close(): Promise<void>;
 }
 
@@ -74,6 +76,7 @@ async function composeOn(): Promise<RunningRuntime> {
     runtime,
     origin: `http://127.0.0.1:${address.port}`,
     faults,
+    runCounter: 0,
     close: () => runtime.close(),
   };
 }
@@ -148,7 +151,8 @@ interface Scenario {
   taskId: string;
   conversationId: string;
   worktreePath: string;
-  runCounter: number;
+  mergeRequestId: string;
+  mainBefore: string;
 }
 
 /** Clone one project, start one run, allocate its worktree, commit one file. */
@@ -164,7 +168,7 @@ async function scenarioWithTaskWork(): Promise<Scenario> {
   });
   if (created.status !== 201) throw new Error(`the clone failed: ${JSON.stringify(created.body)}`);
   const project = created.body as Record<string, string>;
-  env.runCounter = (env.runCounter ?? 0) + 1;
+  env.runCounter += 1;
   const n = env.runCounter;
   const taskId = startRun(env.runtime, n);
   const allocated = await postJson(env.origin, `/v1/projects/${project.project_id}/worktrees`, {
@@ -178,17 +182,18 @@ async function scenarioWithTaskWork(): Promise<Scenario> {
   return {
     env,
     originUrl,
-    projectId: project.project_id,
-    repoPath: project.repo_path,
+    projectId: project.project_id!,
+    repoPath: project.repo_path!,
     taskId,
     conversationId: `conv_s19_${n}`,
     worktreePath: allocation.worktree.worktree_path,
-    runCounter: n,
+    mergeRequestId: "",
+    mainBefore: "",
   };
 }
 
-function headOf(repoDir: string, ref: string): string {
-  return simpleGit(repoDir).revparse([ref]).trim();
+async function headOf(repoDir: string, ref: string): Promise<string> {
+  return String(await simpleGit(repoDir).revparse([ref])).trim();
 }
 
 // ---------------------------------------------------------------------------
@@ -386,14 +391,12 @@ describe("S19 projects API: merge requests and the PRD decisions", () => {
     if (prepared.status !== 201) {
       throw new Error(`preparing the merge request failed: ${JSON.stringify(prepared.body)}`);
     }
-    (s as Scenario & { mergeRequestId: string }).mergeRequestId = (
-      prepared.body as Record<string, unknown>
-    )["merge_request_id"] as string;
-    (s as Scenario & { mainBefore: string }).mainBefore = headOf(s.repoPath, "main");
-    return s as Scenario & { mergeRequestId: string; mainBefore: string };
+    s.mergeRequestId = (prepared.body as Record<string, unknown>)["merge_request_id"] as string;
+    s.mainBefore = await headOf(s.repoPath, "main");
+    return s;
   }
 
-  function decisionPath(s: { projectId: string; mergeRequestId: string }) {
+  function decisionPath(s: Scenario) {
     return `/v1/projects/${s.projectId}/merge-requests/${s.mergeRequestId}/decision`;
   }
 
@@ -421,7 +424,7 @@ describe("S19 projects API: merge requests and the PRD decisions", () => {
       decided_by: { type: "agent", id: AGENT_ID },
     });
     expect(agentDecision.status).toBe(403);
-    expect(headOf(s.repoPath, "main")).toBe(s.mainBefore);
+    expect(await headOf(s.repoPath, "main")).toBe(s.mainBefore);
   });
 
   it("approve performs the merge through the S20 machinery; main advances", async () => {
@@ -439,7 +442,7 @@ describe("S19 projects API: merge requests and the PRD decisions", () => {
     >;
     expect(mr["status"]).toBe("merged");
     // Real git state: the target branch advanced past the prepared base.
-    expect(headOf(s.repoPath, "main")).not.toBe(s.mainBefore);
+    expect(await headOf(s.repoPath, "main")).not.toBe(s.mainBefore);
   });
 
   it("reject leaves the target branch untouched", async () => {
@@ -456,7 +459,7 @@ describe("S19 projects API: merge requests and the PRD decisions", () => {
       unknown
     >;
     expect(mr["status"]).toBe("rejected");
-    expect(headOf(s.repoPath, "main")).toBe(s.mainBefore);
+    expect(await headOf(s.repoPath, "main")).toBe(s.mainBefore);
   });
 
   it("request-changes leaves the target branch untouched", async () => {
@@ -473,6 +476,6 @@ describe("S19 projects API: merge requests and the PRD decisions", () => {
       unknown
     >;
     expect(mr["status"]).toBe("changes_requested");
-    expect(headOf(s.repoPath, "main")).toBe(s.mainBefore);
+    expect(await headOf(s.repoPath, "main")).toBe(s.mainBefore);
   });
 });

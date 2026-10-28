@@ -5,18 +5,27 @@ import { useState, type ReactNode } from "react";
 import { Group, Panel, Separator as ResizeSeparator } from "react-resizable-panels";
 
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import {
+  WorkspacePanelSlot,
+  useWorkspacePanelRegionWiring,
+} from "@/components/workspace/workspace-panel";
 
 import { SidebarContent } from "./sidebar-content";
 import { Wordmark } from "./wordmark";
 
 /**
  * App shell (UI_DESIGN §2.2): desktop = sidebar (280px) + chat column
- * (fluid) + reserved workspace region (a collapsible panel, collapsed in this
- * chunk — the workspace surfaces mount into it in later chunks). Mobile =
- * sidebar drawer over a full-screen conversation (§3.2).
+ * (fluid, minimum 320px — the chat's own floor) + the reserved workspace
+ * region (S17 chunk 4: the workspace panel mounts here — the library owns
+ * the one separator handle's pointer + keyboard resize, the panel host
+ * provider in app/app/layout.tsx owns the semantic states and the
+ * per-conversation persistence). Mobile = sidebar drawer over a
+ * full-screen conversation (§3.2); the panel becomes a bottom sheet
+ * rendered by the provider.
  */
 export function AppShell({ children }: { children: ReactNode }) {
   const [navOpen, setNavOpen] = useState(false);
+  const { panelRef, handlePanelResize } = useWorkspacePanelRegionWiring();
 
   return (
     <div className="flex h-dvh overflow-hidden bg-canvas text-text">
@@ -46,7 +55,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </header>
 
         <Group orientation="horizontal" className="min-h-0 flex-1">
-          <Panel id="conversation-panel" className="min-w-0">
+          <Panel id="conversation-panel" minSize={320} className="min-w-0">
             <main id="conversation" className="h-full overflow-y-auto">
               {children}
             </main>
@@ -60,11 +69,15 @@ export function AppShell({ children }: { children: ReactNode }) {
             collapsible
             collapsedSize={0}
             defaultSize={0}
+            minSize={320}
+            panelRef={panelRef}
+            onResize={handlePanelResize}
             className="bg-surface"
           >
-            {/* Reserved workspace region — files, editor, live views, task runs,
-                and tool history mount here in later chunks. */}
-            <div aria-hidden="true" />
+            {/* The S17 workspace panel (Files/Editor/Private files/Artifacts)
+                mounts here for the registered conversation; without one the
+                region stays an honest reserved slot. */}
+            <WorkspacePanelSlot />
           </Panel>
         </Group>
       </div>

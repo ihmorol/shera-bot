@@ -1,56 +1,43 @@
 /**
  * S17 chunk 4 — the workspace panel host's pure state machine and its
- * per-conversation persistence (UI_DESIGN §2.2 docked states, §4 S7 entry;
- * interaction model reimplemented from mockup/REFERENCE.md §8).
+ * per-conversation persistence (UI_DESIGN §2.2 docked states, §4 S7 entry).
  *
- * The docked panel has THREE width states and one route state:
+ * The docked panel has THREE semantic width states and one route state:
  *
  *   closed (0) → inline at 360px → inline at 50% → FULL PAGE (a route,
  *   /app/chat/[chatId]/workspace/full — deep-linkable, never a width).
  *
- * Resize is SINGLE-OWNER: while a pointer drag is active (pointer capture on
- * the divider) every keyboard action is ignored, and vice versa — keyboard and
- * drag can never fight. Drag geometry follows the validated dock: the panel
- * docks RIGHT of the chat, so moving the pointer LEFT widens; a press/release
- * with no movement never changes the width; Escape, pointercancel and lost
- * pointer capture cancel and restore the starting width.
+ * DIVISION OF OWNERSHIP (conflicting simultaneous control is impossible by
+ * construction): the physical resize — pointer drag AND keyboard on the
+ * divider — belongs to the react-resizable-panels separator the S08 app
+ * shell already mounts (one handle, one library state, built-in ARIA
+ * splitter keyboard). This reducer owns the SEMANTIC states: the chat-header
+ * toggle cycle, the half/reset presets, and the committed width the library
+ * reports back through onResize. The two never fight: the library is the
+ * only writer of geometry during an interaction, and the reducer is the
+ * only writer during commanded transitions.
  *
- * Keyboard (the dock divider semantics): arrows step 16px, Shift+arrows 48px,
- * Home/End reach the min/max limits, Enter resets to the default width.
- *
- * Clamps: the panel never goes below PANEL_MIN_WIDTH and never takes the chat
- * below CHAT_MIN_WIDTH (max width = viewport − chat minimum). The drag's max
- * is resolved once at dragStart (a viewport change mid-drag cancels the drag,
- * per the dock's window-resize rule).
+ * Clamps: the panel never goes below PANEL_MIN_WIDTH and never takes the
+ * chat below CHAT_MIN_WIDTH — enforced by the two Panels' minSize props in
+ * the shell group (chat panel minSize 320px bounds the workspace panel's
+ * maxSize structurally) and repeated here for the commanded widths.
  */
 
 export const PANEL_DEFAULT_WIDTH = 360;
 export const PANEL_MIN_WIDTH = 320;
 export const CHAT_MIN_WIDTH = 320;
-export const KEYBOARD_RESIZE_STEP = 16;
-export const KEYBOARD_RESIZE_LARGE_STEP = 48;
 
 /** Mobile breakpoint (§2.2: md 768px) — below it the docked panel is a bottom sheet. */
 export const MOBILE_MAX_WIDTH = 767;
 
 export type PanelWidthState = { kind: "closed" } | { kind: "inline"; width: number };
 
-export interface PanelDrag {
-  owner: "pointer";
-  /** Width when the drag started — every move resolves against it, cancel restores it. */
-  startWidth: number;
-  startPointerX: number;
-  /** The clamp ceiling resolved at dragStart (viewport − chat minimum). */
-  maxWidth: number;
-}
-
 export interface PanelState {
   widthState: PanelWidthState;
-  drag: PanelDrag | null;
 }
 
 export function initialPanelState(): PanelState {
-  return { widthState: { kind: "closed" }, drag: null };
+  return { widthState: { kind: "closed" } };
 }
 
 export type PanelAction =
@@ -64,19 +51,11 @@ export type PanelAction =
     }
   | { type: "showHalf"; viewportWidth: number }
   | { type: "reset"; viewportWidth: number }
-  | { type: "dragStart"; pointerX: number; viewportWidth: number }
-  | { type: "dragMove"; pointerX: number }
-  | { type: "dragEnd" }
-  | { type: "dragCancel" }
   | {
-      type: "keyboardResize";
-      direction: "widen" | "narrow";
-      large?: boolean;
-      viewportWidth: number;
-    }
-  | { type: "keyboardMin" }
-  | { type: "keyboardMax"; viewportWidth: number }
-  | { type: "keyboardReset" };
+      type: "setWidth";
+      /** The committed pixel width the resize handle reported. */
+      width: number;
+    };
 
 /** Widest the panel may grow at this viewport while the chat keeps its minimum. */
 export function panelMaxWidth(viewportWidth: number): number {
@@ -102,7 +81,7 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
     }
     case "close":
       // The width rides along (prefsFromState keeps it) so the next open restores it.
-      return { ...state, widthState: { kind: "closed" }, drag: null };
+      return { ...state, widthState: { kind: "closed" } };
     case "chatHeaderToggle": {
       if (state.widthState.kind === "closed") {
         return {
@@ -150,75 +129,12 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
           width: clampPanelWidth(PANEL_DEFAULT_WIDTH, panelMaxWidth(action.viewportWidth)),
         },
       };
-    case "dragStart": {
-      if (state.widthState.kind !== "inline" || state.drag !== null) return state;
-      return {
-        ...state,
-        drag: {
-          owner: "pointer",
-          startWidth: state.widthState.width,
-          startPointerX: action.pointerX,
-          maxWidth: panelMaxWidth(action.viewportWidth),
-        },
-      };
-    }
-    case "dragMove": {
-      if (state.drag === null || state.widthState.kind !== "inline") return state;
-      // Panel docks right: pointer LEFT widens. Every move resolves against
-      // the START width, so jitter never accumulates.
-      const delta = state.drag.startPointerX - action.pointerX;
-      return {
-        ...state,
-        widthState: {
-          kind: "inline",
-          width: clampPanelWidth(state.drag.startWidth + delta, state.drag.maxWidth),
-        },
-      };
-    }
-    case "dragEnd": {
-      if (state.drag === null) return state;
-      // Commit the current width as-is (clamped at dragMove time); a
-      // press/release with no movement leaves the width exactly as it was.
-      return { ...state, drag: null };
-    }
-    case "dragCancel": {
-      if (state.drag === null) return state;
-      return {
-        ...state,
-        widthState: { kind: "inline", width: state.drag.startWidth },
-        drag: null,
-      };
-    }
-    case "keyboardResize": {
-      // Single owner: an active pointer drag owns the resize.
-      if (state.drag !== null || state.widthState.kind !== "inline") return state;
-      const step = action.large ? KEYBOARD_RESIZE_LARGE_STEP : KEYBOARD_RESIZE_STEP;
-      const next =
-        action.direction === "widen"
-          ? state.widthState.width + step
-          : state.widthState.width - step;
-      return {
-        ...state,
-        widthState: {
-          kind: "inline",
-          width: clampPanelWidth(next, panelMaxWidth(action.viewportWidth)),
-        },
-      };
-    }
-    case "keyboardMin": {
-      if (state.drag !== null || state.widthState.kind !== "inline") return state;
-      return { ...state, widthState: { kind: "inline", width: PANEL_MIN_WIDTH } };
-    }
-    case "keyboardMax": {
-      if (state.drag !== null || state.widthState.kind !== "inline") return state;
-      return {
-        ...state,
-        widthState: { kind: "inline", width: panelMaxWidth(action.viewportWidth) },
-      };
-    }
-    case "keyboardReset": {
-      if (state.drag !== null || state.widthState.kind !== "inline") return state;
-      return { ...state, widthState: { kind: "inline", width: PANEL_DEFAULT_WIDTH } };
+    case "setWidth": {
+      // The resize handle's committed width (the library has already applied
+      // its own min/max constraints; this clamp keeps the semantic state
+      // inside the panel's own floor).
+      if (action.width < PANEL_MIN_WIDTH) return state;
+      return { ...state, widthState: { kind: "inline", width: action.width } };
     }
   }
 }

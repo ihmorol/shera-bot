@@ -9,9 +9,8 @@ import type { ContainerResolutionState } from "@/lib/container-resolution";
 import { useAgentDirectChat, useAgentSessionPresence } from "@/lib/agent-data";
 import { useLiveConversation, useSameOriginRuntimeSocketUrl } from "@/lib/runtime-live";
 import {
-  WorkspacePanelDock,
   WorkspacePanelToggle,
-  useWorkspacePanelController,
+  useWorkspacePanelRegistration,
 } from "@/components/workspace/workspace-panel";
 import type { SessionPresenceChipState } from "@/lib/session-presence";
 
@@ -124,43 +123,48 @@ function RuntimeAgentDirectChat({
   // so real mode carries unread_count 0 instead of the demo count (G4).
   const summary: ConversationSummary = { ...conversation, unread_count: 0 };
 
-  // S17 chunk 4: the docked workspace panel beside the chat (UI_DESIGN §4 S7)
-  // — the toggle lives in the chat header, the panel state (width, open) is
-  // persisted per conversation by the controller. Until the direct-chat
-  // binding resolves there is no conversation id to key the panel by, so the
-  // toggle stays out of the header (never a control that half-works).
-  const panel = useWorkspacePanelController(real.directChatId);
+  // S17 chunk 4: the workspace panel mounts in the shell's reserved region,
+  // registered to THIS conversation while it is mounted (the toggle lives in
+  // the chat header; width + membership persist per conversation). Until the
+  // direct-chat binding resolves there is no conversation id to register, so
+  // the toggle stays out of the header (never a control that half-works).
+  useWorkspacePanelRegistration(real.directChatId, workspaceId);
 
-  const chatView = liveEnabled ? (
-    <AgentChatView
-      agent={identity}
-      conversation={summary}
-      thread={[]}
-      timelineOverride={live.timeline}
-      connectionState={live.connectionState}
-      replay={live.replay}
-      liveStream={
-        live.stream
-          ? {
-              agentId: live.stream.agentId,
-              text: live.stream.text,
-              announcementText: live.stream.announcementText,
-            }
-          : null
-      }
-      onRuntimeSend={live.sendMessage}
-      onRuntimeRetry={live.retry}
-      sessionPresence={sessionPresence}
-      surfaceState={live.error ? "error" : live.loading ? "loading" : "ready"}
-      safeErrorMessage={live.error ?? real.safeErrorMessage}
-      mode="runtime"
-      headerActions={
-        real.directChatId !== null ? (
-          <WorkspacePanelToggle controller={panel} chatId={real.directChatId} />
-        ) : undefined
-      }
-    />
-  ) : (
+  const workspaceToggle =
+    real.directChatId !== null ? (
+      <WorkspacePanelToggle chatId={real.directChatId} />
+    ) : undefined;
+
+  if (liveEnabled) {
+    return (
+      <AgentChatView
+        agent={identity}
+        conversation={summary}
+        thread={[]}
+        timelineOverride={live.timeline}
+        connectionState={live.connectionState}
+        replay={live.replay}
+        liveStream={
+          live.stream
+            ? {
+                agentId: live.stream.agentId,
+                text: live.stream.text,
+                announcementText: live.stream.announcementText,
+              }
+            : null
+        }
+        onRuntimeSend={live.sendMessage}
+        onRuntimeRetry={live.retry}
+        sessionPresence={sessionPresence}
+        surfaceState={live.error ? "error" : live.loading ? "loading" : "ready"}
+        safeErrorMessage={live.error ?? real.safeErrorMessage}
+        mode="runtime"
+        headerActions={workspaceToggle}
+      />
+    );
+  }
+
+  return (
     <AgentChatView
       agent={identity}
       conversation={summary}
@@ -169,22 +173,7 @@ function RuntimeAgentDirectChat({
       surfaceState={real.surfaceState}
       safeErrorMessage={real.safeErrorMessage}
       mode="runtime"
-      headerActions={
-        real.directChatId !== null ? (
-          <WorkspacePanelToggle controller={panel} chatId={real.directChatId} />
-        ) : undefined
-      }
+      headerActions={workspaceToggle}
     />
-  );
-
-  if (real.directChatId === null) {
-    return <div className="flex h-full min-h-0 w-full">{chatView}</div>;
-  }
-
-  return (
-    <div className="flex h-full min-h-0 w-full">
-      <div className="flex min-w-0 flex-1 flex-col">{chatView}</div>
-      <WorkspacePanelDock controller={panel} workspaceId={workspaceId} />
-    </div>
   );
 }

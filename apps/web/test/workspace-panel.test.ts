@@ -6,17 +6,15 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   CHAT_MIN_WIDTH,
-  KEYBOARD_RESIZE_LARGE_STEP,
-  KEYBOARD_RESIZE_STEP,
   PANEL_DEFAULT_WIDTH,
   PANEL_MIN_WIDTH,
   type PanelAction,
   type PanelPrefs,
-  type PanelState,
   type PanelWidthState,
   initialPanelState,
   isMobileViewport,
   loadPanelPrefs,
+  panelMaxWidth,
   panelPrefsStorageKey,
   panelReducer,
   prefsFromState,
@@ -138,19 +136,18 @@ describe("panel state machine (S7 docked states)", () => {
     expect(state.widthState).toEqual({ kind: "inline", width: 480 });
   });
 
-  it("clamps resizes: panel never smaller than 320px, chat never under its own minimum", () => {
-    const wide = panelReducer(initialPanelState(), {
+  it("clamps commanded widths: panel floor 320px, chat keeps its own minimum", () => {
+    // The structural clamp lives in the shell group (chat panel minSize 320px
+    // bounds the workspace panel); the reducer repeats it for commanded widths.
+    expect(panelMaxWidth(700)).toBe(700 - CHAT_MIN_WIDTH);
+    expect(CHAT_MIN_WIDTH).toBe(320);
+    expect(PANEL_MIN_WIDTH).toBe(320);
+    const state = panelReducer(initialPanelState(), {
       type: "open",
       viewportWidth: 700,
+      preferredWidth: 200, // under the floor — clamps to 320
     });
-    // Max width leaves the chat CHAT_MIN_WIDTH: 700 - 320 = 380.
-    const maxed = panelReducer(wide, { type: "keyboardMax", viewportWidth: 700 });
-    expect((maxed.widthState as { width: number }).width).toBe(700 - CHAT_MIN_WIDTH);
-    expect(CHAT_MIN_WIDTH).toBe(320);
-
-    const narrowed = panelReducer(maxed, { type: "keyboardMin" });
-    expect((narrowed.widthState as { width: number }).width).toBe(PANEL_MIN_WIDTH);
-    expect(PANEL_MIN_WIDTH).toBe(320);
+    expect((state.widthState as { width: number }).width).toBe(PANEL_MIN_WIDTH);
   });
 
   it("reset returns to the 360 default", () => {
@@ -161,116 +158,66 @@ describe("panel state machine (S7 docked states)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2. Drag resize — single owner (pointer capture), cancel restores
+// 2. Committed width from the resize handle — the library owns the pointer
+//    drag and the divider keyboard (one handle, one state: conflicting
+//    simultaneous control is impossible by construction); the reducer only
+//    records the committed size.
 // ---------------------------------------------------------------------------
 
-describe("drag resize (single-owner resize state)", () => {
-  const VW = 1440;
-
-  function dragging(): PanelState {
-    const state = panelReducer(initialPanelState(), { type: "open", viewportWidth: VW });
-    return panelReducer(state, { type: "dragStart", pointerX: 1000, viewportWidth: VW });
-  }
-
-  it("sizes from the drag START width — moves never accumulate", () => {
-    let state = dragging();
-    state = panelReducer(state, { type: "dragMove", pointerX: 960 }); // widen 40
-    expect((state.widthState as { width: number }).width).toBe(360 + 40);
-    state = panelReducer(state, { type: "dragMove", pointerX: 990 }); // widen 10, from START
-    expect((state.widthState as { width: number }).width).toBe(360 + 10);
+describe("committed width from the resize handle", () => {
+  it("records the handle's committed width as the inline width", () => {
+    const state = panelReducer(
+      panelReducer(initialPanelState(), { type: "open", viewportWidth: 1440 }),
+      { type: "setWidth", width: 512 },
+    );
+    expect((state.widthState as { width: number }).width).toBe(512);
   });
 
-  it("widens when the pointer moves LEFT (the panel docks right of the chat)", () => {
-    const state = panelReducer(dragging(), { type: "dragMove", pointerX: 900 });
-    expect((state.widthState as { width: number }).width).toBe(360 + 100);
-  });
-
-  it("clamps during the drag, not only at commit", () => {
-    const state = panelReducer(dragging(), { type: "dragMove", pointerX: 0 });
-    expect((state.widthState as { width: number }).width).toBe(VW - CHAT_MIN_WIDTH);
-  });
-
-  it("while a drag owns the resize, keyboard actions are ignored (no fighting)", () => {
-    let state = panelReducer(dragging(), { type: "dragMove", pointerX: 960 });
-    state = panelReducer(state, {
-      type: "keyboardResize",
-      direction: "widen",
-      viewportWidth: VW,
-    });
-    expect((state.widthState as { width: number }).width).toBe(400);
-
-    state = panelReducer(state, { type: "dragEnd" });
-    // Ownership released: keyboard works again.
-    state = panelReducer(state, {
-      type: "keyboardResize",
-      direction: "narrow",
-      viewportWidth: VW,
-    });
-    expect((state.widthState as { width: number }).width).toBe(400 - KEYBOARD_RESIZE_STEP);
-  });
-
-  it("endDrag commits; cancel restores the starting width (Escape / pointercancel)", () => {
-    const committed = panelReducer(dragging(), { type: "dragEnd" });
-    expect((committed.widthState as { width: number }).width).toBe(360);
-    expect(committed.drag).toBeNull();
-
-    const cancelled = panelReducer(panelReducer(dragging(), { type: "dragMove", pointerX: 900 }), {
-      type: "dragCancel",
-    });
-    expect((cancelled.widthState as { width: number }).width).toBe(360);
-    expect(cancelled.drag).toBeNull();
-  });
-
-  it("a press/release with no movement does not change the width", () => {
-    const state = panelReducer(dragging(), { type: "dragEnd" });
+  it("ignores sub-floor reports — the closed state is semantic, not a width", () => {
+    const state = panelReducer(
+      panelReducer(initialPanelState(), { type: "open", viewportWidth: 1440 }),
+      { type: "setWidth", width: 0 },
+    );
     expect((state.widthState as { width: number }).width).toBe(360);
   });
 });
 
 // ---------------------------------------------------------------------------
-// 3. Keyboard resize operability (mockup §8 divider semantics)
+// 3. Keyboard + drag operability live in the shell's ONE library separator
 // ---------------------------------------------------------------------------
 
-describe("keyboard resize", () => {
-  const VW = 1440;
+describe("resize operability (shell group)", () => {
+  const readShell = (): string =>
+    readFileSync(join(APP_DIR, "components/shell/app-shell.tsx"), "utf8");
 
-  function open(): PanelState {
-    return panelReducer(initialPanelState(), { type: "open", viewportWidth: VW });
-  }
-
-  it("arrows step 16px; with Shift 48px; Left widens the right-docked panel", () => {
-    expect(KEYBOARD_RESIZE_STEP).toBe(16);
-    expect(KEYBOARD_RESIZE_LARGE_STEP).toBe(48);
-    const widened = panelReducer(open(), {
-      type: "keyboardResize",
-      direction: "widen",
-      viewportWidth: VW,
-    });
-    expect((widened.widthState as { width: number }).width).toBe(360 + 16);
-    const large = panelReducer(open(), {
-      type: "keyboardResize",
-      direction: "widen",
-      large: true,
-      viewportWidth: VW,
-    });
-    expect((large.widthState as { width: number }).width).toBe(360 + 48);
+  it("the reserved region is a library Panel with the ONE separator handle", () => {
+    const shell = readShell();
+    expect(shell).toMatch(/Panel\s+id="workspace"/);
+    expect(shell).toMatch(/ResizeSeparator/);
+    expect(shell).toMatch(/aria-label="Resize workspace panel"/);
   });
 
-  it("Home/End reach the min/max limits and Enter resets to 360", () => {
-    const min = panelReducer(open(), { type: "keyboardMin" });
-    expect((min.widthState as { width: number }).width).toBe(PANEL_MIN_WIDTH);
-    // A step past the min clamps to it (the panel never goes under 320).
-    const clamped = panelReducer(open(), {
-      type: "keyboardResize",
-      direction: "narrow",
-      large: true,
-      viewportWidth: VW,
-    });
-    expect((clamped.widthState as { width: number }).width).toBe(PANEL_MIN_WIDTH);
-    const max = panelReducer(open(), { type: "keyboardMax", viewportWidth: VW });
-    expect((max.widthState as { width: number }).width).toBe(VW - CHAT_MIN_WIDTH);
-    const reset = panelReducer(max, { type: "keyboardReset" });
-    expect((reset.widthState as { width: number }).width).toBe(PANEL_DEFAULT_WIDTH);
+  it("the panel wires the controller to the library geometry (imperative + reports)", () => {
+    const shell = readShell();
+    expect(shell).toMatch(/panelRef=\{panelRef\}/);
+    expect(shell).toMatch(/onResize=\{handlePanelResize\}/);
+    expect(shell).toMatch(/minSize=\{320\}/);
+    const host = readFileSync(join(APP_DIR, "components/workspace/workspace-panel.tsx"), "utf8");
+    // Commands skip when the library already applied the width — the handle
+    // and the commands never fight over geometry.
+    expect(host).toMatch(/reportedWidth/);
+    expect(host).toMatch(/handle\.resize\(/);
+    expect(host).toMatch(/handle\.collapse\(\)/);
+  });
+
+  it("the chat registers its membership; the toggle renders in the chat header", () => {
+    const surface = readFileSync(
+      join(APP_DIR, "components/chat/agent-direct-chat-surface.tsx"),
+      "utf8",
+    );
+    expect(surface).toMatch(/useWorkspacePanelRegistration\(/);
+    expect(surface).toMatch(/WorkspacePanelToggle/);
+    expect(surface).toMatch(/headerActions=\{workspaceToggle\}/);
   });
 });
 
@@ -717,13 +664,14 @@ describe("panel host routes", () => {
     expect(surface).toMatch(/presentation="page"/);
   });
 
-  it("the docked host owns the persisted panel state machine per conversation", () => {
+  it("the provider owns the persisted panel state machine per conversation", () => {
     const source = readFileSync(join(APP_DIR, "components/workspace/workspace-panel.tsx"), "utf8");
     expect(source).toMatch(/panelReducer/);
     expect(source).toMatch(/loadPanelPrefs|savePanelPrefs/);
-    expect(source).toMatch(/setPointerCapture/);
-    // Escape cancels an active drag; pointercancel/lostcapture too.
-    expect(source).toMatch(/dragCancel/);
+    // The provider releases the panel when no conversation is registered —
+    // the region never pretends to belong to a chat.
+    expect(source).toMatch(/register\(null\)/);
+    expect(source).toMatch(/WorkspacePanelSlot/);
   });
 
   it("the full-page and inline surfaces are deep-linkable through the route builders", () => {

@@ -15,7 +15,12 @@
  * G3: the proposal input has NO raw-arguments field — it carries the sha256
  * args_digest only, and every persisted surface (request row, journal event)
  * stores exactly that digest. The side_effect_summary is bounded, UI-safe
- * text authored by the tool's typed definition — never tool arguments.
+ * text authored by the tool's typed definition — never tool arguments. Chunk 3
+ * additionally scrubs BOTH free-text surfaces (side_effect_summary and
+ * resource_scope) through a conservative deterministic redaction pass at this
+ * boundary: secret-shaped material becomes [REDACTED] before any record or
+ * journal event is written ("arguments summaries, target resources, and side
+ * effects never include secrets").
  *
  * Reminders (E3): all five slots of APPROVAL_REMINDER_SCHEDULE_SECONDS
  * [0, 900, 2700, 10800, 86400] are scheduled IMMEDIATELY at request time on
@@ -187,6 +192,63 @@ export const TypedToolProposal = z.strictObject({
 export type TypedToolProposal = z.infer<typeof TypedToolProposal>;
 
 /**
+ * The G3 boundary redaction pass (S20 chunk 3): secret-shaped material in the
+ * proposal's FREE-TEXT surfaces — the side-effect summary AND the resource
+ * scope — is replaced with [REDACTED] before anything is recorded or
+ * journalled ("arguments summaries, target resources, and side effects never
+ * include secrets"). Conservative by design: a false positive only redacts a
+ * little UI text, a false negative leaks a secret — the pass is biased to
+ * over-redact.
+ *
+ * The pass is a PURE, DETERMINISTIC function of its input, applied ONCE at
+ * this boundary. Everything downstream (request row, grant match, journal
+ * event, recheck) compares the RECORDED values exactly, so the redaction
+ * cannot drift between surfaces; a raw secret-bearing scope presented at the
+ * recheck gate fails closed as a typed miss rather than over-matching a
+ * redacted grant.
+ */
+const SECRET_SHAPED_PATTERNS: readonly { pattern: RegExp; replacement: string }[] = [
+  // Bearer/Basic/Token scheme values ("Bearer ghp_...", "Basic dXNlcjpwYXNz").
+  { pattern: /\b(Bearer|Basic|Token)\s+[A-Za-z0-9._~+/=-]{8,}/gi, replacement: "$1 [REDACTED]" },
+  // Secret-shaped key/value assignments ("api_key=...", "password: '...'",
+  // "client_secret = ..."), quoted or bare, bounded by separators.
+  {
+    pattern:
+      /\b(api[_-]?key|apikey|access[_-]?token|auth[_-]?token|secret|token|password|passwd|pwd|passphrase|credential[s]?|private[_-]?key|client[_-]?secret)\b(\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,;&]+)/gi,
+    replacement: "$1$2[REDACTED]",
+  },
+  // Provider token shapes: GitHub, OpenAI, Slack, AWS access keys.
+  { pattern: /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{10,}\b/g, replacement: "[REDACTED]" },
+  { pattern: /\bgithub_pat_[A-Za-z0-9_]{10,}\b/g, replacement: "[REDACTED]" },
+  { pattern: /\bsk-[A-Za-z0-9_-]{16,}\b/g, replacement: "[REDACTED]" },
+  { pattern: /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g, replacement: "[REDACTED]" },
+  { pattern: /\bAKIA[0-9A-Z]{16}\b/g, replacement: "[REDACTED]" },
+  // JSON Web Tokens (three base64url segments).
+  {
+    pattern: /\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\b/g,
+    replacement: "[REDACTED]",
+  },
+];
+
+/**
+ * A long opaque run (24+ chars of base64url-ish material) that mixes letters
+ * and digits — high-entropy token material. Word-shaped runs (letters only)
+ * and pure numbers are left alone, so ordinary prose and URIs survive.
+ */
+const HIGH_ENTROPY_RUN = /(?<![A-Za-z0-9+/=_-])[A-Za-z0-9+/=_-]{24,}(?![A-Za-z0-9+/=_-])/g;
+
+export function redactSecrets(text: string): string {
+  let redacted = text;
+  for (const { pattern, replacement } of SECRET_SHAPED_PATTERNS) {
+    redacted = redacted.replace(pattern, replacement);
+  }
+  redacted = redacted.replace(HIGH_ENTROPY_RUN, (run) =>
+    /\d/.test(run) && /[A-Za-z]/.test(run) ? "[REDACTED]" : run,
+  );
+  return redacted;
+}
+
+/**
  * The gated set (G6, D35): READ_ONLY is the ladder's only automatic class —
  * read-only tools run automatically; every other D9 risk class pauses the run
  * for an approval decision. LOCAL_MUTATION's preview surface is the web gate's
@@ -331,6 +393,14 @@ export type ApprovalDecisionResult =
       outcome: "transition_rejected";
       /** The typed D8 rejection; NOTHING was persisted or journalled. */
       rejection: TaskRejection;
+    }
+  | {
+      outcome: "already_decided";
+      approval_id: string;
+      /** The replayed choice — equal to the request's recorded resolution. */
+      choice: ApprovalChoice;
+      /** The request at its STORED resolved shape (what "propagates"). */
+      request: ApprovalRequest;
     };
 
 export class ApprovalsService {
@@ -355,7 +425,16 @@ export class ApprovalsService {
         "the tool proposal does not conform to the typed proposal contract",
       );
     }
-    const proposal = verdict.data;
+    const parsed = verdict.data;
+    // The G3 redaction pass (chunk 3): secret-shaped material is scrubbed from
+    // the free-text surfaces HERE — the single deterministic point where every
+    // recorded value is born — so the request row AND the journal event carry
+    // [REDACTED], never the secret. Identity on clean text.
+    const proposal: TypedToolProposal = {
+      ...parsed,
+      resource_scope: redactSecrets(parsed.resource_scope),
+      side_effect_summary: redactSecrets(parsed.side_effect_summary),
+    };
 
     // E12: the proposal must name the run it rides on — same workspace, same
     // task, same conversation. A mismatch is a composition fault, surfaced
@@ -532,7 +611,11 @@ export class ApprovalsService {
    *  - AGENT_CANNOT_SELF_APPROVE        — the deciding Agent IS the requester;
    *  - AGENT_CANNOT_DECIDE_APPROVAL     — any other Agent actor (only user
    *    actors decide; a prompt-shaped input cannot create a grant — G6);
-   *  - APPROVAL_ALREADY_RESOLVED        — the request was already decided.
+   *  - APPROVAL_ALREADY_RESOLVED        — the request was already decided with
+   *    a DIFFERENT choice. The SAME choice replayed (two tabs, a retry) is
+   *    instead the typed idempotent `already_decided` outcome: the stored
+   *    resolution is returned, and nothing is re-applied — no second grant, no
+   *    second journal event, no re-run of the withheld callback (D9).
    *
    * A D8 transition rejection (stale projection, wrong state, an admin trying
    * to approve — the approval rows allow user actors only) is answered as the
@@ -629,9 +712,22 @@ export class ApprovalsService {
       );
     }
 
-    // Decisions are immutable (D9): a resolved request answers every further
-    // decision with the typed already-resolved refusal.
+    // Decisions are immutable (D9) — and IDEMPOTENT for the honest case: the
+    // same decision arriving twice (two tabs, a retried call) is answered with
+    // the stored resolution as a typed `already_decided` result. Nothing is
+    // re-applied: no second grant, no second journal event, and the withheld
+    // callback is never re-run (the approved action is not executed twice).
+    // A DIFFERENT choice on a resolved request stays the typed
+    // already-resolved refusal — the first decision stands.
     if (request.status !== "pending") {
+      if (request.resolved_by_choice === choice) {
+        return {
+          outcome: "already_decided",
+          approval_id: request.approval_id,
+          choice,
+          request,
+        };
+      }
       throw new ApprovalsServiceError(
         "APPROVAL_ALREADY_RESOLVED",
         "state",

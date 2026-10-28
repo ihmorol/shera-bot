@@ -1,54 +1,116 @@
 # Shera Bot
 
-Shera Bot is a private prototype for a local-first, multi-agent assistant platform. The product design is documented and synchronized with the final decisions (D1–D50, E1–E14; D47–D50/E9–E14 Delegated pending owner review); the product runtime implementation has not yet been established, but its monorepo scaffold exists (S01 — placeholders, no behavior). A static client mockup lives in `mockup/`, and a separate marketing/waitlist site lives in `business-landing-portfolio/`.
+Shera Bot is a private prototype of a multi-agent AI assistant platform. It runs for at most five users on one VM. Its job is to validate the end-to-end product experience and the runtime architecture; the evidence it produces decides whether the larger platform gets built.
 
-## Client mockup
+A versioned **Pack** holds specialized **Agents** that work in **Operations**. The user talks to them in a Telegram-like web client. Agents propose; the runtime validates and executes every action. Risky work pauses for a scoped, expiring, revocable approval. User data lives local-first inside an isolated per-user container; the central service stores only control-plane records.
 
-Start with [`mockup/README.md`](mockup/README.md) to run the static UI. Future agents should read [`mockup/HANDOFF.md`](mockup/HANDOFF.md) and [`mockup/REFERENCE.md`](mockup/REFERENCE.md) for implemented interactions, simulated/inert features, completed pane changes and known blockers. [`mockup/UX_RECOMMENDATIONS.md`](mockup/UX_RECOMMENDATIONS.md) contains proposed first-use improvements, and the [`dated review archive`](mockup/reviews/2026-09-13/README.md) preserves the audit and screenshots.
+> [!NOTE]
+> This is private testing software, not a production deployment. It makes no guarantee about the correctness of agent outputs.
 
-The mockup is not a working backend or proof of prototype acceptance. Its UX recommendations are not adopted product decisions.
+## The product model
 
-## Monorepo (development)
+The canonical hierarchy:
 
-The workspace holds the runtime scaffold (S01 — placeholders only; no application behavior yet):
-
-- Apps: `apps/web` (Next.js client), `apps/control-plane` (Express API), `apps/user-runtime` (runtime gateway)
-- Packages: `packages/contracts`, `clients`, `agent-pack-sdk`, `pi-protocol`, `provider-contracts`, `observability`, `test-kit`
-- Non-workspace directories: `agent-packs/` (pack definitions), `infra/` (deployment), `tests/<tier>/` (E8 test tiers)
-
-Requires Node 24.19.0 (`.nvmrc`) and pnpm 12.4.1 (`packageManager`), enforced by `engines` and `.npmrc`.
-
-```bash
-pnpm install             # workspace install (frozen lockfile in CI)
-pnpm lint                # eslint, one flat config at the root
-pnpm format:check        # prettier
-pnpm typecheck           # tsc for every workspace member (turbo), plus repo-level files
-pnpm test                # vitest (contract tier first; E8 tiers under tests/)
-pnpm build               # turbo (apps/web: next build)
-pnpm license:inventory   # dependency + license gate; fails on an unreviewed license
-pnpm mockup:test         # the static mockup's regression suite
+```text
+Pack → Operations → Agents
 ```
 
-CI (`.github/workflows/ci.yml`) runs the same commands on pull requests to `main`, uploads the license inventory as an artifact, and runs the mockup regression job. The choices behind the pipeline — pins, CI provider, layout, license policy and its one reviewed exception — are recorded in E16 ([`docs/decisions/engineering-record-e16-2026-09-17.md`](docs/decisions/engineering-record-e16-2026-09-17.md); filed as "E15" on 2026-09-17, renumbered on 2026-09-19 to resolve the identifier collision with the OSS-leverage record).
+- A **Pack** is a versioned catalog of Operations, Agents, skills, connectors, and defaults. A workspace pins one Pack version. The prototype ships `agent-packs/student/v1`.
+- An **Operation** is a reusable collaborative chat with a purpose, a roster, and its own task runs. The student pack defines three: Research Paper, Programming Assignment, and Exam Preparation. Users can also open ad hoc Operations.
+- An **Agent** is a durable identity: one profile, one direct chat, one private memory, one settings surface. The student pack defines six: General Assistant, Researcher, Developer, Citation Manager, Programming Tutor, and Study Planner. Each Agent is rostered in exactly one Operation; cross-Operation work runs through subagent triggering (D46).
 
-## Start here
+Three rules shape everything else:
 
-Before modifying architecture or code, read the documentation in this order:
+1. **Agents propose; the runtime decides.** No surface shows an agent action as done before the runtime validates it.
+2. **Approvals are runtime objects.** Risky actions offer five fixed choices. A prompt cannot create a grant; grants are checked, scoped, and revocable.
+3. **Events are honest.** Live, replayed, delayed, and disconnected events are visually distinct (D26). Durable history comes from an append-only event journal, so a refresh or reconnect shows the real past.
 
-1. [`docs/README.md`](docs/README.md) — canonical documentation index.
-2. [`docs/PRD.md`](docs/PRD.md) — synchronized product baseline (2026-09-17, per D1–D50/E1–E14; original 2026-09-08 baseline in Git history).
-3. [`docs/decisions/README.md`](docs/decisions/README.md) — decision index.
-4. [`docs/GLOSSARY.md`](docs/GLOSSARY.md) — canonical vocabulary: **Pack → Operations → Agents**.
-5. [`docs/TRACEABILITY.md`](docs/TRACEABILITY.md) — PRD reconciliation, decision status, acceptance coverage, and open items.
-6. Historical context: `docs/history/2026-09-08-to-2026-09-11/README.md` is absent from the working tree after commit `9d8b81c`. Consult the archive in Git history (for example `cea3ba1`) and local raw exports where available; read relevant full evidence before relying on a summary.
+Providers, credits, and resource tiers round out the model. Built-in and custom providers are planned; the credit ledger is internal accounting with reservation and settlement; tiers are simulated. There are no real payments.
 
-## Rules for future agents
+## Architecture
 
-- The PRD was synchronized with the final decisions on 2026-09-11 by explicit user instruction. Future product decisions that change user-visible scope, data ownership, approval safety, tenancy, agent roles, persistence, or acceptance criteria must again be recorded as decisions and synchronized into the PRD (PRD §24).
-- Later decision records supplement or supersede conflicting PRD wording; check `docs/TRACEABILITY.md` before implementing an affected area.
-- Use **Agent** everywhere. `Expert` is historical wording only and is not a separate product object.
-- Preserve the **Operation** framing: the canonical hierarchy is **Pack → Operations → Agents**.
-- Preserve evidence status. Do not turn inferred, provisional, superseded, deferred, or engineering decisions into ordinary confirmed product decisions.
-- Do not discard an alternative, finding, obstacle, reference, or failed attempt merely because a later decision changed direction.
-- When changing architecture, update the decision record, traceability row, glossary if needed, and the session/history index if the change came from a new decision.
-- `business-landing-portfolio/` is a marketing surface: keep its copy consistent with the canonical vocabulary (Agent, never Expert/Scene), but it is out of scope for prototype acceptance criteria.
+pnpm and Turborepo monorepo. All TypeScript, ESM.
+
+| Path | Purpose |
+| --- | --- |
+| `apps/web` | Next.js client: login, direct Agent chats, Operations, settings. Dark-only theme. |
+| `apps/control-plane` | Express API: Google OAuth, five-account signup cap, sessions, PostgreSQL. Provisions one runtime container per user and proxies browser traffic to it. |
+| `apps/user-runtime` | The runtime gateway, one per user, inside a container. Owns state changes, the event journal, approvals, leases, and supervised agent sessions and task workers. |
+| `packages/contracts` | Zod schemas. The source of truth for every API shape. |
+| `packages/agent-pack-sdk` | Pack manifest schema, loader, and SHA-256 integrity checks. |
+| `packages/clients` | API clients generated from the contracts (`pnpm gen:clients`). |
+| `packages/pi-protocol`, `packages/provider-contracts`, `packages/observability` | Reserved packages. Still empty; later slices fill them. |
+| `packages/test-kit` | Shared test helpers. |
+| `agent-packs/` | Versioned pack content. `student/v1` is the pinned pack. |
+| `tests/` | Cross-cutting tiers: contract, integration, e2e, recovery, security, benchmark. |
+| `spikes/` | Preserved spike evidence. Kept, never deleted. |
+| `infra/` | Deployment. Arrives with a later slice. |
+| `mockup/` | Static HTML/JS mockup of the client, with its own regression suite. It is not the product. |
+| `docs/` | PRD, decision records, glossary, traceability, build plan, handoffs. |
+
+### Where data lives
+
+- **Central PostgreSQL** holds control-plane records only: accounts, OAuth identities, sessions, container mappings, backups, security events.
+- **Container-local SQLite** (WAL mode) holds product state: conversations, task runs, approvals, events, memories, schedules, tool inventory, checkpoints.
+
+Conversations, files, memories, and provider keys stay inside the user's container. The control plane never mirrors them.
+
+## Running locally
+
+Pinned toolchain: Node 24.19.0 (`.nvmrc`) and pnpm 12.4.1 (`packageManager`). `engines` enforces both.
+
+```bash
+pnpm install --frozen-lockfile
+```
+
+Copy `apps/control-plane/.env.example` and `apps/web/.env.example`, then fill the values. `SHERA_WEB_ORIGIN` must match on both apps. Generate `AUTH_SECRET` with `openssl rand -hex 32`. For a local run without a pinned origin, set `AUTH_TRUST_HOST=true`.
+
+Local ports: web on 3000, control plane on 3001, the runtime gateway on 8080 inside its container. The web client expects the control plane at `127.0.0.1:3001`, so start it with `PORT=3001`.
+
+```bash
+cd apps/control-plane && pnpm db:migrate && PORT=3001 pnpm start   # identity + provisioning
+cd apps/web && pnpm dev                                            # the client
+```
+
+The control plane creates runtime containers through Docker (image `shera-user-runtime:dev`) on an internal-only network with no published ports. The image build and the full container lifecycle are unvalidated work; no Dockerfile or compose file is committed yet.
+
+### Checks
+
+```bash
+pnpm lint               # eslint, one flat config at the root
+pnpm format:check       # prettier
+pnpm typecheck          # tsc across the workspace (turbo)
+pnpm test               # vitest: all tiers, plus co-located tests
+pnpm build              # turbo (apps/web: next build)
+pnpm boundary-guards    # architecture boundary checks
+pnpm license:inventory  # dependency + license gate
+pnpm mockup:test        # the mockup's regression suite
+```
+
+Integration tests start a real PostgreSQL cluster. Point `SHERA_PG_BIN` at local PostgreSQL 16 binaries first. Live-provider tests are opt-in and never run by default (G7).
+
+The S15 record (E28) pins the full suite at 1210 tests in 98 files, with boundary guards, typecheck, and build green. The latest CI runs on `main` pass the same pipeline.
+
+## Current status
+
+Design is complete. The PRD carries decisions D1–D51 and acceptance criteria 1–27. Implementation follows a 35-slice build plan (GitHub issues #2–#36) with guardrails G1–G8 as acceptance criteria.
+
+Landed (S01–S16): monorepo scaffold, contracts, control plane with auth, container provisioning, the runtime gateway, the web shell, the end-to-end thin slice, the pack loader, agent identity with private-folder isolation, on-demand agent sessions, Operation chats, ad-hoc Operations, the launch preview gate, and task-worker supervision. S17–S35 are open; the live list is in [`docs/BUILD_MAP.md`](docs/BUILD_MAP.md).
+
+Not yet validated against real services: Google OAuth sign-in, the Docker lifecycle, and live model providers. [`docs/TRACEABILITY.md`](docs/TRACEABILITY.md) keeps the standing list with evidence.
+
+## Documentation
+
+Read in this order before changing architecture or product behavior:
+
+1. [`AGENTS.md`](AGENTS.md): mandatory loading rules and non-negotiables for agents working in this repo.
+2. [`docs/README.md`](docs/README.md): documentation index.
+3. [`docs/PRD.md`](docs/PRD.md): the synchronized product baseline.
+4. [`docs/decisions/README.md`](docs/decisions/README.md): decision index.
+5. [`docs/GLOSSARY.md`](docs/GLOSSARY.md): canonical vocabulary.
+6. [`docs/TRACEABILITY.md`](docs/TRACEABILITY.md): acceptance coverage and open items.
+
+## Vocabulary
+
+> [!IMPORTANT]
+> The canonical terms are **Agent** and **Operation**. `Expert` and `Scene` are historical aliases from old transcripts and decision records. Do not use them in new code, schemas, UI, or docs.

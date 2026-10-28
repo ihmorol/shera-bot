@@ -17,7 +17,6 @@ import {
 } from "../components/chat/approval-card";
 import {
   PendingApprovalsRows,
-  pendingApprovalsEmptyNotice,
 } from "../components/chat/pending-approvals";
 import { OperationRunsPanel } from "../components/operations/operation-runs-panel";
 import {
@@ -743,11 +742,6 @@ describe("Pending approvals region (in-thread)", () => {
     expect(rows).toContain("Decision recorded");
     expect(rows).toContain("Always approve this tool");
     expect(rows).not.toContain("Review decision");
-  });
-
-  it("the conversation-scoped helper exposes the quiet wait copy for thread surfaces", () => {
-    // The region's wrapper copy: what the thread shows while an approval pends.
-    expect(pendingApprovalsEmptyNotice).toContain("No approvals");
   });
 });
 

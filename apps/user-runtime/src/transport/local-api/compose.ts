@@ -188,12 +188,12 @@ export interface ComposeRuntimeOptions extends ComposeLocalApiOptions {
    * S20 chunk 4: the scripted lifecycle trigger (G4 opt-in). When set, the
    * composed FakeHarnessAdapter's script proposes ONE typed `tool.proposed`
    * journal event per run while the run is RUNNING, and the gateway runs the
-   * approvals boundary over it with the execute callback withheld: a risk
-   * class in GATED_RISK_CLASSES pauses the run (WAITING_FOR_APPROVAL) and
-   * files a pending approval; READ_ONLY runs automatically (G6). The tool
-   * definition is runtime-authored typed configuration (D38) — never a
-   * classification of proposal text (G2). Default: unset — the scripted runs
-   * behave exactly as before S20 (G4).
+   * approvals boundary over it with the execute callback withheld: any GATED
+   * risk class (every D9 class except the ladder's READ_ONLY) pauses the run
+   * (WAITING_FOR_APPROVAL) and files a pending approval; READ_ONLY runs
+   * automatically (G6). The tool definition is runtime-authored typed
+   * configuration (D38) — never a classification of proposal text (G2).
+   * Default: unset — the scripted runs behave exactly as before S20 (G4).
    */
   scriptedToolProposal?: ScriptedToolProposalConfig;
   /**
@@ -878,6 +878,19 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
   // event path, no classification — G2/G4). Without the option both halves
   // are absent and the runs behave exactly as before S20.
   const scriptedToolProposal = options.scriptedToolProposal;
+  // S20 review fix F6e: the scripted proposal is carried by the composed
+  // FakeHarnessAdapter's script — a caller-supplied harnessAdapter replaces
+  // that adapter wholesale, so the option would be SILENTLY dropped (the
+  // proposal never fires, no approval ever pauses). Record the conflict
+  // through the established redacted fault-log seam instead of dropping it
+  // silently (G5); the runs then behave exactly as the custom adapter
+  // dictates.
+  if (scriptedToolProposal && options.harnessAdapter) {
+    logFault("approval_scripted_tool_proposal_ignored", {
+      reason: "a custom harness adapter is configured; the scripted proposal script is not attached",
+      tool_id: scriptedToolProposal.tool.tool_id,
+    });
+  }
   const harness = new HarnessRunService({
     adapter: options.harnessAdapter ??
       (scriptedToolProposal

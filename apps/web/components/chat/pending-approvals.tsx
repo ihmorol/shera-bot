@@ -31,11 +31,9 @@ import { useSessionIdentity } from "@/lib/container-connection";
  *
  * With nothing pending the region renders NOTHING: an empty approvals region
  * is the absence of a pause, not a data surface that owes an empty state (G4).
+ * (The unused `pendingApprovalsEmptyNotice` export was removed — S20 review
+ * fix F6d; the region's honesty is the absence itself.)
  */
-
-/** The honest quiet line for surfaces that show the region's scope. */
-export const pendingApprovalsEmptyNotice =
-  "No approvals are waiting — risky work runs only after you decide.";
 
 export interface PendingApprovalsRowsProps {
   approvals: ApprovalCardData[];

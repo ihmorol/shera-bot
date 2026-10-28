@@ -117,7 +117,6 @@ import {
   ArgsDigest,
   EVENT_ENVELOPES,
   Id,
-  RISK_CLASSES,
   RiskClass,
   type RunState,
   type TaskPolicy,
@@ -265,12 +264,10 @@ export function redactSecrets(text: string): string {
  * read-only tools run automatically; every other D9 risk class pauses the run
  * for an approval decision. LOCAL_MUTATION's preview surface is the web gate's
  * concern (chunk 4); its EXECUTION is gated here like every other risky class.
+ * (The inverse GATED_RISK_CLASSES export was dead code — removed, S20 review
+ * fix F6c; NON_GATED is the used half.)
  */
 export const NON_GATED_RISK_CLASSES: ReadonlySet<RiskClass> = new Set<RiskClass>(["READ_ONLY"]);
-
-export const GATED_RISK_CLASSES: readonly RiskClass[] = RISK_CLASSES.filter(
-  (riskClass) => !NON_GATED_RISK_CLASSES.has(riskClass),
-);
 
 /**
  * The request_approval transition is not policy-guarded (no retry-class
@@ -662,9 +659,16 @@ export class ApprovalsService {
     // One-time consumption (S20 chunk 3): when the approved execution
     // COMPLETES, the one-time grant is consumed durably — stamped once, after
     // the callback resolves, so the gate consult inside that execution still
-    // passes but no second execution ever can (the stamp survives restarts; a
-    // failed callback leaves the grant unconsumed — the user simply
-    // re-decides). Reusable grants are never consumed.
+    // passes but no second execution ever can (the stamp survives restarts).
+    //
+    // Crash-window note (review-corrected): a FAILED callback leaves the
+    // grant unconsumed, but the decision itself has committed — the request
+    // is resolved and decisions are immutable. A retry is therefore
+    // FAIL-CLOSED, not a re-run: a re-decide answers the typed
+    // `already_decided` outcome and the withheld action is NOT re-executed
+    // (the idempotency rule below never reaches the callback). The action is
+    // lost, not duplicated — the unconsumed grant simply stays unused until
+    // it is revoked or expires. Reusable grants are never consumed.
     if (committed.outcome === "approved") {
       input.execute();
       if (committed.grant.one_time) {
@@ -1114,19 +1118,19 @@ export class ApprovalsService {
    * a typed reason (nothing throws for the state-based misses — the caller
    * branches on the result).
    *
-   * Check order:
-   *  (a) the deterministic policy fields are present and coherent — a
-   *      malformed input (e.g. a non-digest args_digest) is a typed
-   *      APPROVAL_RECHECK_INVALID refusal BEFORE any grant is consulted;
-   *  (c) the chunk-2 deterministic lookup — principal + tool identity +
+   * Check order (labels follow the actual sequence — S20 review fix F6b):
+   *  (a) the input is coherent typed policy data — a malformed input (e.g. a
+   *      non-digest args_digest) is a typed APPROVAL_RECHECK_INVALID refusal
+   *      BEFORE any grant is consulted;
+   *  (b) the chunk-2 deterministic lookup — principal + tool identity +
    *      capability + resource_scope exact match, NOT revoked, NOT expired
-   *      (compared on the injected clock, (d)), and the one-time args_digest
-   *      pin — a miss answers `no_active_grant`;
-   *  (b) the acting-conversation check on top of the RETURNED grant (the
+   *      (compared on the injected clock), and the one-time args_digest pin —
+   *      a miss answers `no_active_grant`;
+   *  (c) the acting-conversation check on top of the RETURNED grant (the
    *      lookup deliberately carries no conversation parameter — chunk 2): a
    *      grant scoped to one conversation is refused from any other; an
    *      explicit "any" passes everywhere;
-   *  (c') the one-time consumption state — a consumed one-time grant answers
+   *  (d) the one-time consumption state — a consumed one-time grant answers
    *      `grant_consumed` even for identical arguments.
    *
    * Fail-closed (G5): the FIRST deterministic match decides — the gate never

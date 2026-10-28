@@ -49,6 +49,26 @@ const SECRET = "ghp_redacted_scan_token_9f8e7d6c";
 
 const clockNow = "2026-10-29T10:00:00.000Z";
 
+/**
+ * The S20 scripted demo tool (runtime-owned, D38): a GATED proposal pauses
+ * each run at WAITING_FOR_APPROVAL. The scenario approves it FIRST (the user
+ * resuming the run), so the run is legitimately RUNNING mid-task when the
+ * merge request is prepared and pauses again on the merge approval.
+ */
+const GATED_TOOL = {
+  agent_id: AGENT_ID,
+  tool: {
+    tool_id: "tool_repo_push",
+    tool_version: "1.2.0",
+    capability: "repo.push",
+    risk_class: "EXTERNAL_WRITE",
+    resource_scope: "workspace://notes/draft.md",
+    side_effect_summary: "Pushes local commits to the configured remote repository.",
+  },
+  args_digest: `sha256:${"b".repeat(64)}`,
+  proposal_summary: "Scripted demo proposal: push the drafted notes.",
+} as const;
+
 interface RunningRuntime {
   runtime: RuntimeHandle;
   origin: string;
@@ -66,6 +86,7 @@ async function composeOn(): Promise<RunningRuntime> {
     packsRoot: PACKS_ROOT,
     now: () => clockNow,
     logUntypedFault: (event, fields) => faults.push({ event, fields }),
+    scriptedToolProposal: GATED_TOOL,
   });
   trackConnection(runtime);
   await new Promise<void>((resolveListen) =>
@@ -138,6 +159,7 @@ async function commitIn(workDir: string, relPath: string, content: string) {
   const git = simpleGit(workDir);
   await git.addConfig("user.email", "agent@example.invalid");
   await git.addConfig("user.name", "Coding Agent");
+  mkdirSync(dirname(join(workDir, relPath)), { recursive: true });
   writeFileSync(join(workDir, relPath), content);
   await git.add([relPath]);
   await git.commit("task work");
@@ -153,6 +175,20 @@ interface Scenario {
   worktreePath: string;
   mergeRequestId: string;
   mainBefore: string;
+}
+
+/** Resume the run's scripted tool approval so it is RUNNING again mid-task. */
+async function resumeScriptedApproval(env: RunningRuntime): Promise<void> {
+  const pending = await getJson(env.origin, `/v1/approvals/pending?workspace_id=${WORKSPACE}`);
+  const approvals = (pending.body["approvals"] ?? []) as Array<Record<string, unknown>>;
+  if (approvals.length !== 1) throw new Error("expected exactly the scripted tool approval");
+  const approvalId = approvals[0]!["approval_id"] as string;
+  const decided = await postJson(env.origin, `/v1/approvals/${approvalId}/decision`, {
+    workspace_id: WORKSPACE,
+    choice: "approve-this-execution-only",
+    decided_by: USER,
+  });
+  if (decided.status !== 200) throw new Error("resuming the scripted approval failed");
 }
 
 /** Clone one project, start one run, allocate its worktree, commit one file. */
@@ -178,6 +214,10 @@ async function scenarioWithTaskWork(): Promise<Scenario> {
   });
   if (allocated.status !== 201) throw new Error("the worktree allocation failed");
   const allocation = allocated.body as { worktree: { worktree_path: string } };
+  // The user approves the scripted tool request FIRST: the run is legitimately
+  // RUNNING mid-task when the coordinating Agent prepares the merge request
+  // (which then pauses the run again on the merge approval — the D8 ladder).
+  await resumeScriptedApproval(env);
   await commitIn(allocation.worktree.worktree_path, "src/greet.ts", "export const g = 1;\n");
   return {
     env,
@@ -338,7 +378,7 @@ describe("S19 projects API: credentials custody (D22/G3)", () => {
     expect(stored.status).toBe(201);
     const credential = stored.body as Record<string, string>;
     expect(credential.credential_id).toMatch(/^cred_/);
-    expect(credential.masked_hint).toBe("••••d6c");
+    expect(credential.masked_hint).toBe("••••7d6c");
 
     // The value NEVER appears in any API response (G3 redaction scan).
     const list = await getJson(

@@ -40,6 +40,7 @@ import { AgentsRepository } from "../../adapters/sqlite/agents-repository.ts";
 import type { PackAgentSeed } from "../../adapters/sqlite/agents-repository.ts";
 import { ArtifactsRepository } from "../../adapters/sqlite/artifacts-repository.ts";
 import { ApprovalsRepository } from "../../adapters/sqlite/approvals-repository.ts";
+import { ProjectsRepository } from "../../adapters/sqlite/projects-repository.ts";
 import { CommandReceiptsRepository } from "../../adapters/sqlite/command-receipts-repository.ts";
 import { ConversationsRepository } from "../../adapters/sqlite/conversations-repository.ts";
 import { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
@@ -73,6 +74,8 @@ import {
   type OperationPackCatalog,
 } from "../../modules/operations/operations.service.ts";
 import { ApprovalsService } from "../../modules/approvals/approvals.service.ts";
+import { CredentialVault } from "../../modules/projects/credential-vault.ts";
+import { GitService } from "../../modules/git/git.service.ts";
 import { HarnessRunService } from "../../modules/runtime/harness-run-service.ts";
 import { loadWorkspacePack, type WorkspacePack } from "../../modules/runtime/pack-pin.ts";
 import { seedAgentsFromPack } from "../../adapters/sqlite/agents-repository.ts";
@@ -115,6 +118,7 @@ import {
   buildApprovalsApiHandle,
   type ScriptedToolProposalConfig,
 } from "./s20-approvals-api.ts";
+import { buildProjectsApiHandle, type ProjectsApiHandle } from "./s19-projects-api.ts";
 import { consoleRedactedLogger, type RedactedLogger } from "../http/typed-errors.ts";
 import { attachWebSocketGateway, type WebSocketGatewayHandle } from "../websocket/gateway.ts";
 
@@ -349,6 +353,11 @@ export interface RuntimeHandle {
    * configured (G4); the read-only /v1/browser routes then answer honestly.
    */
   browser: BrowserService | undefined;
+   * S19 chunk 1: the git coordination seam — project import/clone, per-
+   * repository credentials, the task-scoped worktrees with their conflict
+   * queue, and the approval-gated merges. The HTTP surface relays into it.
+   */
+  projects: ProjectsApiHandle;
   /** Closes the gateway (and with it the HTTP server), then SQLite. */
   close(): Promise<void>;
 }
@@ -370,6 +379,7 @@ interface Wired {
   approvals: ApprovalsService;
   terminals: TerminalRecorder;
   browser: BrowserService | undefined;
+  projects: ProjectsApiHandle;
   setPublisher(publisher: ConversationPublisher): void;
 }
 
@@ -825,9 +835,55 @@ function wire(
     operations: operationsRepository,
     ...(options.now ? { clock: options.now } : {}),
   });
+
+  // S19 chunk 1: the git coordination seam over the SAME transaction and
+  // repositories every other writer uses. The credential vault's key file
+  // and every project clone live beside the database in the container's data
+  // directory (the same layout rule as the agent folders).
+  const projectsRepository = new ProjectsRepository(tx);
+  const projectsRoot = join(dirname(options.dbPath), "projects");
+  const gitService = new GitService({
+    projects: projectsRepository,
+    vault: new CredentialVault(join(dirname(options.dbPath), "project-credentials.key")),
+    approvals,
+    approvalsRepository,
+    tx,
+    projectsRoot,
+    ...(options.now ? { clock: options.now } : {}),
+    logFault,
+  });
+
+  // The S20 approval executor gains its real action here: an approval whose
+  // request resolves to a merge request executes THAT merge through the git
+  // service — after the decision transaction commits (the S20 rule), never
+  // before. Any other approval keeps the no-op scripted execution (G4).
   const approvalsApi = buildApprovalsApiHandle({
     approvals,
     approvalsRepository,
+    journal,
+    now: options.now ?? (() => new Date().toISOString()),
+    executeForApproval: (request) => {
+      const mergeRequest = projectsRepository.findMergeRequestByApproval(
+        request.workspace_id,
+        request.approval_id,
+      );
+      if (mergeRequest === null) {
+        return undefined;
+      }
+      return () => {
+        void gitService
+          .performMerge({
+            workspace_id: request.workspace_id,
+            project_id: mergeRequest.project_id,
+            merge_request_id: mergeRequest.merge_request_id,
+          })
+          .catch(() => {}); // the row records the failure (G5)
+      };
+    },
+  });
+  const projectsApi = buildProjectsApiHandle({
+    git: gitService,
+    approvals: approvalsApi,
     journal,
     now: options.now ?? (() => new Date().toISOString()),
   });
@@ -888,6 +944,7 @@ function wire(
     // S18 chunk 2: the read-only browser live-view surface when a browser is
     // configured (two GET routes; the routes relay into the service).
     ...(browserHandle ? { browser: browserHandle } : {}),
+    projects: projectsApi,
     ...(options.logUntypedFault ? { logUntypedFault: options.logUntypedFault } : {}),
   });
   return {
@@ -907,6 +964,7 @@ function wire(
     approvals,
     terminals,
     browser,
+    projects: projectsApi,
     setPublisher(next) {
       publisher = next;
     },
@@ -1112,6 +1170,7 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     approvals: wired.approvals,
     terminals: wired.terminals,
     browser: wired.browser,
+    projects: wired.projects,
     close: async () => {
       replyStreamer?.stopAll();
       // S16: drain every live worker child through the escalation BEFORE the

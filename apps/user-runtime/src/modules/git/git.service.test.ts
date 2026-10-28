@@ -183,8 +183,15 @@ async function commitFile(workDir: string, relPath: string, content: string, mes
   await git.commit(message);
 }
 
-async function headOf(repoDir: string, ref: string): Promise<string> {
-  return String(await simpleGit(repoDir).revparse([ref])).trim();
+function headOf(repoDir: string, ref: string): Promise<string> {
+  return simpleGit(repoDir)
+    .revparse([ref])
+    .then((value) => String(value).trim());
+}
+
+/** git prints forward-slash paths; node joins with the platform separator. */
+function normalizePath(value: string): string {
+  return value.replace(/\\+/g, "/");
 }
 
 function makeRun(taskId: string, overrides: Partial<TaskRun> = {}): TaskRun {
@@ -366,7 +373,7 @@ describe("git.service: task-scoped branch + worktree and the conflict queue", ()
     const branches = await repo.branch(["--list", worktree.branch_name]);
     expect(branches.all).toContain(worktree.branch_name);
     const worktrees = await repo.raw(["worktree", "list"]);
-    expect(worktrees).toContain(worktree.worktree_path);
+    expect(normalizePath(worktrees)).toContain(normalizePath(worktree.worktree_path));
 
     // The coding task commits on its branch; main does not move.
     await commitFile(worktree.worktree_path, "src/feature.ts", "export {};\n", "task A work");
@@ -489,7 +496,8 @@ describe("git.service: merge requests and the PRD decisions", () => {
     expect(request?.status).toBe("pending");
     expect(request?.tool_id).toBe("git.merge");
     expect(request?.risk_class).toBe("LOCAL_MUTATION");
-    expect(request?.resource_scope).toContain(project.project_id);
+    expect(request?.resource_scope).toContain("demo");
+    expect(request?.resource_scope).toContain("branches/main");
   });
 
   it("approve performs the merge (no rebase, no force); the worktree releases and main advances", async () => {

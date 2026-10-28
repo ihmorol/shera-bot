@@ -886,7 +886,7 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
         updated_at    TEXT    NOT NULL,
         PRIMARY KEY (workspace_id, project_id, worktree_id),
         UNIQUE (workspace_id, project_id, worktree_path),
-        CHECK (status = 'queued' OR queue_reason IS NULL)
+        CHECK (status != 'queued' OR queue_reason IS NOT NULL)
       ) STRICT;
 
       CREATE UNIQUE INDEX IF NOT EXISTS project_worktrees_active_idx

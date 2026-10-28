@@ -1,7 +1,8 @@
-import { Play, ListChecks } from "lucide-react";
+import { ListChecks, Play, GitBranch, FlaskConical } from "lucide-react";
 
 import { ErrorState } from "@/components/shell/states";
 import { Button } from "@/components/ui/button";
+import type { GitRunLinkage } from "@/lib/projects-api";
 import type { OperationRun as OperationRunType } from "@shera-bot/contracts";
 import { cn } from "@/lib/utils";
 
@@ -16,7 +17,41 @@ import { cn } from "@/lib/utils";
  * the amber approval accent, the dot paired with text (§2.3: color never the
  * only signal), and the honest pause line. The pause is the approval flow:
  * the deciding card lives in the thread.
+ *
+ * S19 (§S9, PRD §10, E6): a coding run's card is git-aware — when the
+ * runtime's project ledger holds a worktree or a merge request for this
+ * run's task, the card names the project and branch, the worktree state
+ * (the G5 queue reason included), and the validation status. The linkage is
+ * a join over REAL runtime reads keyed on id equality; a run without git
+ * work renders no git line at all — never an invented branch.
  */
+
+/** The validation chip inside a git-aware run card (§2.1 status vocabulary). */
+function RunValidationStatus({
+  status,
+}: {
+  status: NonNullable<GitRunLinkage["validation_status"]>;
+}) {
+  const copy =
+    status === "passed"
+      ? "validation passed"
+      : status === "failed"
+        ? "validation failed"
+        : "validation not run";
+  return (
+    <span
+      data-testid="operation-run-validation"
+      data-validation-status={status}
+      className={cn(
+        "flex items-center gap-1 font-mono",
+        status === "passed" ? "text-live" : status === "failed" ? "text-failed" : "text-muted",
+      )}
+    >
+      <FlaskConical className="size-3" aria-hidden="true" />
+      {copy}
+    </span>
+  );
+}
 
 /** The run state chip's §2.1 status vocabulary — shared with cards.tsx. */
 function runStateClass(state: OperationRunType["state"]): string {
@@ -41,6 +76,7 @@ export function OperationRunsPanel({
   onRetry,
   onCreateRun,
   createPending,
+  gitLinkage,
   className,
 }: {
   runs: OperationRunType[];
@@ -49,6 +85,8 @@ export function OperationRunsPanel({
   onRetry: () => void;
   onCreateRun: () => void;
   createPending: boolean;
+  /** The task→git join from the workspace's project ledger (S19 chunk 2). */
+  gitLinkage?: Record<string, GitRunLinkage>;
   className?: string;
 }) {
   return (
@@ -85,52 +123,96 @@ export function OperationRunsPanel({
         </p>
       ) : (
         <ul className="flex flex-col gap-2">
-          {runs.map((run) => (
-            <li
-              key={run.run_id}
-              data-testid="operation-run"
-              data-run-state={run.state}
-              className="rounded-lg border border-line bg-surface-elevated px-3 py-2"
-            >
-              <p className="truncate font-mono text-xs text-text">{run.run_id}</p>
-              <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted">
-                <span
-                  data-testid="operation-run-state"
-                  className={cn("flex items-center gap-1.5 font-mono", runStateClass(run.state))}
-                >
-                  {run.state === "WAITING_FOR_APPROVAL" ? (
-                    <span className="size-1.5 rounded-full bg-approval" aria-hidden="true" />
-                  ) : null}
-                  {run.state}
-                  {run.state === "WAITING_FOR_APPROVAL" ? (
-                    <span className="sr-only">— paused for your approval</span>
-                  ) : null}
-                </span>
-                <span>{run.events_seq_cursor} events</span>
-                <span>
-                  {run.artifacts.length === 1 ? "1 artifact" : `${run.artifacts.length} artifacts`}
-                </span>
-              </p>
-              {run.state === "WAITING_FOR_APPROVAL" ? (
-                <p className="mt-0.5 text-xs text-approval" data-testid="operation-run-waiting">
-                  Paused for your approval — decide from the card in the thread.
+          {runs.map((run) => {
+            const linkage = gitLinkage?.[run.run_id];
+            return (
+              <li
+                key={run.run_id}
+                data-testid="operation-run"
+                data-run-state={run.state}
+                className="rounded-lg border border-line bg-surface-elevated px-3 py-2"
+              >
+                <p className="truncate font-mono text-xs text-text">{run.run_id}</p>
+                <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted">
+                  <span
+                    data-testid="operation-run-state"
+                    className={cn("flex items-center gap-1.5 font-mono", runStateClass(run.state))}
+                  >
+                    {run.state === "WAITING_FOR_APPROVAL" ? (
+                      <span className="size-1.5 rounded-full bg-approval" aria-hidden="true" />
+                    ) : null}
+                    {run.state}
+                    {run.state === "WAITING_FOR_APPROVAL" ? (
+                      <span className="sr-only">— paused for your approval</span>
+                    ) : null}
+                  </span>
+                  <span>{run.events_seq_cursor} events</span>
+                  <span>
+                    {run.artifacts.length === 1
+                      ? "1 artifact"
+                      : `${run.artifacts.length} artifacts`}
+                  </span>
                 </p>
-              ) : null}
-              {run.parent_task_id ? (
-                // D34/D46: a delegated subrun stays its own independently
-                // tracked run, labeled by the delegating task.
-                <p
-                  data-testid="operation-run-parent"
-                  className="mt-0.5 flex items-center gap-1 text-xs text-muted"
-                >
-                  <Play className="size-3" aria-hidden="true" />
-                  Delegated subrun of {run.parent_task_id}
-                </p>
-              ) : null}
-            </li>
-          ))}
+                {run.state === "WAITING_FOR_APPROVAL" ? (
+                  <p className="mt-0.5 text-xs text-approval" data-testid="operation-run-waiting">
+                    Paused for your approval — decide from the card in the thread.
+                  </p>
+                ) : null}
+                {run.parent_task_id ? (
+                  // D34/D46: a delegated subrun stays its own independently
+                  // tracked run, labeled by the delegating task.
+                  <p
+                    data-testid="operation-run-parent"
+                    className="mt-0.5 flex items-center gap-1 text-xs text-muted"
+                  >
+                    <Play className="size-3" aria-hidden="true" />
+                    Delegated subrun of {run.parent_task_id}
+                  </p>
+                ) : null}
+                {linkage ? <GitLinkageLine linkage={linkage} /> : null}
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>
+  );
+}
+
+/** One run's git work: project, branch, worktree state, validation (G5 honest). */
+function GitLinkageLine({ linkage }: { linkage: GitRunLinkage }) {
+  return (
+    <div
+      data-testid="operation-run-git"
+      className="mt-1.5 rounded-md border border-line bg-surface px-2.5 py-1.5"
+    >
+      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+        <GitBranch className="size-3 text-muted" aria-hidden="true" />
+        <span className="text-muted">{linkage.project_name}</span>
+        {linkage.branch_name !== null ? (
+          <span className="font-mono text-text">{linkage.branch_name}</span>
+        ) : null}
+        {linkage.worktree_status !== null ? (
+          <span
+            className={cn(
+              "font-mono",
+              linkage.worktree_status === "active"
+                ? "text-live"
+                : linkage.worktree_status === "queued"
+                  ? "text-approval"
+                  : "text-muted",
+            )}
+          >
+            {linkage.worktree_status}
+          </span>
+        ) : null}
+        {linkage.validation_status !== null ? (
+          <RunValidationStatus status={linkage.validation_status} />
+        ) : null}
+      </p>
+      {linkage.queue_reason !== null && linkage.worktree_status === "queued" ? (
+        <p className="mt-1 text-xs text-muted">{linkage.queue_reason}</p>
+      ) : null}
+    </div>
   );
 }

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 
 import { AgentSettingsSurface } from "@/components/settings/agent-settings";
+import { GitSettingsSurface } from "@/components/settings/git-settings";
 import { PermissionsSettingsSurface } from "@/components/settings/permissions-settings";
 import { WorkersSettingsSurface } from "@/components/settings/worker-admission-readout";
 import { SurfaceFrame } from "@/components/shell/surface-frame";
@@ -67,6 +68,17 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
     );
   }
 
+  // S19 (§S9 "Git & repositories", PRD §10, E6): the merge review — the
+  // minimal PRD §10 fields per merge request with the three decisions, the
+  // worktree ledger with the visible queue, and the validation runs.
+  if (section?.length === 1 && section[0] === "git") {
+    return (
+      <SurfaceFrame title="Settings" meta="Git & repositories">
+        <GitSettingsSurface />
+      </SurfaceFrame>
+    );
+  }
+
   const sectionLabel = section?.length ? section.join(" / ") : "Overview";
 
   return (
@@ -95,19 +107,26 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
             </Link>
             <span className="font-mono text-xs uppercase tracking-[0.16em] text-muted">open</span>
           </li>
-          {["Profile", "Providers", "Tools", "Git", "Memory", "Credits", "Workspace"].map(
-            (item) => (
-              <li
-                key={item}
-                className="flex items-center justify-between rounded-xl border border-line bg-surface px-4 py-3"
-              >
-                <span className="text-sm text-text">{item}</span>
-                <span className="font-mono text-xs uppercase tracking-[0.16em] text-muted">
-                  pending
-                </span>
-              </li>
-            ),
-          )}
+          <li className="flex items-center justify-between rounded-xl border border-line bg-surface px-4 py-3">
+            <Link
+              href={routes.settings("git")}
+              className="text-sm text-text underline underline-offset-4 hover:text-cool-highlight"
+            >
+              Git
+            </Link>
+            <span className="font-mono text-xs uppercase tracking-[0.16em] text-muted">open</span>
+          </li>
+          {["Profile", "Providers", "Tools", "Memory", "Credits", "Workspace"].map((item) => (
+            <li
+              key={item}
+              className="flex items-center justify-between rounded-xl border border-line bg-surface px-4 py-3"
+            >
+              <span className="text-sm text-text">{item}</span>
+              <span className="font-mono text-xs uppercase tracking-[0.16em] text-muted">
+                pending
+              </span>
+            </li>
+          ))}
         </ul>
         <p className="mt-6">
           <Link

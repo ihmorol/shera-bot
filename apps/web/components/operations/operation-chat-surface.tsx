@@ -37,6 +37,7 @@ import {
   useRosterCommand,
   useSendOperationMessage,
 } from "@/lib/operation-data";
+import { useGitLinkage } from "@/lib/projects-data";
 import { routes } from "@/lib/routes";
 
 /**
@@ -147,6 +148,8 @@ function RuntimeOperationChat({
 
   const operation = detail.detail?.operation ?? null;
   const runs = detail.detail?.runs ?? [];
+  // S19 chunk 2: the task→git join that makes coding run cards git-aware.
+  const gitLinkage = useGitLinkage(workspaceId);
   const pending =
     rosterCommand.isPending || coordinatorCommand.isPending || renameOperation.isPending;
 
@@ -353,6 +356,7 @@ function RuntimeOperationChat({
             onRetry={detail.refetch}
             createPending={createRun.isPending}
             onCreateRun={() => createRun.mutate()}
+            gitLinkage={gitLinkage.linkage}
           />
         </aside>
       </div>

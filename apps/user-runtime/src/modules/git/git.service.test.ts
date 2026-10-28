@@ -695,6 +695,18 @@ describe("credential vault: AES-256-GCM custody inside the container", () => {
     // The stored row carries ciphertext only: no read-back surface exists.
     const row = env.projects.findCredential(WS, project.project_id, stored.credential_id);
     expect(row?.secret_ciphertext.toString("utf8")).not.toContain("tok_abcd1234");
+
+    // G3 at rest: the raw secret appears NOWHERE in the container's durable
+    // state — one scan over the SQLite file covers every row AND every
+    // journalled event payload, and the key file carries only key material.
+    const dbBytes = readFileSync(join(env.dir, "runtime.db"));
+    expect(dbBytes.includes(Buffer.from("tok_abcd1234", "utf8"))).toBe(false);
+    expect(
+      readFileSync(join(env.dir, "project-credentials.key")).includes(
+        Buffer.from("tok_abcd1234", "utf8"),
+      ),
+    ).toBe(false);
+    expect(JSON.stringify(env.faults)).not.toContain("tok_abcd1234");
   });
 });
 

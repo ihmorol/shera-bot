@@ -38,6 +38,12 @@ function newTempDbPath(): string {
   return join(dir, "runtime.db");
 }
 
+function openMigratedDb(path: string) {
+  const conn = openDatabase(path);
+  applyMigrations(conn.db);
+  return conn;
+}
+
 afterAll(() => {
   for (const dir of tempDirs) {
     rmSync(dir, { recursive: true, force: true });
@@ -63,7 +69,7 @@ function makeArtifacts() {
   return { conn, clock, repo };
 }
 
-function insert(input: Partial<ArtifactInsert>): ArtifactInsert {
+function insert(input: Partial<ArtifactInsert> = {}): ArtifactInsert {
   return {
     workspace_id: "ws_default",
     name: "report.pdf",
@@ -134,7 +140,7 @@ describe("insertArtifact / getArtifact", () => {
 
       clock.tick();
       repo.insertArtifact(
-        insert({ producer_agent_id: "bob", producer_task_id: "task-5", producer_agent_id: "bob" }),
+        insert({ producer_agent_id: "bob", producer_task_id: "task-5" }),
       );
 
       const reloaded = repo.getArtifact("ws_default", first.artifact_id);

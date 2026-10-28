@@ -63,6 +63,12 @@ function newTempDbPath(): string {
   return join(dir, "runtime.db");
 }
 
+function openMigratedDb(path: string) {
+  const conn = openDatabase(path);
+  applyMigrations(conn.db);
+  return conn;
+}
+
 afterAll(() => {
   for (const dir of tempDirs) {
     rmSync(dir, { recursive: true, force: true });
@@ -81,8 +87,7 @@ function makeClock(startIso = "2026-10-28T10:00:00.000Z") {
   };
 }
 
-function seedAgent(db: ReturnType<typeof openDatabase>["db"], agentId: string, displayName: string): void {
-  const now = "2026-10-28T09:00:00.000Z";
+function seedAgent(db: ReturnType<typeof openDatabase>["db"], agentId: string, displayName: string): void {  const now = "2026-10-28T09:00:00.000Z";
   db.prepare(
     `INSERT INTO agents (
        agent_id, workspace_id, display_name, role_description, avatar_hue,

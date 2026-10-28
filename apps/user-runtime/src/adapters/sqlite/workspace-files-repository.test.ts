@@ -622,7 +622,10 @@ describe("write-lease gating on the storage write path (D6)", () => {
   it("blocks a user write while an Agent holds an active lease, with the tooltip data attached; reads NEVER block", () => {
     const { conn, repo, leases } = makeRepo();
     try {
-      writeAsAgent(repo, leases, "ws_default", "workspace://plan.md", ALICE, new Uint8Array([1]), "text/plain", "task-4");
+      const lease = leases.acquireLease("ws_default", "workspace://plan.md", "task-4", ALICE, LEASE_TTL);
+      repo.write("ws_default", "workspace://plan.md", ALICE, new Uint8Array([1]), "text/plain", {
+        task_id: "task-4",
+      });
 
       // Concurrent reads are ALWAYS allowed — they never touch the lease table.
       expect(repo.read("ws_default", "workspace://plan.md", USER).size).toBe(1);
@@ -648,8 +651,6 @@ describe("write-lease gating on the storage write path (D6)", () => {
       expect(repo.read("ws_default", "workspace://plan.md", USER).size).toBe(1);
 
       // After the lease is released, the user write succeeds.
-      const lease: WriteLease = leases
-        .acquireLease("ws_default", "workspace://plan.md", "task-4", ALICE, 60_000);
       leases.releaseLease(lease.lease_id, "task-4");
       const overwritten = repo.write(
         "ws_default",

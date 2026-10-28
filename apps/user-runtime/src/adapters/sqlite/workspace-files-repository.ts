@@ -26,10 +26,17 @@
  * non-recursive delete. Scope denial is checked BEFORE the delete refusal, so
  * a cross-private agent delete reads as the denial, not the refusal.
  *
- * Write leases (D6): concurrent reads are always allowed here; lease gating
- * of writes is the runtime gateway's concern and lands in S17 chunk 2 against
- * the write_leases table (created in v9) — this repository deliberately does
- * NOT enforce leases yet, and rewrite-over-file is allowed without one.
+ * Write leases (D6, S17 chunk 2): concurrent reads are always allowed here;
+ * every WRITE is gated through the write-lease gate (assertWriteAllowed of
+ * the write-leases repository, injected at construction — the gate is a
+ * required collaborator so an ungated repository cannot exist). A user write
+ * is blocked only while an Agent holds an ACTIVE lease on the exact path
+ * (WRITE_LEASE_CONFLICT carrying the holding Agent + task — the tooltip
+ * data); an agent write requires an active lease held by its own task
+ * (WRITE_LEASE_REQUIRED). Scope denial (D39) is checked BEFORE the gate, so a
+ * cross-private agent write reads as the denial, not a lease error. Delete is
+ * never agent-triggered (below) and directories are structural (no leases on
+ * roots), so the gate covers the whole agent-writable surface.
  *
  * WORKSPACE SCOPING IS NOT OPTIONAL (E12): every method takes workspace_id
  * and every statement keys rows by it — the same URI in two workspaces is two
@@ -259,6 +266,31 @@ export interface WorkspaceDeleteOptions {
   recursive?: boolean;
 }
 
+/** Options for the gated write path. */
+export interface WorkspaceWriteOptions {
+  /**
+   * The Agent's task requesting the write (D6: agent writes are task-scoped
+   * and lease-gated). Required for agent writes to pass the lease gate;
+   * ignored for user writes.
+   */
+  task_id?: string;
+}
+
+/**
+ * The write-lease gate every write goes through (D6, S17 chunk 2). Satisfied
+ * structurally by WriteLeasesRepository.assertWriteAllowed — declared here so
+ * the files repository never imports the leases repository (the dependency
+ * points one way: leases → files, for the shared URI parser).
+ */
+export interface WorkspaceWriteLeaseGate {
+  assertWriteAllowed(
+    workspaceId: string,
+    uri: string,
+    actor: WorkspaceStorageActor,
+    taskId?: string,
+  ): void;
+}
+
 /** Deterministic root ids/names: one shared root, one root per Agent scope. */
 function scopeRootId(scope: "workspace" | "agent", agentId: string | null): string {
   return scope === "workspace" ? "root:workspace" : `root:agent:${agentId}`;
@@ -307,15 +339,24 @@ function toNode(row: NodeRow): WorkspaceNode {
 }
 
 export class WorkspaceFilesRepository {
-  constructor(private readonly tx: SqliteTransactions) {}
+  /**
+   * The write-lease gate is a REQUIRED collaborator (D6, G5): there is no
+   * ungated construction, so a silent lease bypass is unrepresentable. Repos
+   * sharing one database share one SqliteTransactions instance.
+   */
+  constructor(
+    private readonly tx: SqliteTransactions,
+    private readonly writeLeases: WorkspaceWriteLeaseGate,
+  ) {}
 
   /**
    * Write (create or replace) one file. Missing parent directories are
    * auto-created; rewriting an existing file replaces content/size/mime in
    * place (same id, created_by preserved — the first writer's provenance
-   * stays). Write-lease gating is chunk 2's concern (D6); no lease is checked
-   * yet. Runs in one short transaction; a call inside an open transaction
-   * joins it.
+   * stays). The write goes through the lease gate FIRST (D6): a user write
+   * is blocked by an active agent lease on the exact path, an agent write
+   * requires its own task's active lease — refused writes mutate nothing.
+   * Runs in one short transaction; a call inside an open transaction joins it.
    */
   write(
     workspaceId: string,
@@ -323,6 +364,7 @@ export class WorkspaceFilesRepository {
     actor: WorkspaceStorageActor,
     content: Uint8Array,
     mimeType: string | null,
+    options?: WorkspaceWriteOptions,
   ): WorkspaceFileContent {
     const parsed = parseScopedWorkspaceUri(uri);
     this.assertScopeAccess(actor, parsed);
@@ -330,6 +372,8 @@ export class WorkspaceFilesRepository {
     // (like delete), so writing "workspace://" is a kind error, not a crash.
     const name = parsed.segments[parsed.segments.length - 1];
     if (name === undefined) throw new WorkspaceNodeTypeError();
+    // D6 lease gate: after URI + scope validation, before any row is touched.
+    this.writeLeases.assertWriteAllowed(workspaceId, uri, actor, options?.task_id);
     return this.tx.transaction((db) => {
       const parentId = this.materializeParents(db, workspaceId, parsed, actor);
       const now = new Date().toISOString();

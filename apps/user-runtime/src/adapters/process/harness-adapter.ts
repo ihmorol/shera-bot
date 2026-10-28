@@ -14,7 +14,7 @@
  * and will run real processes; the deterministic FAKE (fake-harness-adapter)
  * has no processes, no timers, no I/O beyond what the gateway journals.
  */
-import type { TaskJournalEventType } from "@shera-bot/contracts";
+import type { TaskJournalEventType, TaskTriggerEventType } from "@shera-bot/contracts";
 
 /** What the gateway asks the harness to drive: one existing task run. */
 export interface HarnessRunRequest {
@@ -26,12 +26,22 @@ export interface HarnessRunRequest {
 /**
  * A proposal across the seam. `task_command` proposals are applied through the
  * D8 transition table (the run's state machine); `journal_event` proposals are
- * non-transition durable events (progress/artifact/checkpoint) journalled on
- * the run's stream without changing its state.
+ * non-transition durable events journalled on the run's stream without
+ * changing its state — the execution-journal vocabulary (progress/artifact/
+ * checkpoint) AND the D34 trigger vocabulary (S20 chunk 4: a TYPED
+ * `tool.proposed` proposed MID-RUN by the scripted harness rides here; the
+ * gateway journals it through the unchanged D26 registry path and, through
+ * the approvals delegate, runs the approval boundary over it). The gateway
+ * validates every proposal against the D26 envelope registry regardless of
+ * which side of this union it lands on — no adapter is trusted (G2).
  */
 export type HarnessProposal =
   | { kind: "task_command"; command: unknown }
-  | { kind: "journal_event"; event_type: TaskJournalEventType; payload: Record<string, unknown> };
+  | {
+      kind: "journal_event";
+      event_type: TaskJournalEventType | TaskTriggerEventType;
+      payload: Record<string, unknown>;
+    };
 
 export interface HarnessEventSink {
   /** Propose one unit of work; the gateway validates and executes (or rejects). */

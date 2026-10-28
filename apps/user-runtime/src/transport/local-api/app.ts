@@ -43,6 +43,7 @@ import type { ReplayService } from "../../modules/events/replay.service.ts";
 import { MessageSender } from "../../modules/events/events.types.ts";
 import type { OperationsService } from "../../modules/operations/operations.service.ts";
 import type { WorkerAdmissionReadout } from "../../modules/workers/task-worker-supervisor.service.ts";
+import { registerApprovalsRoutes, type ApprovalsApiHandle } from "./s20-approvals-api.ts";
 import {
   ADHOC_AUTO_LABEL_PATTERN,
   type PackSummary,
@@ -411,6 +412,15 @@ export interface LocalApiDeps {
    * factory remains composable without the storage seam.
    */
   workspace?: WorkspaceApiDeps;
+  /**
+   * S20 chunk 4: the approvals facade over the approvals service — the D9
+   * card reads, the five-choice decision surface, the active grants + revoke,
+   * the reminder mutes, and the due-reminder tick. Every route is
+   * workspace-scoped (E12) and every rule lives in the service (the routes
+   * relay, never re-derive). Present on every composed stack (the surface is
+   * passive until the scripted trigger files a request — no G4 concern).
+   */
+  approvals?: ApprovalsApiHandle;
   /**
    * B-1: the redacted sink untyped HTTP faults are recorded to — the generic
    * INTERNAL_ERROR's correlation_id is logged with it, so "The failure has
@@ -1141,6 +1151,13 @@ export function createLocalApi(deps: LocalApiDeps): Express {
   app.get("/internal/v1/health", (_req, res) => {
     res.status(200).json({ status: "ok" });
   });
+
+  // S20 chunk 4: the approvals surface — the literal-segment paths register
+  // before the error handlers, and the module owns its own literal-before-
+  // :approval_id ordering (Express matches in registration order).
+  if (deps.approvals) {
+    registerApprovalsRoutes(app, deps.approvals);
+  }
 
   // Typed failures and unknown routes: the SheraError taxonomy, never an
   // Express default page, a stack trace, or raw internals (D23 rule 4, G3).

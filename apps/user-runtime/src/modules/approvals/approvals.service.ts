@@ -148,6 +148,9 @@ export type ApprovalsServiceFailureCode =
   | "APPROVAL_ALREADY_RESOLVED"
   | "APPROVAL_RECHECK_INVALID"
   | "APPROVAL_MUTE_INVALID"
+  // S20 chunk 4: the revoke route's typed 404 — the repository's E12-scoped
+  // false is lifted into the shared taxonomy by the API facade.
+  | "APPROVAL_GRANT_NOT_FOUND"
   | "AGENT_CANNOT_SELF_APPROVE"
   | "AGENT_CANNOT_DECIDE_APPROVAL";
 

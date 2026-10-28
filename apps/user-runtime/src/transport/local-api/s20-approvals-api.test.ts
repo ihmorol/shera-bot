@@ -29,17 +29,27 @@
  *      NEVER changes run state — D32/E3) and mutes suppress notifications
  *      only.
  */
-import { join } from "node:path";
+import { join, resolve as resolvePath } from "node:path";
+import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import type { TypedExecutionEvent } from "@shera-bot/contracts";
 
+import { OperationsRepository } from "../../adapters/sqlite/operations-repository.ts";
+import { openDatabase } from "../../adapters/sqlite/connection.ts";
+import { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import { DEFAULT_WORKSPACE_ID, composeRuntime, type RuntimeHandle } from "./compose.ts";
+import type { ScriptedToolProposalConfig } from "./s20-approvals-api.ts";
 import {
   cleanupTempResources,
   makeTempDir,
   trackConnection,
 } from "../../../test/helpers/temp-resources.ts";
+
+const here = dirname(fileURLToPath(import.meta.url));
+/** The pinned student pack: the cancel-cascade test rosters a REAL pack Agent. */
+const PACKS_ROOT = resolvePath(here, "../../../../../agent-packs");
 
 const WORKSPACE = DEFAULT_WORKSPACE_ID;
 const FOREIGN_WORKSPACE = "ws-other-0000";
@@ -80,15 +90,17 @@ let clockNow = "2026-10-28T12:00:00.000Z";
 interface RunningRuntime {
   runtime: RuntimeHandle;
   origin: string;
+  dbPath: string;
   close(): Promise<void>;
 }
 
 async function composeOn(
-  scriptedToolProposal: Record<string, unknown> | undefined,
+  scriptedToolProposal: ScriptedToolProposalConfig | undefined,
 ): Promise<RunningRuntime> {
   const dir = makeTempDir("shera-s20-approvals-api-");
   const runtime = composeRuntime({
     dbPath: join(dir, "runtime.db"),
+    packsRoot: PACKS_ROOT,
     now: () => clockNow,
     ...(scriptedToolProposal !== undefined ? { scriptedToolProposal } : {}),
   });
@@ -98,6 +110,7 @@ async function composeOn(
   return {
     runtime,
     origin: `http://127.0.0.1:${address.port}`,
+    dbPath: join(dir, "runtime.db"),
     close: () => runtime.close(),
   };
 }
@@ -161,6 +174,45 @@ async function decide(
     choice,
     decided_by: decidedBy,
   });
+}
+
+/**
+ * Seed one task-scoped child run through the operations REPOSITORY on a
+ * second connection (the chunk-2 arrangement; arrangement writes stay inside
+ * the repository — no SQL here). Returns the seeded row.
+ */
+function seedChildRun(dbPath: string, parentTaskId: string, runId: string) {
+  const conn = openDatabase(dbPath);
+  try {
+    const row = {
+      run_id: runId,
+      workspace_id: WORKSPACE,
+      operation_id: "op_s20_children",
+      parent_task_id: parentTaskId,
+      state: "RUNNING" as const,
+      events_seq_cursor: 0,
+      credits: {} as Record<string, unknown>,
+      artifacts: [] as string[],
+      created_at: clockNow,
+      updated_at: clockNow,
+    };
+    new OperationsRepository(new SqliteTransactions(conn.db)).createRun(WORKSPACE, row);
+    return row;
+  } finally {
+    conn.close();
+  }
+}
+
+/** Re-read one child run through the repository on a second connection. */
+function readChildRun(dbPath: string, parentTaskId: string, runId: string) {
+  const conn = openDatabase(dbPath);
+  try {
+    return new OperationsRepository(new SqliteTransactions(conn.db))
+      .listRunsByParentTaskId(WORKSPACE, parentTaskId)
+      .find((row) => row.run_id === runId);
+  } finally {
+    conn.close();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -364,22 +416,12 @@ describe("S20 approvals API: decisions", () => {
     >;
     const approvalId = approvals[0]!["approval_id"] as string;
 
-    // One child run (D34/D46 delegation link) that the cascade must cancel.
-    const op = await postJson(env.origin, "/v1/operations", {
-      workspace_id: WORKSPACE,
-      definition_ref: null,
-      name: "S20 Cancel Op",
-      roster_agent_ids: [GATED_AGENT],
-      coordinator_agent_id: GATED_AGENT,
-    });
-    expect(op.status).toBe(201);
-    const operationId = op.body["operation_id"] as string;
-    const child = await postJson(env.origin, `/v1/operations/${operationId}/runs`, {
-      workspace_id: WORKSPACE,
-      run_id: "run_s20_child",
-      parent_task_id: run.taskId,
-    });
-    expect(child.status).toBe(201);
+    // One child run (D34/D46 delegation link, parent_task_id = the TASK's id)
+    // seeded at the repository level — the S13 run route scopes its parent
+    // link to Operation runs, while the approval cascade is task-scoped (the
+    // same arrangement the chunk-2 service suite uses).
+    const child = seedChildRun(env.dbPath, run.taskId, "run_s20_child");
+    expect(child.state).toBe("RUNNING");
 
     const decision = await decide(env.origin, approvalId, "cancel-the-task");
     expect(decision.status).toBe(200);
@@ -387,11 +429,10 @@ describe("S20 approvals API: decisions", () => {
     expect(decision.body["run"]).toMatchObject({ task_id: run.taskId, state: "CANCELLED" });
     expect(decision.body["cancelled_child_run_ids"]).toEqual(["run_s20_child"]);
 
-    const childDetail = await getJson(
-      env.origin,
-      `/v1/operations/${operationId}/runs/run_s20_child?workspace_id=${WORKSPACE}`,
-    );
-    expect(childDetail.body["state"]).toBe("CANCELLED");
+    // The child row is CANCELLED durably (read on a second connection — the
+    // honest cross-connection check, no SQL outside the repository).
+    const reread = readChildRun(env.dbPath, run.taskId, "run_s20_child");
+    expect(reread?.state).toBe("CANCELLED");
   });
 
   it("replays the SAME decision idempotently (200 already_decided, stored resolution) and refuses a DIFFERENT choice", async () => {

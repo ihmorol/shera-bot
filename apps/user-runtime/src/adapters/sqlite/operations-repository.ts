@@ -850,6 +850,30 @@ export class OperationsRepository {
     return rows.map((row) => this.runFromRow(row));
   }
 
+  /**
+   * The DIRECT children of one delegating run — rows whose parent_task_id
+   * references it (D34/D46 delegation link, indexed by the v6
+   * operation_runs_by_parent_idx). Workspace-scoped (E12). S20 chunk 2's
+   * cancel-the-task path reads this inside its decision transaction to cancel
+   * children in the SAME atomic unit as the parent — there is deliberately no
+   * other cascade in the operations service to reuse.
+   */
+  listRunsByParentTaskId(
+    workspaceId: string,
+    parentTaskId: string,
+    exec?: DatabaseSync,
+  ): OperationRun[] {
+    const db = exec ?? this.tx.connection();
+    const rows = db
+      .prepare(
+        `SELECT ${RUN_COLUMNS} FROM operation_runs
+         WHERE workspace_id = ? AND parent_task_id = ?
+         ORDER BY created_at, run_id`,
+      )
+      .all(workspaceId, parentTaskId) as unknown as OperationRunSqlRow[];
+    return rows.map((row) => this.runFromRow(row));
+  }
+
   updateRunState(
     workspaceId: string,
     operationId: string,

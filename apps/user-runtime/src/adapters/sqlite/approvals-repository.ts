@@ -16,15 +16,37 @@
  * insert/list/revoke for grants, and basic reminder + mute accessors. The
  * decision application, invalidation rules, reminder firing, and mute
  * enforcement are later chunks' logic against this same schema.
+ *
+ * Chunk-2 addition (S20; D9, G3): grants carry a nullable `args_digest`
+ * adjacency column (v10) so ONE-TIME grants match the exact argument set — a
+ * changed argument set invalidates a one-time approval. Reusable grants store
+ * NULL (deliberately argument-agnostic). The contracts ApprovalGrant is
+ * untouched; `ApprovalGrantRecord` = contract record + the digest. Requests
+ * gain `resolveRequest`, the one writer that stamps status + resolved_at +
+ * resolved_by_choice (decisions are immutable — D9).
  */
 import type { DatabaseSync } from "node:sqlite";
 
-import type { Actor, ApprovalGrant, ApprovalRequest } from "@shera-bot/contracts";
+import type { Actor, ApprovalChoice, ApprovalGrant, ApprovalRequest } from "@shera-bot/contracts";
 
 import type { SqliteTransactions } from "./transactions.ts";
 
 /** The contract status vocabulary of an approval request. */
 export type ApprovalRequestStatus = ApprovalRequest["status"];
+
+/**
+ * One durable approval grant: the contracts ApprovalGrant record plus the
+ * v10 args_digest adjacency column (null for reusable grants — they are
+ * deliberately argument-agnostic; digest-only even here, never raw args — G3).
+ */
+export type ApprovalGrantRecord = ApprovalGrant & { args_digest: string | null };
+
+/** The resolution a decision stamps on one request (status moves off pending). */
+export interface ApprovalRequestResolution {
+  status: Exclude<ApprovalRequestStatus, "pending">;
+  resolved_at: string;
+  resolved_by_choice: ApprovalChoice;
+}
 
 /** One E3 reminder slot of one approval request (the v9 reminder table). */
 export interface ApprovalReminderRow {
@@ -57,7 +79,8 @@ const REQUEST_COLUMNS = `
 const GRANT_COLUMNS = `
   workspace_id, grant_id, source_choice, principal_type, principal_id,
   tool_id, tool_version, capability, resource_scope, conversation_scope,
-  workspace_scope, expires_at, one_time, created_by_json, approved_at, revoked_at`;
+  workspace_scope, expires_at, one_time, created_by_json, approved_at, revoked_at,
+  args_digest`;
 
 function requestRowToRecord(row: Record<string, unknown>): ApprovalRequest {
   return {
@@ -82,7 +105,7 @@ function requestRowToRecord(row: Record<string, unknown>): ApprovalRequest {
   };
 }
 
-function grantRowToRecord(row: Record<string, unknown>): ApprovalGrant {
+function grantRowToRecord(row: Record<string, unknown>): ApprovalGrantRecord {
   return {
     workspace_id: row.workspace_id as string,
     grant_id: row.grant_id as string,
@@ -100,6 +123,7 @@ function grantRowToRecord(row: Record<string, unknown>): ApprovalGrant {
     created_by: JSON.parse(row.created_by_json as string) as Actor,
     approved_at: row.approved_at as string,
     revoked_at: (row.revoked_at as string | null) ?? null,
+    args_digest: (row.args_digest as string | null) ?? null,
   };
 }
 
@@ -183,16 +207,45 @@ export class ApprovalsRepository {
     ).map(requestRowToRecord);
   }
 
+  /**
+   * Stamp the ONE resolution of a request (S20 chunk 2): status moves off
+   * pending with resolved_at + resolved_by_choice in the same update.
+   * Decisions are immutable (D9) — the service refuses a second resolution
+   * before ever reaching this writer. False when no row matched (E12-scoped).
+   */
+  resolveRequest(
+    workspaceId: string,
+    approvalId: string,
+    resolution: ApprovalRequestResolution,
+    exec?: DatabaseSync,
+  ): boolean {
+    const db = exec ?? this.tx.connection();
+    const result = db
+      .prepare(
+        `UPDATE approval_requests
+         SET status = ?, resolved_at = ?, resolved_by_choice = ?
+         WHERE workspace_id = ? AND approval_id = ?`,
+      )
+      .run(
+        resolution.status,
+        resolution.resolved_at,
+        resolution.resolved_by_choice,
+        workspaceId,
+        approvalId,
+      );
+    return result.changes > 0;
+  }
+
   // -------------------------------------------------------------------------
   // Approval grants (D9 — created by the decision application, later chunk)
   // -------------------------------------------------------------------------
 
-  insertGrant(record: ApprovalGrant, exec?: DatabaseSync): ApprovalGrant {
+  insertGrant(record: ApprovalGrantRecord, exec?: DatabaseSync): ApprovalGrantRecord {
     const db = exec ?? this.tx.connection();
     db.prepare(
       `INSERT INTO approval_grants
          (${GRANT_COLUMNS})
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       record.workspace_id,
       record.grant_id,
@@ -210,12 +263,13 @@ export class ApprovalsRepository {
       JSON.stringify(record.created_by),
       record.approved_at,
       record.revoked_at,
+      record.args_digest,
     );
     return record;
   }
 
   /** Every grant of one workspace, oldest first (revoked rows included). */
-  listGrants(workspaceId: string, exec?: DatabaseSync): ApprovalGrant[] {
+  listGrants(workspaceId: string, exec?: DatabaseSync): ApprovalGrantRecord[] {
     const db = exec ?? this.tx.connection();
     return (
       db
@@ -230,7 +284,12 @@ export class ApprovalsRepository {
   }
 
   /** Stamp revoked_at on one grant; false when no row matched (E12-scoped). */
-  revokeGrant(workspaceId: string, grantId: string, revokedAt: string, exec?: DatabaseSync): boolean {
+  revokeGrant(
+    workspaceId: string,
+    grantId: string,
+    revokedAt: string,
+    exec?: DatabaseSync,
+  ): boolean {
     const db = exec ?? this.tx.connection();
     const result = db
       .prepare(

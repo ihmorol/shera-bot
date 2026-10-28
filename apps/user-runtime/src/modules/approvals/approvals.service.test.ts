@@ -195,9 +195,9 @@ describe("approvals service: a gated typed proposal pauses the run (S20 chunk 1)
 
     const reminders = env.approvals.listRemindersByApproval(WS, result.approval_id);
     expect(reminders).toHaveLength(APPROVAL_REMINDER_SCHEDULE_SECONDS.length);
-    expect(
-      reminders.map((row) => row.reminder_index).sort((a, b) => a - b),
-    ).toEqual([0, 1, 2, 3, 4]);
+    expect(reminders.map((row) => row.reminder_index).sort((a, b) => a - b)).toEqual([
+      0, 1, 2, 3, 4,
+    ]);
     for (const row of reminders) {
       expect(row.delivered_at).toBeNull();
       const offset = APPROVAL_REMINDER_SCHEDULE_SECONDS.at(row.reminder_index);
@@ -377,6 +377,7 @@ describe("approvals service: the five choices do exactly what they say (S20 chun
     });
 
     expect(result.outcome).toBe("approved");
+    if (result.outcome !== "approved") throw new Error("expected an approved outcome");
     expect(sideEffect.ran).toBe(true);
     expect(result.run.state).toBe("RUNNING");
 
@@ -430,7 +431,8 @@ describe("approvals service: the five choices do exactly what they say (S20 chun
     });
 
     expect(result.outcome).toBe("action_rejected");
-    if (result.outcome !== "action_rejected") throw new Error("expected an action_rejected outcome");
+    if (result.outcome !== "action_rejected")
+      throw new Error("expected an action_rejected outcome");
     // The denied action does not resume into execution.
     expect(sideEffect.ran).toBe(false);
     // "Reject this action" denies the ACTION, not the task (D8 vocabulary):
@@ -597,21 +599,24 @@ describe("approvals service: decision refusals (S20 chunk 2, D9/G6)", () => {
     expect(env.journal.listStream(`task:${run.task_id}`, WS)).toHaveLength(2);
   });
 
-  it("a stale run projection surfaces the typed transition rejection and persists NOTHING (no grant without a resume)", () => {
+  it("a run projection that can no longer take the resume (double-apply) surfaces the typed transition rejection and persists NOTHING", () => {
     const env = newRuntime();
     const pause = pauseOnce(env, makeRun());
 
+    // The caller's projection says the run already moved on from
+    // WAITING_FOR_APPROVAL (a retried decision call after a crashed first
+    // apply): approving it again must be refused typed with nothing written.
     const result = env.service.applyDecision({
       approval_id: pause.approval_id,
       choice: "approve-this-execution-only",
       decided_by: USER,
-      run: { ...pause.run, version: pause.run.version - 1 },
+      run: { ...pause.run, state: "RUNNING", version: pause.run.version + 1 },
       execute: () => {},
     });
 
     expect(result.outcome).toBe("transition_rejected");
     if (result.outcome !== "transition_rejected") throw new Error("expected a typed rejection");
-    expect(result.rejection.kind).toBe("version_conflict");
+    expect(result.rejection.kind).toBe("illegal_transition");
     expect(env.approvals.getRequest(WS, pause.approval_id)?.status).toBe("pending");
     expect(env.approvals.listGrants(WS)).toHaveLength(0);
   });

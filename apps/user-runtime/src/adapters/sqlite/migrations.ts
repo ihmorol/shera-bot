@@ -201,6 +201,14 @@
  * conversation_id, and approval_id references are validated by the writers in
  * the same workspace, so no FOREIGN KEY is declared — the v4/v5/v6/v8
  * discipline.
+ *
+ * v10 — approval grant digest (S20 chunk 2; D9, G3): a nullable args_digest
+ * adjacency column on approval_grants. The contracts ApprovalGrant is
+ * untouched; the repository carries the digest alongside the contract record
+ * so ONE-TIME grants can be matched against the exact argument set (a changed
+ * argument set invalidates a one-time approval — D9). Reusable grants store
+ * NULL: they are deliberately argument-agnostic ("always approve this tool").
+ * The digest-only rule holds (G3 — never raw arguments).
  */
 import type { DatabaseSync } from "node:sqlite";
 
@@ -654,6 +662,13 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
         created_at   TEXT    NOT NULL,
         PRIMARY KEY (workspace_id, mute_id)
       ) STRICT;
+    `,
+  },
+  {
+    version: 10,
+    name: "approval-grant-digest",
+    sql: `
+      ALTER TABLE approval_grants ADD COLUMN args_digest TEXT;
     `,
   },
 ];

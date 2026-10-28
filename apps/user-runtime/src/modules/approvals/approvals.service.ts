@@ -29,12 +29,51 @@
  * journal event commit as ONE transaction — a mid-unit failure applies
  * nothing. A transition rejection persists NOTHING (the run is already
  * terminal or otherwise unpausable; the typed rejection is the answer).
+ *
+ * ---------------------------------------------------------------------------
+ * Chunk 2 — applying a decision (S20; D9, PRD §8, G5/G6)
+ *
+ * `applyDecision` is the ONLY path that turns one of the five contract
+ * choices into effects. Grants are created NOWHERE else — there is no public
+ * "create grant" API, so a prompt-shaped input cannot create a grant (G6):
+ * grant creation happens only inside this service's runtime transaction,
+ * behind the typed actor refusals.
+ *
+ * The five choices, exactly as named (PRD §8):
+ *  - approve-this-execution-only → a one_time grant bound to the requester's
+ *    own principal (the proposing Agent), pinned to tool VERSION and
+ *    args_digest — a changed argument set or tool version invalidates it.
+ *  - always-approve-this-tool → a reusable grant whose principal is the
+ *    requesting TASK run; conversation_scope defaults to the CURRENT
+ *    conversation ("any" is never implicit).
+ *  - always-approve-this-tool-for-this-agent → a reusable grant bound to the
+ *    requesting Agent. This — not the choice name's breadth — is the explicit
+ *    widening the user chose; a child task with a different principal cannot
+ *    match a grant it did not ask for (D9: a child cannot widen its parent's
+ *    permissions).
+ *  - reject-this-action → the request is rejected and the run returns to
+ *    RUNNING via the D8 approval_rejected row ("reject denies the action, not
+ *    the task"); the withheld callback is NEVER invoked — the action ends as
+ *    a typed denial, not an execution.
+ *  - cancel-the-task → the request is cancelled and the run walks the D8
+ *    cancellation path (CANCELLING → CANCELLED) with its DIRECT child runs
+ *    (parent_task_id) cancelled in the SAME transaction — a real cancelled
+ *    state, never a silent failure (G5).
+ *
+ * Ordering inside the transaction (D23 rule 5): typed refusals first (unknown
+ * choice, missing request, run mismatch, agent actor, already resolved), then
+ * the PURE transition evaluation — a transition rejection persists NOTHING,
+ * so no grant can ever exist without its resumed run — then grant +
+ * resolution + journal events as one commit. The withheld execute callback
+ * runs ONLY on the approve path and ONLY after that commit.
  */
 import { randomUUID } from "node:crypto";
 
 import { z } from "zod";
 
 import {
+  ApprovalChoice,
+  ApprovalGrant,
   ApprovalRequest,
   APPROVAL_REMINDER_SCHEDULE_SECONDS,
   ArgsDigest,
@@ -42,14 +81,20 @@ import {
   Id,
   RISK_CLASSES,
   RiskClass,
+  type Actor,
+  type RunState,
   type TaskPolicy,
   type TaskRejection,
   type TaskRun,
 } from "@shera-bot/contracts";
 
-import { ApprovalsRepository } from "../../adapters/sqlite/approvals-repository.ts";
+import {
+  ApprovalsRepository,
+  type ApprovalGrantRecord,
+} from "../../adapters/sqlite/approvals-repository.ts";
 import type { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
-import type { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
+import type { OperationsRepository } from "../../adapters/sqlite/operations-repository.ts";
+import type { SqliteExec, SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import type { EventsService } from "../events/events.service.ts";
 import { taskStreamId } from "../tasks/task-events.ts";
 import { evaluateTaskTransition } from "../tasks/task-transitions.ts";
@@ -57,15 +102,21 @@ import { evaluateTaskTransition } from "../tasks/task-transitions.ts";
 /** Stable failure codes for the approvals boundary (SCREAMING_SNAKE). */
 export type ApprovalsServiceFailureCode =
   | "APPROVAL_PROPOSAL_INVALID"
-  | "APPROVAL_PROPOSAL_RUN_MISMATCH";
+  | "APPROVAL_PROPOSAL_RUN_MISMATCH"
+  | "APPROVAL_DECISION_INVALID"
+  | "APPROVAL_REQUEST_NOT_FOUND"
+  | "APPROVAL_REQUEST_RUN_MISMATCH"
+  | "APPROVAL_ALREADY_RESOLVED"
+  | "AGENT_CANNOT_SELF_APPROVE"
+  | "AGENT_CANNOT_DECIDE_APPROVAL";
 
 export class ApprovalsServiceError extends Error {
   readonly code: ApprovalsServiceFailureCode;
-  readonly category: "validation" | "state";
+  readonly category: "validation" | "state" | "forbidden";
 
   constructor(
     code: ApprovalsServiceFailureCode,
-    category: "validation" | "state",
+    category: "validation" | "state" | "forbidden",
     message: string,
   ) {
     super(`${code}: ${message}`);
@@ -126,6 +177,13 @@ export interface ApprovalsServiceDeps {
   /** The journal-append authority the service journals BOTH events through. */
   events: Pick<EventsService, "appendEvent">;
   approvals: ApprovalsRepository;
+  /**
+   * The cancel-the-task cascade's run reads + cancellation (S20 chunk 2):
+   * direct children by parent_task_id, cancelled inside the decision
+   * transaction. Deliberately narrow — the approvals boundary never mutates
+   * runs beyond this cascade.
+   */
+  operations: Pick<OperationsRepository, "listRunsByParentTaskId" | "updateRunState">;
   /** Injected clock (ISO strings); defaults to the system clock. */
   clock?: () => string;
 }
@@ -167,6 +225,78 @@ type ApprovalRequestedEnvelope = z.infer<(typeof EVENT_ENVELOPES)["approval.requ
 /** The journal payload type of a task.waiting_for_approval append (the full envelope). */
 type WaitingForApprovalEnvelope = z.infer<(typeof EVENT_ENVELOPES)["task.waiting_for_approval"]>;
 
+/**
+ * The journal payload type of every D8 lifecycle transition append (the full
+ * envelope): approval_granted, approval_rejected, cancelling and cancelled
+ * share the TaskLifecyclePayload shape — each keeps its own event_type
+ * literal, so the append sites pick the envelope by that literal.
+ */
+type LifecycleEnvelopeOf<
+  T extends
+    "task.approval_granted" | "task.approval_rejected" | "task.cancelling" | "task.cancelled",
+> = z.infer<(typeof EVENT_ENVELOPES)[T]>;
+
+/**
+ * Run states a cancel-the-task cascade must NOT touch: an already-terminal
+ * child keeps its outcome (a terminal child is never resurrected).
+ */
+const TERMINAL_RUN_STATES: ReadonlySet<RunState> = new Set<RunState>([
+  "SUCCEEDED",
+  "FAILED",
+  "CANCELLED",
+]);
+
+/**
+ * The decision input: one of the five contract choices, the deciding actor,
+ * the paused run's current projection (held by the caller, D5), and the
+ * callback withheld since the pause. The choice is re-validated typed at the
+ * boundary — raw API input can carry anything.
+ */
+export interface ApplyDecisionInput {
+  approval_id: string;
+  choice: ApprovalChoice;
+  decided_by: Actor;
+  run: TaskRun;
+  /**
+   * The gated action withheld at pause time. Invoked ONLY by the three
+   * approve choices, and only AFTER the decision transaction has committed.
+   */
+  execute: () => void;
+}
+
+export type ApprovalDecisionResult =
+  | {
+      outcome: "approved";
+      approval_id: string;
+      /** The request at its resolved (approved) shape. */
+      request: ApprovalRequest;
+      /** The grant the choice created (one_time for execution-only). */
+      grant: ApprovalGrantRecord;
+      /** The run back at RUNNING, version advanced by the D8 machinery. */
+      run: TaskRun;
+    }
+  | {
+      outcome: "action_rejected";
+      approval_id: string;
+      request: ApprovalRequest;
+      /** The run back at RUNNING — the action was denied, not the task (D8). */
+      run: TaskRun;
+    }
+  | {
+      outcome: "task_cancelled";
+      approval_id: string;
+      request: ApprovalRequest;
+      /** The run at CANCELLED (both D8 cancellation steps journalled). */
+      run: TaskRun;
+      /** Direct child runs cancelled in the same transaction. */
+      cancelled_child_run_ids: string[];
+    }
+  | {
+      outcome: "transition_rejected";
+      /** The typed D8 rejection; NOTHING was persisted or journalled. */
+      rejection: TaskRejection;
+    };
+
 export class ApprovalsService {
   constructor(private readonly deps: ApprovalsServiceDeps) {}
 
@@ -180,9 +310,7 @@ export class ApprovalsService {
    * reminders; a run that cannot legally pause answers the typed D8 rejection
    * with nothing persisted.
    */
-  createRequestFromTypedProposal(
-    input: CreateRequestFromTypedProposalInput,
-  ): ApprovalPauseResult {
+  createRequestFromTypedProposal(input: CreateRequestFromTypedProposalInput): ApprovalPauseResult {
     const verdict = TypedToolProposal.safeParse(input.proposal);
     if (!verdict.success) {
       throw new ApprovalsServiceError(
@@ -352,4 +480,415 @@ export class ApprovalsService {
       };
     });
   }
+
+  // -------------------------------------------------------------------------
+  // Decisions (S20 chunk 2; D9, PRD §8, G5/G6)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Apply one of the five contract choices to one pending approval request.
+   * See the module doc for the per-choice semantics and the write ordering.
+   *
+   * Typed refusals (each its own error, nothing persisted):
+   *  - APPROVAL_DECISION_INVALID        — the choice is not a contract choice;
+   *  - APPROVAL_REQUEST_NOT_FOUND       — no such request in the workspace;
+   *  - APPROVAL_REQUEST_RUN_MISMATCH    — the request does not ride this run;
+   *  - AGENT_CANNOT_SELF_APPROVE        — the deciding Agent IS the requester;
+   *  - AGENT_CANNOT_DECIDE_APPROVAL     — any other Agent actor (only user
+   *    actors decide; a prompt-shaped input cannot create a grant — G6);
+   *  - APPROVAL_ALREADY_RESOLVED        — the request was already decided.
+   *
+   * A D8 transition rejection (stale projection, wrong state, an admin trying
+   * to approve — the approval rows allow user actors only) is answered as the
+   * typed `transition_rejected` outcome with NOTHING persisted.
+   */
+  applyDecision(input: ApplyDecisionInput): ApprovalDecisionResult {
+    const choiceVerdict = ApprovalChoice.safeParse(input.choice);
+    if (!choiceVerdict.success) {
+      throw new ApprovalsServiceError(
+        "APPROVAL_DECISION_INVALID",
+        "validation",
+        "the decision choice is not one of the five contract choices",
+      );
+    }
+    const choice = choiceVerdict.data;
+
+    const committed = this.deps.tx.transaction((exec) =>
+      this.decideInTransaction(
+        input.approval_id,
+        choice,
+        input.decided_by,
+        input.run,
+        exec as SqliteExec,
+      ),
+    );
+
+    // The withheld callback runs ONLY on the approve path and ONLY after the
+    // decision transaction has COMMITTED: a callback failure can never roll
+    // back an approval the user gave, and no side effect can precede its
+    // durable grant + resume record (the S20 AC, on the decision side).
+    if (committed.outcome === "approved") {
+      input.execute();
+    }
+    return committed;
+  }
+
+  private decideInTransaction(
+    approvalId: string,
+    choice: ApprovalChoice,
+    decidedBy: Actor,
+    run: TaskRun,
+    exec: SqliteExec,
+  ): ApprovalDecisionResult {
+    const request = this.deps.approvals.getRequest(run.workspace_id, approvalId, exec);
+    if (request === null) {
+      throw new ApprovalsServiceError(
+        "APPROVAL_REQUEST_NOT_FOUND",
+        "state",
+        "no approval request with this id exists in the workspace",
+      );
+    }
+
+    // E12/E-adjacent composition check: the decision's run projection must be
+    // the run the request rides on (same workspace, task, conversation).
+    if (
+      request.workspace_id !== run.workspace_id ||
+      request.task_id !== run.task_id ||
+      request.conversation_id !== run.conversation_id
+    ) {
+      throw new ApprovalsServiceError(
+        "APPROVAL_REQUEST_RUN_MISMATCH",
+        "validation",
+        "the request's workspace/task/conversation do not match the run",
+      );
+    }
+
+    // G6 absolute invariants BEFORE any state check: an Agent never decides an
+    // approval — not its own request (D9), and not anyone else's either. A
+    // prompt-shaped input arriving as an agent actor therefore can never reach
+    // grant creation (there is no other grant-creating path at all).
+    if (decidedBy.type === "agent") {
+      const self =
+        request.requested_by.type === "agent" && request.requested_by.id === decidedBy.id;
+      throw new ApprovalsServiceError(
+        self ? "AGENT_CANNOT_SELF_APPROVE" : "AGENT_CANNOT_DECIDE_APPROVAL",
+        "forbidden",
+        self
+          ? "an Agent cannot approve its own request"
+          : "only user actors decide approvals; an Agent actor cannot decide",
+      );
+    }
+
+    // Decisions are immutable (D9): a resolved request answers every further
+    // decision with the typed already-resolved refusal.
+    if (request.status !== "pending") {
+      throw new ApprovalsServiceError(
+        "APPROVAL_ALREADY_RESOLVED",
+        "state",
+        "this approval request was already resolved; decisions are immutable",
+      );
+    }
+
+    const now = this.now();
+    const commandId = `cmd_${randomUUID()}`;
+    const stream = taskStreamId(run.task_id);
+    // The first decision event takes the stream's next sequence; a second
+    // (the cancel path's completion) takes the one after.
+    const firstSequence = this.deps.journal.nextSequence(stream, run.workspace_id, exec);
+    const ctx: DecisionContext = {
+      request,
+      run,
+      decidedBy,
+      choice,
+      now,
+      commandId,
+      stream,
+      firstSequence,
+      exec,
+    };
+
+    if (choice === "reject-this-action") {
+      return this.rejectAction(ctx);
+    }
+    if (choice === "cancel-the-task") {
+      return this.cancelTask(ctx);
+    }
+    return this.approveAction(ctx);
+  }
+
+  private rejectAction(ctx: DecisionContext): ApprovalDecisionResult {
+    const { request, run, decidedBy, choice, now, commandId, stream, firstSequence, exec } = ctx;
+
+    // Pure first (D23 rule 5): the D8 vocabulary resumes the run via
+    // approval_rejected ("reject denies the action, not the task" — PRD §8);
+    // a rejection here persists nothing, the request stays pending.
+    const denial = evaluateTaskTransition({
+      run,
+      command: {
+        type: "approval_rejected",
+        command_id: commandId,
+        idempotency_key: `approval-decision:${request.approval_id}`,
+        workspace_id: request.workspace_id,
+        task_id: request.task_id,
+        actor: decidedBy,
+        expected_version: run.version,
+        issued_at: now,
+        approval_id: request.approval_id,
+      },
+      policy: DEFAULT_TASK_POLICY,
+      applied_idempotency_keys: [],
+      clock: { now, next_sequence: firstSequence },
+    });
+    if (!denial.ok) {
+      return { outcome: "transition_rejected", rejection: denial.rejection };
+    }
+
+    this.deps.approvals.resolveRequest(
+      request.workspace_id,
+      request.approval_id,
+      { status: "rejected", resolved_at: now, resolved_by_choice: choice },
+      exec,
+    );
+    this.deps.events.appendEvent({
+      event_id: denial.emitted_event.event_id,
+      stream_id: stream,
+      type: "task.approval_rejected",
+      payload: denial.emitted_event as LifecycleEnvelopeOf<"task.approval_rejected">,
+      workspace_id: request.workspace_id,
+      correlation_id: commandId,
+    });
+
+    // The withheld callback is deliberately NEVER invoked on this path: the
+    // denied action does not resume into execution — it ends as this typed
+    // denial (the run itself is free to continue with other work).
+    return {
+      outcome: "action_rejected",
+      approval_id: request.approval_id,
+      request: { ...request, status: "rejected", resolved_at: now, resolved_by_choice: choice },
+      run: { ...run, state: "RUNNING", version: denial.next_version, updated_at: now },
+    };
+  }
+
+  private cancelTask(ctx: DecisionContext): ApprovalDecisionResult {
+    const { request, run, decidedBy, choice, now, commandId, stream, firstSequence, exec } = ctx;
+
+    // Step 1 of the D8 cancellation: WAITING_FOR_APPROVAL -> CANCELLING. The
+    // deciding user is the actor (the table's cancel rows allow user/admin).
+    const cancelling = evaluateTaskTransition({
+      run,
+      command: {
+        type: "cancel_task",
+        command_id: commandId,
+        idempotency_key: `approval-decision:${request.approval_id}`,
+        workspace_id: request.workspace_id,
+        task_id: request.task_id,
+        actor: decidedBy,
+        expected_version: run.version,
+        issued_at: now,
+      },
+      policy: DEFAULT_TASK_POLICY,
+      applied_idempotency_keys: [],
+      clock: { now, next_sequence: firstSequence },
+    });
+    if (!cancelling.ok) {
+      return { outcome: "transition_rejected", rejection: cancelling.rejection };
+    }
+
+    // Step 2: CANCELLING -> CANCELLED, driven by the runtime gateway actor —
+    // PRD §8 "immediate cancellation" still journals both D8 steps.
+    const completed = evaluateTaskTransition({
+      run: { ...run, state: "CANCELLING", version: cancelling.next_version, updated_at: now },
+      command: {
+        type: "cancel_complete",
+        command_id: `cmd_${randomUUID()}`,
+        idempotency_key: `approval-cancel-complete:${request.approval_id}`,
+        workspace_id: request.workspace_id,
+        task_id: request.task_id,
+        actor: { type: "runtime", id: "runtime-gateway" },
+        expected_version: cancelling.next_version,
+        issued_at: now,
+      },
+      policy: DEFAULT_TASK_POLICY,
+      applied_idempotency_keys: [],
+      clock: { now, next_sequence: firstSequence + 1 },
+    });
+    if (!completed.ok) {
+      return { outcome: "transition_rejected", rejection: completed.rejection };
+    }
+
+    this.deps.approvals.resolveRequest(
+      request.workspace_id,
+      request.approval_id,
+      { status: "cancelled", resolved_at: now, resolved_by_choice: choice },
+      exec,
+    );
+    this.deps.events.appendEvent({
+      event_id: cancelling.emitted_event.event_id,
+      stream_id: stream,
+      type: "task.cancelling",
+      payload: cancelling.emitted_event as LifecycleEnvelopeOf<"task.cancelling">,
+      workspace_id: request.workspace_id,
+      correlation_id: commandId,
+    });
+    this.deps.events.appendEvent({
+      event_id: completed.emitted_event.event_id,
+      stream_id: stream,
+      type: "task.cancelled",
+      payload: completed.emitted_event as LifecycleEnvelopeOf<"task.cancelled">,
+      workspace_id: request.workspace_id,
+      correlation_id: commandId,
+    });
+
+    // The cascade (S20 AC: "Cancel the task" cancels the run AND its children
+    // rather than failing it silently): the direct children by parent_task_id,
+    // cancelled in the SAME transaction. Already-terminal children keep their
+    // outcome — a terminal child is not resurrected (G5: nothing is hidden;
+    // the returned id list is the honest record of what was cancelled).
+    const cancelledChildRunIds: string[] = [];
+    for (const child of this.deps.operations.listRunsByParentTaskId(
+      request.workspace_id,
+      request.task_id,
+      exec,
+    )) {
+      if (TERMINAL_RUN_STATES.has(child.state)) {
+        continue;
+      }
+      this.deps.operations.updateRunState(
+        request.workspace_id,
+        child.operation_id,
+        child.run_id,
+        "CANCELLED",
+        now,
+        exec,
+      );
+      cancelledChildRunIds.push(child.run_id);
+    }
+
+    return {
+      outcome: "task_cancelled",
+      approval_id: request.approval_id,
+      request: { ...request, status: "cancelled", resolved_at: now, resolved_by_choice: choice },
+      run: { ...run, state: "CANCELLED", version: completed.next_version, updated_at: now },
+      cancelled_child_run_ids: cancelledChildRunIds,
+    };
+  }
+
+  private approveAction(ctx: DecisionContext): ApprovalDecisionResult {
+    const { request, run, decidedBy, choice, now, commandId, stream, firstSequence, exec } = ctx;
+    if (choice === "reject-this-action" || choice === "cancel-the-task") {
+      throw new ApprovalsServiceError(
+        "APPROVAL_DECISION_INVALID",
+        "validation",
+        "non-grant choices never reach the approve path",
+      );
+    }
+
+    // Pure first (D23 rule 5): the D8 resume must be legal before ANY write —
+    // a grant without a resumed run would be exactly the half-applied state
+    // the S20 AC forbids (G5).
+    const resume = evaluateTaskTransition({
+      run,
+      command: {
+        type: "approval_granted",
+        command_id: commandId,
+        idempotency_key: `approval-decision:${request.approval_id}`,
+        workspace_id: request.workspace_id,
+        task_id: request.task_id,
+        actor: decidedBy,
+        expected_version: run.version,
+        issued_at: now,
+        approval_id: request.approval_id,
+      },
+      policy: DEFAULT_TASK_POLICY,
+      applied_idempotency_keys: [],
+      clock: { now, next_sequence: firstSequence },
+    });
+    if (!resume.ok) {
+      return { outcome: "transition_rejected", rejection: resume.rejection };
+    }
+
+    // The grant (D9 field list). Principal = the requester's own: the TASK run
+    // for "always-approve-this-tool", the requesting Agent for the other two
+    // approve choices (the record's requested_by — never the deciding user,
+    // never a parent run). conversation_scope defaults to the CURRENT
+    // conversation; "any" is never implicit. Every grant pins the tool
+    // VERSION; a one-time grant additionally pins the args_digest (a changed
+    // argument set or tool version invalidates it). No expiry is invented
+    // here: null = bounded by the prototype container lifetime (contract).
+    const oneTime = choice === "approve-this-execution-only";
+    const grant = ApprovalGrant.parse({
+      grant_id: `grt_${randomUUID()}`,
+      workspace_id: request.workspace_id,
+      source_choice: choice,
+      principal_type:
+        choice === "always-approve-this-tool"
+          ? "task"
+          : request.requested_by.type === "user"
+            ? "user"
+            : "agent",
+      principal_id:
+        choice === "always-approve-this-tool" ? request.task_id : request.requested_by.id,
+      tool_id: request.tool_id,
+      tool_version: request.tool_version,
+      capability: request.capability,
+      resource_scope: request.resource_scope,
+      conversation_scope: request.conversation_id,
+      workspace_scope: request.workspace_id,
+      expires_at: null,
+      one_time: oneTime,
+      created_by: decidedBy,
+      approved_at: now,
+      revoked_at: null,
+    });
+    const grantRecord: ApprovalGrantRecord = {
+      ...grant,
+      // G3: the digest, never raw arguments. Reusable grants are deliberately
+      // argument-agnostic ("always approve this tool") and store NULL.
+      args_digest: oneTime ? request.args_digest : null,
+    };
+
+    // 1. The durable grant row — created here ONLY, inside the runtime
+    //    transaction behind the typed refusals above (G6: no public
+    //    "create grant" surface exists).
+    this.deps.approvals.insertGrant(grantRecord, exec);
+
+    // 2. The immutable request resolution.
+    this.deps.approvals.resolveRequest(
+      request.workspace_id,
+      request.approval_id,
+      { status: "approved", resolved_at: now, resolved_by_choice: choice },
+      exec,
+    );
+
+    // 3. The D8 resume, journalled through the same path as every writer (G2).
+    this.deps.events.appendEvent({
+      event_id: resume.emitted_event.event_id,
+      stream_id: stream,
+      type: "task.approval_granted",
+      payload: resume.emitted_event as LifecycleEnvelopeOf<"task.approval_granted">,
+      workspace_id: request.workspace_id,
+      correlation_id: commandId,
+    });
+
+    return {
+      outcome: "approved",
+      approval_id: request.approval_id,
+      request: { ...request, status: "approved", resolved_at: now, resolved_by_choice: choice },
+      grant: grantRecord,
+      run: { ...run, state: "RUNNING", version: resume.next_version, updated_at: now },
+    };
+  }
+}
+
+/** Everything one decision touches, passed from the transaction into a branch. */
+interface DecisionContext {
+  request: ApprovalRequest;
+  run: TaskRun;
+  decidedBy: Actor;
+  choice: ApprovalChoice;
+  now: string;
+  commandId: string;
+  stream: string;
+  firstSequence: number;
+  exec: SqliteExec;
 }

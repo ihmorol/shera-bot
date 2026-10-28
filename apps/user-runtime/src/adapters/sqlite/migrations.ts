@@ -928,6 +928,44 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
         ON merge_requests (workspace_id, project_id, task_id);
     `,
   },
+  {
+    // S19 chunk 2 (issue #20): the archive import source. SQLite cannot ALTER
+    // a CHECK constraint, so the projects table is rebuilt (create-copy-drop-
+    // rename) with source_kind widened to admit 'archive' — the repository
+    // snapshot import (the "download ZIP" flow). The rebuild preserves every
+    // column, the STRICT discipline, and the primary key; the widened CHECK
+    // still refuses every kind outside the three.
+    version: 15,
+    name: "projects-archive-source",
+    sql: `
+      CREATE TABLE IF NOT EXISTS projects_v15 (
+        workspace_id    TEXT    NOT NULL,
+        project_id      TEXT    NOT NULL,
+        name            TEXT    NOT NULL CHECK (length(name) BETWEEN 1 AND 255),
+        source_kind     TEXT    NOT NULL CHECK (source_kind IN ('git_url', 'directory', 'archive')),
+        source_url      TEXT    NOT NULL,
+        repo_path       TEXT    NOT NULL,
+        default_branch  TEXT    NOT NULL,
+        access_mode     TEXT    NOT NULL CHECK (access_mode IN ('shared', 'restricted')),
+        created_by_type TEXT    NOT NULL CHECK (created_by_type IN ('user', 'agent', 'runtime', 'admin', 'system')),
+        created_by_id   TEXT    NOT NULL,
+        created_at      TEXT    NOT NULL,
+        updated_at      TEXT    NOT NULL,
+        PRIMARY KEY (workspace_id, project_id)
+      ) STRICT;
+
+      INSERT INTO projects_v15
+        (workspace_id, project_id, name, source_kind, source_url, repo_path,
+         default_branch, access_mode, created_by_type, created_by_id, created_at, updated_at)
+      SELECT
+        workspace_id, project_id, name, source_kind, source_url, repo_path,
+        default_branch, access_mode, created_by_type, created_by_id, created_at, updated_at
+      FROM projects;
+
+      DROP TABLE projects;
+      ALTER TABLE projects_v15 RENAME TO projects;
+    `,
+  },
 ];
 
 /**

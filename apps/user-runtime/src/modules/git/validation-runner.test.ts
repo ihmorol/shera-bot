@@ -37,7 +37,7 @@
  *   5. Guard rails: an unknown merge request, a released worktree, and a
  *      hung command (per-command timeout) each fail typed.
  */
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -321,14 +321,15 @@ describe("validation runner: real execution inside the task worktree", () => {
   });
 
   it("executes in the worktree, not in the runtime's own cwd", async () => {
+    // The command writes a probe at its cwd: the probe must land in the
+    // task's own worktree — never in the main checkout, never beside the
+    // runtime process.
     const { env, projectId, mergeRequestId, worktreePath } = await preparedMergeRequest({
-      test: 'node -e "console.log(process.cwd())"',
+      test: `node -e "require('fs').writeFileSync('probe.txt', process.cwd())"`,
     });
     const view = await env.runner.runForMergeRequest(WS, projectId, mergeRequestId);
     expect(view.validation_status).toBe("passed");
-    // The recorded output carries the WORKTREE path (forward slashes in git
-    // style are irrelevant here — node prints the platform form).
-    expect(view.validation_note).toContain(worktreePath);
+    expect(existsSync(join(worktreePath, "probe.txt"))).toBe(true);
   });
 
   it("fails typed when a declared command hangs (per-command timeout)", async () => {

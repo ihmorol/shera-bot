@@ -189,7 +189,12 @@ interface TarEntrySpec {
   paxPath?: string;
 }
 
-function tarHeader(spec: { name: string; size: number; typeflag: string; linkname?: string }) {
+function tarHeader(spec: {
+  name: string;
+  size: number;
+  typeflag: string;
+  linkname?: string | undefined;
+}) {
   const head = Buffer.alloc(TAR_BLOCK);
   stringField(spec.name, 100).copy(head, 0);
   stringField("0000644", 8).copy(head, 100);
@@ -319,7 +324,10 @@ describe("archive extraction: zip happy paths", () => {
     const archive = join(dest, "repo.zip");
     writeFileSync(
       archive,
-      writeStoredZip([{ name: "src\\main.rs", data: Buffer.from("fn main() {}\n") }]),
+      writeStoredZip([
+        { name: "README.md", data: Buffer.from("# top\n") },
+        { name: "src\\main.rs", data: Buffer.from("fn main() {}\n") },
+      ]),
     );
     await extractArchiveInto(archive, join(dest, "out"));
     expect(readFileSync(join(dest, "out", "src", "main.rs"), "utf8")).toBe("fn main() {}\n");
@@ -447,7 +455,13 @@ describe("archive extraction: tar formats", () => {
     const dest = makeTempDir("shera-s19-tar-long-");
     const longName = `${"deep/".repeat(30)}actually-fine.txt`;
     const archive = join(dest, "long.tar");
-    writeFileSync(archive, writeTar([{ name: longName, data: Buffer.from("long\n") }]));
+    writeFileSync(
+      archive,
+      writeTar([
+        { name: "README.md", data: Buffer.from("# top\n") },
+        { name: longName, data: Buffer.from("long\n") },
+      ]),
+    );
     const result = await extractArchiveInto(archive, join(dest, "out"));
     expect(readFileSync(join(dest, "out", longName), "utf8")).toBe("long\n");
     expect(result.files).toContain(longName);
@@ -458,7 +472,10 @@ describe("archive extraction: tar formats", () => {
     const archive = join(dest, "pax.tar");
     writeFileSync(
       archive,
-      writeTar([{ name: "shortname", paxPath: "real/path/file.txt", data: Buffer.from("pax\n") }]),
+      writeTar([
+        { name: "README.md", data: Buffer.from("# top\n") },
+        { name: "shortname", paxPath: "real/path/file.txt", data: Buffer.from("pax\n") },
+      ]),
     );
     await extractArchiveInto(archive, join(dest, "out"));
     expect(readFileSync(join(dest, "out", "real", "path", "file.txt"), "utf8")).toBe("pax\n");
@@ -477,6 +494,7 @@ describe("archive extraction: size and count caps", () => {
     maxFileBytes: 1024,
     maxTotalBytes: 2048,
     maxEntries: 8,
+    maxArchiveBytes: 8192,
   };
 
   it("refuses a single entry above the per-entry cap", async () => {
@@ -637,6 +655,7 @@ describe("archive import through the git service: atomicity", () => {
       archive,
       gzipSync(
         writeTar([
+          { name: "README.md", data: Buffer.from("# tarred\n") },
           { name: "src/", typeflag: "5" },
           { name: "src/main.go", data: Buffer.from("package main\n") },
         ]),
@@ -669,7 +688,7 @@ describe("archive import through the git service: atomicity", () => {
         actor: USER,
         source: { kind: "archive", path: archive },
       }),
-    ).rejects.toThrow(ArchiveImportError);
+    ).rejects.toThrow(/escapes the destination/);
     expect(env.projects.listProjects(WS)).toEqual([]);
     expect(readdirSync(env.projectsRoot)).toEqual([]);
     // And nothing escaped the workspace either.
@@ -685,7 +704,7 @@ describe("archive import through the git service: atomicity", () => {
         actor: USER,
         source: { kind: "archive", path: join(tempDirs[0] ?? ".", "missing.zip") },
       }),
-    ).rejects.toThrow(ArchiveImportError);
+    ).rejects.toThrow(/archive file does not exist/);
     expect(env.projects.listProjects(WS)).toEqual([]);
   });
 });

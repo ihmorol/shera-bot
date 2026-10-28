@@ -26,7 +26,7 @@ export interface ProjectRow {
   workspace_id: string;
   project_id: string;
   name: string;
-  source_kind: "git_url" | "directory";
+  source_kind: "git_url" | "directory" | "archive";
   source_url: string;
   repo_path: string;
   default_branch: string;

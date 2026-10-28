@@ -272,6 +272,21 @@ const GIT_REJECTIONS: Record<
     safe_message: "The git URL is not usable in this form.",
     user_action: null,
   },
+  GIT_ARCHIVE_INVALID: {
+    status: 400,
+    safe_message: "The archive import was refused; nothing was registered.",
+    user_action: "Check the archive and retry the import.",
+  },
+  GIT_FETCH_FAILED: {
+    status: 400,
+    safe_message: "The origin fetch failed; the local clone is unchanged.",
+    user_action: "Check the project's credential and remote, then retry.",
+  },
+  GIT_VALIDATION_TARGET_INVALID: {
+    status: 409,
+    safe_message: "The validation has no worktree to run against.",
+    user_action: "The task's worktree must be active to run validation.",
+  },
   GIT_MERGE_REQUEST_NOT_FOUND: {
     status: 404,
     safe_message: "The merge request does not exist for this project.",

@@ -43,7 +43,7 @@ import { randomUUID, createHash } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-import { simpleGit } from "simple-git";
+import { simpleGit, type SimpleGit } from "simple-git";
 
 import type { TaskRun } from "@shera-bot/contracts";
 
@@ -61,10 +61,13 @@ import type { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import { ApprovalsService, type TypedToolProposal } from "../approvals/approvals.service.ts";
 import {
   CredentialVault,
+  CredentialVaultError,
+  buildAuthenticatedUrl,
   maskSecret,
   sanitizeGitUrl,
   urlHasEmbeddedCredentials,
 } from "../projects/credential-vault.ts";
+import { ArchiveImportError, extractArchiveInto } from "../projects/archive-import.ts";
 
 /** Stable failure codes for the git boundary (SCREAMING_SNAKE). */
 export type GitServiceFailureCode =
@@ -78,6 +81,9 @@ export type GitServiceFailureCode =
   | "GIT_CREDENTIAL_REVOKED"
   | "GIT_CREDENTIAL_ACTIVE_EXISTS"
   | "GIT_URL_INVALID"
+  | "GIT_ARCHIVE_INVALID"
+  | "GIT_FETCH_FAILED"
+  | "GIT_VALIDATION_TARGET_INVALID"
   | "GIT_MERGE_REQUEST_NOT_FOUND"
   | "GIT_MERGE_REQUEST_INVALID"
   | "GIT_MERGE_NOT_APPROVED"
@@ -111,7 +117,7 @@ export interface ProjectView {
   workspace_id: string;
   project_id: string;
   name: string;
-  source_kind: "git_url" | "directory";
+  source_kind: "git_url" | "directory" | "archive";
   /** The sanitized origin label — never credential-bearing (G3). */
   source_url: string;
   /** The container-local clone directory (the UI never needs it; tests and ops do). */
@@ -181,7 +187,21 @@ export interface ImportProjectInput {
   workspace_id: string;
   name: string;
   actor: { type: string; id: string };
-  source: { kind: "git_url"; url: string } | { kind: "directory"; path: string };
+  source:
+    | {
+        kind: "git_url";
+        url: string;
+        /**
+         * The D22 call-time credential: provided ONCE in the request, used for
+         * THIS clone through buildAuthenticatedUrl (https only), and sealed
+         * into the project's credential rows on success. It is never
+         * persisted raw, echoed, or logged (G3) — a failed import leaves no
+         * row and no secret.
+         */
+        credential?: { username: string | null; secret: string };
+      }
+    | { kind: "directory"; path: string }
+    | { kind: "archive"; path: string };
 }
 
 export interface PrepareMergeRequestInput {
@@ -204,6 +224,15 @@ export interface GitServiceDeps {
   tx: SqliteTransactions;
   /** The container-local root every project clone + worktree lives under. */
   projectsRoot: string;
+  /**
+   * Optional git environment for EVERY git call this service makes, passed
+   * through simple-git's allowEnvironment seam (ambient GIT_* variables are
+   * guarded otherwise). The deployment seam for TLS posture: a corporate CA
+   * bundle (GIT_SSL_CAINFO) or a loopback test certificate
+   * (GIT_SSL_NO_VERIFY) is wired HERE, by the composition — never set as an
+   * ambient process variable, never persisted into any repository's config.
+   */
+  gitEnvironment?: Record<string, string>;
   /** Injected clock (ISO strings); defaults to the system clock. */
   clock?: () => string;
   /** The redacted fault sink; default: no-op (the composition injects one). */
@@ -238,6 +267,31 @@ function rawStdout(error: unknown): string {
   return "";
 }
 
+/** The storage row's read model — the exact PRD §10 minimal fields plus approval state. */
+export function toMergeRequestView(row: MergeRequestRow): MergeRequestView {
+  return {
+    workspace_id: row.workspace_id,
+    project_id: row.project_id,
+    merge_request_id: row.merge_request_id,
+    task_id: row.task_id,
+    agent_id: row.agent_id,
+    source_branch: row.source_branch,
+    target_branch: row.target_branch,
+    change_summary: row.change_summary,
+    changed_files: parseJsonList(row.changed_files_json),
+    validation_status: row.validation_status,
+    validation_note: row.validation_note,
+    conflict_status: row.conflict_status,
+    conflict_files: parseJsonList(row.conflict_files_json),
+    approval_id: row.approval_id,
+    status: row.status,
+    status_reason: row.status_reason,
+    merged_commit: row.merged_commit,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
 function splitLines(text: string): string[] {
   return text
     .split("\n")
@@ -262,6 +316,31 @@ export class GitService {
   private readonly mergeOutcomes = new Map<string, Promise<MergeRequestView>>();
 
   constructor(private readonly deps: GitServiceDeps) {}
+
+  /**
+   * The git client for one working directory, carrying the composition's git
+   * environment (see gitEnvironment). Every git invocation in this service
+   * goes through here. The runtime is headless and its credential custody is
+   * the vault (D22): terminal prompts are disabled and credential helpers are
+   * cleared per-invocation (`-c credential.helper=`, never persisted), so a
+   * missing credential fails typed instead of blocking on an interactive
+   * helper that sits OUTSIDE the vault.
+   */
+  private git(cwd?: string): SimpleGit {
+    const gitEnvironment = this.deps.gitEnvironment ?? {};
+    const env = { GIT_TERMINAL_PROMPT: "0", ...gitEnvironment };
+    const client = simpleGit({
+      ...(cwd !== undefined ? { baseDir: cwd } : {}),
+      // The helper CLEAR is the safe direction of this guarded option (an
+      // empty credential.helper removes every ambient helper): the runtime's
+      // only credential custody is the vault (D22), and a helper outside the
+      // container would be an invisible, unauditable credential path.
+      unsafe: { allowUnsafeCredentialHelper: true },
+      config: ["credential.helper="],
+      allowEnvironment: Object.keys(env),
+    });
+    return client.env(env);
+  }
 
   private now(): string {
     return (this.deps.clock ?? (() => new Date().toISOString()))();
@@ -323,6 +402,15 @@ export class GitService {
     const staging = join(this.deps.projectsRoot, projectId);
     const repoPath = join(staging, "repo");
 
+    // D22: the provided credential is encrypted BEFORE anything else runs, so
+    // a vault failure registers nothing and leaves no plaintext path behind.
+    const providedCredential =
+      input.source.kind === "git_url" ? input.source.credential : undefined;
+    const sealedCredential =
+      providedCredential !== undefined && providedCredential.secret.length > 0
+        ? this.deps.vault.encrypt(providedCredential.secret)
+        : null;
+
     try {
       let sourceUrl: string;
       if (input.source.kind === "git_url") {
@@ -339,12 +427,35 @@ export class GitService {
         }
         sourceUrl = sanitizeGitUrl(url);
         mkdirSync(staging, { recursive: true });
-        await simpleGit().clone(url, repoPath);
+        const cloneUrl =
+          providedCredential !== undefined && sealedCredential !== null
+            ? // The call-time injection (D22): https only — the vault seam
+              // refuses any other scheme, so a file:// path never takes a
+              // secret. The authenticated URL exists in this frame only.
+              buildAuthenticatedUrl(url, {
+                username: providedCredential.username,
+                secret: providedCredential.secret,
+              })
+            : url;
+        await this.git().clone(cloneUrl, repoPath);
         // The remote is stored credential-free (G3): a later fetch re-injects
         // the project's stored credential at call time.
-        await simpleGit(repoPath)
+        await this.git(repoPath)
           .remote(["set-url", "origin", sourceUrl])
           .catch(() => {});
+      } else if (input.source.kind === "archive") {
+        sourceUrl = input.source.path;
+        mkdirSync(staging, { recursive: true });
+        // The bounded-format extraction: every entry passes the traversal and
+        // size guards; a refusal throws ArchiveImportError and leaves the
+        // staging tree gone (mapped to the typed GIT_ARCHIVE_INVALID below).
+        await extractArchiveInto(input.source.path, repoPath);
+        const git = this.git(repoPath);
+        await git.init(["-b", "main"]);
+        await git.addConfig("user.email", "runtime@shera.local");
+        await git.addConfig("user.name", "Shera Runtime");
+        await git.add(["-A"]);
+        await git.commit(`Import ${name}`);
       } else {
         const sourcePath = input.source.path;
         if (!existsSync(sourcePath) || !statSync(sourcePath).isDirectory()) {
@@ -357,7 +468,7 @@ export class GitService {
         sourceUrl = sourcePath;
         mkdirSync(staging, { recursive: true });
         cpSync(sourcePath, repoPath, { recursive: true });
-        const git = simpleGit(repoPath);
+        const git = this.git(repoPath);
         if (existsSync(join(repoPath, ".git"))) {
           // An already-versioned tree: keep its history as-is.
           await git.addConfig("user.email", "runtime@shera.local");
@@ -371,7 +482,7 @@ export class GitService {
         }
       }
 
-      const repo = simpleGit(repoPath);
+      const repo = this.git(repoPath);
       const defaultBranch = String(await repo.revparse(["--abbrev-ref", "HEAD"])).trim();
 
       // The row is inserted LAST: a failure anywhere above leaves no project
@@ -392,10 +503,51 @@ export class GitService {
         updated_at: at,
       };
       this.deps.projects.insertProject(row);
+      if (providedCredential !== undefined && sealedCredential !== null) {
+        // The secret is sealed into the project's credential custody only
+        // after the project row exists: future clones/fetches resolve it at
+        // call time (D22). The plaintext never touches any other surface.
+        this.deps.projects.insertCredential({
+          workspace_id: input.workspace_id,
+          project_id: projectId,
+          credential_id: `cred_${randomUUID()}`,
+          credential_kind: "token",
+          username: providedCredential.username,
+          secret_ciphertext: sealedCredential.ciphertext,
+          secret_iv: sealedCredential.iv,
+          secret_tag: sealedCredential.tag,
+          key_version: sealedCredential.key_version,
+          created_by_type: input.actor.type,
+          created_by_id: input.actor.id,
+          created_at: at,
+          revoked_at: null,
+        });
+      }
       return this.toProjectView(row);
     } catch (error) {
       // Nothing registered, nothing left behind (G4: honest, bounded failure).
       rmSync(staging, { recursive: true, force: true });
+      if (error instanceof ArchiveImportError) {
+        // The extraction's typed refusals are the import's typed refusals:
+        // their messages are authored guard copy (never a raw entry name or
+        // a filesystem path), so they cross the boundary safely.
+        this.fault("s19_project_import_failed", {
+          workspace_id: input.workspace_id,
+          project_id: projectId,
+          name,
+          kind: input.source.kind,
+        });
+        throw new GitServiceError("GIT_ARCHIVE_INVALID", "validation", error.message);
+      }
+      if (error instanceof CredentialVaultError) {
+        this.fault("s19_project_import_failed", {
+          workspace_id: input.workspace_id,
+          project_id: projectId,
+          name,
+          kind: input.source.kind,
+        });
+        throw new GitServiceError("GIT_URL_INVALID", "validation", error.message);
+      }
       if (error instanceof GitServiceError) {
         this.fault("s19_project_import_failed", {
           workspace_id: input.workspace_id,
@@ -444,6 +596,83 @@ export class GitService {
     };
   }
 
+  /**
+   * Fetch the project's origin into the local clone (the D22 call-time
+   * consumer on the fetch side). When the project holds an ACTIVE token
+   * credential it is decrypted HERE and injected into the fetched URL through
+   * buildAuthenticatedUrl — the authenticated URL exists only inside this
+   * frame and is never stored, logged, or echoed (G3). Without a credential
+   * the fetch runs anonymously (public remotes). A REVOKED credential fails
+   * safely: the typed refusal fires from the resolve BEFORE any git call.
+   * A git-level failure is typed GIT_FETCH_FAILED with no git error text.
+   */
+  async refreshProject(workspaceId: string, projectId: string): Promise<{ fetched: boolean }> {
+    const project = this.requireProject(workspaceId, projectId);
+    const repo = this.git(project.repo_path);
+
+    // D22: revocation is revocation, never a fall-back. When the project has
+    // a token credential at all, the fetch MUST go through it: an active one
+    // is decrypted HERE and injected into the fetched URL through
+    // buildAuthenticatedUrl (the authenticated URL exists only inside this
+    // frame — never stored, logged, or echoed, G3); a revoked one refuses
+    // typed BEFORE any git call.
+    const tokenRows = this.deps.projects
+      .listCredentials(workspaceId, projectId)
+      .filter((row) => row.credential_kind === "token");
+
+    if (tokenRows.length > 0) {
+      const activeToken = tokenRows.find((row) => row.revoked_at === null);
+      if (activeToken === undefined) {
+        this.fault("s19_project_fetch_failed", {
+          workspace_id: workspaceId,
+          project_id: projectId,
+          reason: "credential_revoked",
+        });
+        throw new GitServiceError(
+          "GIT_CREDENTIAL_REVOKED",
+          "state",
+          "the credential has been revoked and can no longer be used",
+        );
+      }
+      // The revoked case also throws here — belt and braces (D22).
+      const credential = await this.resolveCredential(
+        workspaceId,
+        projectId,
+        activeToken.credential_id,
+      );
+      const authenticatedUrl = buildAuthenticatedUrl(project.source_url, credential);
+      try {
+        await repo.raw(["fetch", authenticatedUrl, "+refs/heads/*:refs/remotes/origin/*"]);
+      } catch {
+        this.fault("s19_project_fetch_failed", {
+          workspace_id: workspaceId,
+          project_id: projectId,
+        });
+        throw new GitServiceError(
+          "GIT_FETCH_FAILED",
+          "state",
+          "the origin fetch failed; the local clone is unchanged",
+        );
+      }
+      return { fetched: true };
+    }
+
+    try {
+      await repo.fetch(["origin"]);
+    } catch {
+      this.fault("s19_project_fetch_failed", {
+        workspace_id: workspaceId,
+        project_id: projectId,
+      });
+      throw new GitServiceError(
+        "GIT_FETCH_FAILED",
+        "state",
+        "the origin fetch failed; the local clone is unchanged",
+      );
+    }
+    return { fetched: true };
+  }
+
   // -------------------------------------------------------------------------
   // Task-scoped branches + worktrees; the conflict queue
   // -------------------------------------------------------------------------
@@ -472,7 +701,7 @@ export class GitService {
       }
     }
 
-    const repo = simpleGit(project.repo_path);
+    const repo = this.git(project.repo_path);
     const at = this.now();
     const branchName = taskBranchName(input.task_id);
 
@@ -607,7 +836,7 @@ export class GitService {
       );
     }
     const project = this.requireProject(input.workspace_id, input.project_id);
-    const repo = simpleGit(project.repo_path);
+    const repo = this.git(project.repo_path);
     if (row.status === "active") {
       try {
         await repo.raw(["worktree", "remove", row.worktree_path]);
@@ -697,7 +926,7 @@ export class GitService {
 
     const sourceBranch = worktree.branch_name;
     const targetBranch = project.default_branch;
-    const repo = simpleGit(project.repo_path);
+    const repo = this.git(project.repo_path);
 
     // The change set: commits + files on the task branch that the target
     // branch does not have (merge-base diff — the D35 preview's diff).
@@ -957,7 +1186,7 @@ export class GitService {
     }
 
     const project = this.requireProject(input.workspace_id, input.project_id);
-    const repo = simpleGit(project.repo_path);
+    const repo = this.git(project.repo_path);
 
     const status = await repo.status();
     if (!status.isClean()) {
@@ -1047,27 +1276,7 @@ export class GitService {
   }
 
   private toMergeRequestView(row: MergeRequestRow): MergeRequestView {
-    return {
-      workspace_id: row.workspace_id,
-      project_id: row.project_id,
-      merge_request_id: row.merge_request_id,
-      task_id: row.task_id,
-      agent_id: row.agent_id,
-      source_branch: row.source_branch,
-      target_branch: row.target_branch,
-      change_summary: row.change_summary,
-      changed_files: parseJsonList(row.changed_files_json),
-      validation_status: row.validation_status,
-      validation_note: row.validation_note,
-      conflict_status: row.conflict_status,
-      conflict_files: parseJsonList(row.conflict_files_json),
-      approval_id: row.approval_id,
-      status: row.status,
-      status_reason: row.status_reason,
-      merged_commit: row.merged_commit,
-      created_at: row.created_at,
-      updated_at: row.updated_at,
-    };
+    return toMergeRequestView(row);
   }
 
   // -------------------------------------------------------------------------

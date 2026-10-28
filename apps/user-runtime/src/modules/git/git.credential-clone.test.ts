@@ -106,7 +106,7 @@ async function startLoopbackOrigin(username: string, password: string): Promise<
   await seedGit.add(["-A"]);
   await seedGit.commit("initial commit");
   const bare = join(dir, "origin.git");
-  await seedGit.clone(["--bare", seed, bare]);
+  await seedGit.clone(seed, bare, ["--bare"]);
   await simpleGit(bare).raw(["update-server-info"]);
 
   const expected = `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
@@ -124,9 +124,10 @@ async function startLoopbackOrigin(username: string, password: string): Promise<
       res.end("authentication required");
       return;
     }
-    // Serve the bare repository's files, guarded to the directory (test infra).
-    const base = join(bare, path);
-    if (!base.startsWith(bare)) {
+    // Serve the directory CONTAINING the bare repository (the URL path names
+    // origin.git), guarded to that directory (test infra).
+    const base = join(dir, path);
+    if (!base.startsWith(dir)) {
       res.statusCode = 403;
       res.end("forbidden");
       return;
@@ -167,7 +168,7 @@ async function startLoopbackOrigin(username: string, password: string): Promise<
       writeFileSync(join(seedWorktree, relPath), content);
       await pushGit.add(["-A"]);
       await pushGit.commit(`origin update: ${relPath}`);
-      await pushGit.push(["origin", "main"]);
+      await pushGit.push(["../origin.git", "main"]);
       await simpleGit(bare).raw(["update-server-info"]);
     },
     close: () =>
@@ -217,6 +218,11 @@ function newEnv(): TestEnv {
     approvalsRepository,
     tx,
     projectsRoot,
+    // The loopback fixture's self-signed test certificate: wired as the
+    // service's git ENVIRONMENT (simple-git's allowEnvironment seam), the
+    // same seam a production deployment would use for a corporate CA bundle.
+    // Nothing is persisted into any repository's config.
+    gitEnvironment: { GIT_SSL_NO_VERIFY: "1" },
     clock: () => NOW,
     logFault: (event, fields) => faults.push({ event, fields }),
   });
@@ -239,21 +245,6 @@ afterEach(() => {
   }
 });
 
-/** Trust the loopback fixture's self-signed cert for the duration of one call. */
-async function withLoopbackTrust<T>(run: () => Promise<T>): Promise<T> {
-  const previous = process.env.GIT_SSL_NO_VERIFY;
-  process.env.GIT_SSL_NO_VERIFY = "1";
-  try {
-    return await run();
-  } finally {
-    if (previous === undefined) {
-      delete process.env.GIT_SSL_NO_VERIFY;
-    } else {
-      process.env.GIT_SSL_NO_VERIFY = previous;
-    }
-  }
-}
-
 const SECRET = "tok_loopback_e2e_9f8e7d6c";
 const USERNAME = "git-user";
 
@@ -263,18 +254,16 @@ describe("credential-authenticated clone end to end", () => {
     const origin = await startLoopbackOrigin(USERNAME, SECRET);
     openServers.push(origin);
 
-    const project = await withLoopbackTrust(() =>
-      env.git.importProject({
-        workspace_id: WS,
-        name: "private-repo",
-        actor: USER,
-        source: {
-          kind: "git_url",
-          url: origin.url,
-          credential: { username: USERNAME, secret: SECRET },
-        },
-      }),
-    );
+    const project = await env.git.importProject({
+      workspace_id: WS,
+      name: "private-repo",
+      actor: USER,
+      source: {
+        kind: "git_url",
+        url: origin.url,
+        credential: { username: USERNAME, secret: SECRET },
+      },
+    });
 
     // The clone really happened over https: the file landed, the remote is
     // stored credential-free.
@@ -293,14 +282,28 @@ describe("credential-authenticated clone end to end", () => {
 
     // G3 at rest: the raw secret appears NOWHERE in durable state — the
     // database (every row AND every journalled event), the vault key file,
-    // the whole clone directory, the fault log.
+    // EVERY file under the clone's .git directory, and the fault log.
     const dbBytes = readFileSync(join(env.dir, "runtime.db"));
     expect(dbBytes.includes(Buffer.from(SECRET, "utf8"))).toBe(false);
     expect(
       readFileSync(join(env.dir, "project-credentials.key")).includes(Buffer.from(SECRET, "utf8")),
     ).toBe(false);
-    const cloneTree = readFileSync(join(project.repo_path, ".git", "FETCH_HEAD"), "utf8");
-    expect(cloneTree).not.toContain(SECRET);
+    const gitDir = join(project.repo_path, ".git");
+    const gitFiles: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) {
+          walk(full);
+        } else {
+          gitFiles.push(full);
+        }
+      }
+    };
+    walk(gitDir);
+    for (const file of gitFiles) {
+      expect(readFileSync(file).includes(Buffer.from(SECRET, "utf8"))).toBe(false);
+    }
     expect(JSON.stringify(env.faults)).not.toContain(SECRET);
   });
 
@@ -309,16 +312,14 @@ describe("credential-authenticated clone end to end", () => {
     const origin = await startLoopbackOrigin(USERNAME, SECRET);
     openServers.push(origin);
 
-    await withLoopbackTrust(() =>
-      expect(
-        env.git.importProject({
-          workspace_id: WS,
-          name: "locked-out",
-          actor: USER,
-          source: { kind: "git_url", url: origin.url },
-        }),
-      ).rejects.toThrow(GitServiceError),
-    );
+    await expect(
+      env.git.importProject({
+        workspace_id: WS,
+        name: "locked-out",
+        actor: USER,
+        source: { kind: "git_url", url: origin.url },
+      }),
+    ).rejects.toThrow(GitServiceError);
     expect(env.projects.listProjects(WS)).toEqual([]);
     expect(readdirSync(env.projectsRoot)).toEqual([]);
     expect(JSON.stringify(env.faults)).not.toContain(SECRET);
@@ -347,28 +348,22 @@ describe("credential-authenticated fetch end to end", () => {
     const env = trackedEnv();
     const origin = await startLoopbackOrigin(USERNAME, SECRET);
     openServers.push(origin);
-    const project = await withLoopbackTrust(() =>
-      env.git.importProject({
-        workspace_id: WS,
-        name: "private-repo",
-        actor: USER,
-        source: {
-          kind: "git_url",
-          url: origin.url,
-          credential: { username: USERNAME, secret: SECRET },
-        },
-      }),
-    );
-    const before = String(
-      await simpleGit(project.repo_path).raw(["revparse", "origin/main"]),
-    ).trim();
+    const project = await env.git.importProject({
+      workspace_id: WS,
+      name: "private-repo",
+      actor: USER,
+      source: {
+        kind: "git_url",
+        url: origin.url,
+        credential: { username: USERNAME, secret: SECRET },
+      },
+    });
+    const before = String(await simpleGit(project.repo_path).revparse(["origin/main"])).trim();
 
     await origin.pushCommit("docs/new-note.md", "fetched later\n");
-    const refreshed = await withLoopbackTrust(() => env.git.refreshProject(WS, project.project_id));
+    const refreshed = await env.git.refreshProject(WS, project.project_id);
     expect(refetched(origin)).toBe(true);
-    const after = String(
-      await simpleGit(project.repo_path).raw(["revparse", "origin/main"]),
-    ).trim();
+    const after = String(await simpleGit(project.repo_path).revparse(["origin/main"])).trim();
     expect(after).not.toBe(before);
     expect(refreshed.fetched).toBe(true);
     // The .git directory still carries no credential material after the fetch.
@@ -381,27 +376,26 @@ describe("credential-authenticated fetch end to end", () => {
     const env = trackedEnv();
     const origin = await startLoopbackOrigin(USERNAME, SECRET);
     openServers.push(origin);
-    const project = await withLoopbackTrust(() =>
-      env.git.importProject({
-        workspace_id: WS,
-        name: "private-repo",
-        actor: USER,
-        source: {
-          kind: "git_url",
-          url: origin.url,
-          credential: { username: USERNAME, secret: SECRET },
-        },
-      }),
-    );
+    const project = await env.git.importProject({
+      workspace_id: WS,
+      name: "private-repo",
+      actor: USER,
+      source: {
+        kind: "git_url",
+        url: origin.url,
+        credential: { username: USERNAME, secret: SECRET },
+      },
+    });
     const stored = env.git.listCredentials(WS, project.project_id)[0];
     if (!stored) throw new Error("expected the sealed credential");
     await origin.pushCommit("docs/after-revoke.md", "must not be fetched\n");
     await env.git.revokeCredential(WS, project.project_id, stored.credential_id);
-    await withLoopbackTrust(() =>
-      expect(env.git.refreshProject(WS, project.project_id)).rejects.toThrow(/revoked/i),
-    );
-    // The origin saw NO request: the refusal fired before any network call.
-    expect(refetched(origin)).toBe(false);
+    // The import itself fetched refs; snapshot the count so the assertion
+    // below proves the REVOKED refresh made no request of its own.
+    const requestsAtRevoke = origin.requests.length;
+    await expect(env.git.refreshProject(WS, project.project_id)).rejects.toThrow(/revoked/i);
+    // The origin saw NO new request: the refusal fired before any network call.
+    expect(origin.requests.length).toBe(requestsAtRevoke);
     // The typed refusal carries no secret; the fault log neither.
     expect(JSON.stringify(env.faults)).not.toContain(SECRET);
     expect(existsSync(join(project.repo_path, "docs"))).toBe(false);

@@ -76,6 +76,7 @@ import {
 import { ApprovalsService } from "../../modules/approvals/approvals.service.ts";
 import { CredentialVault } from "../../modules/projects/credential-vault.ts";
 import { GitService } from "../../modules/git/git.service.ts";
+import { ValidationRunner } from "../../modules/git/validation-runner.ts";
 import { HarnessRunService } from "../../modules/runtime/harness-run-service.ts";
 import { loadWorkspacePack, type WorkspacePack } from "../../modules/runtime/pack-pin.ts";
 import { seedAgentsFromPack } from "../../adapters/sqlite/agents-repository.ts";
@@ -885,6 +886,12 @@ function wire(
     git: gitService,
     approvals: approvalsApi,
     journal,
+    // S19 chunk 2: the runtime's validation runner over the SAME repository
+    // (G2: the runtime validates what the Agent proposed to merge).
+    validation: new ValidationRunner({
+      projects: projectsRepository,
+      ...(options.now ? { clock: options.now } : {}),
+    }),
     now: options.now ?? (() => new Date().toISOString()),
   });
 

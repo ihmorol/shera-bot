@@ -51,6 +51,7 @@ import type {
   WorktreeView,
 } from "../../modules/git/git.service.ts";
 import { GitServiceError } from "../../modules/git/git.service.ts";
+import type { ValidationRunner } from "../../modules/git/validation-runner.ts";
 import { rebuildRunProjection, type ApprovalsApiHandle } from "./s20-approvals-api.ts";
 import { contractValidationResponse } from "../http/typed-errors.ts";
 
@@ -75,6 +76,8 @@ export const GET_PROJECT_MERGE_REQUEST_PATH =
   "/v1/projects/:project_id/merge-requests/:merge_request_id" as const;
 export const MERGE_REQUEST_DECISION_PATH =
   "/v1/projects/:project_id/merge-requests/:merge_request_id/decision" as const;
+export const RUN_MERGE_REQUEST_VALIDATION_PATH =
+  "/v1/projects/:project_id/merge-requests/:merge_request_id/validation" as const;
 
 // ---------------------------------------------------------------------------
 // Payload schemas
@@ -86,8 +89,23 @@ const WorkspaceQuery = z.strictObject({ workspace_id: WorkspaceId });
 const RequestActor = Actor;
 
 const ProjectSource = z.discriminatedUnion("kind", [
-  z.strictObject({ kind: z.literal("git_url"), url: z.string().min(1).max(2048) }),
+  z.strictObject({
+    kind: z.literal("git_url"),
+    url: z.string().min(1).max(2048),
+    /**
+     * The D22 import credential: provided ONCE, used for THIS clone, and
+     * sealed into the project's credential custody on success. It is never
+     * echoed back — the response carries metadata only (G3).
+     */
+    credential: z
+      .strictObject({
+        username: z.string().min(1).max(256).nullish(),
+        secret: z.string().min(1).max(4096),
+      })
+      .optional(),
+  }),
   z.strictObject({ kind: z.literal("directory"), path: z.string().min(1).max(2048) }),
+  z.strictObject({ kind: z.literal("archive"), path: z.string().min(1).max(2048) }),
 ]);
 
 const CreateProjectBody = z.strictObject({
@@ -183,6 +201,16 @@ export interface ProjectsApiHandle {
   listMergeRequests(workspaceId: string, projectId: string): MergeRequestView[];
   getMergeRequest(workspaceId: string, projectId: string, mergeRequestId: string): MergeRequestView;
   /**
+   * The runtime's validation run (G2): executes the project's declared
+   * validation inside the task worktree and attaches the result to the
+   * merge request row. The answer is the post-run view.
+   */
+  runValidation(
+    workspaceId: string,
+    projectId: string,
+    mergeRequestId: string,
+  ): Promise<MergeRequestView>;
+  /**
    * The PRD §10 decision, relayed through the S20 approval machinery. The
    * approve path awaits the executor-started merge so the answer carries the
    * honest post-merge row.
@@ -201,6 +229,8 @@ export function buildProjectsApiHandle(deps: {
   /** The S20 decision surface (the ONLY approval path — G6). */
   approvals: Pick<ApprovalsApiHandle, "decide">;
   journal: Pick<EventJournalRepository, "readFrom">;
+  /** The runtime's validation runner (G2: the runtime validates). */
+  validation: Pick<ValidationRunner, "runForMergeRequest">;
   now: () => string;
 }): ProjectsApiHandle {
   const { git } = deps;
@@ -242,6 +272,9 @@ export function buildProjectsApiHandle(deps: {
     listMergeRequests: (workspaceId, projectId) => git.listMergeRequests(workspaceId, projectId),
     getMergeRequest: (workspaceId, projectId, mergeRequestId) =>
       git.getMergeRequest(workspaceId, projectId, mergeRequestId),
+
+    runValidation: (workspaceId, projectId, mergeRequestId) =>
+      deps.validation.runForMergeRequest(workspaceId, projectId, mergeRequestId),
 
     async decideMergeRequest(input) {
       const mergeRequest = git.getMergeRequest(
@@ -353,11 +386,29 @@ export function registerProjectsRoutes(app: Express, deps: ProjectsApiHandle): v
         );
       return;
     }
+    // The zod credential shape (optional username) normalizes onto the
+    // service input's exact shape (username: string | null) before the call.
+    const source = body.data.source;
+    const normalizedSource =
+      source.kind === "git_url"
+        ? {
+            kind: "git_url" as const,
+            url: source.url,
+            ...(source.credential !== undefined
+              ? {
+                  credential: {
+                    username: source.credential.username ?? null,
+                    secret: source.credential.secret,
+                  },
+                }
+              : {}),
+          }
+        : source;
     const project = await deps.importProject({
       workspace_id: body.data.workspace_id,
       name: body.data.name,
       actor: body.data.actor,
-      source: body.data.source,
+      source: normalizedSource,
     });
     res.status(201).json(project);
   });
@@ -580,6 +631,29 @@ export function registerProjectsRoutes(app: Express, deps: ProjectsApiHandle): v
       .json(
         deps.getMergeRequest(query.data.workspace_id, req.params.project_id, mergeRequestId.data),
       );
+  });
+
+  // POST .../merge-requests/:id/validation — the runtime runs the project's
+  // declared validation inside the task worktree and attaches the result to
+  // the merge request (G2: agents propose; the runtime validates). The
+  // recorded result never blocks on its own: the merge stays approval-gated.
+  app.post(RUN_MERGE_REQUEST_VALIDATION_PATH, async (req, res) => {
+    const mergeRequestId = Id.safeParse(req.params.merge_request_id);
+    const body = ReleaseWorktreeBody.safeParse(req.body);
+    if (!mergeRequestId.success || !body.success) {
+      res
+        .status(400)
+        .json(
+          validationFailure("The validation request is not valid: a workspace_id is required."),
+        );
+      return;
+    }
+    const mergeRequest = await deps.runValidation(
+      body.data.workspace_id,
+      req.params.project_id,
+      mergeRequestId.data,
+    );
+    res.status(200).json(mergeRequest);
   });
 
   // POST .../merge-requests/:id/decision — the three PRD §10 choices through

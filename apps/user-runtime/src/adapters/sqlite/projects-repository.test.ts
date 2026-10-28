@@ -89,9 +89,9 @@ describe("S19 v14 migration (projects-and-git)", () => {
 
   it("v15 widens projects.source_kind to admit archives while keeping the strict enum", () => {
     const v15 = MIGRATIONS.find((migration) => migration.version === 15);
-    expect(v15?.up).toContain("'archive'");
-    expect(v15?.up).toContain("'git_url'");
-    expect(v15?.up).toContain("'directory'");
+    expect(v15?.sql).toContain("'archive'");
+    expect(v15?.sql).toContain("'git_url'");
+    expect(v15?.sql).toContain("'directory'");
     // The rebuilt table still refuses an unknown kind (STRICT discipline).
     expect(() =>
       conn.db

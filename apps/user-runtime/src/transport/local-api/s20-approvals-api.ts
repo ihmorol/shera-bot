@@ -40,9 +40,12 @@
  *
  * The reminder tick (E3): the gateway has NO general periodic path in this
  * slice (the only intervals are the G4-conditional session/worker supervisor
- * ticks — absent without a harness command), so the scan is exposed as
- * GET due-reminders per workspace for the UI/scheduler layer. The scheduler
- * deferral is recorded for the review round. The scan is the chunk-3
+ * ticks — absent without a harness command), so the scan is exposed as POST
+ * due-reminders per workspace for the UI/scheduler layer (S20 review fix F3:
+ * a POST, not a GET — the scan stamps delivered_at, a state mutation, so it
+ * rides the command verb with the workspace in the body; the browser proxy's
+ * Origin check covers it like every mutation). The scheduler deferral is
+ * recorded for the review round. The scan is the chunk-3
  * dueReminders logic verbatim: delivery stamps delivered_at and NEVER
  * changes run state (D32).
  *
@@ -110,6 +113,7 @@ export const LIST_APPROVAL_GRANTS_PATH = "/v1/approvals/grants" as const;
 export const REVOKE_APPROVAL_GRANT_PATH = "/v1/approvals/grants/revoke" as const;
 /** GET lists the workspace's mutes; POST records one (the command convention). */
 export const APPROVAL_MUTES_PATH = "/v1/approvals/mutes" as const;
+/** POST fires the workspace's due reminder slots (F3: a state-mutating scan). */
 export const DUE_APPROVAL_REMINDERS_PATH = "/v1/approvals/due-reminders" as const;
 
 // ---------------------------------------------------------------------------
@@ -403,6 +407,9 @@ function runReadModel(run: { task_id: string; state: RunState; version: number }
 /** E12: every read takes the workspace from the query, every mutation from the body. */
 const ApprovalWorkspaceQuery = z.strictObject({ workspace_id: WorkspaceId });
 
+/** E12: the workspace selector of the POST mutations that carry only it. */
+const ApprovalWorkspaceBody = z.strictObject({ workspace_id: WorkspaceId });
+
 const ApprovalDecisionBody = z.strictObject({
   workspace_id: WorkspaceId,
   choice: ApprovalChoice,
@@ -475,16 +482,35 @@ export function registerApprovalsRoutes(app: Express, deps: ApprovalsApiHandle):
     res.status(200).json({ grants: deps.listActiveGrants(query.data.workspace_id) });
   });
 
-  // GET /v1/approvals/due-reminders — fire the due E3 slots of one workspace:
-  // delivery stamps delivered_at (the durable record) and NEVER changes run
-  // state (E3/D32). Muted slots answer `muted` and stay undelivered for audit.
-  app.get(DUE_APPROVAL_REMINDERS_PATH, (req, res) => {
-    const query = ApprovalWorkspaceQuery.safeParse(req.query);
-    if (!query.success) {
+  // F3: the old GET scan route is GONE — no compat shim. The literal segment
+  // registers BEFORE the :approval_id capture (the module's ordering
+  // discipline) so the retired verb answers the typed 404 — never a mistyped
+  // "unknown approval id" 400, and never a state-mutating read.
+  app.get(DUE_APPROVAL_REMINDERS_PATH, (_req, res) => {
+    res.status(404).json({
+      code: "ROUTE_NOT_FOUND",
+      category: "validation",
+      safe_message: "The requested resource does not exist.",
+      retryable: false,
+      user_action: null,
+      internal_details: null,
+      correlation_id: randomUUID(),
+    });
+  });
+
+  // POST /v1/approvals/due-reminders — fire the due E3 slots of one
+  // workspace (S20 review fix F3: a POST, not a GET — the scan stamps
+  // delivered_at, a state mutation, so it rides the command verb like every
+  // other mutation and the workspace arrives in the body). Delivery NEVER
+  // changes run state (E3/D32). Muted slots answer `muted` and stay
+  // undelivered for audit.
+  app.post(DUE_APPROVAL_REMINDERS_PATH, (req, res) => {
+    const body = ApprovalWorkspaceBody.safeParse(req.body);
+    if (!body.success) {
       res.status(400).json(validationFailure("The reminder request is not valid: a workspace_id is required."));
       return;
     }
-    res.status(200).json({ reminders: deps.dueReminders(query.data.workspace_id) });
+    res.status(200).json({ reminders: deps.dueReminders(body.data.workspace_id) });
   });
 
   // GET /v1/approvals/mutes — the workspace's reminder mutes, oldest first.

@@ -175,13 +175,18 @@ export function fetchApprovalMutes(workspaceId: string): Promise<ApprovalMuteRec
  * The reminder scan (E3): fires the due slots of the workspace — delivery
  * stamps delivered_at server-side and NEVER changes run state. The chat views
  * poll it on the presence cadence so the card timelines gain their delivered
- * markers without any local clock authority.
+ * markers without any local clock authority. (S20 review fix F3: the scan is
+ * a POST — it mutates state, so it rides the command verb with the workspace
+ * in the body, behind the proxy's Origin check like every mutation.)
  */
 export function fetchDueReminders(workspaceId: string): Promise<DueReminderEntry[]> {
-  const query = new URLSearchParams({ workspace_id: workspaceId });
   return requestRuntime(
-    `/api/runtime/v1/approvals/due-reminders?${query.toString()}`,
+    "/api/runtime/v1/approvals/due-reminders",
     (payload) => z.strictObject({ reminders: z.array(DueReminderEntry) }).parse(payload).reminders,
+    {
+      method: "POST",
+      body: JSON.stringify({ workspace_id: workspaceId }),
+    },
   );
 }
 

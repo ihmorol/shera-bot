@@ -39,6 +39,8 @@ export const pendingApprovalsEmptyNotice =
 
 export interface PendingApprovalsRowsProps {
   approvals: ApprovalCardData[];
+  /** Decisions settled THIS session — rendered as their quiet resolved cards. */
+  resolvedLocally: ApprovalCardData[];
   remindersByApproval: Record<string, ReminderSlotRow[] | undefined>;
   runByApproval: Record<string, ApprovalRunReadModel | undefined>;
   identities: AgentRosterSummary[];
@@ -57,6 +59,7 @@ export interface PendingApprovalsRowsProps {
 /** Presentational: one card row per pending approval + the open decision modal. */
 export function PendingApprovalsRows({
   approvals,
+  resolvedLocally,
   remindersByApproval,
   runByApproval,
   identities,
@@ -85,6 +88,11 @@ export function PendingApprovalsRows({
             onReview={() => onOpenChange(true, approval.approval_id)}
             onMute={(scope) => onMute(approval, scope)}
           />
+        </li>
+      ))}
+      {resolvedLocally.map((approval) => (
+        <li key={approval.approval_id} className="flex justify-start">
+          <ApprovalCard approval={approval} identities={identities} />
         </li>
       ))}
       {openApproval ? (
@@ -124,12 +132,19 @@ export function PendingApprovals({ workspaceId }: { workspaceId: string }) {
   const [openApprovalId, setOpenApprovalId] = useState<string | null>(null);
   const [chosenChoice, setChosenChoice] = useState<ApprovalChoice | null>(null);
   const [decisionSafeError, setDecisionSafeError] = useState<string | null>(null);
+  // Decisions settled in THIS tab keep their quiet resolved cards in the
+  // thread (the decision response carries the resolved request). A decision
+  // made in ANOTHER tab propagates through the poll: the pending list simply
+  // stops returning the card (its status moved off pending) — the same
+  // read-after-write truth, no local invention.
+  const [resolvedLocally, setResolvedLocally] = useState<ApprovalCardData[]>([]);
 
   const decidedByReady = session.data !== undefined;
 
   return (
     <PendingApprovalsRows
       approvals={pending.approvals}
+      resolvedLocally={resolvedLocally}
       remindersByApproval={Object.fromEntries(
         Object.entries(details).map(([approvalId, detail]) => [
           approvalId,
@@ -174,13 +189,18 @@ export function PendingApprovals({ workspaceId }: { workspaceId: string }) {
           },
           {
             onSuccess: (outcome) => {
-              // already_decided is the runtime's STORED resolution (a raced
-              // decision in another tab): the modal closes and the card
-              // resolves quietly — the poll brings the recorded status.
+              // Terminal or already_decided alike: the response's request IS
+              // the stored resolution — keep the quiet card, close the modal.
+              // already_decided (a raced decision in another tab) resolves
+              // exactly the same way, honestly, with the STORED choice.
+              setResolvedLocally((resolved) =>
+                resolved.some((entry) => entry.approval_id === outcome.request.approval_id)
+                  ? resolved
+                  : [...resolved, outcome.request],
+              );
               setOpenApprovalId(null);
               setChosenChoice(null);
               setDecisionSafeError(null);
-              void outcome;
             },
             onError: (error) => {
               setDecisionSafeError(

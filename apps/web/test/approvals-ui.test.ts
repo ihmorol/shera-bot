@@ -666,6 +666,7 @@ describe("Pending approvals region (in-thread)", () => {
     const rows = render(
       createElement(PendingApprovalsRows, {
         approvals: [PENDING_APPROVAL],
+        resolvedLocally: [],
         remindersByApproval: {},
         runByApproval: { approval_pending_01: APPROVAL_DETAIL.run },
         identities: [RESEARCHER],
@@ -687,6 +688,7 @@ describe("Pending approvals region (in-thread)", () => {
       render(
         createElement(PendingApprovalsRows, {
           approvals: [],
+          resolvedLocally: [],
           remindersByApproval: {},
           runByApproval: {},
           identities: [RESEARCHER],
@@ -702,6 +704,30 @@ describe("Pending approvals region (in-thread)", () => {
         }),
       ),
     ).toBe("");
+  });
+
+  it("decisions settled this session keep their quiet resolved card in the thread", () => {
+    const rows = render(
+      createElement(PendingApprovalsRows, {
+        approvals: [],
+        resolvedLocally: [RESOLVED_APPROVAL],
+        remindersByApproval: {},
+        runByApproval: {},
+        identities: [RESEARCHER],
+        decidedByReady: true,
+        openApprovalId: null,
+        chosenChoice: null,
+        decisionPending: false,
+        decisionSafeError: null,
+        mutePending: false,
+        onOpenChange: () => undefined,
+        onChoose: () => undefined,
+        onMute: () => undefined,
+      }),
+    );
+    expect(rows).toContain("Decision recorded");
+    expect(rows).toContain("Always approve this tool");
+    expect(rows).not.toContain("Review decision");
   });
 
   it("the conversation-scoped helper exposes the quiet wait copy for thread surfaces", () => {

@@ -48,7 +48,7 @@ const MUTE_NOTE =
 function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex min-w-0 items-baseline gap-x-3 gap-y-0.5 max-sm:flex-col">
-      <dt className="w-24 shrink-0 font-mono text-[11px] uppercase tracking-[0.16em] text-muted max-sm:w-auto">
+      <dt className="w-28 shrink-0 font-mono text-[11px] uppercase tracking-[0.16em] text-muted max-sm:w-auto">
         {label}
       </dt>
       <dd className="min-w-0 flex-1 text-sm text-text">{children}</dd>
@@ -109,10 +109,11 @@ export function ApprovalCard({
   identities: AgentRosterSummary[];
   /** The detail read's reminder rows when available (delivered markers). */
   reminders?: ReminderSlotRow[] | undefined;
-  onReview: () => void;
-  onMute: (scope: "approval" | "task" | "all") => void;
-  reviewPending: boolean;
-  mutePending: boolean;
+  /** Decision + mute affordances: pending cards only (resolved cards stay quiet). */
+  onReview?: () => void;
+  onMute?: (scope: "approval" | "task" | "all") => void;
+  reviewPending?: boolean;
+  mutePending?: boolean;
 }) {
   const pending = approval.status === "pending";
   const requesterName =
@@ -215,7 +216,7 @@ export function ApprovalCard({
                   variant="outline"
                   size="sm"
                   disabled={mutePending}
-                  onClick={() => onMute("approval")}
+                  onClick={() => onMute?.("approval")}
                 >
                   Mute this approval
                 </Button>
@@ -223,7 +224,7 @@ export function ApprovalCard({
                   variant="outline"
                   size="sm"
                   disabled={mutePending}
-                  onClick={() => onMute("task")}
+                  onClick={() => onMute?.("task")}
                 >
                   Mute this task
                 </Button>
@@ -231,7 +232,7 @@ export function ApprovalCard({
                   variant="outline"
                   size="sm"
                   disabled={mutePending}
-                  onClick={() => onMute("all")}
+                  onClick={() => onMute?.("all")}
                 >
                   Mute all reminders
                 </Button>
@@ -299,8 +300,19 @@ export function ApprovalDecisionContent({
   const titleId = `approval-decision-title-${approval.approval_id}`;
   const descriptionId = `approval-decision-description-${approval.approval_id}`;
 
+  // §2.3 focus contract: the FIRST CHOICE takes initial focus. This effect
+  // lives HERE — inside the dialog content — because Radix's portal mounts
+  // one commit after its wrapper (the SSR-safe mount gate); a wrapper-level
+  // effect runs before the dialog exists and would silently no-op.
+  const panelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    panelRef.current
+      ?.querySelector<HTMLElement>("[data-autofocus]")
+      ?.focus();
+  }, []);
+
   return (
-    <div className="relative">
+    <div ref={panelRef} className="relative">
       <h2 id={titleId} className="font-display text-lg font-semibold tracking-tight text-text">
         Approval required
       </h2>
@@ -414,18 +426,6 @@ export function ApprovalDecisionModal({
   pending: boolean;
   safeErrorMessage: string | null;
 }) {
-  // Radix's open-focus is redirected (onOpenAutoFocus prevented below); this
-  // effect takes the FIRST CHOICE instead (§2.3). Scoping to the content ref
-  // keeps the lookup inside THIS dialog.
-  const contentRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    const target = contentRef.current?.querySelector<HTMLElement>("[data-autofocus]");
-    target?.focus();
-  }, [open]);
-
   const titleId = `approval-decision-title-${approval.approval_id}`;
   const descriptionId = `approval-decision-description-${approval.approval_id}`;
 
@@ -434,7 +434,6 @@ export function ApprovalDecisionModal({
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="animate-overlay-in fixed inset-0 z-50 bg-canvas/70 backdrop-blur-sm" />
         <DialogPrimitive.Content
-          ref={contentRef}
           aria-labelledby={titleId}
           aria-describedby={descriptionId}
           aria-live="assertive"

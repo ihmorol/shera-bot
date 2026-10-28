@@ -1,4 +1,5 @@
 import { Send } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { AgentAvatar } from "@/components/chat/agent-avatar";
 import { ErrorState } from "@/components/shell/states";
@@ -153,6 +154,7 @@ export function OperationThreadView({
   onComposerChange,
   onSend,
   sendPending,
+  approvals,
   className,
 }: {
   items: OperationThreadItem[];
@@ -164,6 +166,12 @@ export function OperationThreadView({
   onComposerChange: (value: string) => void;
   onSend: () => void;
   sendPending: boolean;
+  /**
+   * S20: the workspace's pending approval cards, rendered as the FIRST rows
+   * of the thread — in the chat message flow where the system-notice cards
+   * live (§S8). The region renders nothing when nothing is pending.
+   */
+  approvals?: ReactNode;
   className?: string;
 }) {
   // The light @-mention affordance: a trailing @-token in the draft shows the
@@ -205,6 +213,7 @@ export function OperationThreadView({
           </div>
         ) : (
           <ul className="flex flex-col gap-5">
+            {approvals}
             {items.map((item) => (
               <li
                 key={

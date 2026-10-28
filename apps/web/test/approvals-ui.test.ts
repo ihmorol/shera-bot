@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -8,7 +10,11 @@ import {
   type ApprovalChoice,
 } from "@shera-bot/contracts";
 
-import { ApprovalCard, ApprovalDecisionModal } from "../components/chat/approval-card";
+import {
+  ApprovalCard,
+  ApprovalDecisionContent,
+  ApprovalDecisionModal,
+} from "../components/chat/approval-card";
 import {
   PendingApprovalsRows,
   pendingApprovalsEmptyNotice,
@@ -500,7 +506,9 @@ describe("Approval card (§S8, D9)", () => {
     expect(html).toContain("2.1.0");
     expect(html).toContain("repo.issue.create");
     expect(html).toContain("repo:shera-bot/issues");
-    expect(html).toContain("Opens one issue in the pinned repository's tracker.");
+    // SSR entity-encodes the apostrophe (the S13 suites' verbatim-check trick:
+    // assert the apostrophe-free prefix).
+    expect(html).toContain("Opens one issue in the pinned repository");
     // G3: the digest IS the arguments surface — a short fingerprint renders, never raw args.
     expect(html).toContain("9f2c44e7");
     expect(html).not.toContain('{"');
@@ -574,13 +582,12 @@ describe("Approval card (§S8, D9)", () => {
 
 function renderModal(props: Record<string, unknown> = {}): string {
   return render(
-    createElement(ApprovalDecisionModal, {
+    createElement(ApprovalDecisionContent, {
       approval: PENDING_APPROVAL,
       identities: [RESEARCHER],
       run: APPROVAL_DETAIL.run,
-      open: true,
-      onOpenChange: () => undefined,
       onChoose: () => undefined,
+      onDismiss: () => undefined,
       chosenChoice: null,
       pending: false,
       safeErrorMessage: null,
@@ -601,28 +608,48 @@ describe("Approval decision modal (§S8, §2.3)", () => {
     }
   });
 
-  it("is a modal dialog whose announcement and semantics are machine-readable", () => {
+  it("the Radix wrapper carries the modal semantics: trap, Escape, redirect to the first choice", () => {
+    // The dialog box is a Radix Portal — not server-renderable — so its
+    // semantics assert at source level (the ui/sheet.tsx precedent). Radix
+    // supplies role="dialog" + aria-modal + the focus trap + Escape; the
+    // default open-focus is REDIRECTED so the first choice takes it.
+    const source = readFileSync(
+      join(import.meta.dirname, "..", "components", "chat", "approval-card.tsx"),
+      "utf8",
+    );
+    expect(source).toContain("@radix-ui/react-dialog");
+    expect(source).toContain("onOpenAutoFocus={(event) => event.preventDefault()}");
+    expect(source).toMatch(/querySelector<HTMLElement>\("\[data-autofocus\]"\)/);
+    expect(source).toMatch(/DialogPrimitive\.Content/);
+  });
+
+  it("the request announces assertively with the tool named", () => {
     const html = renderModal();
-    expect(html).toContain('role="dialog"');
-    expect(html).toContain("aria-modal");
-    // §2.3: tool/approval events announce assertively — the request does too.
     expect(html).toContain('aria-live="assertive"');
     expect(html).toContain("tool_repo_issue_create");
+    expect(html).toContain("Researcher asks to run");
+    expect(html).toContain("paused until you decide");
   });
 
   it("the five choices are the only initially focusable actions (§2.3 focus contract)", () => {
     const html = renderModal();
-    // Initial focus lands on the first choice…
-    expect(html).toContain("autofocus");
-    const autofocusAt = html.indexOf("autofocus");
+    // Initial focus is MARKED on the first choice (the wrapper focuses it on
+    // open)…
+    expect(html).toContain('data-autofocus="true"');
+    const autofocusAt = html.indexOf("data-autofocus");
     expect(html.slice(autofocusAt, autofocusAt + 400)).toContain(VERBATIM_CHOICES[0]);
-    // …and the modal's other affordance (close) is out of the initial tab order.
+    // …and the panel's only other affordance (close) is out of the initial
+    // tab order — the five choices are what Tab reaches first.
     expect(html).toContain('tabindex="-1"');
+    // No other focusable control exists in the panel.
+    const focusableButtons = html.split("<button").length - 1;
+    expect(focusableButtons).toBe(6); // five choices + the close affordance
   });
 
   it("while a decision is pending the choices disable; an error keeps its safe message", () => {
     const pending = renderModal({ pending: true, chosenChoice: "approve-this-execution-only" });
     expect(pending).toMatch(/<button[^>]*?\bdisabled=""/);
+    expect(pending).toContain("aria-busy");
 
     const failed = renderModal({ safeErrorMessage: "The decision was not accepted. Try again." });
     expect(failed).toContain('role="alert"');
@@ -640,6 +667,7 @@ describe("Pending approvals region (in-thread)", () => {
       createElement(PendingApprovalsRows, {
         approvals: [PENDING_APPROVAL],
         remindersByApproval: {},
+        runByApproval: { approval_pending_01: APPROVAL_DETAIL.run },
         identities: [RESEARCHER],
         decidedByReady: true,
         openApprovalId: null,
@@ -660,6 +688,7 @@ describe("Pending approvals region (in-thread)", () => {
         createElement(PendingApprovalsRows, {
           approvals: [],
           remindersByApproval: {},
+          runByApproval: {},
           identities: [RESEARCHER],
           decidedByReady: true,
           openApprovalId: null,
@@ -793,14 +822,14 @@ describe("Permissions & approvals settings (§S9, D9/D35)", () => {
 
   it("a consumed one-time grant says so honestly", () => {
     const html = renderPermissions({ grants: [ONE_TIME_GRANT] });
-    expect(html).toContain("one-time");
+    expect(html).toContain("One-time");
     expect(html).toContain("used");
   });
 
   it("lists reminder mutes with the honest no-unmute note", () => {
     const html = renderPermissions();
     expect(html).toContain("task_run_01");
-    expect(html).toContain("task");
+    expect(html).toContain("Task");
     // The API has no un-mute path in this prototype — the surface says so.
     expect(html).toContain("cannot be removed");
   });

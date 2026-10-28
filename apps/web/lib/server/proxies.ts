@@ -2,18 +2,20 @@ import { randomUUID } from "node:crypto";
 import { Session, isBrowserRuntimePath, runtimeWorkspaceMatches } from "@shera-bot/contracts";
 
 /**
- * The S20 review fix (F1): on the BROWSER path the approval decision's acting
- * user is bound SERVER-SIDE from the authenticated session — the body-asserted
- * `decided_by` is overwritten, so the decision's audit trail is the session's
- * google_sub, never a client-chosen identity. Direct runtime-API callers (no
- * proxy) are the documented systemic exception: the local route still relays
- * its body actor (the pre-existing prototype pattern). The session contract
- * guarantees google_sub once Session parses; the explicit typed 401 below is
- * the defensive answer for a session-shaped body that somehow carries no
- * identity — the same UNAUTHENTICATED failure shape the control plane serves.
+ * The S20 review fixes (F1/F2): on the BROWSER path the approval mutations
+ * that name an acting user bind that user SERVER-SIDE from the authenticated
+ * session — the body-asserted `decided_by` (decision) / `created_by` (mute)
+ * is overwritten, so the audit trail is the session's google_sub, never a
+ * client-chosen identity. Direct runtime-API callers (no proxy) are the
+ * documented systemic exception: the local routes still relay their body
+ * actor (the pre-existing prototype pattern). The session contract guarantees
+ * google_sub once Session parses; the explicit typed 401 below is the
+ * defensive answer for a session-shaped body that somehow carries no identity
+ * — the same UNAUTHENTICATED failure shape the control plane serves.
  */
 const SESSION_ACTOR_BINDINGS: ReadonlyArray<{ pathPattern: RegExp; bodyField: string }> = [
   { pathPattern: /^\/v1\/approvals\/[a-zA-Z0-9_-]+\/decision$/, bodyField: "decided_by" },
+  { pathPattern: /^\/v1\/approvals\/mutes$/, bodyField: "created_by" },
 ];
 
 /** The 401 failure shape for a request whose session carries no usable identity. */

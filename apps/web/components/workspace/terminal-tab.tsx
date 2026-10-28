@@ -62,7 +62,7 @@ function PolicyEntries({ policy }: { policy: Record<string, unknown> }): ReactEl
       {entries.map(([key, value]) => (
         <div key={key} className="flex items-baseline gap-2 text-xs">
           <dt className="shrink-0 text-muted">{key}</dt>
-          <dd className="min-w-0 break-all font-mono text-text">
+          <dd className="min-w-0 wrap-anywhere font-mono text-text">
             {value === null || value === undefined
               ? "—"
               : typeof value === "object"
@@ -84,7 +84,7 @@ function ExecutionSummary({ execution }: { execution: TerminalExecutionView }): 
       <div className="flex items-start justify-between gap-2">
         <code
           data-testid="terminal-command"
-          className="min-w-0 break-all font-mono text-xs text-cool-highlight"
+          className="min-w-0 wrap-anywhere font-mono text-xs text-cool-highlight"
         >
           {execution.command}
         </code>
@@ -98,7 +98,7 @@ function ExecutionSummary({ execution }: { execution: TerminalExecutionView }): 
       </div>
       <div className="flex items-baseline gap-2 text-xs">
         <span className="shrink-0 text-muted">Workdir</span>
-        <span data-testid="terminal-workdir" className="min-w-0 break-all font-mono text-text">
+        <span data-testid="terminal-workdir" className="min-w-0 wrap-anywhere font-mono text-text">
           {execution.workdir}
         </span>
       </div>

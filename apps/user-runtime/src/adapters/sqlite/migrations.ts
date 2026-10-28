@@ -168,6 +168,39 @@
  * is stored here for the prototype so an artifact survives independent of any
  * workspace_nodes entry. Chunk 1 creates the table; the artifact repository
  * lands in chunk 2.
+ *
+ * v10 — approval records (S20 chunk 1, renumbered from v9 at the S17
+ * integration rebase; D9, PRD §8, E3, E12, G3): the four
+ * durable tables the approval lifecycle pauses runs against.
+ *
+ * approval_requests mirrors the contracts ApprovalRequest one-to-one — tool
+ * identity, version, capability, risk class, EXPLICIT resource scope, the
+ * args_digest, the side-effect summary the UI renders, and the pending |
+ * approved | rejected | cancelled status with its resolution stamps. There is
+ * NO raw-arguments column: approval records carry the sha256 args_digest only
+ * (G3 — raw arguments never enter approval records, events, or logs).
+ * requested_by is the D4 Actor, stored as validated JSON.
+ *
+ * approval_grants mirrors the contracts ApprovalGrant: only the three approve
+ * choices create grants (reject/cancel do not), each grant pins the tool
+ * VERSION (a changed version invalidates a one-time approval), scopes to an
+ * explicit resource, a conversation ("any" or one id), and the workspace
+ * (E12), carries its expiry and one_time flag, and records approved_at /
+ * revoked_at — everything revocable (D9).
+ *
+ * approval_reminders holds the five E3 reminder slots per request
+ * (reminder_index 0-4 onto APPROVAL_REMINDER_SCHEDULE_SECONDS [0, 900, 2700,
+ * 10800, 86400]); due_at is written at request time on the injected clock and
+ * delivered_at stays NULL until a reminder is delivered. Delivery events never
+ * change task state (E3).
+ *
+ * approval_mutes is the reminder-silencing ledger (scope 'approval' | 'task' |
+ * 'all', target_id nullable for the 'all' scope).
+ *
+ * Every table is workspace-scoped as PRIMARY KEY prefix (E12); task_id,
+ * conversation_id, and approval_id references are validated by the writers in
+ * the same workspace, so no FOREIGN KEY is declared — the v4/v5/v6/v8
+ * discipline.
  */
 import type { DatabaseSync } from "node:sqlite";
 
@@ -535,6 +568,91 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
         producer_task_id  TEXT    NOT NULL,
         created_at        TEXT    NOT NULL,
         PRIMARY KEY (workspace_id, artifact_id)
+      ) STRICT;
+    `,
+  },
+  {
+    version: 10,
+    name: "approval-records",
+    sql: `
+      CREATE TABLE IF NOT EXISTS approval_requests (
+        workspace_id        TEXT    NOT NULL,
+        approval_id         TEXT    NOT NULL,
+        task_id             TEXT    NOT NULL,
+        conversation_id     TEXT    NOT NULL,
+        tool_id             TEXT    NOT NULL,
+        tool_version        TEXT    NOT NULL,
+        capability          TEXT    NOT NULL,
+        risk_class          TEXT    NOT NULL CHECK (risk_class IN (
+          'READ_ONLY', 'LOCAL_MUTATION', 'DESTRUCTIVE_LOCAL', 'EXTERNAL_WRITE',
+          'CREDENTIAL_ACCESS', 'DEPLOYMENT', 'FINANCIAL_OR_IRREVERSIBLE')),
+        resource_scope      TEXT    NOT NULL,
+        args_digest         TEXT    NOT NULL,
+        side_effect_summary TEXT    NOT NULL,
+        requested_by_json   TEXT    NOT NULL CHECK (json_valid(requested_by_json)),
+        requested_at        TEXT    NOT NULL,
+        status              TEXT    NOT NULL CHECK (status IN ('pending', 'approved', 'rejected', 'cancelled')),
+        resolved_at         TEXT,
+        resolved_by_choice  TEXT    CHECK (resolved_by_choice IS NULL OR resolved_by_choice IN (
+          'approve-this-execution-only', 'always-approve-this-tool',
+          'always-approve-this-tool-for-this-agent', 'reject-this-action',
+          'cancel-the-task')),
+        PRIMARY KEY (workspace_id, approval_id)
+      ) STRICT;
+
+      CREATE INDEX IF NOT EXISTS approval_requests_by_task_idx
+        ON approval_requests (workspace_id, task_id);
+
+      CREATE INDEX IF NOT EXISTS approval_requests_by_status_idx
+        ON approval_requests (workspace_id, status);
+
+      CREATE TABLE IF NOT EXISTS approval_grants (
+        workspace_id       TEXT    NOT NULL,
+        grant_id           TEXT    NOT NULL,
+        source_choice      TEXT    NOT NULL CHECK (source_choice IN (
+          'approve-this-execution-only', 'always-approve-this-tool',
+          'always-approve-this-tool-for-this-agent')),
+        principal_type     TEXT    NOT NULL CHECK (principal_type IN ('user', 'agent', 'task')),
+        principal_id       TEXT    NOT NULL,
+        tool_id            TEXT    NOT NULL,
+        tool_version       TEXT    NOT NULL,
+        capability         TEXT    NOT NULL,
+        resource_scope     TEXT    NOT NULL,
+        conversation_scope TEXT    NOT NULL,
+        workspace_scope    TEXT    NOT NULL,
+        expires_at         TEXT,
+        one_time           INTEGER NOT NULL CHECK (one_time IN (0, 1)),
+        created_by_json    TEXT    NOT NULL CHECK (json_valid(created_by_json)),
+        approved_at        TEXT    NOT NULL,
+        revoked_at         TEXT,
+        PRIMARY KEY (workspace_id, grant_id)
+      ) STRICT;
+
+      CREATE INDEX IF NOT EXISTS approval_grants_by_principal_idx
+        ON approval_grants (workspace_id, principal_type, principal_id);
+
+      CREATE INDEX IF NOT EXISTS approval_grants_by_tool_idx
+        ON approval_grants (workspace_id, tool_id);
+
+      CREATE TABLE IF NOT EXISTS approval_reminders (
+        workspace_id   TEXT    NOT NULL,
+        approval_id    TEXT    NOT NULL,
+        reminder_index INTEGER NOT NULL CHECK (reminder_index BETWEEN 0 AND 4),
+        due_at         TEXT    NOT NULL,
+        delivered_at   TEXT,
+        PRIMARY KEY (workspace_id, approval_id, reminder_index)
+      ) STRICT;
+
+      CREATE INDEX IF NOT EXISTS approval_reminders_due_idx
+        ON approval_reminders (workspace_id, due_at);
+
+      CREATE TABLE IF NOT EXISTS approval_mutes (
+        workspace_id TEXT    NOT NULL,
+        mute_id      TEXT    NOT NULL,
+        scope        TEXT    NOT NULL CHECK (scope IN ('approval', 'task', 'all')),
+        target_id    TEXT,
+        created_at   TEXT    NOT NULL,
+        PRIMARY KEY (workspace_id, mute_id)
       ) STRICT;
     `,
   },

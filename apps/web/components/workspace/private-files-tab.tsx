@@ -56,7 +56,7 @@ export function PrivateFilesTabView(props: PrivateFilesTabViewProps): ReactEleme
           </h3>
           <span
             data-testid="private-badge"
-            className="flex shrink-0 items-center gap-1 rounded-full border border-line-accent bg-surface-elevated px-2 py-0.5 text-xs font-medium text-approval"
+            className="flex shrink-0 items-center gap-1 rounded-full border border-line-accent bg-surface-elevated px-2 py-0.5 text-xs font-medium text-sky"
           >
             <Lock className="size-3" aria-hidden="true" />
             Private
@@ -135,7 +135,7 @@ function PrivateNodeRow({
     <li>
       <div className="group flex items-center gap-2 rounded-lg px-2 py-2 transition-colors hover:bg-surface-elevated">
         {node.is_directory ? (
-          <Folder className="size-4 shrink-0 text-approval" aria-hidden="true" />
+          <Folder className="size-4 shrink-0 text-sky" aria-hidden="true" />
         ) : (
           <FileText className="size-4 shrink-0 text-muted" aria-hidden="true" />
         )}
@@ -201,7 +201,7 @@ function PrivateEmptyAgentState(): ReactElement {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 px-6 py-10 text-center">
       <div className="flex size-10 items-center justify-center rounded-xl border border-line bg-surface-elevated">
-        <Lock className="size-5 text-approval" aria-hidden="true" />
+        <Lock className="size-5 text-sky" aria-hidden="true" />
       </div>
       <p className="max-w-[38ch] text-sm text-muted">
         Choose an Agent above to see its private folder. Each folder belongs to that one Agent.
@@ -217,7 +217,7 @@ function PrivateEmptyFolderState({ agentName }: { agentName: string }): ReactEle
       className="flex h-full flex-col items-center justify-center gap-3 px-6 py-10 text-center"
     >
       <div className="flex size-10 items-center justify-center rounded-xl border border-line bg-surface-elevated">
-        <Folder className="size-5 text-approval" aria-hidden="true" />
+        <Folder className="size-5 text-sky" aria-hidden="true" />
       </div>
       <p className="max-w-[38ch] text-sm text-muted">
         No private files yet — this folder is {agentName}&apos;s own scratch space.

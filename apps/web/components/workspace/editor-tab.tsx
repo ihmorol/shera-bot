@@ -83,7 +83,11 @@ export function EditorTabView(props: EditorTabViewProps): ReactElement {
             <p className="shrink-0 font-mono text-xs text-muted">
               {props.mimeType ?? "unknown type"} · {formatBytes(props.size)}
             </p>
-            <SaveStatus dirty={props.dirty} saveState={props.saveState} />
+            {/* While the D6 lock holds, the lock alert IS the state — a second
+                amber "Unsaved changes" chip would say the same thing twice. */}
+            {!props.leaseLocked ? (
+              <SaveStatus dirty={props.dirty} saveState={props.saveState} />
+            ) : null}
           </div>
           {props.conflictTooltip ? (
             <p

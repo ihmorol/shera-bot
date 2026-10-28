@@ -2,7 +2,7 @@
  * Approvals repository (S20 chunk 1; D9, PRD §8, E3, E12, G3) — the only place
  * approval SQL lives.
  *
- * Four durable tables (the v9 migration): approval_requests, approval_grants,
+ * Four durable tables (the v10 migration): approval_requests, approval_grants,
  * approval_reminders, approval_mutes. The request and grant rows mirror the
  * contracts shapes one-to-one (this repository accepts and returns the
  * contract records; the storage mapping — Actor JSON, boolean↔INTEGER, absent
@@ -18,7 +18,7 @@
  * enforcement are later chunks' logic against this same schema.
  *
  * Chunk-2 addition (S20; D9, G3): grants carry a nullable `args_digest`
- * adjacency column (v10) so ONE-TIME grants match the exact argument set — a
+ * adjacency column (v11) so ONE-TIME grants match the exact argument set — a
  * changed argument set invalidates a one-time approval. Reusable grants store
  * NULL (deliberately argument-agnostic). The contracts ApprovalGrant is
  * untouched; `ApprovalGrantRecord` = contract record + the digest. Requests
@@ -26,14 +26,14 @@
  * resolved_by_choice (decisions are immutable — D9).
  *
  * Chunk-3 additions (S20; D9, E3): grants carry a nullable `consumed_at`
- * stamp (v11) — `consumeGrant` is the ONE writer that sets it, and only on
+ * stamp (v12) — `consumeGrant` is the ONE writer that sets it, and only on
  * rows whose stamp is still NULL (write-once, like the decision resolution).
  * Reminders gain the due-scan accessor (`listDueUndeliveredReminders`) and the
  * delivery stamp (`markReminderDelivered`, write-once as well) the service's
  * reminder scan fires through.
  *
  * Review-round addition (S20; F2): mutes gain a nullable `created_by` audit
- * column (v12) — every new mute is recorded with its creating user actor's id
+ * column (v13) — every new mute is recorded with its creating user actor's id
  * (the service refuses actorless or non-user mutes); legacy rows read NULL.
  */
 import type { DatabaseSync } from "node:sqlite";
@@ -64,7 +64,7 @@ export interface ApprovalRequestResolution {
   resolved_by_choice: ApprovalChoice;
 }
 
-/** One E3 reminder slot of one approval request (the v9 reminder table). */
+/** One E3 reminder slot of one approval request (the v10 reminder table). */
 export interface ApprovalReminderRow {
   workspace_id: string;
   approval_id: string;

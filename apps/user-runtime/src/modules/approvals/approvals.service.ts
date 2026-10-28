@@ -88,12 +88,12 @@
  * "better" grant behind the deterministic pick).
  *
  * One-time consumption: the grant row carries a durable consumed_at stamp
- * (v11) written ONCE, after the approved execution's callback resolves — a
+ * (v12) written ONCE, after the approved execution's callback resolves — a
  * one-time grant can never authorize a second execution, and the stamp
  * survives a runtime restart. The gate consult INSIDE the approved execution
  * still passes: consumption marks COMPLETION, not the decision.
  *
- * Reminder firing (`dueReminders`) scans the durable v9 reminder rows
+ * Reminder firing (`dueReminders`) scans the durable v10 reminder rows
  * (delivered_at IS NULL, due_at <= now on the injected clock), enforces the
  * mute scopes, and stamps delivered_at — the durable delivery record. It
  * NEVER touches run state: no transition, no journal event, nothing but the
@@ -1184,7 +1184,7 @@ export class ApprovalsService {
 
   /**
    * Fire every due, undelivered reminder of one workspace (E3): the durable
-   * v9 reminder rows are scanned at the INJECTED clock time (delivered_at IS
+   * v10 reminder rows are scanned at the INJECTED clock time (delivered_at IS
    * NULL, due_at <= now) inside one transaction; each due slot is either
    * DELIVERED (delivered_at stamped — the write-once durable delivery record)
    * or suppressed by a mute. The schedule itself has no slot after 24h, so a

@@ -202,7 +202,7 @@
  * the same workspace, so no FOREIGN KEY is declared — the v4/v5/v6/v8
  * discipline.
  *
- * v10 — approval grant digest (S20 chunk 2; D9, G3): a nullable args_digest
+ * v11 — approval grant digest (S20 chunk 2; D9, G3): a nullable args_digest
  * adjacency column on approval_grants. The contracts ApprovalGrant is
  * untouched; the repository carries the digest alongside the contract record
  * so ONE-TIME grants can be matched against the exact argument set (a changed
@@ -210,7 +210,7 @@
  * NULL: they are deliberately argument-agnostic ("always approve this tool").
  * The digest-only rule holds (G3 — never raw arguments).
  *
- * v11 — approval grant consumption (S20 chunk 3; D9): a nullable consumed_at
+ * v12 — approval grant consumption (S20 chunk 3; D9): a nullable consumed_at
  * stamp on approval_grants. A ONE-TIME grant is consumed durably once the
  * approved execution completes — after the withheld execute callback resolves
  * — so a one-time approval can never be used twice, not even across a runtime
@@ -219,9 +219,9 @@
  * rows whose consumed_at is still NULL), mirroring the immutability of
  * decisions themselves (D9).
  *
- * v12 — approval mute creator (S20 review round; F2): a nullable created_by
+ * v13 — approval mute creator (S20 review round; F2): a nullable created_by
  * column on approval_mutes, holding the user actor id that recorded the mute.
- * Nullable, following the v10/v11 ALTER TABLE style (no NOT NULL DEFAULT —
+ * Nullable, following the v11/v12 ALTER TABLE style (no NOT NULL DEFAULT —
  * STRICT tables backfill nothing), so pre-existing creatorless mute rows keep
  * reading NULL; every NEW mute is written only through the service, which
  * requires the deciding user actor and stamps its id. Muting is a user
@@ -683,21 +683,21 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
     `,
   },
   {
-    version: 10,
+    version: 11,
     name: "approval-grant-digest",
     sql: `
       ALTER TABLE approval_grants ADD COLUMN args_digest TEXT;
     `,
   },
   {
-    version: 11,
+    version: 12,
     name: "approval-grant-consumption",
     sql: `
       ALTER TABLE approval_grants ADD COLUMN consumed_at TEXT;
     `,
   },
   {
-    version: 12,
+    version: 13,
     name: "approval-mute-creator",
     sql: `
       ALTER TABLE approval_mutes ADD COLUMN created_by TEXT;

@@ -3,10 +3,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 
-import { BrowserTabView, type BrowserTabState } from "../components/workspace/browser-tab";
+import { BrowserTabView } from "../components/workspace/browser-tab";
 import { TerminalTabView, type TerminalTabViewProps } from "../components/workspace/terminal-tab";
 import { WorkspacePanelBody } from "../components/workspace/workspace-panel";
 import { WORKSPACE_TABS } from "../components/workspace/panel-tabs";
+import type { BrowserTabState } from "../lib/live-views-api";
 import {
   INITIAL_TERMINAL_STATE,
   applyTerminalStreamEvent,

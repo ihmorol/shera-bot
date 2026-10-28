@@ -39,9 +39,7 @@ function envelope(
   return {
     event_id: `evt-${Math.random().toString(36).slice(2)}`,
     sequence: 1,
-    type: overrides.type,
     occurred_at: "2026-10-29T10:00:00.000Z",
-    payload: overrides.payload,
     ...overrides,
   };
 }
@@ -173,8 +171,8 @@ describe("live-views client", () => {
       vi.fn(async () => new Response(JSON.stringify(running), { status: 200 })),
     );
     const view = await fetchBrowserView(WORKSPACE);
-    expect(view.state).toBe("running");
-    if (view.state === "running") {
+    expect("state" in view && view.state).toBe("running");
+    if ("state" in view && view.state === "running") {
       expect(view.screenshot_base64).not.toBe("");
       expect(view.url).toContain("https://");
     }
@@ -195,7 +193,7 @@ describe("live-views client", () => {
       ),
     );
     const stopped = await fetchBrowserView(WORKSPACE);
-    expect(stopped.state).not.toBe("running");
+    expect("state" in stopped && stopped.state).toBe("stopped");
     expect("url" in stopped).toBe(false);
     expect("screenshot_base64" in stopped).toBe(false);
   });

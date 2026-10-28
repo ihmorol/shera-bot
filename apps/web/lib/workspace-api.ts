@@ -19,9 +19,12 @@ import { UNREACHABLE_ERROR, typedErrorFromPayload } from "@/lib/typed-error";
  *   POST  /v1/workspace/files/upload   gated binary write (base64 body)
  *   POST  /v1/workspace/directories    mkdir (structural, ungated)
  *   POST  /v1/workspace/delete         user-only delete (G6: the UI confirms)
- *   GET   /v1/workspace/leases         the workspace's active write leases (D6)
  *   GET   /v1/workspace/artifacts      the E12 artifact list (by workspace or run)
  *   GET   /v1/workspace/artifacts/:id  the byte-exact artifact download
+ *
+ * The GET /v1/workspace/leases route stays a server surface with no client
+ * consumer (F2 review fix removed the dead client export); the panel's lease
+ * data is the WRITE_LEASE_CONFLICT 409's structured details, parsed below.
  *
  * The actor is the S01 fixture user, the established D4 convention for the
  * request-carried actor (AGENT_SETTINGS_USER_ACTOR — no invented auth, G4).
@@ -66,18 +69,11 @@ const WorkspaceFileResponse = z.strictObject({
   content_base64: z.string().min(1),
 });
 
-/** One active write lease (D6) — the chunk-5 conflict tooltip's data source. */
-export const WorkspaceLeaseSchema = z.strictObject({
-  lease_id: z.string().min(1),
-  workspace_id: z.string().min(1),
-  path: z.string().min(1),
-  task_id: z.string().min(1),
-  holder: z.strictObject({ type: z.enum(["user", "agent"]), id: z.string().min(1) }),
-  expires_at: z.string().min(1),
-});
-export type WorkspaceLease = z.infer<typeof WorkspaceLeaseSchema>;
-
-const WorkspaceLeasesResponse = z.strictObject({ leases: z.array(WorkspaceLeaseSchema) });
+/** One active write lease (D6) — removed (F2 review fix): the export had no
+ * consumer, and its schema expected a nested holder{type,id} shape the server
+ * never emits (the API answers flat holder_type/holder_id), so any call was a
+ * guaranteed parse failure. The lease list route stays a server surface; the
+ * panel's lease data travels through the typed 409 conflict details below. */
 
 /**
  * One artifact_refs row WITHOUT content (the E12 list/ref shape) — the
@@ -319,14 +315,6 @@ export function readWorkspaceArtifact(
         bytes: base64ToBytes(parsed.content_base64),
       };
     },
-  );
-}
-
-export function listWorkspaceLeases(workspaceId: string): Promise<WorkspaceLease[]> {
-  const query = new URLSearchParams({ workspace_id: workspaceId });
-  return requestWorkspace(
-    `/api/runtime/v1/workspace/leases?${query.toString()}`,
-    (payload) => WorkspaceLeasesResponse.parse(payload).leases,
   );
 }
 

@@ -15,16 +15,17 @@ describe("browser runtime trust boundary", () => {
   });
   it("allowlists the S20 approvals reads and the three approval mutations", () => {
     // The web UI's approvals seam (§S8): the pending list, the detail card,
-    // the grants/mutes lists, and the E3 reminder scan are GETs; the decision,
-    // the grant revoke, and the mute are POSTs. Every route is
+    // and the grants/mutes lists are GETs; the decision, the grant revoke,
+    // the mute, and the due-reminder scan are POSTs. Every route is
     // workspace-scoped (E12) — the workspace selector check above still
-    // applies to all of them.
+    // applies to all of them. (S20 review fix F3: the scan MOVED to POST — a
+    // GET that stamps delivered_at was a state mutation on a read verb, with
+    // no Origin check; the S15-precedent command-convention applies.)
     for (const path of [
       "/v1/approvals/pending",
       "/v1/approvals/approval_pending_01",
       "/v1/approvals/grants",
       "/v1/approvals/mutes",
-      "/v1/approvals/due-reminders",
     ])
       expect(isBrowserRuntimePath("GET", path), `GET ${path}`).toBe(true);
     expect(isBrowserRuntimePath("GET", "/v1/approvals/unknown%2f")).toBe(false);
@@ -32,14 +33,17 @@ describe("browser runtime trust boundary", () => {
       ["POST", "/v1/approvals/approval_pending_01/decision"],
       ["POST", "/v1/approvals/grants/revoke"],
       ["POST", "/v1/approvals/mutes"],
+      ["POST", "/v1/approvals/due-reminders"],
     ] as const)
       expect(isBrowserRuntimePath(method, path), `${method} ${path}`).toBe(true);
     // No other mutation class opens up: no approval creation, no un-mute, no
     // un-revoke (write-once semantics live in the runtime, not the browser),
-    // and a decision stays POST-only.
+    // a decision stays POST-only, and the state-mutating reminder scan is no
+    // longer reachable as a GET.
     expect(isBrowserRuntimePath("POST", "/v1/approvals/pending")).toBe(false);
     expect(isBrowserRuntimePath("DELETE", "/v1/approvals/mutes/mute_01")).toBe(false);
     expect(isBrowserRuntimePath("GET", "/v1/approvals/approval_pending_01/decision")).toBe(false);
+    expect(isBrowserRuntimePath("GET", "/v1/approvals/due-reminders")).toBe(false);
   });
   it("rejects missing, conflicting and duplicate workspace selectors", () => {
     expect(

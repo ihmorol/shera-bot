@@ -432,8 +432,15 @@ describe("Approvals client (proxy paths)", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(200, { reminders: [entry] })));
     const reminders = await fetchDueReminders(WORKSPACE);
     expect(reminders).toEqual([entry]);
-    const [duePath] = vi.mocked(globalThis.fetch).mock.calls[0] as [string];
-    expect(duePath).toBe(`/api/runtime/v1/approvals/due-reminders?workspace_id=${WORKSPACE}`);
+    // F3: the scan MOVED to POST — it stamps delivered_at (a state mutation),
+    // so a state-mutating poll rides the command verb with a workspace body.
+    const [duePath, dueInit] = vi.mocked(globalThis.fetch).mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
+    expect(duePath).toBe("/api/runtime/v1/approvals/due-reminders");
+    expect(dueInit.method).toBe("POST");
+    expect(JSON.parse(String(dueInit.body))).toEqual({ workspace_id: WORKSPACE });
   });
 });
 

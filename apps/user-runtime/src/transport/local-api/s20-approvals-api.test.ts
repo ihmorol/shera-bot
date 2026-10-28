@@ -25,9 +25,10 @@
  *   7. Every route is workspace-scoped (E12): another workspace's approval is
  *      invisible and its decision is refused (404), never silently applied.
  *   8. The approval detail carries the five E3 reminder slots with their
- *      delivered_at stamps; GET due-reminders fires the due slots (delivery
+ *      delivered_at stamps; POST due-reminders fires the due slots (delivery
  *      NEVER changes run state — D32/E3) and mutes suppress notifications
- *      only.
+ *      only. The scan is a POST (S20 review fix F3): it stamps delivered_at,
+ *      a state mutation no GET may carry.
  */
 import { join, resolve as resolvePath } from "node:path";
 import { dirname } from "node:path";
@@ -620,8 +621,17 @@ describe("S20 approvals API: workspace scoping (E12)", () => {
   it("requires a workspace_id on every route", async () => {
     env = await composeOn(GATED_TOOL);
     expect((await getJson(env.origin, "/v1/approvals/pending")).status).toBe(400);
-    expect((await postJson(env.origin, "/v1/approvals/mutes", { scope: "all" })).status).toBe(400);
-    expect((await getJson(env.origin, "/v1/approvals/due-reminders")).status).toBe(400);
+    expect(
+      (await postJson(env.origin, "/v1/approvals/mutes", { scope: "all", created_by: USER })).status,
+    ).toBe(400);
+    expect(
+      (await postJson(env.origin, "/v1/approvals/due-reminders", {})).status,
+    ).toBe(400);
+    // F3: the old GET scan route is GONE — the typed 404, never a silent
+    // state-mutating read.
+    const oldGet = await getJson(env.origin, "/v1/approvals/due-reminders");
+    expect(oldGet.status).toBe(404);
+    expect(oldGet.body["code"]).toBe("ROUTE_NOT_FOUND");
   });
 });
 
@@ -717,7 +727,11 @@ describe("S20 approvals API: mutes and due reminders", () => {
     });
 
     // The immediate slot (0) is due at the pause time; the scan answers it.
-    const tick = await getJson(env.origin, `/v1/approvals/due-reminders?workspace_id=${WORKSPACE}`);
+    // F3: the scan is a POST — it stamps delivered_at, so it rides the
+    // command verb (a GET that mutated state had no Origin check).
+    const tick = await postJson(env.origin, "/v1/approvals/due-reminders", {
+      workspace_id: WORKSPACE,
+    });
     expect(tick.status).toBe(200);
     const entries = tick.body["reminders"] as Array<Record<string, unknown>>;
     expect(entries).toHaveLength(1);
@@ -745,14 +759,14 @@ describe("S20 approvals API: mutes and due reminders", () => {
     >;
     const approvalId = approvals[0]!["approval_id"] as string;
 
-    const first = (await getJson(env.origin, `/v1/approvals/due-reminders?workspace_id=${WORKSPACE}`)).body["reminders"] as Array<Record<string, unknown>>;
+    const first = (await postJson(env.origin, "/v1/approvals/due-reminders", { workspace_id: WORKSPACE })).body["reminders"] as Array<Record<string, unknown>>;
     expect(first).toHaveLength(1);
     expect(first[0]).toMatchObject({ reminder_index: 0, outcome: "delivered" });
     expect(first[0]!["delivered_at"]).not.toBeNull();
 
     // The delivered slot does not resurface; the later slots are not yet due.
     expect(
-      ((await getJson(env.origin, `/v1/approvals/due-reminders?workspace_id=${WORKSPACE}`)).body["reminders"] ?? []),
+      ((await postJson(env.origin, "/v1/approvals/due-reminders", { workspace_id: WORKSPACE })).body["reminders"] ?? []),
     ).toHaveLength(0);
 
     // The delivery stamp landed on the detail read.

@@ -5,6 +5,7 @@ import { useCallback, useSyncExternalStore, type ReactElement } from "react";
 
 import { ContainerGate } from "@/components/shell/container-gate";
 import { BackToChatButton, WorkspacePanelHost } from "@/components/workspace/workspace-panel";
+import type { WorkspaceTabId } from "@/components/workspace/panel-tabs";
 import { useContainerResolution } from "@/lib/container-connection";
 import { routes } from "@/lib/routes";
 import { clearWorkspaceFullMarker, workspaceFullBackMarkerKey } from "@/lib/workspace-panel";
@@ -83,10 +84,26 @@ export function useWorkspaceFullOpenedInApp(chatId: string): boolean {
   return useSyncExternalStore(noopSubscribe, getSnapshot, () => false);
 }
 
-/** The full-page route: same tabs, more width, the state-aware Back chrome. */
-export function WorkspaceFullSurface({ chatId }: { chatId: string }): ReactElement {
+/** The full-page route: same tabs, more width, the state-aware Back chrome.
+ * The active tab is deep-linkable (F3): the route validates ?tab= into
+ * initialTab, and in-panel switches are reflected back into the URL with a
+ * replace — no history spam, no scroll jump, and the URL always names the
+ * tab you are looking at. */
+export function WorkspaceFullSurface({
+  chatId,
+  initialTab,
+}: {
+  chatId: string;
+  initialTab?: WorkspaceTabId;
+}): ReactElement {
   const router = useRouter();
   const cameFromApp = useWorkspaceFullOpenedInApp(chatId);
+  const onTabChange = useCallback(
+    (tab: WorkspaceTabId) => {
+      router.replace(`${routes.workspaceFull(chatId)}?tab=${tab}`, { scroll: false });
+    },
+    [router, chatId],
+  );
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-line bg-surface px-4 lg:px-6">
@@ -101,7 +118,13 @@ export function WorkspaceFullSurface({ chatId }: { chatId: string }): ReactEleme
       <ReadyWorkspace>
         {(workspaceId) => (
           <div className="min-h-0 flex-1">
-            <WorkspacePanelHost chatId={chatId} workspaceId={workspaceId} presentation="page" />
+            <WorkspacePanelHost
+              chatId={chatId}
+              workspaceId={workspaceId}
+              presentation="page"
+              initialTab={initialTab}
+              onTabChange={onTabChange}
+            />
           </div>
         )}
       </ReadyWorkspace>

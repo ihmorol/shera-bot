@@ -275,12 +275,22 @@ export function WorkspacePanelBody({
   workspaceId,
   onClose,
   className,
+  initialTab,
+  onTabChange,
 }: {
   workspaceId: string;
   onClose?: (() => void) | undefined;
   className?: string | undefined;
+  /** The deep-linked initial tab (F3): the full-page route validates ?tab= and passes it down; absent → Files. */
+  initialTab?: WorkspaceTabId | undefined;
+  /** Optional URL sync hook (F3): the full-page surface reflects switches via router.replace; the docked panel has none. */
+  onTabChange?: ((tab: WorkspaceTabId) => void) | undefined;
 }): ReactElement {
-  const [activeTab, setActiveTab] = useState<WorkspaceTabId>("files");
+  const [activeTab, setActiveTab] = useState<WorkspaceTabId>(initialTab ?? "files");
+  const changeTab = (id: WorkspaceTabId) => {
+    setActiveTab(id);
+    onTabChange?.(id);
+  };
   return (
     <section
       aria-label="Workspace panel"
@@ -289,7 +299,7 @@ export function WorkspacePanelBody({
       <div className="flex shrink-0 items-stretch border-b border-line">
         <TabStrip
           active={activeTab}
-          onChange={setActiveTab}
+          onChange={changeTab}
           className="min-w-0 flex-1 border-b-0"
         />
         {onClose ? (
@@ -386,18 +396,28 @@ export function BackToChatButton({
 
 /**
  * The standalone per-conversation panel body host (the deep-linkable route
- * surfaces render this — same tabs, full width, no dock chrome).
+ * surfaces render this — same tabs, full width, no dock chrome). The
+ * full-page surface passes the deep-linked initial tab (F3) and owns the URL
+ * sync for in-panel switches; the inline route renders the default Files tab.
  */
 export function WorkspacePanelHost({
   workspaceId,
+  initialTab,
+  onTabChange,
 }: {
   chatId: string;
   workspaceId: string;
   presentation: PanelPresentation;
+  initialTab?: WorkspaceTabId | undefined;
+  onTabChange?: ((tab: WorkspaceTabId) => void) | undefined;
 }): ReactElement {
   return (
     <div data-testid="workspace-panel-page" className="h-full min-h-0">
-      <WorkspacePanelBody workspaceId={workspaceId} />
+      <WorkspacePanelBody
+        workspaceId={workspaceId}
+        initialTab={initialTab}
+        onTabChange={onTabChange}
+      />
     </div>
   );
 }

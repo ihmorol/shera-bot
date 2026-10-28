@@ -30,6 +30,26 @@ export const CHAT_MIN_WIDTH = 320;
 /** Mobile breakpoint (§2.2: md 768px) — below it the docked panel is a bottom sheet. */
 export const MOBILE_MAX_WIDTH = 767;
 
+// ---------------------------------------------------------------------------
+// Full-page tab deep link (F3 review fix): the active tab of the
+// /app/chat/[chatId]/workspace/full route rides a ?tab= query param,
+// validated against the four S7 tab ids — anything else (unknown, empty,
+// missing, or a repeated-param array) lands on Files, the honest default.
+// The validator is a server-safe pure helper (no runtime client-module
+// imports) so the full-page route can call it during SSR; the panel tab type
+// rides as a type-only import.
+// ---------------------------------------------------------------------------
+
+import type { WorkspaceTabId } from "../components/workspace/panel-tabs";
+
+const WORKSPACE_TAB_IDS: readonly string[] = ["files", "editor", "private", "artifacts"];
+
+export function workspaceTabFromParam(value: unknown): WorkspaceTabId {
+  return typeof value === "string" && WORKSPACE_TAB_IDS.includes(value)
+    ? (value as WorkspaceTabId)
+    : "files";
+}
+
 export type PanelWidthState = { kind: "closed" } | { kind: "inline"; width: number };
 
 export interface PanelState {

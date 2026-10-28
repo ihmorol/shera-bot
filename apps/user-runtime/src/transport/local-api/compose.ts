@@ -85,7 +85,8 @@ import {
 import { SessionReplyBridge } from "../../modules/sessions/session-reply-bridge.ts";
 import { TerminalRecorder } from "../../modules/terminals/terminal-recorder.service.ts";
 import { observeSessionSpawnWithTerminalRecorder } from "../../modules/terminals/session-terminal-recorder.ts";
-import { buildLiveViewsApiHandle } from "./s18-live-views-api.ts";
+import { BrowserService } from "../../modules/browser/browser.service.ts";
+import { buildLiveViewsApiHandle, type BrowserLiveViewHandle } from "./s18-live-views-api.ts";
 import {
   TaskWorkerAdmissionGate,
   DEFAULT_WORKER_ADMISSION_POLICY,
@@ -151,6 +152,20 @@ export interface ComposeLocalApiOptions {
    * clock; the E8 mock mode pins it so runs are byte-comparable.
    */
   now?: () => string;
+  /**
+   * S18 chunk 2 (G4 opt-in): the container's shared browser profile service —
+   * ONE Chromium profile per user container (PRD §6) in a container-local
+   * directory, started on demand by the Agent's browser driver, idle-closed
+   * after `idleTimeoutMs` (default 120000), and persistent across restarts
+   * (AC19; the profile dir is the D22 custody store). When it is NOT set the
+   * composition has NO browser service: no browser process ever spawns and
+   * the /v1/browser routes answer the honest `configured: false` — the same
+   * optional-seam shape as the session supervisor and the worker system (G4).
+   */
+  browser?: {
+    profileDir: string;
+    idleTimeoutMs?: number;
+  };
 }
 
 export interface LocalApiHandle {
@@ -160,6 +175,11 @@ export interface LocalApiHandle {
    * relay into; tests and operators may consult the AC26 gate directly.
    */
   approvals: ApprovalsService;
+  /**
+   * S18 chunk 2: the shared browser profile service seam when configured;
+   * undefined otherwise (G4 — no browser process ever spawns without it).
+   */
+  browser: BrowserService | undefined;
   /** Closes the SQLite connection. The caller owns the database file. */
   close(): void;
 }
@@ -322,6 +342,13 @@ export interface RuntimeHandle {
    * tests and later slices (the S26 execution tools) drive it directly.
    */
   terminals: TerminalRecorder;
+  /**
+   * S18 chunk 2: the shared browser profile service seam — the browser's
+   * lifecycle, its D6 single-owner control boundary, and the driver seam the
+   * Agent's browser work runs through. Undefined when no browser is
+   * configured (G4); the read-only /v1/browser routes then answer honestly.
+   */
+  browser: BrowserService | undefined;
   /** Closes the gateway (and with it the HTTP server), then SQLite. */
   close(): Promise<void>;
 }
@@ -342,6 +369,7 @@ interface Wired {
   workers: TaskWorkerSystem | undefined;
   approvals: ApprovalsService;
   terminals: TerminalRecorder;
+  browser: BrowserService | undefined;
   setPublisher(publisher: ConversationPublisher): void;
 }
 
@@ -499,6 +527,29 @@ function wire(
     terminals: terminalEvents,
     events,
   });
+
+  // S18 chunk 2: the shared browser profile service — opt-in (G4). One
+  // Chromium profile per user container in a container-local directory; the
+  // browser starts on demand, idles out per its policy, and keeps cookies in
+  // the profile dir across restarts (AC19; D22 custody). The service owns
+  // the D6 single-owner control boundary and the D27 capability posture; the
+  // HTTP surface gets ONLY the read-only handle below. Without the option
+  // nothing browser-shaped exists and the routes answer configured:false.
+  const browser = options.browser
+    ? new BrowserService({
+        profileDir: options.browser.profileDir,
+        ...(options.browser.idleTimeoutMs !== undefined
+          ? { idleTimeoutMs: options.browser.idleTimeoutMs }
+          : {}),
+        logFault: (event, fields) => logFault(event, fields),
+      })
+    : undefined;
+  const browserHandle: BrowserLiveViewHandle | undefined = browser
+    ? {
+        state: (workspaceId) => browser.stateReadout(workspaceId),
+        view: (workspaceId) => browser.snapshotView(workspaceId),
+      }
+    : undefined;
 
   // S12 (D32 layer 2): the supervised warm Agent session when a harness
   // command IS configured; when it is NOT, the runtime composes with the
@@ -834,6 +885,9 @@ function wire(
       terminals: terminalEvents,
       journal,
     }),
+    // S18 chunk 2: the read-only browser live-view surface when a browser is
+    // configured (two GET routes; the routes relay into the service).
+    ...(browserHandle ? { browser: browserHandle } : {}),
     ...(options.logUntypedFault ? { logUntypedFault: options.logUntypedFault } : {}),
   });
   return {
@@ -852,6 +906,7 @@ function wire(
     workers,
     approvals,
     terminals,
+    browser,
     setPublisher(next) {
       publisher = next;
     },
@@ -860,7 +915,12 @@ function wire(
 
 export function composeLocalApi(options: ComposeLocalApiOptions): LocalApiHandle {
   const wired = wire(options);
-  return { app: wired.app, approvals: wired.approvals, close: () => wired.conn.close() };
+  return {
+    app: wired.app,
+    approvals: wired.approvals,
+    browser: wired.browser,
+    close: () => wired.conn.close(),
+  };
 }
 
 /**
@@ -1051,6 +1111,7 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     workers: wired.workers,
     approvals: wired.approvals,
     terminals: wired.terminals,
+    browser: wired.browser,
     close: async () => {
       replyStreamer?.stopAll();
       // S16: drain every live worker child through the escalation BEFORE the
@@ -1059,6 +1120,10 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
       // S12: drain every live session child through the escalation BEFORE the
       // transport goes down — a stopped runtime never leaves an orphan.
       await wired.sessions?.stopAll();
+      // S18 chunk 2: close the shared browser cleanly BEFORE the transport
+      // goes down — the persistent profile flushes its session state (AC19)
+      // and no Chromium orphan outlives the runtime.
+      await wired.browser?.dispose("shutdown");
       // io.close() also closes the attached HTTP server (socket.io v4).
       await gateway.close();
       wired.conn.close();

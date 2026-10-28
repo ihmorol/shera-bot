@@ -243,7 +243,10 @@ describe("S18 browser service — cookie persistence across service instances (A
       if ((req.url ?? "").startsWith("/login")) {
         res.writeHead(200, {
           "content-type": "text/html; charset=utf-8",
-          "set-cookie": `shera_session=${COOKIE_VALUE}; Path=/`,
+          // Max-Age makes this a PERSISTENT cookie: Chromium (correctly) keeps
+          // session cookies (no expiry) in memory only, so the profile-
+          // persistence evidence needs a cookie with a lifetime.
+          "set-cookie": `shera_session=${COOKIE_VALUE}; Path=/; Max-Age=86400`,
         });
         res.end("<html><head><title>login-done</title></head><body></body></html>");
         return;

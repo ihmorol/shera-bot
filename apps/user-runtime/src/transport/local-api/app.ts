@@ -44,7 +44,11 @@ import { MessageSender } from "../../modules/events/events.types.ts";
 import type { OperationsService } from "../../modules/operations/operations.service.ts";
 import type { WorkerAdmissionReadout } from "../../modules/workers/task-worker-supervisor.service.ts";
 import { registerApprovalsRoutes, type ApprovalsApiHandle } from "./s20-approvals-api.ts";
-import { registerLiveViewsRoutes, type TerminalsApiHandle } from "./s18-live-views-api.ts";
+import {
+  registerLiveViewsRoutes,
+  type BrowserLiveViewHandle,
+  type TerminalsApiHandle,
+} from "./s18-live-views-api.ts";
 import {
   ADHOC_AUTO_LABEL_PATTERN,
   type PackSummary,
@@ -432,6 +436,15 @@ export interface LocalApiDeps {
    * recorded (G4).
    */
   terminals?: TerminalsApiHandle;
+  /**
+   * S18 chunk 2: the read-only browser live-view surface over the shared
+   * browser profile service — the ACTUAL current page (url, title, fresh
+   * screenshot) and the lifecycle/ownership/posture readout. GET-only like
+   * the terminal surface: the no-takeover inventory covers the browser panel
+   * too (PRD §4.3/§20). Absent when the composition configured no browser —
+   * the routes then answer the honest `configured: false` (G4).
+   */
+  browser?: BrowserLiveViewHandle;
   /**
    * B-1: the redacted sink untyped HTTP faults are recorded to — the generic
    * INTERNAL_ERROR's correlation_id is logged with it, so "The failure has
@@ -1170,12 +1183,13 @@ export function createLocalApi(deps: LocalApiDeps): Express {
     registerApprovalsRoutes(app, deps.approvals);
   }
 
-  // S18 chunk 1: the read-only terminal live-views surface — three GET
-  // routes, literal segments before the :terminal_id capture (the module
-  // owns its ordering). No mutation route exists on this surface: the
-  // no-takeover acceptance criterion is the inventory itself.
+  // S18 chunk 1+2: the read-only terminal AND browser live-views surface —
+  // three terminal GET routes plus two browser GET routes, literal segments
+  // before the :terminal_id capture (the module owns its ordering). No
+  // mutation route exists on either surface: the no-takeover acceptance
+  // criterion is the inventory itself.
   if (deps.terminals) {
-    registerLiveViewsRoutes(app, deps.terminals);
+    registerLiveViewsRoutes(app, deps.terminals, deps.browser);
   }
 
   // Typed failures and unknown routes: the SheraError taxonomy, never an

@@ -1,11 +1,13 @@
 /**
- * S18 chunk 1 — the read-only terminal live-views HTTP API (issue #19; PRD
- * §4.3, §14, §19 AC19/AC21, §20, D11, E12, G3/G6).
+ * S18 chunk 1+2 — the read-only terminal AND browser live-views HTTP API
+ * (issue #19; PRD §4.3, §14, §16, §19 AC19/AC21, §20, D6, D11, D22, D27, E12,
+ * G3/G4/G6).
  *
  * ---------------------------------------------------------------------------
  * The HTTP surface
  *
- * Three GET routes expose what the terminal recorder durably stored:
+ * TERMINAL (chunk 1) — three GET routes expose what the terminal recorder
+ * durably stored:
  *
  *   GET /v1/terminals/events  — the durable replay of one Agent's terminal
  *     journal stream (`terminal:<workspace_id>:<agent_id>`), cursor-paged by
@@ -20,21 +22,45 @@
  *     command, working directory, resource policy, approval state, the
  *     redacted output chunks in order, and the exit.
  *
+ * BROWSER (chunk 2) — two GET routes expose the shared browser profile
+ * service's live state (the service owns every rule; the routes relay):
+ *
+ *   GET /v1/browser/view   — the ACTUAL current page of the shared browser:
+ *     its URL, title, and a fresh screenshot. A stopped/starting/crashed
+ *     browser answers its true state with NO image and NO url — never a
+ *     placeholder (G4). Structured fields crossed the G3 redaction boundary
+ *     in the service (cookie values never render; D22/D27).
+ *
+ *   GET /v1/browser/state  — the browser's lifecycle + ownership + posture:
+ *     the D6 single control owner, the lifecycle state, the idle policy, the
+ *     D27 "no inbound socket" posture, and the profile directory (the D22
+ *     custody store). When the composition has no browser service the route
+ *     answers `configured: false` — the honest not-configured shape (G4),
+ *     the same discipline as the worker admission readout.
+ *
  * THE NO-TAKEOVER ACCEPTANCE CRITERION IS THE ROUTE INVENTORY ITSELF: the
- * surface contains ZERO terminal-control routes — no stdin write, no signal
- * send, no command execution — because the runtime offers no terminal control
- * at all in this slice (PRD §4.3: the user receives a live shared READ-ONLY
- * view; §20: direct takeover is future work). The routes are reads only; any
- * non-GET verb on these paths answers the typed ROUTE_NOT_FOUND (there is no
+ * surface contains ZERO terminal-control and ZERO browser-control routes —
+ * no stdin write, no signal send, no command execution, no navigation, no
+ * click, no typing — because the runtime offers no control at all in this
+ * slice (PRD §4.3: the user receives a live shared READ-ONLY view; §20:
+ * direct takeover is future work). The routes are reads only; any non-GET
+ * verb on these paths answers the typed ROUTE_NOT_FOUND (there is no
  * mutation handler to hit), and the module's contract test enumerates the
- * registered routes and asserts the exact inventory.
+ * registered routes and asserts the exact inventory. Control-shaped
+ * operations exist ONLY at the browser service's driver seam — runtime code,
+ * never the API.
  *
  * Every route is workspace-scoped (E12): the workspace_id is required on
- * every read, and every repository/journal call is workspace-keyed — another
- * workspace's terminal activity is invisible, and an unknown terminal in the
+ * every read, and every repository/service call is workspace-keyed — another
+ * workspace's terminal activity is invisible, an unknown terminal in the
  * reading workspace is the typed TERMINAL_NOT_FOUND 404, never a guessed
- * record (G4). Output chunks were REDACTED before persistence (G3), so these
- * responses are clean by construction; nothing here re-derives content.
+ * record (G4). The BROWSER is the container-shared profile (PRD §6: one
+ * shared browser profile per user container), so both workspaces of the
+ * container read the same browser honestly — the readout echoes the reading
+ * workspace's id and nothing workspace-private exists to leak. Terminal
+ * output chunks were REDACTED before persistence (G3), so those responses
+ * are clean by construction; the browser view's fields are redacted inside
+ * the service before they reach this transport.
  */
 import { randomUUID } from "node:crypto";
 
@@ -51,6 +77,11 @@ import type {
 } from "../../adapters/sqlite/terminal-events-repository.ts";
 import { TerminalEventsRepositoryError } from "../../adapters/sqlite/terminal-events-repository.ts";
 import { terminalStreamFor } from "../../modules/terminals/terminals.events.ts";
+import type {
+  BrowserStateReadout,
+  BrowserViewReadout,
+} from "../../modules/browser/browser.service.ts";
+import { BrowserServiceError } from "../../modules/browser/browser.service.ts";
 import { contractValidationResponse } from "../http/typed-errors.ts";
 
 // ---------------------------------------------------------------------------
@@ -63,6 +94,13 @@ export const LIST_TERMINAL_EVENTS_PATH = "/v1/terminals/events" as const;
 export const GET_TERMINAL_STATE_PATH = "/v1/terminals/state" as const;
 /** GET — one execution's assembled durable record. */
 export const GET_TERMINAL_PATH = "/v1/terminals/:terminal_id" as const;
+
+// S18 chunk 2 — the read-only browser live-view routes (GET only; the
+// no-takeover inventory extends to the browser panel).
+/** GET — the shared browser's ACTUAL current page (url, title, screenshot). */
+export const GET_BROWSER_VIEW_PATH = "/v1/browser/view" as const;
+/** GET — the shared browser's lifecycle, ownership, and posture readout. */
+export const GET_BROWSER_STATE_PATH = "/v1/browser/state" as const;
 
 /** The composed handle: the routes never touch SQL and never re-derive. */
 export interface TerminalsApiHandle {
@@ -87,6 +125,19 @@ export interface TerminalsApiHandle {
     workspaceId: string,
     agentId: string,
   ): { agent_id: string; current: TerminalRecord | null; recent: TerminalRecord[] };
+}
+
+/**
+ * S18 chunk 2: the browser live-view handle over the shared browser profile
+ * service. Pure relay — the service owns lifecycle, ownership, capability,
+ * and redaction rules; this handle exists so the transport never touches
+ * Playwright (D23 module shape). Present only when the composition configured
+ * a browser (G4: without it the routes answer the honest not-configured
+ * state).
+ */
+export interface BrowserLiveViewHandle {
+  state(workspaceId: string): BrowserStateReadout;
+  view(workspaceId: string): Promise<BrowserViewReadout>;
 }
 
 /** The recent-history window the state route assembles. */
@@ -175,7 +226,11 @@ const TerminalEventsQuery = z.strictObject({
  * :terminal_id capture (Express matches in registration order — the same
  * discipline as the S15/S20 modules).
  */
-export function registerLiveViewsRoutes(app: Express, deps: TerminalsApiHandle): void {
+export function registerLiveViewsRoutes(
+  app: Express,
+  deps: TerminalsApiHandle,
+  browser?: BrowserLiveViewHandle,
+): void {
   // GET /v1/terminals/events — the durable terminal replay (cursor-paged).
   app.get(LIST_TERMINAL_EVENTS_PATH, (req, res) => {
     const query = TerminalEventsQuery.safeParse(req.query);
@@ -249,6 +304,64 @@ export function registerLiveViewsRoutes(app: Express, deps: TerminalsApiHandle):
       }
       throw error;
     }
+  });
+
+  // S18 chunk 2 — GET /v1/browser/state: lifecycle + ownership + posture.
+  app.get(GET_BROWSER_STATE_PATH, (req, res) => {
+    const query = TerminalWorkspaceQuery.safeParse(req.query);
+    if (!query.success) {
+      res
+        .status(400)
+        .json(
+          validationFailure("The browser state request is not valid: a workspace_id is required."),
+        );
+      return;
+    }
+    if (!browser) {
+      res.status(200).json({ configured: false, workspace_id: query.data.workspace_id });
+      return;
+    }
+    res.status(200).json({ configured: true, ...browser.state(query.data.workspace_id) });
+  });
+
+  // S18 chunk 2 — GET /v1/browser/view: the shared browser's ACTUAL current
+  // page. A view capture that fails on a still-running browser answers the
+  // typed 503 (honest unavailability, never a placeholder); a stopped or
+  // crashed browser answers its true state with no image (G4).
+  app.get(GET_BROWSER_VIEW_PATH, (req, res) => {
+    const query = TerminalWorkspaceQuery.safeParse(req.query);
+    if (!query.success) {
+      res
+        .status(400)
+        .json(
+          validationFailure("The browser view request is not valid: a workspace_id is required."),
+        );
+      return;
+    }
+    if (!browser) {
+      res.status(200).json({ configured: false, workspace_id: query.data.workspace_id });
+      return;
+    }
+    browser
+      .view(query.data.workspace_id)
+      .then((readout) => {
+        res.status(200).json({ configured: true, ...readout });
+      })
+      .catch((error: unknown) => {
+        if (error instanceof BrowserServiceError && error.code === "BROWSER_VIEW_UNAVAILABLE") {
+          res.status(503).json({
+            code: error.code,
+            category: error.category,
+            safe_message: "The browser live view is temporarily unavailable.",
+            retryable: true,
+            user_action: "Refresh the panel to capture the current page again.",
+            internal_details: null,
+            correlation_id: randomUUID(),
+          });
+          return;
+        }
+        throw error;
+      });
   });
 }
 

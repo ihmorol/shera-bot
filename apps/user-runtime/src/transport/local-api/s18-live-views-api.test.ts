@@ -498,7 +498,7 @@ describe("S18 live views API — the browser live view and its redaction posture
         "<html><head><title>S18 Composed Panel Page</title></head><body><h1>shera-api-proof</h1></body></html>",
       );
     });
-    const { runtime } = await composeOnBrowser();
+    const { runtime, origin: apiOrigin } = await composeOnBrowser();
 
     // Drive the Agent's browser driver seam (never the HTTP surface — the
     // read-only API has no navigation routes by construction).
@@ -518,7 +518,7 @@ describe("S18 live views API — the browser live view and its redaction posture
       url: `${origin}/panel-target`,
     });
 
-    const view = await getJson(origin, `/v1/browser/view?workspace_id=${WORKSPACE}`);
+    const view = await getJson(apiOrigin, `/v1/browser/view?workspace_id=${WORKSPACE}`);
     expect(view.status).toBe(200);
     expect(view.body["configured"]).toBe(true);
     expect(view.body["state"]).toBe("running");
@@ -526,7 +526,7 @@ describe("S18 live views API — the browser live view and its redaction posture
     expect(view.body["title"]).toBe("S18 Composed Panel Page");
     expect(String(view.body["screenshot_base64"]).length).toBeGreaterThan(100);
 
-    const state = await getJson(origin, `/v1/browser/state?workspace_id=${WORKSPACE}`);
+    const state = await getJson(apiOrigin, `/v1/browser/state?workspace_id=${WORKSPACE}`);
     expect(state.status).toBe(200);
     expect(state.body["configured"]).toBe(true);
     expect(state.body["lifecycle_state"]).toBe("running");
@@ -644,9 +644,9 @@ describe("S18 live views API — the browser live view and its redaction posture
   });
 
   it("binds the composed surface to loopback only (D27 documented check)", async () => {
+    // composeOnBrowser already bound the surface; the documented D27 check
+    // asserts the bind address the composed surface actually holds.
     const { runtime } = await composeOnBrowser();
-    runtime.httpServer.listen(0, "127.0.0.1", () => {});
-    await new Promise((resolve) => setTimeout(resolve, 50));
     const address = runtime.httpServer.address() as { address: string };
     expect(address.address).toBe("127.0.0.1");
   });

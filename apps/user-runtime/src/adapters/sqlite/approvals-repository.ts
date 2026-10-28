@@ -234,7 +234,10 @@ export class ApprovalsRepository {
    * Stamp the ONE resolution of a request (S20 chunk 2): status moves off
    * pending with resolved_at + resolved_by_choice in the same update.
    * Decisions are immutable (D9) — the service refuses a second resolution
-   * before ever reaching this writer. False when no row matched (E12-scoped).
+   * before ever reaching this writer, AND the writer is guarded anyway
+   * (S20 review fix F4a): only a row still PENDING is updated, so a raced
+   * second write is an idempotent no-op that cannot re-stamp the first
+   * resolution. False when no pending row matched (E12-scoped).
    */
   resolveRequest(
     workspaceId: string,
@@ -247,7 +250,7 @@ export class ApprovalsRepository {
       .prepare(
         `UPDATE approval_requests
          SET status = ?, resolved_at = ?, resolved_by_choice = ?
-         WHERE workspace_id = ? AND approval_id = ?`,
+         WHERE workspace_id = ? AND approval_id = ? AND status = 'pending'`,
       )
       .run(
         resolution.status,
@@ -307,7 +310,12 @@ export class ApprovalsRepository {
     ).map(grantRowToRecord);
   }
 
-  /** Stamp revoked_at on one grant; false when no row matched (E12-scoped). */
+  /**
+   * Stamp revoked_at on one grant; false when no UNREVOKED row matched
+   * (E12-scoped). The stamp is write-once (S20 review fix F4b): a raced
+   * second revoke is an idempotent no-op, never a re-stamp — the first
+   * revocation instant stands as the audit record.
+   */
   revokeGrant(
     workspaceId: string,
     grantId: string,
@@ -318,7 +326,7 @@ export class ApprovalsRepository {
     const result = db
       .prepare(
         `UPDATE approval_grants SET revoked_at = ?
-         WHERE workspace_id = ? AND grant_id = ?`,
+         WHERE workspace_id = ? AND grant_id = ? AND revoked_at IS NULL`,
       )
       .run(revokedAt, workspaceId, grantId);
     return result.changes > 0;

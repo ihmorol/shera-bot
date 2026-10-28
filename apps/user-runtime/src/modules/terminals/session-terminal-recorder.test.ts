@@ -32,6 +32,7 @@ import type {
   SessionChildExit,
   SessionSpawnRequest,
 } from "../sessions/session-supervisor.service.ts";
+import { terminalStreamFor } from "./terminals.events.ts";
 import { TerminalRecorder } from "./terminal-recorder.service.ts";
 import {
   observeSessionSpawnWithTerminalRecorder,
@@ -223,7 +224,12 @@ describe("session spawn seam terminal recorder (S18 chunk 1)", () => {
 
     const record = repo.latestRecord(WS, AGENT);
     expect(record?.output.map((chunk) => chunk.stream)).toEqual(["stderr", "stderr"]);
-    expect(record?.output.map((chunk) => chunk.text)).toEqual(["[REDACTED]\n", "ready\n"]);
+    // The secret VALUE collapses; the non-secret shape around it stays
+    // readable (the redaction layer's pinned behavior).
+    expect(record?.output.map((chunk) => chunk.text)).toEqual([
+      "export API_KEY=[REDACTED]\n",
+      "ready\n",
+    ]);
     // The supervisor's own consumer still received the raw chunk (the
     // redaction boundary is the PERSISTENCE boundary, not the process pipe).
     expect(supervisorListenerChunks).toEqual(["export API_KEY=sk-live-abc123def456\n", "ready\n"]);

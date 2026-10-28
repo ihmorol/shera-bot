@@ -42,3 +42,48 @@ describe("browser runtime trust boundary", () => {
     ).toBe(false);
   });
 });
+
+describe("workspace panel allowlist (S17, D6/D39/G6)", () => {
+  it("allows the workspace reads the panel renders", () => {
+    for (const path of [
+      "/v1/workspace/nodes",
+      "/v1/workspace/files",
+      "/v1/workspace/leases",
+      "/v1/workspace/artifacts",
+      "/v1/workspace/artifacts/artifact_1",
+    ])
+      expect(isBrowserRuntimePath("GET", path)).toBe(true);
+  });
+
+  it("allows the typed workspace writes the panel performs", () => {
+    expect(isBrowserRuntimePath("PUT", "/v1/workspace/files")).toBe(true);
+    for (const path of [
+      "/v1/workspace/files/upload",
+      "/v1/workspace/directories",
+      "/v1/workspace/delete",
+      "/v1/workspace/leases",
+      "/v1/workspace/leases/lease_1/renew",
+      "/v1/workspace/artifacts",
+    ])
+      expect(isBrowserRuntimePath("POST", path)).toBe(true);
+    expect(isBrowserRuntimePath("DELETE", "/v1/workspace/leases/lease_1")).toBe(true);
+  });
+
+  it("never allows the runtime-internal task-terminal force-release (D6)", () => {
+    expect(isBrowserRuntimePath("POST", "/v1/workspace/leases/release-for-task")).toBe(false);
+  });
+
+  it("still refuses everything outside the workspace panel surface", () => {
+    for (const [method, path] of [
+      ["GET", "/v1/workspace"],
+      ["GET", "/v1/workspace/nodes/extra"],
+      ["POST", "/v1/workspace/files/upload/extra"],
+      ["PATCH", "/v1/workspace/files"],
+      ["DELETE", "/v1/workspace/files"],
+      ["DELETE", "/v1/workspace/delete"],
+      ["GET", "/v1/workspace/../secrets"],
+      ["POST", "/v1/workspace/files%2fupload"],
+    ] as const)
+      expect(isBrowserRuntimePath(method, path)).toBe(false);
+  });
+});

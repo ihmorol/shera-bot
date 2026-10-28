@@ -213,6 +213,15 @@ export type TypedToolProposal = z.infer<typeof TypedToolProposal>;
 const SECRET_SHAPED_PATTERNS: readonly { pattern: RegExp; replacement: string }[] = [
   // Bearer/Basic/Token scheme values ("Bearer ghp_...", "Basic dXNlcjpwYXNz").
   { pattern: /\b(Bearer|Basic|Token)\s+[A-Za-z0-9._~+/=-]{8,}/gi, replacement: "$1 [REDACTED]" },
+  // URL userinfo credentials ("postgres://admin:p4ss@db/prod" — S20 review
+  // fix F5): the PASSWORD component is redacted while the scheme, user, and
+  // host survive, so the resource scope stays readable and grant-matching
+  // stays useful. Runs BEFORE the entropy scan, so even short low-entropy
+  // passwords (invisible to it) never survive in a URL.
+  {
+    pattern: /\b([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)([^\s/:@]+):([^\s/@]+)@/g,
+    replacement: "$1$2:[REDACTED]@",
+  },
   // Secret-shaped key/value assignments ("api_key=...", "password: '...'",
   // "client_secret = ..."), quoted or bare, bounded by separators.
   {

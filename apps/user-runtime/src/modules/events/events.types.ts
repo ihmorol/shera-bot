@@ -281,6 +281,56 @@ export const WorkerReapedPayload = z.strictObject({
 export type WorkerReapedPayload = z.infer<typeof WorkerReapedPayload>;
 
 /**
+ * Terminal live-view events (S18 chunk 1; PRD §4.3, D10, D27, G3). Journaled
+ * on `terminal:<workspace_id>:<agent_id>` streams, one event per
+ * terminal_events row, written in the SAME transaction as its row (D10) by
+ * the terminal recorder. The payloads carry exactly what the read-only panel
+ * shows — command, working directory, resource policy, approval state, and
+ * the output chunks — and each chunk payload is the REDACTED text (G3: the
+ * recorder redacts before this envelope is ever built, so the persisted
+ * journal row AND its broadcast are clean by construction).
+ *
+ * The D14 protocol has no terminal frame; these events are derived on the
+ * runtime side from what the spawn seams already emit (the session harness
+ * process it launches, the child's stderr, the child's exit). The execution
+ * slices (S26) will feed real Agent-initiated shell executions through the
+ * same recorder.
+ */
+export const TerminalApprovalState = z.enum(["not_required", "pending", "approved", "rejected"]);
+export type TerminalApprovalState = z.infer<typeof TerminalApprovalState>;
+
+export const TerminalStartedPayload = z.strictObject({
+  workspace_id: z.string().min(1),
+  agent_id: z.string().min(1),
+  terminal_id: z.string().min(1),
+  session_id: z.string().min(1).nullable(),
+  command: z.string().min(1),
+  workdir: z.string().min(1),
+  resource_policy: z.record(z.string(), z.unknown()),
+  approval_state: TerminalApprovalState,
+});
+export type TerminalStartedPayload = z.infer<typeof TerminalStartedPayload>;
+
+export const TerminalOutputPayload = z.strictObject({
+  workspace_id: z.string().min(1),
+  agent_id: z.string().min(1),
+  terminal_id: z.string().min(1),
+  stream: z.enum(["stdout", "stderr"]),
+  /** The already-redacted chunk text, bounded to the storage cap (G3). */
+  text: z.string().max(8_192),
+});
+export type TerminalOutputPayload = z.infer<typeof TerminalOutputPayload>;
+
+export const TerminalExitedPayload = z.strictObject({
+  workspace_id: z.string().min(1),
+  agent_id: z.string().min(1),
+  terminal_id: z.string().min(1),
+  exit_code: z.number().int().nullable(),
+  exit_signal: z.string().nullable(),
+});
+export type TerminalExitedPayload = z.infer<typeof TerminalExitedPayload>;
+
+/**
  * The D26 task-execution vocabulary (S07; D51 seam) journaled on `task:<id>`
  * streams. The journal row stores the FULL contract envelope as its payload —
  * the envelope IS the durable D26 event — so each registry entry validates the
@@ -322,6 +372,9 @@ export const EVENT_TYPES = {
   "worker.completed": { schema_version: 1, payload: WorkerCompletedPayload },
   "worker.stopped": { schema_version: 1, payload: WorkerStoppedPayload },
   "worker.reaped": { schema_version: 1, payload: WorkerReapedPayload },
+  "terminal.started": { schema_version: 1, payload: TerminalStartedPayload },
+  "terminal.output": { schema_version: 1, payload: TerminalOutputPayload },
+  "terminal.exited": { schema_version: 1, payload: TerminalExitedPayload },
   ...TASK_EVENT_REGISTRY,
 } as const;
 

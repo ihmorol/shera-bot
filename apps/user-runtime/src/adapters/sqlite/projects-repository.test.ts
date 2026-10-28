@@ -77,12 +77,32 @@ describe("S19 v14 migration (projects-and-git)", () => {
     conn.close();
   });
 
-  it("appends v14 to the committed migration chain", () => {
+  it("appends v15 to the committed migration chain", () => {
     const v14 = MIGRATIONS.find((migration) => migration.version === 14);
     expect(v14?.name).toBe("projects-and-git");
-    expect(MIGRATIONS.at(-1)?.version).toBe(14);
+    const v15 = MIGRATIONS.find((migration) => migration.version === 15);
+    expect(v15?.name).toBe("projects-archive-source");
+    expect(MIGRATIONS.at(-1)?.version).toBe(15);
     const applied = appliedMigrationVersions(conn.db);
-    expect(applied.at(-1)).toBe(14);
+    expect(applied.at(-1)).toBe(15);
+  });
+
+  it("v15 widens projects.source_kind to admit archives while keeping the strict enum", () => {
+    const v15 = MIGRATIONS.find((migration) => migration.version === 15);
+    expect(v15?.up).toContain("'archive'");
+    expect(v15?.up).toContain("'git_url'");
+    expect(v15?.up).toContain("'directory'");
+    // The rebuilt table still refuses an unknown kind (STRICT discipline).
+    expect(() =>
+      conn.db
+        .prepare(
+          `INSERT INTO projects (workspace_id, project_id, name, source_kind, source_url, repo_path,
+             default_branch, access_mode, created_by_type, created_by_id, created_at, updated_at)
+           VALUES (?, 'prj_x', 'demo', 'not_a_kind', 'https://example.invalid/repo', '/tmp/r',
+             'main', 'shared', 'user', 'user_001', '2026-10-29T10:00:00.000Z', '2026-10-29T10:00:00.000Z')`,
+        )
+        .run(WS),
+    ).toThrow();
   });
 
   it("creates the four product tables plus the access allowlist table", () => {

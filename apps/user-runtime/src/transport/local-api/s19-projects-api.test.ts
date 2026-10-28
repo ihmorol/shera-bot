@@ -519,3 +519,132 @@ describe("S19 projects API: merge requests and the PRD decisions", () => {
     expect(await headOf(s.repoPath, "main")).toBe(s.mainBefore);
   });
 });
+
+// ---------------------------------------------------------------------------
+// S19 chunk 2: the validation route, archive sources, and credential imports
+// ---------------------------------------------------------------------------
+
+describe("S19 projects API: validation route (chunk 2)", () => {
+  let scenario: Scenario | undefined;
+  let env: RunningRuntime | undefined;
+
+  afterEach(async () => {
+    if (scenario) {
+      await scenario.env.close();
+      scenario = undefined;
+    }
+    if (env) {
+      await env.close();
+      env = undefined;
+    }
+  });
+
+  it("runs the declared validation and attaches the result to the merge request", async () => {
+    const s = await scenarioWithTaskWork();
+    scenario = s;
+    const prepared = await postJson(s.env.origin, `/v1/projects/${s.projectId}/merge-requests`, {
+      workspace_id: WORKSPACE,
+      task_id: s.taskId,
+      agent_id: AGENT_ID,
+      conversation_id: s.conversationId,
+      change_summary: "Add the greeting module.",
+    });
+    s.mergeRequestId = (prepared.body as Record<string, unknown>)["merge_request_id"] as string;
+
+    const validation = await postJson(
+      s.env.origin,
+      `/v1/projects/${s.projectId}/merge-requests/${s.mergeRequestId}/validation`,
+      { workspace_id: WORKSPACE },
+    );
+    expect(validation.status).toBe(200);
+    const mr = validation.body as Record<string, unknown>;
+    // This origin declares nothing (no package.json): honest not_run with the
+    // explanatory note, attached to the row.
+    expect(mr["validation_status"]).toBe("not_run");
+    expect(typeof mr["validation_note"]).toBe("string");
+    expect((mr["validation_note"] as string).length).toBeGreaterThan(0);
+
+    const detail = await getJson(
+      s.env.origin,
+      `/v1/projects/${s.projectId}/merge-requests/${s.mergeRequestId}?workspace_id=${WORKSPACE}`,
+    );
+    expect((detail.body as Record<string, unknown>)["validation_status"]).toBe("not_run");
+  });
+
+  it("answers the typed 404 for an unknown merge request", async () => {
+    env = await composeOn();
+    const base = makeTempDir("shera-s19-api-origin-");
+    const url = pathToFileURL(await makeOrigin(base, "origin")).href;
+    const created = await postJson(env.origin, "/v1/projects", {
+      workspace_id: WORKSPACE,
+      name: "demo",
+      actor: USER,
+      source: { kind: "git_url", url },
+    });
+    const projectId = (created.body as Record<string, string>).project_id!;
+    const validation = await postJson(
+      env.origin,
+      `/v1/projects/${projectId}/merge-requests/mr_missing/validation`,
+      { workspace_id: WORKSPACE },
+    );
+    expect(validation.status).toBe(404);
+    expect((validation.body as Record<string, string>)["code"]).toBe("GIT_MERGE_REQUEST_NOT_FOUND");
+  });
+});
+
+describe("S19 projects API: archive sources and credential imports (chunk 2)", () => {
+  let env: RunningRuntime | undefined;
+
+  afterEach(async () => {
+    if (env) {
+      await env.close();
+      env = undefined;
+    }
+  });
+
+  it("accepts an archive source and fails typed for a missing archive file, registering nothing", async () => {
+    env = await composeOn();
+    const failed = await postJson(env.origin, "/v1/projects", {
+      workspace_id: WORKSPACE,
+      name: "ghost-archive",
+      actor: USER,
+      source: { kind: "archive", path: join(makeTempDir("shera-s19-api-arch-"), "missing.zip") },
+    });
+    expect(failed.status).toBe(400);
+    expect((failed.body as Record<string, string>)["code"]).toBe("GIT_ARCHIVE_INVALID");
+    const list = await getJson(env.origin, `/v1/projects?workspace_id=${WORKSPACE}`);
+    expect((list.body["projects"] as unknown[]).length).toBe(0);
+  });
+
+  it("accepts an import credential and never echoes the secret (G3)", async () => {
+    env = await composeOn();
+    const secret = "ghp_api_import_scan_token_7a7b7c";
+    // The origin does not exist: the import fails after the credential seam —
+    // proving the shape is accepted and the failure carries no secret.
+    const failed = await postJson(env.origin, "/v1/projects", {
+      workspace_id: WORKSPACE,
+      name: "private",
+      actor: USER,
+      source: {
+        kind: "git_url",
+        url: "https://127.0.0.1:9/repo.git",
+        credential: { username: "git-user", secret },
+      },
+    });
+    expect(failed.status).toBeGreaterThanOrEqual(400);
+    expect(JSON.stringify(failed.body)).not.toContain(secret);
+    // The zod schema itself refuses an empty secret before any git call.
+    const invalid = await postJson(env.origin, "/v1/projects", {
+      workspace_id: WORKSPACE,
+      name: "private",
+      actor: USER,
+      source: {
+        kind: "git_url",
+        url: "https://example.invalid/repo.git",
+        credential: { username: "git-user", secret: "" },
+      },
+    });
+    expect(invalid.status).toBe(400);
+    expect((invalid.body as Record<string, string>)["code"]).toBe("CONTRACT_VALIDATION_FAILED");
+  });
+});

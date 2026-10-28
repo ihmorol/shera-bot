@@ -455,10 +455,36 @@ describe("Approval display logic", () => {
     ]);
   });
 
-  it("the poll cadence matches the app's 5s presence cadence and pauses when hidden", () => {
+  it("the poll cadence matches the app's 5s presence cadence, pauses when hidden, and IS the cross-tab propagation (AC7)", () => {
     expect(APPROVALS_POLL_MS).toBe(5000);
     expect(approvalsRefetchInterval({ visibilityState: "visible" })).toBe(5000);
     expect(approvalsRefetchInterval({ visibilityState: "hidden" })).toBe(false);
+    // AC7 propagation semantics, pinned at source (the Radix-modal precedent
+    // for non-renderable semantics): there is NO approval WebSocket fanout in
+    // this slice, so "a decision propagates across tabs" is carried entirely
+    // by the pending list's visibility-driven 5s re-fetch — every approval
+    // read wires refetchInterval: approvalsRefetchInterval() and never polls
+    // in the background. A decision made in another tab lands on the next
+    // visible tick; nothing fabricates liveness while hidden.
+    const source = readFileSync(
+      join(import.meta.dirname, "..", "lib", "approvals-data.ts"),
+      "utf8",
+    );
+    for (const hook of [
+      "export function usePendingApprovals",
+      "export function useApprovalDetails",
+      "export function useDueReminders",
+    ]) {
+      const start = source.indexOf(hook);
+      expect(start, hook).toBeGreaterThan(-1);
+      const body = source.slice(start, source.indexOf("export function", start + 10));
+      expect(body, `${hook} wires the visibility-driven poll`).toContain(
+        "refetchInterval: () => approvalsRefetchInterval()",
+      );
+      expect(body, `${hook} never polls while hidden`).toContain(
+        "refetchIntervalInBackground: false",
+      );
+    }
   });
 
   it("reminderSlots renders the five E3 slots with delivered markers from the detail read", () => {

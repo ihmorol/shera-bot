@@ -26,17 +26,22 @@
  * non-recursive delete. Scope denial is checked BEFORE the delete refusal, so
  * a cross-private agent delete reads as the denial, not the refusal.
  *
- * Write leases (D6, S17 chunk 2): concurrent reads are always allowed here;
- * every WRITE is gated through the write-lease gate (assertWriteAllowed of
+ * Write leases (D6, S17 chunk 2; delete gating is the F1 review fix):
+ * concurrent reads are always allowed here; every WRITE and every USER DELETE
+ * is gated through the write-lease gate (assertWriteAllowed / gateDelete of
  * the write-leases repository, injected at construction — the gate is a
  * required collaborator so an ungated repository cannot exist). A user write
- * is blocked only while an Agent holds an ACTIVE lease on the exact path
- * (WRITE_LEASE_CONFLICT carrying the holding Agent + task — the tooltip
- * data); an agent write requires an active lease held by its own task
- * (WRITE_LEASE_REQUIRED). Scope denial (D39) is checked BEFORE the gate, so a
- * cross-private agent write reads as the denial, not a lease error. Delete is
- * never agent-triggered (below) and directories are structural (no leases on
- * roots), so the gate covers the whole agent-writable surface.
+ * or delete is blocked only while an Agent holds an ACTIVE lease on the exact
+ * path (a directory delete: on any path under it), with WRITE_LEASE_CONFLICT
+ * carrying the holding Agent + task — the tooltip data; an agent write
+ * requires an active lease held by its own task (WRITE_LEASE_REQUIRED). A
+ * passing delete also purges released-or-expired lease rows on the deleted
+ * paths, so no stale lease can resurrect deleted content later. Scope denial
+ * (D39) is checked BEFORE the gate, so a cross-private agent write reads as
+ * the denial, not a lease error. Delete is never agent-triggered (below).
+ * mkdir is the one deliberately UNGATED mutation — structural, idempotent,
+ * creates-only (no lease on roots, nothing destroyed) — and the write plus
+ * delete gates together cover the whole mutating surface.
  *
  * WORKSPACE SCOPING IS NOT OPTIONAL (E12): every method takes workspace_id
  * and every statement keys rows by it — the same URI in two workspaces is two
@@ -277,10 +282,11 @@ export interface WorkspaceWriteOptions {
 }
 
 /**
- * The write-lease gate every write goes through (D6, S17 chunk 2). Satisfied
- * structurally by WriteLeasesRepository.assertWriteAllowed — declared here so
- * the files repository never imports the leases repository (the dependency
- * points one way: leases → files, for the shared URI parser).
+ * The write-lease gate every write and every USER delete goes through (D6,
+ * S17 chunk 2; delete gating is the F1 review fix). Satisfied structurally by
+ * WriteLeasesRepository — declared here so the files repository never imports
+ * the leases repository (the dependency points one way: leases → files, for
+ * the shared URI parser).
  */
 export interface WorkspaceWriteLeaseGate {
   assertWriteAllowed(
@@ -288,6 +294,21 @@ export interface WorkspaceWriteLeaseGate {
     uri: string,
     actor: WorkspaceStorageActor,
     taskId?: string,
+  ): void;
+  /**
+   * The USER-delete gate (D6/G6): an ACTIVE agent-held lease on the deleted
+   * path — or on any path under a deleted directory's subtree — blocks with
+   * the same typed WriteLeaseConflictError a gated write gets (holder + task,
+   * the tooltip data); when the delete is allowed, released-or-expired lease
+   * rows on the deleted paths are purged so no stale lease can resurrect
+   * deleted content later. Agent deletes never reach this gate — the
+   * AgentDeleteRefusedError refusal owns them before any row is touched.
+   */
+  gateDelete(
+    workspaceId: string,
+    uri: string,
+    actor: WorkspaceStorageActor,
+    options: { includeSubtree: boolean },
   ): void;
 }
 
@@ -507,6 +528,18 @@ export class WorkspaceFilesRepository {
    * Files delete outright; directories require recursive: true when
    * non-empty (the subtree goes atomically with the directory). The scope
    * roots are structural and cannot be deleted.
+   *
+   * The D6 lease gate covers deletes too (F1 review fix): a USER delete runs
+   * through the gate inside the transaction — an ACTIVE agent-held lease on
+   * the deleted path (or on any path under a deleted directory, recursive OR
+   * not: an empty directory with a claimed-but-unwritten path inside it dies
+   * the same way) blocks with the typed WRITE_LEASE_CONFLICT carrying holder
+   * + task; a passing delete purges released-or-expired rows on the deleted
+   * paths so no stale lease resurrects deleted content. User-held leases
+   * never block the panel user (the write gate's rule), and mkdir stays
+   * deliberately UNGATED — it is structural, idempotent, and creates-only, so
+   * the write gate plus this delete gate cover every mutating or destructive
+   * path; the asymmetry is pinned in the API route docs and tests.
    */
   delete(
     workspaceId: string,
@@ -530,6 +563,13 @@ export class WorkspaceFilesRepository {
           .get(workspaceId, row.id);
         if (child !== undefined) throw new WorkspaceDirectoryNotEmptyError();
       }
+      // D6 lease gate for the user delete (F1 review fix): after URI + scope
+      // validation, the agent refusal, and the shape checks, before any row
+      // is deleted. Directories gate the whole subtree of lease paths under
+      // them; files gate their exact path.
+      this.writeLeases.gateDelete(workspaceId, uri, actor, {
+        includeSubtree: row.is_directory === 1,
+      });
       if (row.is_directory === 1) {
         db.prepare(
           `WITH RECURSIVE subtree(id) AS (

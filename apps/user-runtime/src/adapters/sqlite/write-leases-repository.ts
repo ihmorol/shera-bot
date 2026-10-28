@@ -45,6 +45,16 @@
  *   naming a foreign holder + task when one exists, so the conflict is
  *   visible, never absorbed.
  *
+ * THE DELETE GATE (gateDelete — the F1 review fix) is what the files
+ * repository routes every USER delete through: an ACTIVE agent-held lease on
+ * the deleted path (or on any path under a deleted directory) blocks with the
+ * same WriteLeaseConflictError; user-held leases never block the panel user;
+ * and a passing delete purges released-or-expired rows on the deleted paths so
+ * no stale lease resurrects deleted content. Agent deletes are refused by the
+ * files repository before any gate (G6); mkdir stays deliberately ungated
+ * (structural, creates-only) — the write plus delete gates cover every
+ * mutating or destructive path.
+ *
  * The agent display NAME for conflict reporting is injected
  * (agentNameResolver): this repository owns write_leases SQL only and never
  * queries the agents table (each repository owns its tables' SQL); the
@@ -259,6 +269,15 @@ function parseLeasePath(uri: string): { parsed: ParsedScopedUri; canonical: stri
 
 function assertTtl(ttlMs: number): void {
   if (!Number.isFinite(ttlMs) || ttlMs <= 0) throw new LeaseTtlInvalidError(ttlMs);
+}
+
+/**
+ * Escape the LIKE wildcards a canonical lease path may legally contain
+ * (decoded segment names may carry '%' or '_'; '\' is impossible — the URI
+ * parser rejects it) so the subtree prefix match matches exactly.
+ */
+function likeSubtreePattern(canonicalPath: string): string {
+  return `${canonicalPath.replace(/[\\%_]/g, (char) => `\\${char}`)}/%`;
 }
 
 export class WriteLeasesRepository {
@@ -496,6 +515,75 @@ export class WriteLeasesRepository {
       foreign?.task_id ?? null,
       foreign?.holder_id ?? null,
     );
+  }
+
+  /**
+   * THE USER-DELETE GATE (D6, G6 — the F1 review fix; the write gate's
+   * sibling). The workspace-files repository routes every USER delete through
+   * this before touching workspace_nodes; agent deletes never reach it (the
+   * AGENT_DELETE_REQUIRES_APPROVAL refusal owns them first).
+   *
+   * - An ACTIVE lease held by an AGENT on the deleted path — or, when a
+   *   directory's subtree goes with it, on ANY canonical path under it
+   *   (recursive deletes, and non-recursive empty-directory deletes alike: a
+   *   claimed-but-unwritten path inside the directory dies with it) — blocks
+   *   with the same WriteLeaseConflictError a gated write gets, carrying the
+   *   holding Agent + task. A live task must not watch its leased content
+   *   vanish, and no delete may leave content a stale lease can resurrect.
+   * - User-held active leases never block the panel user (the write gate's
+   *   rule); they die with their task through releaseLeasesForTask.
+   * - When the delete is allowed, every RELEASED-or-EXPIRED lease row on the
+   *   deleted paths is deleted outright, so no dangling row survives the
+   *   node: a later agent write under a stale lease cannot re-materialize
+   *   deleted parents. Live user-held rows are left to their task's terminal
+   *   force-release — a lease never dies before its task.
+   *
+   * The subtree match is a canonical-prefix match over parseLeasePath's
+   * canonical form (base + decoded segments joined with '/'), with LIKE
+   * wildcards in names escaped.
+   */
+  gateDelete(
+    workspaceId: string,
+    uri: string,
+    actor: WorkspaceStorageActor,
+    options: { includeSubtree: boolean },
+  ): void {
+    const { canonical } = parseLeasePath(uri);
+    const db = this.tx.connection();
+    const nowIso = this.now().toISOString();
+
+    const pathPredicate = options.includeSubtree
+      ? `path = ? OR path LIKE ? ESCAPE '\\'`
+      : `path = ?`;
+    const pathParams: string[] = options.includeSubtree
+      ? [canonical, likeSubtreePattern(canonical)]
+      : [canonical];
+
+    const blocking = db
+      .prepare(
+        `SELECT ${LEASE_COLUMNS} FROM write_leases
+         WHERE workspace_id = ? AND (${pathPredicate})
+           AND released_at IS NULL AND expires_at > ?
+           AND holder_type = 'agent'
+         ORDER BY acquired_at ASC LIMIT 1`,
+      )
+      .get(workspaceId, ...pathParams, nowIso) as LeaseRow | undefined;
+    if (blocking !== undefined) {
+      throw new WriteLeaseConflictError(
+        blocking.holder_id,
+        this.resolveAgentName(workspaceId, blocking.holder_id),
+        blocking.task_id,
+        canonical,
+      );
+    }
+
+    // The delete proceeds: purge the history rows on the deleted paths so
+    // nothing dangles over vanished content.
+    db.prepare(
+      `DELETE FROM write_leases
+       WHERE workspace_id = ? AND (${pathPredicate})
+         AND (released_at IS NOT NULL OR expires_at <= ?)`,
+    ).run(workspaceId, ...pathParams, nowIso);
   }
 
   /**

@@ -164,10 +164,11 @@ describe("S17 workspace file routes (shared scope, user actor)", () => {
   it("writes, lists, reads, overwrites, and deletes with typed node fields", async () => {
     env = await composeOn(joinDb("s17-shared-"));
 
-    const written = await putJson(env.origin, "/v1/workspace/files", writeBody(
-      "workspace://docs/report.md",
-      "# hello",
-    ));
+    const written = await putJson(
+      env.origin,
+      "/v1/workspace/files",
+      writeBody("workspace://docs/report.md", "# hello"),
+    );
     expect(written.status).toBe(200);
     const node = written.body["node"] as Record<string, unknown>;
     expect(node).toMatchObject({
@@ -189,7 +190,15 @@ describe("S17 workspace file routes (shared scope, user actor)", () => {
     const nodes = listed.body["nodes"] as Array<Record<string, unknown>>;
     expect(nodes).toHaveLength(1);
     expect(nodes[0]).toMatchObject({ name: "report.md", is_directory: 0, scope: "workspace" });
-    for (const field of ["id", "name", "is_directory", "size", "mime_type", "updated_at", "scope"]) {
+    for (const field of [
+      "id",
+      "name",
+      "is_directory",
+      "size",
+      "mime_type",
+      "updated_at",
+      "scope",
+    ]) {
       expect(field in nodes[0]!).toBe(true);
     }
 
@@ -205,10 +214,11 @@ describe("S17 workspace file routes (shared scope, user actor)", () => {
     );
 
     // Overwrite: same node id, new content/size (the upsert keeps provenance).
-    const rewritten = await putJson(env.origin, "/v1/workspace/files", writeBody(
-      "workspace://docs/report.md",
-      "# hello world",
-    ));
+    const rewritten = await putJson(
+      env.origin,
+      "/v1/workspace/files",
+      writeBody("workspace://docs/report.md", "# hello world"),
+    );
     expect(rewritten.status).toBe(200);
     expect((rewritten.body["node"] as Record<string, unknown>)["id"]).toBe(node["id"]);
     expect((rewritten.body["node"] as Record<string, unknown>)["size"]).toBe(13);
@@ -271,10 +281,11 @@ describe("S17 workspace file routes (shared scope, user actor)", () => {
       (made.body["node"] as Record<string, unknown>)["id"],
     );
 
-    const nested = await putJson(env.origin, "/v1/workspace/files", writeBody(
-      "workspace://docs/sub/deep/nested.txt",
-      "deep",
-    ));
+    const nested = await putJson(
+      env.origin,
+      "/v1/workspace/files",
+      writeBody("workspace://docs/sub/deep/nested.txt", "deep"),
+    );
     expect(nested.status).toBe(200);
 
     // Non-empty directory without recursive: the typed state conflict.
@@ -303,10 +314,11 @@ describe("S17 workspace file routes (shared scope, user actor)", () => {
   it("refuses hostile paths and actor-less reads as typed validation errors", async () => {
     env = await composeOn(joinDb("s17-hostile-"));
 
-    const traversal = await putJson(env.origin, "/v1/workspace/files", writeBody(
-      "workspace://%2e%2e/escape.txt",
-      "nope",
-    ));
+    const traversal = await putJson(
+      env.origin,
+      "/v1/workspace/files",
+      writeBody("workspace://%2e%2e/escape.txt", "nope"),
+    );
     expect(traversal.status).toBe(400);
     expect(traversal.body[ERROR_CODE]).toBe("WORKSPACE_PATH_INVALID");
 
@@ -337,10 +349,11 @@ describe("S17 private scopes (D39) and the agent delete refusal (G6)", () => {
   it("lets the user read and write every Agent's private scope", async () => {
     env = await composeOn(joinDb("s17-private-user-"));
 
-    const written = await putJson(env.origin, "/v1/workspace/files", writeBody(
-      `agent://${RESEARCHER}/notes.md`,
-      "private notes",
-    ));
+    const written = await putJson(
+      env.origin,
+      "/v1/workspace/files",
+      writeBody(`agent://${RESEARCHER}/notes.md`, "private notes"),
+    );
     expect(written.status).toBe(200);
     expect(written.body["node"]).toMatchObject({ scope: "agent", agent_id: RESEARCHER });
 
@@ -365,10 +378,11 @@ describe("S17 private scopes (D39) and the agent delete refusal (G6)", () => {
     env = await composeOn(joinDb("s17-private-denial-"));
 
     // Seed a file in Citation Manager's folder (user path).
-    await putJson(env.origin, "/v1/workspace/files", writeBody(
-      `agent://${CITATION}/sources.md`,
-      "sources",
-    ));
+    await putJson(
+      env.origin,
+      "/v1/workspace/files",
+      writeBody(`agent://${CITATION}/sources.md`, "sources"),
+    );
 
     const denial = `PRIVATE_SCOPE_DENIED`;
     const read = await getJson(
@@ -385,11 +399,14 @@ describe("S17 private scopes (D39) and the agent delete refusal (G6)", () => {
     expect(listed.status).toBe(403);
     expect(listed.body[ERROR_CODE]).toBe(denial);
 
-    const written = await putJson(env.origin, "/v1/workspace/files", writeBody(
-      `agent://${CITATION}/intrusion.md`,
-      "no",
-      { actor: RESEARCHER_ACTOR, task_id: "task-sneak" },
-    ));
+    const written = await putJson(
+      env.origin,
+      "/v1/workspace/files",
+      writeBody(`agent://${CITATION}/intrusion.md`, "no", {
+        actor: RESEARCHER_ACTOR,
+        task_id: "task-sneak",
+      }),
+    );
     expect(written.status).toBe(403);
     expect(written.body[ERROR_CODE]).toBe(denial);
   });
@@ -397,14 +414,16 @@ describe("S17 private scopes (D39) and the agent delete refusal (G6)", () => {
   it("refuses agent deletes in its own scope and reads the cross-private delete as the D39 denial", async () => {
     env = await composeOn(joinDb("s17-agent-delete-"));
 
-    await putJson(env.origin, "/v1/workspace/files", writeBody(
-      `agent://${RESEARCHER}/own.md`,
-      "own",
-    ));
-    await putJson(env.origin, "/v1/workspace/files", writeBody(
-      `agent://${CITATION}/foreign.md`,
-      "foreign",
-    ));
+    await putJson(
+      env.origin,
+      "/v1/workspace/files",
+      writeBody(`agent://${RESEARCHER}/own.md`, "own"),
+    );
+    await putJson(
+      env.origin,
+      "/v1/workspace/files",
+      writeBody(`agent://${CITATION}/foreign.md`, "foreign"),
+    );
 
     // Own scope: still refused — delete is never agent-triggered (G6/D6).
     const own = await postJson(env.origin, "/v1/workspace/delete", {
@@ -440,11 +459,11 @@ describe("S17 private scopes (D39) and the agent delete refusal (G6)", () => {
 
     // No lease: the gate refuses with the typed conflict (no task_id at all is
     // the same refusal — the gate enforces, not the route schema).
-    const unleased = await putJson(env.origin, "/v1/workspace/files", writeBody(
-      "workspace://draft.md",
-      "draft",
-      { actor: RESEARCHER_ACTOR },
-    ));
+    const unleased = await putJson(
+      env.origin,
+      "/v1/workspace/files",
+      writeBody("workspace://draft.md", "draft", { actor: RESEARCHER_ACTOR }),
+    );
     expect(unleased.status).toBe(409);
     expect(unleased.body[ERROR_CODE]).toBe("WRITE_LEASE_REQUIRED");
 
@@ -454,20 +473,27 @@ describe("S17 private scopes (D39) and the agent delete refusal (G6)", () => {
       "task-agent-write",
     );
     expect(privateLease.status).toBe(201);
-    const privateWrite = await putJson(env.origin, "/v1/workspace/files", writeBody(
-      `agent://${RESEARCHER}/notes.md`,
-      "agent notes",
-      { actor: RESEARCHER_ACTOR, task_id: "task-agent-write", mime_type: "text/plain" },
-    ));
+    const privateWrite = await putJson(
+      env.origin,
+      "/v1/workspace/files",
+      writeBody(`agent://${RESEARCHER}/notes.md`, "agent notes", {
+        actor: RESEARCHER_ACTOR,
+        task_id: "task-agent-write",
+        mime_type: "text/plain",
+      }),
+    );
     expect(privateWrite.status).toBe(200);
 
     const sharedLease = await acquireLease(env.origin, "workspace://draft.md", "task-agent-write");
     expect(sharedLease.status).toBe(201);
-    const sharedWrite = await putJson(env.origin, "/v1/workspace/files", writeBody(
-      "workspace://draft.md",
-      "agent draft",
-      { actor: RESEARCHER_ACTOR, task_id: "task-agent-write" },
-    ));
+    const sharedWrite = await putJson(
+      env.origin,
+      "/v1/workspace/files",
+      writeBody("workspace://draft.md", "agent draft", {
+        actor: RESEARCHER_ACTOR,
+        task_id: "task-agent-write",
+      }),
+    );
     expect(sharedWrite.status).toBe(200);
   });
 });
@@ -490,13 +516,7 @@ describe("S17 write-lease routes (D6)", () => {
   it("acquires, lists, renews, and releases; a foreign task cannot renew or release", async () => {
     env = await composeOn(joinDb("s17-lease-lifecycle-"));
 
-    const acquired = await acquireLease(
-      env.origin,
-      "workspace://spec.md",
-      "task_1",
-      USER,
-      60_000,
-    );
+    const acquired = await acquireLease(env.origin, "workspace://spec.md", "task_1", USER, 60_000);
     expect(acquired.status).toBe(201);
     const lease = acquired.body["lease"] as Record<string, unknown>;
     expect(lease).toMatchObject({
@@ -577,10 +597,11 @@ describe("S17 write-lease routes (D6)", () => {
         .status,
     ).toBe(201);
 
-    const blocked = await putJson(env.origin, "/v1/workspace/files", writeBody(
-      "workspace://report.md",
-      "user edit",
-    ));
+    const blocked = await putJson(
+      env.origin,
+      "/v1/workspace/files",
+      writeBody("workspace://report.md", "user edit"),
+    );
     expect(blocked.status).toBe(409);
     expect(blocked.body[ERROR_CODE]).toBe("WRITE_LEASE_CONFLICT");
     const details = blocked.body[ERROR_DETAILS] as Record<string, Record<string, unknown>>;
@@ -599,14 +620,8 @@ describe("S17 write-lease routes (D6)", () => {
       (await acquireLease(env.origin, "workspace://a.md", "task_end", RESEARCHER_ACTOR)).status,
     ).toBe(201);
     expect(
-      (
-        await acquireLease(
-          env.origin,
-          `agent://${RESEARCHER}/b.md`,
-          "task_end",
-          RESEARCHER_ACTOR,
-        )
-      ).status,
+      (await acquireLease(env.origin, `agent://${RESEARCHER}/b.md`, "task_end", RESEARCHER_ACTOR))
+        .status,
     ).toBe(201);
 
     const released = await postJson(env.origin, "/v1/workspace/leases/release-for-task", {
@@ -707,9 +722,13 @@ describe("S17 artifact routes (AC16)", () => {
 
   it("records null producer_agent_id for user-produced artifacts", async () => {
     env = await composeOn(joinDb("s17-artifacts-user-"));
-    const created = await postJson(env.origin, "/v1/workspace/artifacts", artifactBody({
-      actor: USER,
-    }));
+    const created = await postJson(
+      env.origin,
+      "/v1/workspace/artifacts",
+      artifactBody({
+        actor: USER,
+      }),
+    );
     expect(created.status).toBe(201);
     expect((created.body["artifact"] as Record<string, unknown>)["producer_agent_id"]).toBeNull();
   });

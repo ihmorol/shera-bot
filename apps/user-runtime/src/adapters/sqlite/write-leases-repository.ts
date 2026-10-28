@@ -107,7 +107,10 @@ export class LeaseNotHeldError extends Error {
   readonly code = "LEASE_NOT_HELD" as const;
   readonly category = "unauthorized" as const;
 
-  constructor(readonly leaseId: string, readonly taskId: string) {
+  constructor(
+    readonly leaseId: string,
+    readonly taskId: string,
+  ) {
     super(`task ${taskId} does not hold lease ${leaseId}`);
     this.name = "LeaseNotHeldError";
   }
@@ -214,7 +217,10 @@ const LEASE_COLUMNS = `
   renewed_at,
   released_at`;
 
-type LeaseRow = Omit<WriteLease, "scope" | "agent_id" | "holder_type" | "renewed_at" | "released_at"> & {
+type LeaseRow = Omit<
+  WriteLease,
+  "scope" | "agent_id" | "holder_type" | "renewed_at" | "released_at"
+> & {
   scope: string;
   agent_id: string | null;
   holder_type: string;
@@ -257,7 +263,8 @@ function assertTtl(ttlMs: number): void {
 
 export class WriteLeasesRepository {
   private readonly now: () => Date;
-  private readonly agentNameResolver: ((workspaceId: string, agentId: string) => string | null) | null;
+  private readonly agentNameResolver:
+    ((workspaceId: string, agentId: string) => string | null) | null;
 
   constructor(
     private readonly tx: SqliteTransactions,
@@ -292,7 +299,12 @@ export class WriteLeasesRepository {
       const nowIso = this.now().toISOString();
       const active = this.findActiveLease(db, workspaceId, canonical, nowIso);
       if (active !== null) {
-        throw new LeaseConflictError(active.holder_type, active.holder_id, active.task_id, canonical);
+        throw new LeaseConflictError(
+          active.holder_type,
+          active.holder_id,
+          active.task_id,
+          canonical,
+        );
       }
       // Steal-by-expiry: a lapsed lease loses the path; mark it released so
       // the table keeps at most one meaningful row per live holding.
@@ -357,9 +369,7 @@ export class WriteLeasesRepository {
         `UPDATE write_leases SET expires_at = ?, renewed_at = ?
          WHERE workspace_id = ? AND lease_id = ?`,
       ).run(expiresAt, nowIso, row.workspace_id, leaseId);
-      return toLease(
-        this.findLeaseById(db, leaseId) as LeaseRow,
-      );
+      return toLease(this.findLeaseById(db, leaseId) as LeaseRow);
     });
   }
 
@@ -378,6 +388,25 @@ export class WriteLeasesRepository {
         `UPDATE write_leases SET released_at = ? WHERE workspace_id = ? AND lease_id = ?`,
       ).run(this.now().toISOString(), row.workspace_id, leaseId);
     });
+  }
+
+  /**
+   * Every ACTIVE (unreleased, unexpired) lease of one workspace, oldest first
+   * — the lease list read (GET /v1/workspace/leases). Released and lapsed
+   * rows are history, not holdings, so they never appear. Reads only.
+   */
+  listActiveLeases(workspaceId: string): WriteLease[] {
+    const nowIso = this.now().toISOString();
+    return (
+      this.tx
+        .connection()
+        .prepare(
+          `SELECT ${LEASE_COLUMNS} FROM write_leases
+           WHERE workspace_id = ? AND released_at IS NULL AND expires_at > ?
+           ORDER BY acquired_at ASC, lease_id ASC`,
+        )
+        .all(workspaceId, nowIso) as unknown as LeaseRow[]
+    ).map(toLease);
   }
 
   /**

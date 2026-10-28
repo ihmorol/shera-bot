@@ -46,6 +46,23 @@ export interface ArtifactRefWithContent extends ArtifactRef {
   content: Uint8Array;
 }
 
+/**
+ * The typed rejection for an artifact id that does not exist in THIS
+ * workspace (E12: the same id in another workspace is another artifact) —
+ * thrown by the transport's artifact routes when the workspace-scoped
+ * getArtifact returns null. The id is the caller's own input and is echoed as
+ * an identifier, never as content (G3).
+ */
+export class ArtifactNotFoundError extends Error {
+  readonly code = "ARTIFACT_NOT_FOUND" as const;
+  readonly category = "state" as const;
+
+  constructor(workspaceId: string, artifactId: string) {
+    super(`artifact ${artifactId} not found in workspace ${workspaceId}`);
+    this.name = "ArtifactNotFoundError";
+  }
+}
+
 /** The insert input: everything except the minted id, computed size, and clock stamp. */
 export interface ArtifactInsert {
   workspace_id: string;

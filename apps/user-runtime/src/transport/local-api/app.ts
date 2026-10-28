@@ -53,6 +53,7 @@ import {
   notFoundRequestHandler,
   type RedactedLogger,
 } from "../http/typed-errors.ts";
+import { registerWorkspaceApiRoutes, type WorkspaceApiDeps } from "./s17-workspace-api.ts";
 
 export const SUBMIT_CONVERSATION_COMMAND_PATH = "/v1/conversations/commands" as const;
 export const LIST_CONVERSATION_EVENTS_PATH = "/v1/conversations/:conversation_id/events" as const;
@@ -401,6 +402,15 @@ export interface LocalApiDeps {
    * never as zeros dressed up as policy (G4).
    */
   workerAdmission?: (workspaceId: string) => WorkerAdmissionReadout;
+  /**
+   * S17: the workspace panel seam — the chunk-1/2 storage repositories
+   * (workspace_nodes files, task-scoped write leases, artifact_refs) behind
+   * their own route module (s17-workspace-api.ts). The routes validate typed
+   * inputs and delegate (G2); every D39/G6/D6 rule lives in the repositories.
+   * Present at every runtime composition; the deps stay optional so the app
+   * factory remains composable without the storage seam.
+   */
+  workspace?: WorkspaceApiDeps;
   /**
    * B-1: the redacted sink untyped HTTP faults are recorded to — the generic
    * INTERNAL_ERROR's correlation_id is logged with it, so "The failure has
@@ -1113,6 +1123,15 @@ export function createLocalApi(deps: LocalApiDeps): Express {
       chat_conversation_id: result.chat_conversation_id,
     });
   });
+
+  /**
+   * S17 — the workspace panel routes (files, directories, leases, artifacts)
+   * live in their own module; registered BEFORE the typed-failure middleware
+   * like every other surface.
+   */
+  if (deps.workspace) {
+    registerWorkspaceApiRoutes(app, deps.workspace);
+  }
 
   /**
    * Health probe (transport status only, never a business event). Same path

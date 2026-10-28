@@ -8,6 +8,10 @@ import { useContainerResolution, useSessionIdentity } from "@/lib/container-conn
 import type { ContainerResolutionState } from "@/lib/container-resolution";
 import { useAgentDirectChat, useAgentSessionPresence } from "@/lib/agent-data";
 import { useLiveConversation, useSameOriginRuntimeSocketUrl } from "@/lib/runtime-live";
+import {
+  WorkspacePanelToggle,
+  useWorkspacePanelRegistration,
+} from "@/components/workspace/workspace-panel";
 import type { SessionPresenceChipState } from "@/lib/session-presence";
 
 /**
@@ -119,6 +123,16 @@ function RuntimeAgentDirectChat({
   // so real mode carries unread_count 0 instead of the demo count (G4).
   const summary: ConversationSummary = { ...conversation, unread_count: 0 };
 
+  // S17 chunk 4: the workspace panel mounts in the shell's reserved region,
+  // registered to THIS conversation while it is mounted (the toggle lives in
+  // the chat header; width + membership persist per conversation). Until the
+  // direct-chat binding resolves there is no conversation id to register, so
+  // the toggle stays out of the header (never a control that half-works).
+  useWorkspacePanelRegistration(real.directChatId, workspaceId);
+
+  const workspaceToggle =
+    real.directChatId !== null ? <WorkspacePanelToggle chatId={real.directChatId} /> : undefined;
+
   if (liveEnabled) {
     return (
       <AgentChatView
@@ -143,6 +157,7 @@ function RuntimeAgentDirectChat({
         surfaceState={live.error ? "error" : live.loading ? "loading" : "ready"}
         safeErrorMessage={live.error ?? real.safeErrorMessage}
         mode="runtime"
+        headerActions={workspaceToggle}
       />
     );
   }
@@ -156,6 +171,7 @@ function RuntimeAgentDirectChat({
       surfaceState={real.surfaceState}
       safeErrorMessage={real.safeErrorMessage}
       mode="runtime"
+      headerActions={workspaceToggle}
     />
   );
 }

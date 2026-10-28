@@ -132,6 +132,42 @@
  * supervisor-initiated termination. run_id is validated by the writer (the
  * run row lives in the same database, written through the operations
  * repositories) so no FOREIGN KEY is declared — the v4/v5/v6 discipline.
+ *
+ * v9 — workspace files storage (S17 chunk 1; PRD §4.3, D6, D23 rule 8, D39):
+ * the real file tree behind every chat's workspace panel. Storage is
+ * ROW-BASED — files are BLOBs inside workspace_nodes, not filesystem entries —
+ * so path traversal and symlink escapes are impossible at the storage layer
+ * by construction; path safety is enforced at URI resolution in the
+ * workspace-files repository (typed rejections, tested there).
+ *
+ * workspace_nodes: one row per file or directory, keyed (workspace_id, id)
+ * (E12). scope is 'workspace' (the shared workspace:// tree) or 'agent' (a
+ * private agent://<agent_id>/ folder, D39) — the CHECK ties agent_id to the
+ * agent scope exactly. parent_id is NULL only for the per-scope root
+ * directories the repository materializes deterministically; every other node
+ * hangs off a real parent, so UNIQUE (workspace_id, parent_id, name) makes a
+ * duplicate sibling name unrepresentable (NULL parent rows — the roots — are
+ * created idempotently by primary key). Names cannot be empty, '.', '..' or
+ * carry '/' or '\' separators (the separator check uses char(92) so the SQL
+ * text needs no backslash escaping): the schema refuses what resolution
+ * rejects. Directories carry no content and size 0; files always carry a BLOB
+ * (zero-length allowed). created_by_type/created_by_id follow the contracts'
+ * Actor shape (D4) — user and agent actors are recorded at write time.
+ *
+ * write_leases: D6 write-lease rows, task-scoped BY DESIGN (task_id NOT NULL
+ * — a lease is always held inside a task run, never floating). Chunk 1
+ * creates the table; acquisition/renewal/release semantics land in S17
+ * chunk 2 against this schema. holder_type/holder_id mirror the Actor shape;
+ * agent_id is the holding agent when the holder is an Agent (null for
+ * user-held leases). path records the leased URI.
+ *
+ * artifact_refs: ArtifactRef records with provenance (D23 rule 8) — the
+ * producing task run (producer_task_id, NOT NULL per the contracts'
+ * ArtifactRef) and the producing Agent when one exists
+ * (producer_agent_id, nullable: the user can produce artifacts too). Content
+ * is stored here for the prototype so an artifact survives independent of any
+ * workspace_nodes entry. Chunk 1 creates the table; the artifact repository
+ * lands in chunk 2.
  */
 import type { DatabaseSync } from "node:sqlite";
 
@@ -423,6 +459,83 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
 
       CREATE INDEX IF NOT EXISTS task_workers_live_idx
         ON task_workers (workspace_id, state);
+    `,
+  },
+  {
+    version: 9,
+    name: "workspace-storage",
+    sql: `
+      CREATE TABLE IF NOT EXISTS workspace_nodes (
+        id              TEXT    NOT NULL,
+        workspace_id    TEXT    NOT NULL,
+        scope           TEXT    NOT NULL CHECK (scope IN ('workspace', 'agent')),
+        agent_id        TEXT,
+        parent_id       TEXT,
+        name            TEXT    NOT NULL CHECK (
+          length(name) BETWEEN 1 AND 255
+          AND name NOT IN ('.', '..')
+          AND instr(name, '/') = 0
+          AND instr(name, char(92)) = 0
+        ),
+        is_directory    INTEGER NOT NULL CHECK (is_directory IN (0, 1)),
+        size            INTEGER NOT NULL CHECK (size >= 0),
+        mime_type       TEXT,
+        content         BLOB,
+        created_by_type TEXT    NOT NULL CHECK (created_by_type IN ('user', 'agent', 'runtime', 'admin', 'system')),
+        created_by_id   TEXT    NOT NULL,
+        created_at      TEXT    NOT NULL,
+        updated_at      TEXT    NOT NULL,
+        PRIMARY KEY (workspace_id, id),
+        UNIQUE (workspace_id, parent_id, name),
+        CHECK (
+          (scope = 'workspace' AND agent_id IS NULL)
+          OR (scope = 'agent' AND agent_id IS NOT NULL)
+        ),
+        CHECK (
+          (is_directory = 1 AND content IS NULL)
+          OR (is_directory = 0 AND content IS NOT NULL)
+        ),
+        CHECK (is_directory = 0 OR size = 0)
+      ) STRICT;
+
+      CREATE INDEX IF NOT EXISTS workspace_nodes_scope_idx
+        ON workspace_nodes (workspace_id, scope, agent_id);
+
+      CREATE TABLE IF NOT EXISTS write_leases (
+        lease_id     TEXT NOT NULL,
+        workspace_id TEXT NOT NULL,
+        scope        TEXT NOT NULL CHECK (scope IN ('workspace', 'agent')),
+        agent_id     TEXT,
+        task_id      TEXT NOT NULL,
+        path         TEXT NOT NULL,
+        holder_type  TEXT NOT NULL CHECK (holder_type IN ('user', 'agent', 'runtime', 'admin', 'system')),
+        holder_id    TEXT NOT NULL,
+        acquired_at  TEXT NOT NULL,
+        expires_at   TEXT NOT NULL,
+        renewed_at   TEXT,
+        released_at  TEXT,
+        PRIMARY KEY (workspace_id, lease_id)
+      ) STRICT;
+
+      CREATE INDEX IF NOT EXISTS write_leases_by_path_idx
+        ON write_leases (workspace_id, path);
+
+      CREATE INDEX IF NOT EXISTS write_leases_by_task_idx
+        ON write_leases (workspace_id, task_id);
+
+      CREATE TABLE IF NOT EXISTS artifact_refs (
+        artifact_id       TEXT    NOT NULL,
+        workspace_id      TEXT    NOT NULL,
+        name              TEXT    NOT NULL,
+        artifact_type     TEXT    NOT NULL,
+        size              INTEGER NOT NULL CHECK (size >= 0),
+        mime_type         TEXT    NOT NULL,
+        content           BLOB    NOT NULL,
+        producer_agent_id TEXT,
+        producer_task_id  TEXT    NOT NULL,
+        created_at        TEXT    NOT NULL,
+        PRIMARY KEY (workspace_id, artifact_id)
+      ) STRICT;
     `,
   },
 ];

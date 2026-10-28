@@ -38,11 +38,14 @@ import { openDatabase, type SqliteConnection } from "../../adapters/sqlite/conne
 import { applyMigrations } from "../../adapters/sqlite/migrations.ts";
 import { AgentsRepository } from "../../adapters/sqlite/agents-repository.ts";
 import type { PackAgentSeed } from "../../adapters/sqlite/agents-repository.ts";
+import { ArtifactsRepository } from "../../adapters/sqlite/artifacts-repository.ts";
 import { CommandReceiptsRepository } from "../../adapters/sqlite/command-receipts-repository.ts";
 import { ConversationsRepository } from "../../adapters/sqlite/conversations-repository.ts";
 import { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
 import { OperationsRepository } from "../../adapters/sqlite/operations-repository.ts";
 import { TaskWorkersRepository } from "../../adapters/sqlite/task-workers-repository.ts";
+import { WorkspaceFilesRepository } from "../../adapters/sqlite/workspace-files-repository.ts";
+import { WriteLeasesRepository } from "../../adapters/sqlite/write-leases-repository.ts";
 import { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import type { HarnessAdapter } from "../../adapters/process/harness-adapter.ts";
 import { FakeHarnessAdapter } from "../../adapters/process/fake-harness-adapter.ts";
@@ -480,6 +483,19 @@ function wire(
     store: new FileAgentFolderStore(join(dirname(options.dbPath), "agent-files")),
   });
 
+  // S17: the workspace panel storage (chunk-1/2 surfaces) — files, write
+  // leases, and artifacts share the ONE SqliteTransactions instance (chunk-2
+  // note 3), and the lease-conflict tooltip resolves Agent display names
+  // through the agents repository's lookup (chunk-2 note 2; an unknown Agent
+  // falls back to its id inside the repository). Wired into the local API
+  // below as the `workspace` deps.
+  const writeLeases = new WriteLeasesRepository(tx, {
+    agentNameResolver: (workspaceId, agentId) =>
+      agentsRepository.getAgent(workspaceId, agentId)?.display_name ?? null,
+  });
+  const workspaceFiles = new WorkspaceFilesRepository(tx, writeLeases);
+  const workspaceArtifacts = new ArtifactsRepository(tx);
+
   // S13: the operations seam shares the SAME late-bound post-commit fanout —
   // the chat binding's conversation.created and a thread message.appended
   // publish through the identical containment (B4) as every other stream.
@@ -682,6 +698,13 @@ function wire(
       : {}),
     operations,
     ...(workerAdmission ? { workerAdmission } : {}),
+    // S17: the workspace panel surface — files, write leases, artifacts
+    // (the route module owns the HTTP shapes; the repositories own the rules).
+    workspace: {
+      files: workspaceFiles,
+      leases: writeLeases,
+      artifacts: workspaceArtifacts,
+    },
     ...(options.logUntypedFault ? { logUntypedFault: options.logUntypedFault } : {}),
   });
   return {

@@ -84,7 +84,11 @@ export async function proxyToLocalApi(request: Request, upstreamPath: string): P
     return tenantMismatch();
   }
   let body: unknown = null;
-  if (request.method === "POST") {
+  // S17: PUT/DELETE join POST as body-carrying methods — the workspace panel's
+  // gated file write (PUT /v1/workspace/files) and the holder-task lease
+  // release (DELETE /v1/workspace/leases/:id) carry workspace_id + actor in
+  // the body, so the runtimeWorkspaceMatches binding below needs them parsed.
+  if (request.method === "POST" || request.method === "PUT" || request.method === "DELETE") {
     try {
       const reader = request.body?.getReader();
       const chunks: Uint8Array[] = [];

@@ -64,9 +64,12 @@
   --breakpoint-lg: 1024px;
   --breakpoint-xl: 1440px;
 
-  /* Motion — one authored entrance grammar, no scattered effects. */
+  /* Motion — one authored entrance grammar, no scattered effects.
+     sheet-in is the LEFT rail's axis (translateX); sheet-up is the mobile
+     bottom sheet's own axis (§2.2) — the sheet never borrows the rail slide. */
   --animate-overlay-in: overlay-in 180ms ease-out;
   --animate-sheet-in: sheet-in 240ms cubic-bezier(0.32, 0.72, 0, 1);
+  --animate-sheet-up: sheet-up 240ms cubic-bezier(0.32, 0.72, 0, 1);
 
   @keyframes overlay-in {
     from {
@@ -83,6 +86,15 @@
     }
     to {
       transform: translateX(0);
+    }
+  }
+
+  @keyframes sheet-up {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
     }
   }
 }

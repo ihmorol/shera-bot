@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { Agent } from "@shera-bot/contracts";
+import type { ReactNode } from "react";
 import { Settings2 } from "lucide-react";
 import Link from "next/link";
 
@@ -258,6 +259,7 @@ export function AgentChatView({
   onRuntimeSend,
   onRuntimeRetry,
   sessionPresence,
+  headerActions,
 }: {
   /** The identity fields the header (and avatar) render — full Agent or the live row. */
   agent: AgentChatIdentity;
@@ -321,6 +323,13 @@ export function AgentChatView({
    * for a presence indicator (G4).
    */
   sessionPresence?: SessionPresenceChipState | undefined;
+  /**
+   * S17 chunk 4 (UI_DESIGN §4 S7): the workspace panel's header toggle slot —
+   * the S7 entry control rendered before the settings link, provided by the
+   * runtime conversation surfaces that host the docked panel. Demo mode
+   * passes nothing and the header is unchanged.
+   */
+  headerActions?: ReactNode | undefined;
 }) {
   const [localMessages, setLocalMessages] = useState<ChatMessage[]>([]);
   const timersRef = useRef<number[]>([]);
@@ -525,6 +534,10 @@ export function AgentChatView({
         >
           Platform default
         </button>
+        {/* S17 chunk 4: the workspace panel toggle (S7 entry) — provided by
+            the runtime surfaces that host the docked panel; demo mode renders
+            nothing here. */}
+        {headerActions}
         {/* §S3: Agent settings one affordance away (the D16 commands surface). */}
         <Link
           href={routes.settings(`agents/${entitySlug(agent.agent_id)}`)}

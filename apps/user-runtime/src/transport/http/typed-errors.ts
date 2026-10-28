@@ -32,6 +32,23 @@ import {
   AgentNotFoundError,
   AgentSettingsValidationError,
 } from "../../adapters/sqlite/agents-repository.ts";
+import { ArtifactNotFoundError } from "../../adapters/sqlite/artifacts-repository.ts";
+import {
+  AgentDeleteRefusedError,
+  PrivateScopeDeniedError,
+  WorkspaceDirectoryNotEmptyError,
+  WorkspaceNodeNotFoundError,
+  WorkspaceNodeTypeError,
+  WorkspacePathError,
+} from "../../adapters/sqlite/workspace-files-repository.ts";
+import {
+  LeaseConflictError,
+  LeaseExpiredError,
+  LeaseNotHeldError,
+  LeaseTtlInvalidError,
+  WriteLeaseConflictError,
+  WriteLeaseRequiredError,
+} from "../../adapters/sqlite/write-leases-repository.ts";
 import {
   AgentFolderAccessDeniedError,
   AgentFolderUriInvalidError,
@@ -331,6 +348,229 @@ export function toSheraErrorResponse(error: unknown, correlationId?: string): Ht
     };
   }
 
+  // S17 — the workspace storage boundary rejections (the chunk-1/2 typed
+  // error classes), mapped onto the same taxonomy. Agent ids, task ids, and
+  // pack-owned display names are identifiers/authored display data, not
+  // secrets (G3); the hostile input itself is never echoed.
+  if (error instanceof WorkspacePathError) {
+    return {
+      status: 400,
+      body: {
+        code: error.code,
+        category: error.category,
+        safe_message: "The workspace path is not a safe workspace:// or agent:// URI.",
+        retryable: false,
+        user_action: null,
+        internal_details: null,
+        correlation_id,
+      },
+    };
+  }
+  if (error instanceof WorkspaceNodeNotFoundError) {
+    return {
+      status: 404,
+      body: {
+        code: error.code,
+        category: error.category,
+        safe_message: "The workspace node does not exist in this workspace.",
+        retryable: false,
+        user_action: null,
+        internal_details: null,
+        correlation_id,
+      },
+    };
+  }
+  if (error instanceof WorkspaceNodeTypeError) {
+    return {
+      status: 409,
+      body: {
+        code: error.code,
+        category: error.category,
+        safe_message: "The addressed node kind does not allow this operation.",
+        retryable: false,
+        user_action: null,
+        internal_details: null,
+        correlation_id,
+      },
+    };
+  }
+  if (error instanceof WorkspaceDirectoryNotEmptyError) {
+    return {
+      status: 409,
+      body: {
+        code: error.code,
+        category: error.category,
+        safe_message: "The directory is not empty; a non-recursive delete refuses it.",
+        retryable: false,
+        user_action: null,
+        internal_details: null,
+        correlation_id,
+      },
+    };
+  }
+  if (error instanceof ArtifactNotFoundError) {
+    return {
+      status: 404,
+      body: {
+        code: error.code,
+        category: error.category,
+        safe_message: "The artifact does not exist in this workspace.",
+        retryable: false,
+        user_action: null,
+        internal_details: null,
+        correlation_id,
+      },
+    };
+  }
+  if (error instanceof PrivateScopeDeniedError) {
+    return {
+      status: 403,
+      body: {
+        code: error.code,
+        category: error.category,
+        safe_message: "This private folder belongs to another Agent.",
+        retryable: false,
+        user_action: null,
+        internal_details: null,
+        correlation_id,
+      },
+    };
+  }
+  if (error instanceof AgentDeleteRefusedError) {
+    return {
+      status: 403,
+      body: {
+        code: error.code,
+        category: error.category,
+        safe_message:
+          "Agents cannot delete workspace files; deletion requires the user approval path.",
+        retryable: false,
+        user_action: null,
+        internal_details: null,
+        correlation_id,
+      },
+    };
+  }
+  // D6 lease arbitration. The conflict bodies carry the structured tooltip
+  // fields the panel renders (chunk-2 note 4) — holding Agent id + display
+  // name + task id, and the conflicting holder for agent/lease refusals.
+  if (error instanceof WriteLeaseConflictError) {
+    return {
+      status: 409,
+      body: {
+        code: error.code,
+        category: error.category,
+        safe_message: "Another task is editing this file.",
+        retryable: false,
+        user_action: null,
+        internal_details: {
+          write_lease_conflict: {
+            holding_agent_id: error.holdingAgentId,
+            holding_agent_name: error.holdingAgentName,
+            task_id: error.taskId,
+            path: error.path,
+          },
+        },
+        correlation_id,
+      },
+    };
+  }
+  if (error instanceof WriteLeaseRequiredError) {
+    return {
+      status: 409,
+      body: {
+        code: error.code,
+        category: error.category,
+        safe_message: "This task does not hold the write lease for this path.",
+        retryable: false,
+        user_action: null,
+        internal_details: {
+          write_lease_required: {
+            agent_id: error.agentId,
+            path: error.path,
+            conflicting_task_id: error.conflictingTaskId,
+            conflicting_holder_id: error.conflictingHolderId,
+          },
+        },
+        correlation_id,
+      },
+    };
+  }
+  if (error instanceof LeaseConflictError) {
+    return {
+      status: 409,
+      body: {
+        code: error.code,
+        category: error.category,
+        safe_message: "The path is already leased by another task.",
+        retryable: false,
+        user_action: null,
+        internal_details: {
+          lease_conflict: {
+            holder_type: error.holder_type,
+            holder_id: error.holder_id,
+            task_id: error.task_id,
+            path: error.path,
+          },
+        },
+        correlation_id,
+      },
+    };
+  }
+  if (error instanceof LeaseExpiredError) {
+    return {
+      status: 409,
+      body: {
+        code: error.code,
+        category: error.category,
+        safe_message: "The lease expired; acquire the path again instead of renewing.",
+        retryable: false,
+        user_action: null,
+        internal_details: {
+          lease_expired: {
+            lease_id: error.leaseId,
+            task_id: error.taskId,
+            expired_at: error.expiredAt,
+          },
+        },
+        correlation_id,
+      },
+    };
+  }
+  if (error instanceof LeaseNotHeldError) {
+    return {
+      status: 403,
+      body: {
+        code: error.code,
+        category: error.category,
+        safe_message: "This task does not hold that lease.",
+        retryable: false,
+        user_action: null,
+        internal_details: {
+          lease_not_held: {
+            lease_id: error.leaseId,
+            task_id: error.taskId,
+          },
+        },
+        correlation_id,
+      },
+    };
+  }
+  if (error instanceof LeaseTtlInvalidError) {
+    return {
+      status: 400,
+      body: {
+        code: error.code,
+        category: error.category,
+        safe_message: "A lease TTL must be a positive number of milliseconds.",
+        retryable: false,
+        user_action: null,
+        internal_details: null,
+        correlation_id,
+      },
+    };
+  }
+
   // Body-parser failures (invalid JSON, oversized body) are client errors
   // with well-known types; answer with the contract's validation failure
   // instead of the generic 500 fallback.
@@ -399,6 +639,21 @@ function isUntypedFault(error: unknown): boolean {
     !(error instanceof AgentSettingsResetUnavailableError) &&
     !(error instanceof AgentFolderAccessDeniedError) &&
     !(error instanceof AgentFolderUriInvalidError) &&
+    // S17: the workspace storage boundary rejections are typed — never the
+    // generic 500, never the fault log.
+    !(error instanceof WorkspacePathError) &&
+    !(error instanceof WorkspaceNodeNotFoundError) &&
+    !(error instanceof WorkspaceNodeTypeError) &&
+    !(error instanceof WorkspaceDirectoryNotEmptyError) &&
+    !(error instanceof ArtifactNotFoundError) &&
+    !(error instanceof PrivateScopeDeniedError) &&
+    !(error instanceof AgentDeleteRefusedError) &&
+    !(error instanceof WriteLeaseConflictError) &&
+    !(error instanceof WriteLeaseRequiredError) &&
+    !(error instanceof LeaseConflictError) &&
+    !(error instanceof LeaseExpiredError) &&
+    !(error instanceof LeaseNotHeldError) &&
+    !(error instanceof LeaseTtlInvalidError) &&
     bodyParserType(error) === null
   );
 }

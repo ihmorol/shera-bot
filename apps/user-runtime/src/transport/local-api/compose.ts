@@ -45,6 +45,7 @@ import { ConversationsRepository } from "../../adapters/sqlite/conversations-rep
 import { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
 import { OperationsRepository } from "../../adapters/sqlite/operations-repository.ts";
 import { TaskWorkersRepository } from "../../adapters/sqlite/task-workers-repository.ts";
+import { TerminalEventsRepository } from "../../adapters/sqlite/terminal-events-repository.ts";
 import { WorkspaceFilesRepository } from "../../adapters/sqlite/workspace-files-repository.ts";
 import { WriteLeasesRepository } from "../../adapters/sqlite/write-leases-repository.ts";
 import { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
@@ -77,10 +78,14 @@ import { loadWorkspacePack, type WorkspacePack } from "../../modules/runtime/pac
 import { seedAgentsFromPack } from "../../adapters/sqlite/agents-repository.ts";
 import { WorkspacesRepository } from "../../adapters/sqlite/workspaces-repository.ts";
 import {
+  DEFAULT_SESSION_POLICY,
   SessionSupervisor,
   type SessionSupervisorPolicy,
 } from "../../modules/sessions/session-supervisor.service.ts";
 import { SessionReplyBridge } from "../../modules/sessions/session-reply-bridge.ts";
+import { TerminalRecorder } from "../../modules/terminals/terminal-recorder.service.ts";
+import { observeSessionSpawnWithTerminalRecorder } from "../../modules/terminals/session-terminal-recorder.ts";
+import { buildLiveViewsApiHandle } from "./s18-live-views-api.ts";
 import {
   TaskWorkerAdmissionGate,
   DEFAULT_WORKER_ADMISSION_POLICY,
@@ -310,6 +315,13 @@ export interface RuntimeHandle {
    * gate, reminders, and mutes; the HTTP surface relays into it.
    */
   approvals: ApprovalsService;
+  /**
+   * S18 chunk 1: the terminal recorder seam — the ONLY writer of
+   * terminal_events and the terminal.* journal vocabulary. The session spawn
+   * seam is already wired through it when a session harness is configured;
+   * tests and later slices (the S26 execution tools) drive it directly.
+   */
+  terminals: TerminalRecorder;
   /** Closes the gateway (and with it the HTTP server), then SQLite. */
   close(): Promise<void>;
 }
@@ -329,6 +341,7 @@ interface Wired {
   operations: OperationsService;
   workers: TaskWorkerSystem | undefined;
   approvals: ApprovalsService;
+  terminals: TerminalRecorder;
   setPublisher(publisher: ConversationPublisher): void;
 }
 
@@ -373,6 +386,34 @@ function operationPackCatalog(pack: WorkspacePack): OperationPackCatalog {
       return agents.some((agent) => agent.agent_id === agentId) ? pack.manifest.pack_id : null;
     },
   };
+}
+
+/**
+ * S18 chunk 1: the supervision facts recorded with every session-seam
+ * terminal execution — the bounds the runtime ACTUALLY enforces on the child,
+ * merged from the composition's policy overrides the same way the supervisor
+ * merges them. `os_resource_limits` is recorded as null by the observer (no
+ * OS-level limits exist on session children in this slice) — the policy
+ * never claims a limit that is not enforced (G4).
+ */
+function supervisionRecordFrom(
+  overrides: Partial<SessionSupervisorPolicy> | undefined,
+): SessionSupervisionRecordShape {
+  const policy = { ...DEFAULT_SESSION_POLICY, ...overrides };
+  return {
+    heartbeat_interval_ms: policy.heartbeatIntervalMs,
+    watchdog_window_ms: policy.heartbeatIntervalMs * policy.missedHeartbeatLimit,
+    stderr_max_bytes: policy.stderrMaxBytes,
+    escalation: "shutdown_frame_then_sigterm_then_sigkill",
+  };
+}
+
+/** The supervision record shape the session spawn observer records. */
+interface SessionSupervisionRecordShape {
+  heartbeat_interval_ms: number;
+  watchdog_window_ms: number;
+  stderr_max_bytes: number;
+  escalation: "shutdown_frame_then_sigterm_then_sigkill";
 }
 
 /**
@@ -446,6 +487,19 @@ function wire(
     publish: containFanout((event) => publisher(event), logFault),
   });
 
+  // S18 chunk 1: the terminal recorder — the one writer of terminal_events
+  // and the terminal.* journal vocabulary, over the SAME transaction and
+  // journal every other writer uses (D10: each row and its entry commit in
+  // one transaction; the recorder owns that composition). Always composed:
+  // the read-only API surface exists on every stack and reads honestly empty
+  // until an execution is recorded (G4).
+  const terminalEvents = new TerminalEventsRepository(tx);
+  const terminals = new TerminalRecorder({
+    tx,
+    terminals: terminalEvents,
+    events,
+  });
+
   // S12 (D32 layer 2): the supervised warm Agent session when a harness
   // command IS configured; when it is NOT, the runtime composes with the
   // supervisor DISABLED — presence "none" everywhere, no process ever spawns,
@@ -455,7 +509,20 @@ function wire(
   const sessions = options.sessionHarness
     ? new SessionSupervisor({
         events,
-        spawnChild: createSessionProcessSpawn(options.sessionHarness),
+        // S18 chunk 1: the spawn seam is observed by the terminal recorder —
+        // every session child the runtime launches is recorded (command,
+        // workdir, resource policy, approval state), its stderr streams
+        // through the redaction boundary, and its exit closes the record.
+        // Contained: a recording failure never costs the Agent its session.
+        spawnChild: observeSessionSpawnWithTerminalRecorder(
+          {
+            recorder: terminals,
+            harness: options.sessionHarness,
+            supervision: supervisionRecordFrom(options.sessionPolicy),
+            logFault: (event, fields) => logFault(event, fields),
+          },
+          createSessionProcessSpawn(options.sessionHarness),
+        ),
         contextProvider: (workspaceId, agentId) => {
           const agent = agents.getAgent(workspaceId, agentId);
           return {
@@ -760,6 +827,13 @@ function wire(
       artifacts: workspaceArtifacts,
     },
     approvals: approvalsApi,
+    // S18 chunk 1: the read-only terminal live-views surface — durable
+    // replay, one execution's record, and the current session terminal
+    // state. Three GET routes; the no-takeover criterion is the inventory.
+    terminals: buildLiveViewsApiHandle({
+      terminals: terminalEvents,
+      journal,
+    }),
     ...(options.logUntypedFault ? { logUntypedFault: options.logUntypedFault } : {}),
   });
   return {
@@ -777,6 +851,7 @@ function wire(
     operations,
     workers,
     approvals,
+    terminals,
     setPublisher(next) {
       publisher = next;
     },
@@ -975,6 +1050,7 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     sessions: wired.sessions,
     workers: wired.workers,
     approvals: wired.approvals,
+    terminals: wired.terminals,
     close: async () => {
       replyStreamer?.stopAll();
       // S16: drain every live worker child through the escalation BEFORE the

@@ -657,3 +657,197 @@ describe("approvals service: decision refusals (S20 chunk 2, D9/G6)", () => {
     expect(env.approvals.listGrants(WS)).toHaveLength(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// S20 chunk 2 — the deterministic grant lookup (issue #21; D9, PRD §8)
+// ---------------------------------------------------------------------------
+
+const APPROVED_TOOL = {
+  toolId: "tool_repo_push",
+  toolVersion: "1.2.0",
+  capability: "repo.push",
+  resourceScope: "workspace://notes/draft.md",
+} as const;
+const ARGS = `sha256:${"b".repeat(64)}`;
+
+function lookup(
+  env: ReturnType<typeof newRuntime>,
+  overrides: Partial<{
+    workspaceId: string;
+    principal: { type: "user" | "agent" | "task"; id: string };
+    toolId: string;
+    toolVersion: string;
+    capability: string;
+    resourceScope: string;
+    argsDigest: string;
+  }> = {},
+) {
+  return env.service.findActiveGrant(
+    overrides.workspaceId ?? WS,
+    overrides.principal ?? { type: "agent", id: "agent_general_assistant" },
+    overrides.toolId ?? APPROVED_TOOL.toolId,
+    overrides.toolVersion ?? APPROVED_TOOL.toolVersion,
+    overrides.capability ?? APPROVED_TOOL.capability,
+    overrides.resourceScope ?? APPROVED_TOOL.resourceScope,
+    overrides.argsDigest ?? ARGS,
+  );
+}
+
+describe("approvals service: findActiveGrant matches deterministically (S20 chunk 2)", () => {
+  it("returns the one-time grant on the exact tool, version, capability, scope, and digest", () => {
+    const env = newRuntime();
+    const pause = pauseOnce(env, makeRun());
+    const result = env.service.applyDecision({
+      approval_id: pause.approval_id,
+      choice: "approve-this-execution-only",
+      decided_by: USER,
+      run: pause.run,
+      execute: () => {},
+    });
+    if (result.outcome !== "approved") throw new Error("expected an approved outcome");
+
+    const lookupResult = lookup(env);
+    expect(lookupResult.ok).toBe(true);
+    if (lookupResult.ok !== true) throw new Error("expected a match");
+    expect(lookupResult.grant.grant_id).toBe(result.grant.grant_id);
+    expect(lookupResult.grant.one_time).toBe(true);
+  });
+
+  it("a CHANGED tool version invalidates a one-time approval — typed miss", () => {
+    const env = newRuntime();
+    const pause = pauseOnce(env, makeRun());
+    env.service.applyDecision({
+      approval_id: pause.approval_id,
+      choice: "approve-this-execution-only",
+      decided_by: USER,
+      run: pause.run,
+      execute: () => {},
+    });
+
+    const miss = lookup(env, { toolVersion: "1.3.0" });
+    expect(miss.ok).toBe(false);
+    if (miss.ok !== false) throw new Error("expected a typed miss");
+    expect(miss.reason).toBe("no_active_grant");
+  });
+
+  it("a CHANGED argument set invalidates a one-time approval — typed miss", () => {
+    const env = newRuntime();
+    const pause = pauseOnce(env, makeRun());
+    env.service.applyDecision({
+      approval_id: pause.approval_id,
+      choice: "approve-this-execution-only",
+      decided_by: USER,
+      run: pause.run,
+      execute: () => {},
+    });
+
+    const miss = lookup(env, { argsDigest: `sha256:${"c".repeat(64)}` });
+    expect(miss.ok).toBe(false);
+    if (miss.ok !== false) throw new Error("expected a typed miss");
+    expect(miss.reason).toBe("no_active_grant");
+  });
+
+  it("a reusable grant matches with DIFFERENT arguments but still not a different tool version", () => {
+    const env = newRuntime();
+    const pause = pauseOnce(env, makeRun());
+    env.service.applyDecision({
+      approval_id: pause.approval_id,
+      choice: "always-approve-this-tool",
+      decided_by: USER,
+      run: pause.run,
+      execute: () => {},
+    });
+
+    // "Always approve this tool" is deliberately argument-agnostic...
+    const hit = lookup(env, {
+      principal: { type: "task", id: "task_001" },
+      argsDigest: `sha256:${"d".repeat(64)}`,
+    });
+    expect(hit.ok).toBe(true);
+
+    // ...but the tool VERSION is pinned for every grant (D9).
+    const miss = lookup(env, {
+      principal: { type: "task", id: "task_001" },
+      toolVersion: "2.0.0",
+    });
+    expect(miss.ok).toBe(false);
+  });
+
+  it("a grant NEVER matches a different principal — a child cannot widen its parent's permissions (D9)", () => {
+    const env = newRuntime();
+
+    // The always-approve-this-tool grant belongs to the requesting TASK.
+    const toolPause = pauseOnce(env, makeRun());
+    env.service.applyDecision({
+      approval_id: toolPause.approval_id,
+      choice: "always-approve-this-tool",
+      decided_by: USER,
+      run: toolPause.run,
+      execute: () => {},
+    });
+    const childMiss = lookup(env, { principal: { type: "task", id: "task_child_001" } });
+    expect(childMiss.ok).toBe(false);
+
+    // The for-this-agent grant belongs to the requesting AGENT.
+    const agentPause = pauseOnce(env, makeRun());
+    env.service.applyDecision({
+      approval_id: agentPause.approval_id,
+      choice: "always-approve-this-tool-for-this-agent",
+      decided_by: USER,
+      run: agentPause.run,
+      execute: () => {},
+    });
+    const otherAgentMiss = lookup(env, { principal: { type: "agent", id: "agent_other_001" } });
+    expect(otherAgentMiss.ok).toBe(false);
+  });
+
+  it("a revoked grant no longer matches", () => {
+    const env = newRuntime();
+    const pause = pauseOnce(env, makeRun());
+    const decision = env.service.applyDecision({
+      approval_id: pause.approval_id,
+      choice: "approve-this-execution-only",
+      decided_by: USER,
+      run: pause.run,
+      execute: () => {},
+    });
+    if (decision.outcome !== "approved") throw new Error("expected an approved outcome");
+
+    expect(lookup(env).ok).toBe(true);
+    expect(
+      env.approvals.revokeGrant(WS, decision.grant.grant_id, "2026-10-28T12:05:00.000Z"),
+    ).toBe(true);
+    expect(lookup(env).ok).toBe(false);
+  });
+
+  it("an expired grant no longer matches — compared on the injected clock", () => {
+    const env = newRuntime();
+    env.approvals.insertGrant({
+      grant_id: "grt_expiring_001",
+      workspace_id: WS,
+      source_choice: "always-approve-this-tool",
+      principal_type: "task",
+      principal_id: "task_001",
+      ...APPROVED_TOOL,
+      conversation_scope: "conv_001",
+      workspace_scope: WS,
+      expires_at: "2026-10-28T12:30:00.000Z",
+      one_time: false,
+      created_by: USER,
+      approved_at: NOW,
+      revoked_at: null,
+      args_digest: null,
+    });
+
+    // NOW (12:00) is before expiry: the grant is active.
+    expect(
+      lookup(env, { principal: { type: "task", id: "task_001" } }).ok,
+    ).toBe(true);
+
+    env.setNow("2026-10-28T12:31:00.000Z");
+    const expired = lookup(env, { principal: { type: "task", id: "task_001" } });
+    expect(expired.ok).toBe(false);
+    if (expired.ok !== false) throw new Error("expected a typed miss");
+    expect(expired.reason).toBe("no_active_grant");
+  });
+});

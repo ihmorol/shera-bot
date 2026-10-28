@@ -814,9 +814,9 @@ describe("approvals service: findActiveGrant matches deterministically (S20 chun
     if (decision.outcome !== "approved") throw new Error("expected an approved outcome");
 
     expect(lookup(env).ok).toBe(true);
-    expect(
-      env.approvals.revokeGrant(WS, decision.grant.grant_id, "2026-10-28T12:05:00.000Z"),
-    ).toBe(true);
+    expect(env.approvals.revokeGrant(WS, decision.grant.grant_id, "2026-10-28T12:05:00.000Z")).toBe(
+      true,
+    );
     expect(lookup(env).ok).toBe(false);
   });
 
@@ -828,7 +828,10 @@ describe("approvals service: findActiveGrant matches deterministically (S20 chun
       source_choice: "always-approve-this-tool",
       principal_type: "task",
       principal_id: "task_001",
-      ...APPROVED_TOOL,
+      tool_id: APPROVED_TOOL.toolId,
+      tool_version: APPROVED_TOOL.toolVersion,
+      capability: APPROVED_TOOL.capability,
+      resource_scope: APPROVED_TOOL.resourceScope,
       conversation_scope: "conv_001",
       workspace_scope: WS,
       expires_at: "2026-10-28T12:30:00.000Z",
@@ -840,9 +843,7 @@ describe("approvals service: findActiveGrant matches deterministically (S20 chun
     });
 
     // NOW (12:00) is before expiry: the grant is active.
-    expect(
-      lookup(env, { principal: { type: "task", id: "task_001" } }).ok,
-    ).toBe(true);
+    expect(lookup(env, { principal: { type: "task", id: "task_001" } }).ok).toBe(true);
 
     env.setNow("2026-10-28T12:31:00.000Z");
     const expired = lookup(env, { principal: { type: "task", id: "task_001" } });

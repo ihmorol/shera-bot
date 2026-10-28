@@ -878,7 +878,72 @@ export class ApprovalsService {
       run: { ...run, state: "RUNNING", version: resume.next_version, updated_at: now },
     };
   }
+
+  // -------------------------------------------------------------------------
+  // Deterministic grant lookup (S20 chunk 2 — the check chunk 3 rechecks)
+  // -------------------------------------------------------------------------
+
+  /**
+   * The deterministic grant check (D9: grants are "checked deterministically").
+   * A grant matches when it is in the workspace, NOT revoked, NOT expired
+   * (expiry compared on the injected clock), carries the SAME principal, and
+   * pins exactly the requested tool_id, tool_version, capability, and
+   * resource_scope. A ONE_TIME grant additionally requires the exact
+   * args_digest — a changed argument set or a changed tool version invalidates
+   * it (the S20 AC); a reusable grant is deliberately argument-agnostic
+   * ("always approve this tool").
+   *
+   * Conversation scope is NOT part of this signature — grants record
+   * conversation_scope ("any" is never implicit), and the chunk-3 recheck
+   * layer, which knows the acting conversation, applies it on top of the
+   * returned grant.
+   *
+   * The FIRST matching grant in (approved_at, grant_id) order wins — a
+   * deterministic pick, never a silent conflict resolution (G5).
+   */
+  findActiveGrant(
+    workspaceId: string,
+    principal: { type: ApprovalGrant["principal_type"]; id: string },
+    toolId: string,
+    toolVersion: string,
+    capability: string,
+    resourceScope: string,
+    argsDigest: string,
+    exec?: SqliteExec,
+  ): GrantLookupResult {
+    const nowMs = new Date(this.now()).getTime();
+    const match = this.deps.approvals.listGrants(workspaceId, exec).find((grant) => {
+      if (grant.revoked_at !== null) {
+        return false;
+      }
+      if (grant.principal_type !== principal.type || grant.principal_id !== principal.id) {
+        return false;
+      }
+      if (grant.tool_id !== toolId || grant.tool_version !== toolVersion) {
+        return false;
+      }
+      if (grant.capability !== capability || grant.resource_scope !== resourceScope) {
+        return false;
+      }
+      // The one-time invalidation rule (D9): the grant holds only for the
+      // exact argument set it was approved for.
+      if (grant.one_time && grant.args_digest !== argsDigest) {
+        return false;
+      }
+      if (grant.expires_at !== null && new Date(grant.expires_at).getTime() <= nowMs) {
+        return false;
+      }
+      return true;
+    });
+    return match === undefined
+      ? { ok: false, reason: "no_active_grant" }
+      : { ok: true, grant: match };
+  }
 }
+
+/** The deterministic lookup's typed result: the matching grant or one typed miss. */
+export type GrantLookupResult =
+  { ok: true; grant: ApprovalGrantRecord } | { ok: false; reason: "no_active_grant" };
 
 /** Everything one decision touches, passed from the transaction into a branch. */
 interface DecisionContext {

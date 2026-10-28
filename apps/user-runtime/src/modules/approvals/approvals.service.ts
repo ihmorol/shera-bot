@@ -1164,7 +1164,10 @@ export class ApprovalsService {
     }
     const grant = lookup.grant;
 
-    if (grant.conversation_scope !== "any" && grant.conversation_scope !== query.acting_conversation_id) {
+    if (
+      grant.conversation_scope !== "any" &&
+      grant.conversation_scope !== query.acting_conversation_id
+    ) {
       return { allowed: false, reason: "conversation_scope_mismatch" };
     }
 

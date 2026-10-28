@@ -340,7 +340,12 @@ export class ApprovalsRepository {
    * consumption of a grant is as immutable as the decision that created it —
    * D9). False when no row matched or the grant was already consumed.
    */
-  consumeGrant(workspaceId: string, grantId: string, consumedAt: string, exec?: DatabaseSync): boolean {
+  consumeGrant(
+    workspaceId: string,
+    grantId: string,
+    consumedAt: string,
+    exec?: DatabaseSync,
+  ): boolean {
     const db = exec ?? this.tx.connection();
     const result = db
       .prepare(

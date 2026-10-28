@@ -182,7 +182,6 @@ export async function proxyToLocalApi(request: Request, upstreamPath: string): P
       ...(typeof body === "object" && body !== null ? (body as Record<string, unknown>) : {}),
       [binding.bodyField]: { type: "user", id: googleSub },
     };
-    body = boundBody;
     request = new Request(request.url, {
       method: request.method,
       headers: request.headers,

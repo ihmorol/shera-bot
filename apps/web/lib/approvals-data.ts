@@ -143,7 +143,12 @@ export function useApprovalMutes(workspaceId: string): {
       refetch: () => void query.refetch(),
     };
   }
-  return { mutes: query.data, state: "ready", safeErrorMessage: undefined, refetch: () => void query.refetch() };
+  return {
+    mutes: query.data,
+    state: "ready",
+    safeErrorMessage: undefined,
+    refetch: () => void query.refetch(),
+  };
 }
 
 /** The workspace's ACTIVE grants (the settings list read). */
@@ -171,7 +176,12 @@ export function useApprovalGrants(workspaceId: string): {
       refetch: () => void query.refetch(),
     };
   }
-  return { grants: query.data, state: "ready", safeErrorMessage: undefined, refetch: () => void query.refetch() };
+  return {
+    grants: query.data,
+    state: "ready",
+    safeErrorMessage: undefined,
+    refetch: () => void query.refetch(),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -215,11 +225,10 @@ export function useApprovalsMute(workspaceId: string) {
       scope: "approval" | "task" | "all";
       approval: Pick<ApprovalCardData, "approval_id" | "task_id">;
     }) =>
-      createApprovalMute(
-        workspaceId,
-        muteTargetFor(input.scope, input.approval),
-        { type: "user", id: session.data?.google_sub ?? "" },
-      ),
+      createApprovalMute(workspaceId, muteTargetFor(input.scope, input.approval), {
+        type: "user",
+        id: session.data?.google_sub ?? "",
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["approval-mutes", workspaceId] });
     },

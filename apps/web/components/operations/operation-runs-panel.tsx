@@ -96,16 +96,10 @@ export function OperationRunsPanel({
               <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted">
                 <span
                   data-testid="operation-run-state"
-                  className={cn(
-                    "flex items-center gap-1.5 font-mono",
-                    runStateClass(run.state),
-                  )}
+                  className={cn("flex items-center gap-1.5 font-mono", runStateClass(run.state))}
                 >
                   {run.state === "WAITING_FOR_APPROVAL" ? (
-                    <span
-                      className="size-1.5 rounded-full bg-approval"
-                      aria-hidden="true"
-                    />
+                    <span className="size-1.5 rounded-full bg-approval" aria-hidden="true" />
                   ) : null}
                   {run.state}
                   {run.state === "WAITING_FOR_APPROVAL" ? (

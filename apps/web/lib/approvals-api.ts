@@ -284,9 +284,10 @@ export function revokeApprovalGrant(
   return requestRuntime(
     "/api/runtime/v1/approvals/grants/revoke",
     (payload) =>
-      z
-        .strictObject({ revoked: z.literal(true), grant_id: z.string() })
-        .parse(payload) as { revoked: true; grant_id: string },
+      z.strictObject({ revoked: z.literal(true), grant_id: z.string() }).parse(payload) as {
+        revoked: true;
+        grant_id: string;
+      },
     {
       method: "POST",
       body: JSON.stringify({ workspace_id: workspaceId, grant_id: grantId }),

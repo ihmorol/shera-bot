@@ -57,10 +57,7 @@ function GrantRow({
   onRevoke: (grantId: string) => void;
 }) {
   return (
-    <li
-      data-grant-id={grant.grant_id}
-      className="rounded-xl border border-line bg-surface p-4"
-    >
+    <li data-grant-id={grant.grant_id} className="rounded-xl border border-line bg-surface p-4">
       <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
         <KeyRound className="size-4 shrink-0 self-center text-sky" aria-hidden="true" />
         <span className="truncate font-mono text-sm text-text">{grant.tool_id}</span>
@@ -123,7 +120,13 @@ function GrantRow({
   );
 }
 
-function MuteRow({ mute, identities }: { mute: ApprovalMuteRecord; identities: AgentRosterSummary[] }) {
+function MuteRow({
+  mute,
+  identities,
+}: {
+  mute: ApprovalMuteRecord;
+  identities: AgentRosterSummary[];
+}) {
   const target =
     mute.scope === "all"
       ? "every reminder in this workspace"
@@ -170,10 +173,7 @@ export function PermissionsReadout({
     return (
       <div aria-busy="true" className="flex flex-col gap-3">
         {Array.from({ length: 2 }, (_, index) => (
-          <div
-            key={index}
-            className="h-32 animate-pulse rounded-xl bg-surface-elevated"
-          />
+          <div key={index} className="h-32 animate-pulse rounded-xl bg-surface-elevated" />
         ))}
       </div>
     );
@@ -274,9 +274,7 @@ export function PermissionsSettingsSurface() {
   if (resolution.data?.kind !== "ready") {
     return <ContainerUnavailableState />;
   }
-  return (
-    <RuntimePermissionsSettings workspaceId={resolution.data.workspace_id} />
-  );
+  return <RuntimePermissionsSettings workspaceId={resolution.data.workspace_id} />;
 }
 
 function RuntimePermissionsSettings({ workspaceId }: { workspaceId: string }) {

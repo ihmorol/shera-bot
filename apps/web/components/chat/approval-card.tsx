@@ -306,9 +306,7 @@ export function ApprovalDecisionContent({
   // effect runs before the dialog exists and would silently no-op.
   const panelRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    panelRef.current
-      ?.querySelector<HTMLElement>("[data-autofocus]")
-      ?.focus();
+    panelRef.current?.querySelector<HTMLElement>("[data-autofocus]")?.focus();
   }, []);
 
   return (
@@ -391,8 +389,8 @@ export function ApprovalDecisionContent({
         })}
       </div>
       <p className="mt-3 text-[13px] text-muted">
-        Approve choices create a visible, revocable grant in Settings → Permissions &amp;
-        approvals. Only you can decide — Agents cannot.
+        Approve choices create a visible, revocable grant in Settings → Permissions &amp; approvals.
+        Only you can decide — Agents cannot.
       </p>
     </div>
   );

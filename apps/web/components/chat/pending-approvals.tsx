@@ -71,7 +71,8 @@ export function PendingApprovalsRows({
   onChoose,
   onMute,
 }: PendingApprovalsRowsProps) {
-  const openApproval = approvals.find((approval) => approval.approval_id === openApprovalId) ?? null;
+  const openApproval =
+    approvals.find((approval) => approval.approval_id === openApprovalId) ?? null;
 
   return (
     <>

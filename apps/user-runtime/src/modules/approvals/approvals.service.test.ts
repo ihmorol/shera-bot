@@ -50,7 +50,7 @@ import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 
 import { APPROVAL_REMINDER_SCHEDULE_SECONDS } from "@shera-bot/contracts";
-import type { ApprovalChoice, OperationRun, TaskPolicy, TaskRun } from "@shera-bot/contracts";
+import type { ApprovalChoice, OperationRun, TaskRun } from "@shera-bot/contracts";
 
 import { ApprovalsRepository } from "../../adapters/sqlite/approvals-repository.ts";
 import { openDatabase, type SqliteConnection } from "../../adapters/sqlite/connection.ts";
@@ -70,8 +70,6 @@ import {
 const WS = "ws_default_01";
 const NOW = "2026-10-28T12:00:00.000Z";
 const HASH = "a".repeat(64);
-
-const POLICY: TaskPolicy = { max_retries: 3 };
 
 const tempDirs: string[] = [];
 
@@ -956,8 +954,12 @@ describe("approvals service: checkExecutionAllowed — the AC26 gate (S20 chunk 
     const env = newRuntime();
     const { decision } = approveReusable(env);
 
-    expect(env.service.checkExecutionAllowed(recheckInput({ principal: TASK_PRINCIPAL })).allowed).toBe(true);
-    expect(env.approvals.revokeGrant(WS, decision.grant.grant_id, "2026-10-28T12:01:00.000Z")).toBe(true);
+    expect(
+      env.service.checkExecutionAllowed(recheckInput({ principal: TASK_PRINCIPAL })).allowed,
+    ).toBe(true);
+    expect(env.approvals.revokeGrant(WS, decision.grant.grant_id, "2026-10-28T12:01:00.000Z")).toBe(
+      true,
+    );
 
     const refused = env.service.checkExecutionAllowed(recheckInput({ principal: TASK_PRINCIPAL }));
     expect(refused).toEqual({ allowed: false, reason: "no_active_grant" });
@@ -1009,7 +1011,9 @@ describe("approvals service: checkExecutionAllowed — the AC26 gate (S20 chunk 
     expect(refused).toEqual({ allowed: false, reason: "conversation_scope_mismatch" });
 
     // The recorded conversation still passes.
-    expect(env.service.checkExecutionAllowed(recheckInput({ principal: TASK_PRINCIPAL })).allowed).toBe(true);
+    expect(
+      env.service.checkExecutionAllowed(recheckInput({ principal: TASK_PRINCIPAL })).allowed,
+    ).toBe(true);
 
     // An explicit 'any' grant passes from ANY conversation.
     env.approvals.insertGrant({
@@ -1124,7 +1128,9 @@ describe("approvals service: one-time consumption (S20 chunk 3, D9)", () => {
     const env = newRuntime();
     approveReusable(env);
 
-    expect(env.service.checkExecutionAllowed(recheckInput({ principal: TASK_PRINCIPAL })).allowed).toBe(true);
+    expect(
+      env.service.checkExecutionAllowed(recheckInput({ principal: TASK_PRINCIPAL })).allowed,
+    ).toBe(true);
     const grant = env.approvals.listGrants(WS)[0]!;
     expect(grant.one_time).toBe(false);
     expect(grant.consumed_at).toBeNull();
@@ -1185,7 +1191,12 @@ describe("approvals service: reminder firing on the fake clock (S20 chunk 3, E3)
     const pause = pauseOnce(env, makeRun());
     expect(env.journal.listStream(`task:${pause.run.task_id}`, WS)).toHaveLength(2);
 
-    env.service.setMute({ workspace_id: WS, scope: "task", target_id: "task_001", created_by: USER });
+    env.service.setMute({
+      workspace_id: WS,
+      scope: "task",
+      target_id: "task_001",
+      created_by: USER,
+    });
     env.setNow("2026-10-30T12:00:00.000Z"); // well past every slot
     env.service.dueReminders(WS);
     // A recheck consult is equally stateless toward runs.
@@ -1204,7 +1215,12 @@ describe("approvals service: mutes stop NOTIFICATIONS only (S20 chunk 3, E3)", (
     const env = newRuntime();
     const pause = pauseOnce(env, makeRun());
 
-    env.service.setMute({ workspace_id: WS, scope: "approval", target_id: pause.approval_id, created_by: USER });
+    env.service.setMute({
+      workspace_id: WS,
+      scope: "approval",
+      target_id: pause.approval_id,
+      created_by: USER,
+    });
     env.setNow("2026-10-29T12:00:00.000Z");
     const entries = env.service.dueReminders(WS);
 
@@ -1224,17 +1240,35 @@ describe("approvals service: mutes stop NOTIFICATIONS only (S20 chunk 3, E3)", (
     const a = pauseOnce(env, makeRun());
     const b = pauseOnce(env, makeRun());
 
-    env.service.setMute({ workspace_id: WS, scope: "approval", target_id: a.approval_id, created_by: USER });
+    env.service.setMute({
+      workspace_id: WS,
+      scope: "approval",
+      target_id: a.approval_id,
+      created_by: USER,
+    });
     env.setNow("2026-10-28T12:15:00.000Z"); // slots 0 and 1 are due for both
     let entries = env.service.dueReminders(WS);
-    expect(entries.filter((e) => e.approval_id === a.approval_id).every((e) => e.outcome === "muted")).toBe(true);
-    expect(entries.filter((e) => e.approval_id === b.approval_id).every((e) => e.outcome === "delivered")).toBe(true);
+    expect(
+      entries.filter((e) => e.approval_id === a.approval_id).every((e) => e.outcome === "muted"),
+    ).toBe(true);
+    expect(
+      entries
+        .filter((e) => e.approval_id === b.approval_id)
+        .every((e) => e.outcome === "delivered"),
+    ).toBe(true);
 
     // The task mute widens the silence to B's remaining slots.
-    env.service.setMute({ workspace_id: WS, scope: "task", target_id: "task_001", created_by: USER });
+    env.service.setMute({
+      workspace_id: WS,
+      scope: "task",
+      target_id: "task_001",
+      created_by: USER,
+    });
     env.setNow("2026-10-29T18:00:00.000Z");
     entries = env.service.dueReminders(WS);
-    expect(entries.filter((e) => e.approval_id === b.approval_id).every((e) => e.outcome === "muted")).toBe(true);
+    expect(
+      entries.filter((e) => e.approval_id === b.approval_id).every((e) => e.outcome === "muted"),
+    ).toBe(true);
 
     // B delivered exactly its two pre-mute slots — muting is not retroactive.
     const bRows = env.approvals.listRemindersByApproval(WS, b.approval_id);
@@ -1252,20 +1286,34 @@ describe("approvals service: mutes stop NOTIFICATIONS only (S20 chunk 3, E3)", (
 
     expect(entries).toHaveLength(10);
     expect(entries.every((e) => e.outcome === "muted")).toBe(true);
-    expect(env.approvals.listRemindersByApproval(WS, a.approval_id).every((r) => r.delivered_at === null)).toBe(true);
-    expect(env.approvals.listRemindersByApproval(WS, b.approval_id).every((r) => r.delivered_at === null)).toBe(true);
+    expect(
+      env.approvals
+        .listRemindersByApproval(WS, a.approval_id)
+        .every((r) => r.delivered_at === null),
+    ).toBe(true);
+    expect(
+      env.approvals
+        .listRemindersByApproval(WS, b.approval_id)
+        .every((r) => r.delivered_at === null),
+    ).toBe(true);
   });
 
   it("an incoherent mute is refused typed — APPROVAL_MUTE_INVALID", () => {
     const env = newRuntime();
 
     expect(
-      catchCode(() => env.service.setMute({ workspace_id: WS, scope: "approval", created_by: USER }))
-        .code,
+      catchCode(() =>
+        env.service.setMute({ workspace_id: WS, scope: "approval", created_by: USER }),
+      ).code,
     ).toBe("APPROVAL_MUTE_INVALID");
     expect(
       catchCode(() =>
-        env.service.setMute({ workspace_id: WS, scope: "all", target_id: "task_001", created_by: USER }),
+        env.service.setMute({
+          workspace_id: WS,
+          scope: "all",
+          target_id: "task_001",
+          created_by: USER,
+        }),
       ).code,
     ).toBe("APPROVAL_MUTE_INVALID");
   });

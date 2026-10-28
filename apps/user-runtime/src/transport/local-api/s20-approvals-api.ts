@@ -224,9 +224,9 @@ function rebuildRunProjection(
     if (row.event_type === "task.created" || !LIFECYCLE_EVENT_TYPES.has(row.event_type)) {
       continue;
     }
-    const envelopeSchema = (
-      EVENT_ENVELOPES as Record<string, z.ZodType | undefined>
-    )[row.event_type];
+    const envelopeSchema = (EVENT_ENVELOPES as Record<string, z.ZodType | undefined>)[
+      row.event_type
+    ];
     if (!envelopeSchema) {
       continue;
     }
@@ -256,7 +256,9 @@ function rebuildRunProjection(
     },
     pack_snapshot: creation.payload.pack_snapshot,
     roster: creation.payload.roster ?? [],
-    ...(creation.payload.provider_snapshot ? { provider_snapshot: creation.payload.provider_snapshot } : {}),
+    ...(creation.payload.provider_snapshot
+      ? { provider_snapshot: creation.payload.provider_snapshot }
+      : {}),
     state,
     version,
     // Not journal-rebuildable in this payload vocabulary and NOT consulted by
@@ -476,7 +478,9 @@ export function registerApprovalsRoutes(app: Express, deps: ApprovalsApiHandle):
   app.get(LIST_APPROVAL_GRANTS_PATH, (req, res) => {
     const query = ApprovalWorkspaceQuery.safeParse(req.query);
     if (!query.success) {
-      res.status(400).json(validationFailure("The grants request is not valid: a workspace_id is required."));
+      res
+        .status(400)
+        .json(validationFailure("The grants request is not valid: a workspace_id is required."));
       return;
     }
     res.status(200).json({ grants: deps.listActiveGrants(query.data.workspace_id) });
@@ -507,7 +511,9 @@ export function registerApprovalsRoutes(app: Express, deps: ApprovalsApiHandle):
   app.post(DUE_APPROVAL_REMINDERS_PATH, (req, res) => {
     const body = ApprovalWorkspaceBody.safeParse(req.body);
     if (!body.success) {
-      res.status(400).json(validationFailure("The reminder request is not valid: a workspace_id is required."));
+      res
+        .status(400)
+        .json(validationFailure("The reminder request is not valid: a workspace_id is required."));
       return;
     }
     res.status(200).json({ reminders: deps.dueReminders(body.data.workspace_id) });
@@ -517,7 +523,9 @@ export function registerApprovalsRoutes(app: Express, deps: ApprovalsApiHandle):
   app.get(APPROVAL_MUTES_PATH, (req, res) => {
     const query = ApprovalWorkspaceQuery.safeParse(req.query);
     if (!query.success) {
-      res.status(400).json(validationFailure("The mutes request is not valid: a workspace_id is required."));
+      res
+        .status(400)
+        .json(validationFailure("The mutes request is not valid: a workspace_id is required."));
       return;
     }
     res.status(200).json({ mutes: deps.listMutes(query.data.workspace_id) });
@@ -551,7 +559,11 @@ export function registerApprovalsRoutes(app: Express, deps: ApprovalsApiHandle):
     if (!body.success) {
       res
         .status(400)
-        .json(validationFailure("The revoke request is not valid: a workspace_id and a grant_id are required."));
+        .json(
+          validationFailure(
+            "The revoke request is not valid: a workspace_id and a grant_id are required.",
+          ),
+        );
       return;
     }
     if (!deps.revokeGrant(body.data.workspace_id, body.data.grant_id)) {
@@ -571,7 +583,9 @@ export function registerApprovalsRoutes(app: Express, deps: ApprovalsApiHandle):
     const approvalId = Id.safeParse(req.params.approval_id);
     const query = ApprovalWorkspaceQuery.safeParse(req.query);
     if (!approvalId.success || !query.success) {
-      res.status(400).json(validationFailure("The approval request is not valid: a workspace_id is required."));
+      res
+        .status(400)
+        .json(validationFailure("The approval request is not valid: a workspace_id is required."));
       return;
     }
     const detail = deps.getApprovalDetail(query.data.workspace_id, approvalId.data);
@@ -592,7 +606,11 @@ export function registerApprovalsRoutes(app: Express, deps: ApprovalsApiHandle):
     if (!approvalId.success || !body.success) {
       res
         .status(400)
-        .json(validationFailure("The decision request is not valid: a workspace_id, one of the five choices, and a user decided_by are required."));
+        .json(
+          validationFailure(
+            "The decision request is not valid: a workspace_id, one of the five choices, and a user decided_by are required.",
+          ),
+        );
       return;
     }
     const result = deps.decide({
@@ -687,7 +705,9 @@ export interface ScriptedToolProposalConfig {
 export function applyScriptedToolProposal(
   approvals: ApprovalsService,
   config: ScriptedToolProposalConfig,
-  event: TypedExecutionEvent & { payload: { tool_id: string; tool_version: string; args_digest: string } },
+  event: TypedExecutionEvent & {
+    payload: { tool_id: string; tool_version: string; args_digest: string };
+  },
   run: TaskRun,
   logFault: RedactedLogger,
 ): TaskRun {

@@ -86,7 +86,7 @@ const READ_ONLY_TOOL = {
   },
 } as const;
 
-let clockNow = "2026-10-28T12:00:00.000Z";
+const clockNow = "2026-10-28T12:00:00.000Z";
 
 interface RunningRuntime {
   runtime: RuntimeHandle;
@@ -106,7 +106,9 @@ async function composeOn(
     ...(scriptedToolProposal !== undefined ? { scriptedToolProposal } : {}),
   });
   trackConnection(runtime);
-  await new Promise<void>((resolveListen) => runtime.httpServer.listen(0, "127.0.0.1", resolveListen));
+  await new Promise<void>((resolveListen) =>
+    runtime.httpServer.listen(0, "127.0.0.1", resolveListen),
+  );
   const address = runtime.httpServer.address() as { port: number };
   return {
     runtime,
@@ -150,7 +152,11 @@ function scriptedTrigger(n: number): TypedExecutionEvent {
 let runCounter = 0;
 
 /** Start one scripted run; it ends WAITING_FOR_APPROVAL on the gated tool. */
-function startScriptedRun(runtime: RuntimeHandle): { taskId: string; state: string; version: number } {
+function startScriptedRun(runtime: RuntimeHandle): {
+  taskId: string;
+  state: string;
+  version: number;
+} {
   runCounter += 1;
   const result = runtime.harness.startRun(scriptedTrigger(runCounter));
   if (!result.ok) {
@@ -314,8 +320,9 @@ describe("S20 approvals API: decisions", () => {
   it("approve-this-execution-only resumes the run and creates the one-time grant", async () => {
     env = await composeOn(GATED_TOOL);
     const run = startScriptedRun(env.runtime);
-    const approvals = ((await pendingList(env.origin)).body["approvals"] ??
-      []) as Array<Record<string, unknown>>;
+    const approvals = ((await pendingList(env.origin)).body["approvals"] ?? []) as Array<
+      Record<string, unknown>
+    >;
     const approvalId = approvals[0]!["approval_id"] as string;
 
     const decision = await decide(env.origin, approvalId, "approve-this-execution-only");
@@ -334,9 +341,12 @@ describe("S20 approvals API: decisions", () => {
       args_digest: `sha256:${"b".repeat(64)}`,
     });
     // The pending list no longer carries the request.
-    expect(((await pendingList(env.origin)).body["approvals"] ?? [])).toHaveLength(0);
+    expect((await pendingList(env.origin)).body["approvals"] ?? []).toHaveLength(0);
     // The resolved detail still answers, with the stamp and the RUNNING run.
-    const detail = await getJson(env.origin, `/v1/approvals/${approvalId}?workspace_id=${WORKSPACE}`);
+    const detail = await getJson(
+      env.origin,
+      `/v1/approvals/${approvalId}?workspace_id=${WORKSPACE}`,
+    );
     expect((detail.body["approval"] as Record<string, unknown>)["status"]).toBe("approved");
     expect((detail.body["run"] as Record<string, unknown>)["state"]).toBe("RUNNING");
   });
@@ -383,7 +393,11 @@ describe("S20 approvals API: decisions", () => {
     >;
     const approvalId = approvals[0]!["approval_id"] as string;
 
-    const decision = await decide(env.origin, approvalId, "always-approve-this-tool-for-this-agent");
+    const decision = await decide(
+      env.origin,
+      approvalId,
+      "always-approve-this-tool-for-this-agent",
+    );
     expect(decision.status).toBe(200);
     expect(decision.body["outcome"]).toBe("approved");
     expect(decision.body["grant"]).toMatchObject({
@@ -406,7 +420,11 @@ describe("S20 approvals API: decisions", () => {
     expect(decision.body["outcome"]).toBe("action_rejected");
     expect((decision.body["run"] as Record<string, unknown>)["state"]).toBe("RUNNING");
     expect(decision.body["grant"]).toBeUndefined();
-    expect(((await getJson(env.origin, `/v1/approvals/grants?workspace_id=${WORKSPACE}`)).body["grants"] ?? [])).toHaveLength(0);
+    expect(
+      (await getJson(env.origin, `/v1/approvals/grants?workspace_id=${WORKSPACE}`)).body[
+        "grants"
+      ] ?? [],
+    ).toHaveLength(0);
   });
 
   it("cancel-the-task cancels the run and its child run in the same unit", async () => {
@@ -446,7 +464,9 @@ describe("S20 approvals API: decisions", () => {
 
     const first = await decide(env.origin, approvalId, "approve-this-execution-only");
     expect(first.status).toBe(200);
-    const grantsAfterFirst = ((await getJson(env.origin, `/v1/approvals/grants?workspace_id=${WORKSPACE}`)).body["grants"] ?? []) as Array<Record<string, unknown>>;
+    const grantsAfterFirst = ((
+      await getJson(env.origin, `/v1/approvals/grants?workspace_id=${WORKSPACE}`)
+    ).body["grants"] ?? []) as Array<Record<string, unknown>>;
     expect(grantsAfterFirst).toHaveLength(1);
 
     // Two tabs / a retried call: the stored resolution is returned, nothing
@@ -456,7 +476,9 @@ describe("S20 approvals API: decisions", () => {
     expect(replay.body["outcome"]).toBe("already_decided");
     expect(replay.body["choice"]).toBe("approve-this-execution-only");
     expect((replay.body["request"] as Record<string, unknown>)["status"]).toBe("approved");
-    const grantsAfterReplay = ((await getJson(env.origin, `/v1/approvals/grants?workspace_id=${WORKSPACE}`)).body["grants"] ?? []) as Array<Record<string, unknown>>;
+    const grantsAfterReplay = ((
+      await getJson(env.origin, `/v1/approvals/grants?workspace_id=${WORKSPACE}`)
+    ).body["grants"] ?? []) as Array<Record<string, unknown>>;
     expect(grantsAfterReplay).toHaveLength(1);
 
     // A different choice on the resolved request is the typed immutable refusal.
@@ -488,8 +510,12 @@ describe("S20 approvals API: decisions", () => {
     expect(other.body["code"]).toBe("AGENT_CANNOT_DECIDE_APPROVAL");
 
     // A prompt-shaped input created NO grant and resolved NOTHING (G6).
-    expect(((await getJson(env.origin, `/v1/approvals/grants?workspace_id=${WORKSPACE}`)).body["grants"] ?? [])).toHaveLength(0);
-    expect(((await pendingList(env.origin)).body["approvals"] ?? [])).toHaveLength(1);
+    expect(
+      (await getJson(env.origin, `/v1/approvals/grants?workspace_id=${WORKSPACE}`)).body[
+        "grants"
+      ] ?? [],
+    ).toHaveLength(0);
+    expect((await pendingList(env.origin)).body["approvals"] ?? []).toHaveLength(1);
   });
 });
 
@@ -540,7 +566,8 @@ describe("S20 approvals API: grants and revocation", () => {
     expect(revoke.body["revoked"]).toBe(true);
 
     // The revoked grant no longer appears in the active list.
-    const grants = ((await getJson(env.origin, `/v1/approvals/grants?workspace_id=${WORKSPACE}`)).body["grants"] ?? []) as Array<Record<string, unknown>>;
+    const grants = ((await getJson(env.origin, `/v1/approvals/grants?workspace_id=${WORKSPACE}`))
+      .body["grants"] ?? []) as Array<Record<string, unknown>>;
     expect(grants).toHaveLength(0);
 
     // AC26: the next execution consult refuses — fail-closed.
@@ -589,7 +616,9 @@ describe("S20 approvals API: workspace scoping (E12)", () => {
     const approvalId = approvals[0]!["approval_id"] as string;
 
     // The foreign workspace's reads see nothing of this approval.
-    expect(((await pendingList(env.origin, FOREIGN_WORKSPACE)).body["approvals"] ?? [])).toHaveLength(0);
+    expect((await pendingList(env.origin, FOREIGN_WORKSPACE)).body["approvals"] ?? []).toHaveLength(
+      0,
+    );
     const foreignDetail = await getJson(
       env.origin,
       `/v1/approvals/${approvalId}?workspace_id=${FOREIGN_WORKSPACE}`,
@@ -607,10 +636,14 @@ describe("S20 approvals API: workspace scoping (E12)", () => {
     );
     expect(foreignDecision.status).toBe(404);
     expect(foreignDecision.body["code"]).toBe("APPROVAL_REQUEST_NOT_FOUND");
-    expect(((await pendingList(env.origin)).body["approvals"] ?? [])).toHaveLength(1);
+    expect((await pendingList(env.origin)).body["approvals"] ?? []).toHaveLength(1);
 
     // Grants and mutes are equally scoped: nothing leaks across.
-    expect(((await getJson(env.origin, `/v1/approvals/grants?workspace_id=${FOREIGN_WORKSPACE}`)).body["grants"] ?? [])).toHaveLength(0);
+    expect(
+      (await getJson(env.origin, `/v1/approvals/grants?workspace_id=${FOREIGN_WORKSPACE}`)).body[
+        "grants"
+      ] ?? [],
+    ).toHaveLength(0);
     const foreignRevoke = await postJson(env.origin, "/v1/approvals/grants/revoke", {
       workspace_id: FOREIGN_WORKSPACE,
       grant_id: "grt_whatever",
@@ -622,11 +655,10 @@ describe("S20 approvals API: workspace scoping (E12)", () => {
     env = await composeOn(GATED_TOOL);
     expect((await getJson(env.origin, "/v1/approvals/pending")).status).toBe(400);
     expect(
-      (await postJson(env.origin, "/v1/approvals/mutes", { scope: "all", created_by: USER })).status,
+      (await postJson(env.origin, "/v1/approvals/mutes", { scope: "all", created_by: USER }))
+        .status,
     ).toBe(400);
-    expect(
-      (await postJson(env.origin, "/v1/approvals/due-reminders", {})).status,
-    ).toBe(400);
+    expect((await postJson(env.origin, "/v1/approvals/due-reminders", {})).status).toBe(400);
     // F3: the old GET scan route is GONE — the typed 404, never a silent
     // state-mutating read.
     const oldGet = await getJson(env.origin, "/v1/approvals/due-reminders");
@@ -675,8 +707,13 @@ describe("S20 approvals API: mutes and due reminders", () => {
 
     // A task-scope mute without its target id is the typed 400.
     expect(
-      (await postJson(env.origin, "/v1/approvals/mutes", { workspace_id: WORKSPACE, scope: "task", created_by: USER }))
-        .status,
+      (
+        await postJson(env.origin, "/v1/approvals/mutes", {
+          workspace_id: WORKSPACE,
+          scope: "task",
+          created_by: USER,
+        })
+      ).status,
     ).toBe(400);
 
     const list = await getJson(env.origin, `/v1/approvals/mutes?workspace_id=${WORKSPACE}`);
@@ -707,7 +744,10 @@ describe("S20 approvals API: mutes and due reminders", () => {
     expect(agent.status).toBe(400);
     expect(agent.body["code"]).toBe("APPROVAL_MUTE_INVALID");
 
-    expect(((await getJson(env.origin, `/v1/approvals/mutes?workspace_id=${WORKSPACE}`)).body["mutes"] ?? [])).toHaveLength(0);
+    expect(
+      (await getJson(env.origin, `/v1/approvals/mutes?workspace_id=${WORKSPACE}`)).body["mutes"] ??
+        [],
+    ).toHaveLength(0);
   });
 
   it("fires due reminders (delivered_at stamped), enforces mutes, and NEVER changes run state", async () => {
@@ -745,7 +785,10 @@ describe("S20 approvals API: mutes and due reminders", () => {
 
     // The detail's reminder rows stay UNDELIVERED for audit; the run is
     // untouched (no transition, no journal event — D32/E3).
-    const detail = await getJson(env.origin, `/v1/approvals/${approvalId}?workspace_id=${WORKSPACE}`);
+    const detail = await getJson(
+      env.origin,
+      `/v1/approvals/${approvalId}?workspace_id=${WORKSPACE}`,
+    );
     const reminders = detail.body["reminders"] as Array<Record<string, unknown>>;
     expect(reminders[0]!["delivered_at"]).toBeNull();
     expect(detail.body["run"]).toMatchObject({ state: "WAITING_FOR_APPROVAL", version: 4 });
@@ -759,19 +802,28 @@ describe("S20 approvals API: mutes and due reminders", () => {
     >;
     const approvalId = approvals[0]!["approval_id"] as string;
 
-    const first = (await postJson(env.origin, "/v1/approvals/due-reminders", { workspace_id: WORKSPACE })).body["reminders"] as Array<Record<string, unknown>>;
+    const first = (
+      await postJson(env.origin, "/v1/approvals/due-reminders", { workspace_id: WORKSPACE })
+    ).body["reminders"] as Array<Record<string, unknown>>;
     expect(first).toHaveLength(1);
     expect(first[0]).toMatchObject({ reminder_index: 0, outcome: "delivered" });
     expect(first[0]!["delivered_at"]).not.toBeNull();
 
     // The delivered slot does not resurface; the later slots are not yet due.
     expect(
-      ((await postJson(env.origin, "/v1/approvals/due-reminders", { workspace_id: WORKSPACE })).body["reminders"] ?? []),
+      (await postJson(env.origin, "/v1/approvals/due-reminders", { workspace_id: WORKSPACE })).body[
+        "reminders"
+      ] ?? [],
     ).toHaveLength(0);
 
     // The delivery stamp landed on the detail read.
-    const detail = await getJson(env.origin, `/v1/approvals/${approvalId}?workspace_id=${WORKSPACE}`);
-    expect((detail.body["reminders"] as Array<Record<string, unknown>>)[0]!["delivered_at"]).not.toBeNull();
+    const detail = await getJson(
+      env.origin,
+      `/v1/approvals/${approvalId}?workspace_id=${WORKSPACE}`,
+    );
+    expect(
+      (detail.body["reminders"] as Array<Record<string, unknown>>)[0]!["delivered_at"],
+    ).not.toBeNull();
   });
 });
 

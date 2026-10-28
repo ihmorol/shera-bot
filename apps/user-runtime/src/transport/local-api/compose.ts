@@ -887,12 +887,14 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
   // dictates.
   if (scriptedToolProposal && options.harnessAdapter) {
     logFault("approval_scripted_tool_proposal_ignored", {
-      reason: "a custom harness adapter is configured; the scripted proposal script is not attached",
+      reason:
+        "a custom harness adapter is configured; the scripted proposal script is not attached",
       tool_id: scriptedToolProposal.tool.tool_id,
     });
   }
   const harness = new HarnessRunService({
-    adapter: options.harnessAdapter ??
+    adapter:
+      options.harnessAdapter ??
       (scriptedToolProposal
         ? new FakeHarnessAdapter({
             ...(options.now ? { now: options.now } : {}),
@@ -928,7 +930,13 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
             // The delegate runs INSIDE startRun's atomic unit: the pause and
             // its journal events commit (or not) with the run's own writes.
             onToolProposed: (event, run) =>
-              applyScriptedToolProposal(wired.approvals, scriptedToolProposal, event, run, logFault),
+              applyScriptedToolProposal(
+                wired.approvals,
+                scriptedToolProposal,
+                event,
+                run,
+                logFault,
+              ),
           },
         }
       : {}),

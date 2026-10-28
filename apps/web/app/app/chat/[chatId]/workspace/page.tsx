@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { EmptyState, SurfaceFrame } from "@/components/shell/surface-frame";
+import { WorkspaceInlineSurface } from "@/components/workspace/workspace-routes";
 import { routes } from "@/lib/routes";
 
 interface WorkspacePageProps {
@@ -13,37 +13,31 @@ export const metadata: Metadata = {
 };
 
 /**
- * S7 workspace panel, inline variant. In the desktop shell this surface mounts
- * in the reserved workspace panel; as a direct route it renders standalone
- * until the panel hosting lands with the workspace chunk.
+ * S7 workspace panel, inline variant (UI_DESIGN §3.1): the per-conversation
+ * workspace panel rendered standalone at its full height — the deep-linkable
+ * inline surface keyed by the conversation id. The docked composition (panel
+ * beside the chat with the header toggle) lives in the chat surfaces; this
+ * route renders the SAME panel body and links to the full-page variant.
  */
 export default async function WorkspacePage({ params }: WorkspacePageProps) {
   const { chatId } = await params;
 
   return (
-    <SurfaceFrame
-      title="Workspace"
-      meta={`Conversation ${chatId}`}
-      actions={
+    <div className="mx-auto flex h-dvh max-w-5xl flex-col px-4 py-4 lg:px-6">
+      <div className="flex items-center justify-between gap-3 pb-3">
+        <p className="font-mono text-xs uppercase tracking-[0.16em] text-muted">
+          Conversation {chatId}
+        </p>
         <Link
           href={routes.workspaceFull(chatId)}
-          className="text-sm text-sky underline underline-offset-4 hover:text-cool-highlight"
+          className="shrink-0 text-sm text-sky underline underline-offset-4 hover:text-cool-highlight"
         >
           Open full page
         </Link>
-      }
-    >
-      <EmptyState
-        explanation="Files, editor, live views, task runs, and tool history mount here with the mock runtime."
-        action={
-          <Link
-            href={routes.workspaceFull(chatId)}
-            className="text-sm text-sky underline underline-offset-4 hover:text-cool-highlight"
-          >
-            Open the full-page workspace
-          </Link>
-        }
-      />
-    </SurfaceFrame>
+      </div>
+      <div className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-line bg-surface">
+        <WorkspaceInlineSurface chatId={chatId} />
+      </div>
+    </div>
   );
 }

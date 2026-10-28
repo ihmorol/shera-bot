@@ -25,8 +25,33 @@ export function isBrowserRuntimePath(method: string, path: string): boolean {
       // runtime re-resolves the definition and re-validates the roster before
       // creating anything, so the browser never writes Operation rows
       // directly.
-      path === "/v1/operations/launch"
+      path === "/v1/operations/launch" ||
+      // S17 chunk 4 (D6/D39/G6): the workspace panel's typed writes — file
+      // upload/mkdir/user-confirmed delete, lease acquire/renew/release for
+      // the panel's conflict surfaces, and artifact insert. Every write still
+      // carries its D4 actor + workspace_id in the body (the proxy's
+      // runtimeWorkspaceMatches check enforces the binding); the D6 lease
+      // gate inside the repositories refuses what the actor may not do. The
+      // runtime-internal task-terminal force-release
+      // (/v1/workspace/leases/release-for-task) is deliberately ABSENT — task
+      // ids are runtime-minted and only the gateway may force-release.
+      path === "/v1/workspace/files/upload" ||
+      path === "/v1/workspace/directories" ||
+      path === "/v1/workspace/delete" ||
+      path === "/v1/workspace/leases" ||
+      /^\/v1\/workspace\/leases\/[a-zA-Z0-9_-]+\/renew$/.test(path) ||
+      path === "/v1/workspace/artifacts"
     );
+  }
+  if (method === "PUT") {
+    // S17: the gated file write (D6) — the one PUT, the panel's editor seam.
+    return path === "/v1/workspace/files";
+  }
+  if (method === "DELETE") {
+    // S17: the holder-task lease release (D6). File deletes are a POST route
+    // (/v1/workspace/delete) so the confirmed delete travels as a typed body,
+    // not a destructive URL.
+    return /^\/v1\/workspace\/leases\/[a-zA-Z0-9_-]+$/.test(path);
   }
   return (
     method === "GET" &&
@@ -48,7 +73,18 @@ export function isBrowserRuntimePath(method: string, path: string): boolean {
       // mutation the gate adds is the launch CONFIRM (POST
       // /v1/operations/launch, allowlisted above).
       path === "/v1/operation-definitions" ||
-      /^\/v1\/operation-definitions\/[a-zA-Z0-9_-]+\/preview$/.test(path))
+      /^\/v1\/operation-definitions\/[a-zA-Z0-9_-]+\/preview$/.test(path) ||
+      // S17 chunk 4 (E12/AC16): the workspace panel reads — the shared
+      // workspace:// tree listing, file bytes (base64 prototype body), the
+      // active write leases (the conflict tooltip's data source, G5), and the
+      // artifact refs + byte-exact artifact download. Reads are scoped by the
+      // workspace_id query the proxy binds to the session (E12); private
+      // agent:// denials stay in the storage layer (D39).
+      path === "/v1/workspace/nodes" ||
+      path === "/v1/workspace/files" ||
+      path === "/v1/workspace/leases" ||
+      path === "/v1/workspace/artifacts" ||
+      /^\/v1\/workspace\/artifacts\/[a-zA-Z0-9_-]+$/.test(path))
   );
 }
 

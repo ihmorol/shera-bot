@@ -169,7 +169,7 @@ describe("drag resize (single-owner resize state)", () => {
 
   function dragging(): PanelState {
     const state = panelReducer(initialPanelState(), { type: "open", viewportWidth: VW });
-    return panelReducer(state, { type: "dragStart", pointerX: 1000 });
+    return panelReducer(state, { type: "dragStart", pointerX: 1000, viewportWidth: VW });
   }
 
   it("sizes from the drag START width — moves never accumulate", () => {
@@ -214,10 +214,9 @@ describe("drag resize (single-owner resize state)", () => {
     expect((committed.widthState as { width: number }).width).toBe(360);
     expect(committed.drag).toBeNull();
 
-    const cancelled = panelReducer(
-      panelReducer(dragging(), { type: "dragMove", pointerX: 900 }),
-      { type: "dragCancel" },
-    );
+    const cancelled = panelReducer(panelReducer(dragging(), { type: "dragMove", pointerX: 900 }), {
+      type: "dragCancel",
+    });
     expect((cancelled.widthState as { width: number }).width).toBe(360);
     expect(cancelled.drag).toBeNull();
   });
@@ -242,20 +241,32 @@ describe("keyboard resize", () => {
   it("arrows step 16px; with Shift 48px; Left widens the right-docked panel", () => {
     expect(KEYBOARD_RESIZE_STEP).toBe(16);
     expect(KEYBOARD_RESIZE_LARGE_STEP).toBe(48);
-    const widened = panelReducer(open(), { type: "keyboardResize", direction: "widen", viewportWidth: VW });
+    const widened = panelReducer(open(), {
+      type: "keyboardResize",
+      direction: "widen",
+      viewportWidth: VW,
+    });
     expect((widened.widthState as { width: number }).width).toBe(360 + 16);
     const large = panelReducer(open(), {
       type: "keyboardResize",
-      direction: "narrow",
+      direction: "widen",
       large: true,
       viewportWidth: VW,
     });
-    expect((large.widthState as { width: number }).width).toBe(360 - 48);
+    expect((large.widthState as { width: number }).width).toBe(360 + 48);
   });
 
   it("Home/End reach the min/max limits and Enter resets to 360", () => {
     const min = panelReducer(open(), { type: "keyboardMin" });
     expect((min.widthState as { width: number }).width).toBe(PANEL_MIN_WIDTH);
+    // A step past the min clamps to it (the panel never goes under 320).
+    const clamped = panelReducer(open(), {
+      type: "keyboardResize",
+      direction: "narrow",
+      large: true,
+      viewportWidth: VW,
+    });
+    expect((clamped.widthState as { width: number }).width).toBe(PANEL_MIN_WIDTH);
     const max = panelReducer(open(), { type: "keyboardMax", viewportWidth: VW });
     expect((max.widthState as { width: number }).width).toBe(VW - CHAT_MIN_WIDTH);
     const reset = panelReducer(max, { type: "keyboardReset" });
@@ -328,10 +339,7 @@ describe("viewport mode", () => {
   });
 
   it("the panel host wires the mobile sheet through the md breakpoint", () => {
-    const source = readFileSync(
-      join(APP_DIR, "components/workspace/workspace-panel.tsx"),
-      "utf8",
-    );
+    const source = readFileSync(join(APP_DIR, "components/workspace/workspace-panel.tsx"), "utf8");
     expect(source).toMatch(/isMobileViewport/);
     expect(source).toMatch(/bottom sheet|sheet|BottomSheet/i);
   });
@@ -343,9 +351,7 @@ describe("viewport mode", () => {
 
 describe("workspace client (S17 local-API seam)", () => {
   it("fetchWorkspaceNodes GETs the nodes route with the D4 user actor and parses rows", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(jsonResponse(200, { nodes: TREE_NODES }));
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { nodes: TREE_NODES }));
     vi.stubGlobal("fetch", fetchMock);
 
     const nodes = await fetchWorkspaceNodes(WORKSPACE, "workspace://");
@@ -353,7 +359,7 @@ describe("workspace client (S17 local-API seam)", () => {
     expect(nodes[0]).toMatchObject({ name: "docs", is_directory: true });
 
     const [path] = fetchMock.mock.calls[0] as [string];
-    const url = new URL(path);
+    const url = new URL(path, "http://localhost");
     expect(url.pathname).toBe("/api/runtime/v1/workspace/nodes");
     expect(url.searchParams.get("workspace_id")).toBe(WORKSPACE);
     expect(url.searchParams.get("path")).toBe("workspace://");
@@ -392,7 +398,9 @@ describe("workspace client (S17 local-API seam)", () => {
   it("createWorkspaceDirectory and deleteWorkspaceNode hit the typed routes", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(jsonResponse(200, { node: makeNode({ name: "new-folder", is_directory: true }) }))
+      .mockResolvedValue(
+        jsonResponse(200, { node: makeNode({ name: "new-folder", is_directory: true }) }),
+      )
       .mockResolvedValueOnce(
         jsonResponse(200, { node: makeNode({ name: "new-folder", is_directory: true }) }),
       )
@@ -481,7 +489,12 @@ describe("workspace client (S17 local-API seam)", () => {
       makeNode({ name: "a-file.txt", size: 3 }),
     ];
     const ordered = childrenOf(nodes);
-    expect(ordered.map((node) => node.name)).toEqual(["a-folder", "b-folder", "a-file.txt", "z-report.md"]);
+    expect(ordered.map((node) => node.name)).toEqual([
+      "a-folder",
+      "b-folder",
+      "a-file.txt",
+      "z-report.md",
+    ]);
     expect(formatBytes(0)).toBe("0 B");
     expect(formatBytes(2048)).toBe("2.0 KB");
   });
@@ -534,9 +547,7 @@ describe("Files tab (workspace:// tree browser)", () => {
   });
 
   it("empty state explains and offers the upload action (§2.4)", () => {
-    const html = render(
-      createElement(FilesTabView, { ...baseProps, state: "ready", nodes: [] }),
-    );
+    const html = render(createElement(FilesTabView, { ...baseProps, state: "ready", nodes: [] }));
     expect(html).toContain("No files yet");
     expect(html).toContain("Upload a file");
   });
@@ -544,7 +555,7 @@ describe("Files tab (workspace:// tree browser)", () => {
   it("loading state is a layout-matched skeleton, never a spinner", () => {
     const html = render(createElement(FilesTabView, { ...baseProps, state: "loading", nodes: [] }));
     expect(html).toContain("animate-pulse");
-    expect(html).not.toContain("<svg");
+    expect(html).not.toContain("animate-spin");
   });
 
   it("error state carries the safe_message with retry (D23 rule 4)", () => {
@@ -632,11 +643,13 @@ describe("delete confirmation gate", () => {
   it("the row delete button only OPENS the confirmation — the mutation lives behind it", () => {
     const source = readFileSync(join(APP_DIR, "components/workspace/files-tab.tsx"), "utf8");
     // The row control hands the node to the gate; the delete client call is
-    // reachable only from the dialog's confirm handler.
+    // reachable only from the dialog's confirm handler (the dialog renders
+    // before the stateful tab in the module, so the call site sits after the
+    // gate exists).
     expect(source).toMatch(/onRequestDelete=\{/);
     expect(source).toMatch(/onConfirmDelete=\{\(\) =>/);
     const dialogConfirm = source.indexOf("delete-confirm-action");
-    const deleteCall = source.indexOf("deleteNodeMutation");
+    const deleteCall = source.indexOf("deleteNode(");
     expect(dialogConfirm).toBeGreaterThanOrEqual(0);
     expect(deleteCall).toBeGreaterThan(dialogConfirm);
   });
@@ -648,7 +661,12 @@ describe("delete confirmation gate", () => {
 
 describe("panel chrome (tab strip + honest empty tabs)", () => {
   it("exposes exactly the chunk-4 tab set with accessible names", () => {
-    expect(WORKSPACE_TABS.map((tab) => tab.id)).toEqual(["files", "editor", "private", "artifacts"]);
+    expect(WORKSPACE_TABS.map((tab) => tab.id)).toEqual([
+      "files",
+      "editor",
+      "private",
+      "artifacts",
+    ]);
     expect(WORKSPACE_TABS.map((tab) => tab.label)).toEqual([
       "Files",
       "Editor",
@@ -671,19 +689,32 @@ describe("panel chrome (tab strip + honest empty tabs)", () => {
 
 describe("panel host routes", () => {
   it("the full-page route renders the host full-page with a Back-to-chat affordance", () => {
-    const source = readFileSync(
+    const page = readFileSync(
       join(APP_DIR, "app/app/chat/[chatId]/workspace/full/page.tsx"),
       "utf8",
     );
-    expect(source).toMatch(/WorkspacePanelHost|WorkspaceFullSurface/);
-    expect(source).toContain("Back to chat");
-    expect(source).toMatch(/router\.back|history\.back/);
+    expect(page).toMatch(/WorkspaceFullSurface/);
+    const surface = readFileSync(
+      join(APP_DIR, "components/workspace/workspace-routes.tsx"),
+      "utf8",
+    );
+    expect(surface).toMatch(/WorkspacePanelHost/);
+    expect(surface).toMatch(/goBackToChat/);
+    expect(surface).toMatch(/router\.back|history\.back/);
+    const host = readFileSync(join(APP_DIR, "components/workspace/workspace-panel.tsx"), "utf8");
+    expect(host).toContain("Back to chat");
   });
 
   it("the inline route renders the per-conversation panel (persisted width)", () => {
-    const source = readFileSync(join(APP_DIR, "app/app/chat/[chatId]/workspace/page.tsx"), "utf8");
-    expect(source).toMatch(/WorkspacePanelHost|WorkspacePanelSurface/);
-    expect(source).toContain("Open full page");
+    const page = readFileSync(join(APP_DIR, "app/app/chat/[chatId]/workspace/page.tsx"), "utf8");
+    expect(page).toContain("Open full page");
+    expect(page).toMatch(/WorkspaceInlineSurface/);
+    const surface = readFileSync(
+      join(APP_DIR, "components/workspace/workspace-routes.tsx"),
+      "utf8",
+    );
+    expect(surface).toMatch(/WorkspacePanelHost/);
+    expect(surface).toMatch(/presentation="page"/);
   });
 
   it("the docked host owns the persisted panel state machine per conversation", () => {

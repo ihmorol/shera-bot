@@ -208,6 +208,9 @@ function canonicalJson(value: unknown): string {
 
 const ARGS_SUMMARY_BUDGET_BYTES = 512;
 const RESULT_SUMMARY_BUDGET_BYTES = 2_048;
+const PREVIEW_BUDGET_BYTES = 2_048;
+const SIDE_EFFECT_BUDGET_BYTES = 500;
+const RESOURCE_SCOPE_BUDGET_BYTES = 512;
 
 /** One withheld gated execution, keyed by its approval id until decided. */
 interface WithheldExecution {
@@ -367,12 +370,21 @@ export class ToolExecutor {
 
     // The pure pre-execution preview (D35) — recorded BEFORE the approval
     // request exists, so the card can show what WOULD happen (AC2) with zero
-    // side effects taken.
-    const preview: ToolPreview | null =
+    // side effects taken. G3/AC9: the preview text passes the redaction
+    // boundary — binding previews are tool-authored text and may carry
+    // secret-shaped or oversized material; they are redacted and bounded
+    // like every other recorded surface, before any row is written.
+    const rawPreview: ToolPreview | null =
       resolved.binding.preview(args.rawArgs) ??
       (args.previewKind !== "none"
         ? { kind: args.previewKind, text: input.proposal.proposal_summary }
         : null);
+    const preview: ToolPreview | null = rawPreview
+      ? {
+          kind: rawPreview.kind,
+          text: redactAndBound(rawPreview.text, PREVIEW_BUDGET_BYTES),
+        }
+      : null;
 
     // Grant fast-path: the proposing run's task-principal grant first (the
     // "always approve this tool" choice), then the agent-principal grant
@@ -506,6 +518,10 @@ export class ToolExecutor {
       preview,
       startedAt,
     };
+    // G3: the free-text surfaces pass the tool redaction layer BEFORE the
+    // approvals boundary (whose own deterministic pass still runs — defense
+    // in depth; the S20 pass predates the S18 quoted-key/cookie vocabulary,
+    // and the executor closes that gap at its boundary).
     const result = approvals.createRequestFromTypedProposal({
       proposal: {
         workspace_id: run.workspace_id,
@@ -518,8 +534,10 @@ export class ToolExecutor {
         risk_class: definition.risk_class,
         resource_scope: resourceScopeOf(input),
         args_digest: proposal.args_digest,
-        side_effect_summary:
+        side_effect_summary: redactAndBound(
           input.side_effect_summary ?? preview?.text ?? proposal.proposal_summary,
+          SIDE_EFFECT_BUDGET_BYTES,
+        ),
       },
       run,
       // The gated action is WITHHELD (AC3): the S20 pause never executes
@@ -915,9 +933,18 @@ function matchesType(value: unknown, propertySchema: Record<string, unknown>): b
   }
 }
 
-/** The D9 resource scope of one proposal (explicit — never inferred widely). */
+/**
+ * The D9 resource scope of one proposal (explicit — never inferred widely),
+ * passed through the redaction boundary ONCE: the recorded scope and the
+ * grant-recheck scope are the SAME deterministic value (the S20 gate compares
+ * exactly; a raw secret-bearing scope fails closed as a typed miss rather
+ * than over-matching a redacted grant).
+ */
 function resourceScopeOf(input: ToolProposalInput): string {
-  return input.resource_scope ?? `task:${input.run.task_id}`;
+  return redactAndBound(
+    input.resource_scope ?? `task:${input.run.task_id}`,
+    RESOURCE_SCOPE_BUDGET_BYTES,
+  );
 }
 
 /** Re-export for the resource-limits type (contracts-only data, no logic). */

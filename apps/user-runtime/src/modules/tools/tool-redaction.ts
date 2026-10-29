@@ -24,12 +24,27 @@ import { redactSecrets } from "../terminals/secret-redaction.ts";
 export const TRUNCATION_MARKER = "…[TRUNCATED";
 
 /**
- * Redact, then bound one text surface to maxBytes (UTF-8). The secret pass
- * runs FIRST so a truncated-at-the-wrong-moment secret cannot survive in the
- * kept prefix.
+ * The S21 tool-surface EXTENSION to the S18 vocabulary: high-entropy token
+ * runs (24+ chars of base64url-ish material mixing letters and digits). The
+ * terminal layer deliberately lacks this pass (terminal output must stay
+ * readable); tool results and argument summaries have no such requirement —
+ * a bare opaque secret (not shaped `key=value`) is exactly the leak channel
+ * AC9 forbids. Word-shaped runs (letters only) and pure numbers survive, so
+ * ordinary prose and URIs stay readable. Same bias as the S20 approval-text
+ * pass: a false positive loses one surface's fidelity, a false negative
+ * leaks a credential.
+ */
+const TOOL_HIGH_ENTROPY_RUN = /(?<![A-Za-z0-9+/=_-])[A-Za-z0-9+/=_-]{24,}(?![A-Za-z0-9+/=_-])/g;
+
+/**
+ * Redact, then bound one text surface to maxBytes (UTF-8). The secret passes
+ * run FIRST (S18 vocabulary, then the tool-layer entropy extension) so a
+ * truncated-at-the-wrong-moment secret cannot survive in the kept prefix.
  */
 export function redactAndBound(text: string, maxBytes: number): string {
-  const redacted = redactSecrets(text);
+  const redacted = redactSecrets(text).replace(TOOL_HIGH_ENTROPY_RUN, (run) =>
+    /\d/.test(run) && /[A-Za-z]/.test(run) ? "[REDACTED]" : run,
+  );
   const byteLength = Buffer.byteLength(redacted, "utf8");
   if (byteLength <= maxBytes) {
     return redacted;

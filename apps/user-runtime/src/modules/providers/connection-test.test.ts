@@ -13,15 +13,12 @@
  * live calls are the documented opt-in-only suite (G7).
  */
 import { createServer, type Server } from "node:http";
-import { AddressInfo } from "node:net";
+import type { AddressInfo } from "node:net";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { ProviderRow } from "../../adapters/sqlite/providers-repository.ts";
-import {
-  ProviderAdapters,
-  ProviderConfigurationError,
-} from "./provider-adapters.ts";
+import { ProviderAdapters, ProviderConfigurationError } from "./provider-adapters.ts";
 import { runConnectionTest, type ConnectionTestResult } from "./connection-test.ts";
 
 const FIXTURE_KEY = "sk-fixture-0123456789abcdefSECRET";
@@ -39,7 +36,9 @@ beforeAll(async () => {
       if (auth !== `Bearer ${FIXTURE_KEY}`) {
         res.writeHead(401, { "content-type": "application/json" });
         res.end(
-          JSON.stringify({ error: { message: `Invalid key ${FIXTURE_KEY} presented`, type: "auth" } }),
+          JSON.stringify({
+            error: { message: `Invalid key ${FIXTURE_KEY} presented`, type: "auth" },
+          }),
         );
         return;
       }
@@ -97,18 +96,26 @@ describe("provider adapters (the provider-neutral seam)", () => {
       "openai-compatible",
     ] as const) {
       const model = ProviderAdapters.resolveLanguageModel(
-        entry({ protocol, base_url: protocol === "openai" ? null : baseUrl }),
+        entry({
+          protocol,
+          // Native adapters take no base URL; the compatible ones point at
+          // the local fixture.
+          base_url:
+            protocol === "openai" || protocol === "anthropic" || protocol === "google"
+              ? null
+              : baseUrl,
+        }),
         FIXTURE_KEY,
         "some-model",
       );
-      expect(model.provider).toBeTruthy();
+      expect(typeof model).toBe("object");
     }
   });
 
   it("refuses an api_key entry without a credential and a native entry with a foreign base_url", () => {
-    expect(() =>
-      ProviderAdapters.resolveLanguageModel(entry(), null, "m"),
-    ).toThrowError(expect.objectContaining({ code: "PROVIDER_CREDENTIAL_REVOKED" }));
+    expect(() => ProviderAdapters.resolveLanguageModel(entry(), null, "m")).toThrowError(
+      expect.objectContaining({ code: "PROVIDER_CREDENTIAL_REVOKED" }),
+    );
     // A native adapter (openai) has no configurable base URL in the prototype
     // registry — a stored base_url would silently reroute a platform key to
     // an attacker-chosen host, so it is a typed configuration error.

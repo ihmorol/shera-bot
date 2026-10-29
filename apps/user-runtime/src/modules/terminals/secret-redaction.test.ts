@@ -83,6 +83,23 @@ describe("redactSecrets (S18 G3 boundary)", () => {
     expect(redacted).toContain("npm run build");
   });
 
+  it("redacts JSON-style QUOTED keys (review round: the log-file reality)", () => {
+    const redacted = redactSecrets('{"api_key": "abc12345xyz", "user": "bob"}');
+    expect(redacted).not.toContain("abc12345xyz");
+    expect(redacted).toContain('"api_key"');
+    expect(redacted).toContain('"user": "bob"');
+    // The tight, space-free JSON spelling redacts too.
+    const tight = redactSecrets('{"token":"value123"}');
+    expect(tight).not.toContain("value123");
+    expect(redactSecrets(redacted)).toBe(redacted);
+  });
+
+  it("redacts echoed set-cookie headers (review round: cookie is a secret family, AC4)", () => {
+    const redacted = redactSecrets("set-cookie: shera_session=4a9d7f2b1c8e; Path=/");
+    expect(redacted).not.toContain("4a9d7f2b1c8e");
+    expect(redacted).toContain("set-cookie:");
+  });
+
   it("leaves plain non-secret output readable", () => {
     const plain = [
       "vite v5.4.11 building for production...",

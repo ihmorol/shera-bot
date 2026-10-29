@@ -16,7 +16,7 @@
  *
  *   GET /v1/terminals/state   — the Agent's CURRENT session terminal state:
  *     the latest execution (running or exited) plus the recent history, as
- *    sembled from terminal_events rows.
+ *     assembled from terminal_events rows.
  *
  *   GET /v1/terminals/:terminal_id — one execution's durable record: the
  *     command, working directory, resource policy, approval state, the
@@ -222,7 +222,7 @@ const TerminalEventsQuery = z.strictObject({
 
 /**
  * Register the live-views routes. ORDER MATTERS: the literal-segment paths
- (/v1/terminals/events, /v1/terminals/state) register BEFORE the
+ * (/v1/terminals/events, /v1/terminals/state) register BEFORE the
  * :terminal_id capture (Express matches in registration order — the same
  * discipline as the S15/S20 modules).
  */

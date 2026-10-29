@@ -48,13 +48,17 @@ const CONNECTION_STRING_USERINFO = /\b([a-z][a-z0-9+.-]*:\/\/)([^\s:@/'"&#]+):([
  * Secret-shaped key assignments: `KEY=value`, `key: value`, and the
  * bare-whitespace CLI shape (`user.token abc12345`), where the key CONTAINS a
  * secret-vocabulary word (password/passwd/pwd/secret/token/api key/access
- * key/private key/credential, case-insensitive — so API_KEY,
- * AWS_SECRET_ACCESS_KEY, DB_PASSWORD, client_secret all match). Quoted and
- * bare values both collapse. The separator never spans lines, so a key at a
- * line end cannot swallow unrelated output on the next line.
+ * key/private key/credential/cookie, case-insensitive — so API_KEY,
+ * AWS_SECRET_ACCESS_KEY, DB_PASSWORD, client_secret all match). The key span
+ * may carry JSON/YAML-style quotes (`"api_key": "..."` — quoted keys are
+ * log-file reality, and leaving them readable would be a false negative), and
+ * `cookie` is in the vocabulary because a `set-cookie:` header echoed into
+ * terminal output is a cookie-value leak channel (AC4). Quoted and bare
+ * values both collapse. The separator never spans lines, so a key at a line
+ * end cannot swallow unrelated output on the next line.
  */
 const SECRET_KEY_ASSIGNMENT =
-  /([A-Za-z0-9_.-]*(?:password|passwd|pwd|secret|token|api_?key|access_?key|private_?key|credential)[A-Za-z0-9_.-]*)([ \t]*[:=][ \t]*|[ \t]+)("[^"\n]*"|'[^'\n]*'|[^\s,&"']+)/gi;
+  /(["'A-Za-z0-9_.-]*(?:password|passwd|pwd|secret|token|api_?key|access_?key|private_?key|credential|cookie)["'A-Za-z0-9_.-]*)([ \t]*[:=][ \t]*|[ \t]+)("[^"\n]*"|'[^'\n]*'|[^\s,&"']+)/gi;
 
 /**
  * Redact every secret-shaped value in one chunk of output. Order matters:

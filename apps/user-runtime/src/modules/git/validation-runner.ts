@@ -29,13 +29,16 @@
  * only the merge request's validation fields.
  */
 import { readFileSync } from "node:fs";
-import { spawn } from "node:child_process";
 import { join } from "node:path";
 
 import {
   MergeRequestNotFoundError,
   type ProjectsRepository,
 } from "../../adapters/sqlite/projects-repository.ts";
+import {
+  runValidationCommand,
+  validationCommandLine,
+} from "../../adapters/process/validation-command-spawn.ts";
 import { redactSecrets } from "../approvals/approvals.service.ts";
 import { GitServiceError, toMergeRequestView, type MergeRequestView } from "./git.service.ts";
 
@@ -110,80 +113,9 @@ export function detectValidationPlan(worktreePath: string): ValidationPlan | nul
   return { manager, commands };
 }
 
-interface CommandResult {
-  ok: boolean;
-  timedOut: boolean;
-  exitCode: number | null;
-  output: string;
-}
-
-/** The script names are from the fixed allowlist — no shell interpolation of user input. */
-function commandLine(manager: ValidationManager, scriptName: string): string[] {
-  if (manager === "pnpm") {
-    return ["pnpm", "run", scriptName];
-  }
-  if (manager === "yarn") {
-    return ["yarn", scriptName];
-  }
-  return ["npm", "run", scriptName];
-}
-
-function runCommand(
-  manager: ValidationManager,
-  scriptName: string,
-  cwd: string,
-  limits: ValidationLimits,
-): Promise<CommandResult> {
-  const [binary, ...args] = commandLine(manager, scriptName);
-  return new Promise((resolve) => {
-    // shell: true resolves the .cmd shim on Windows; every interpolated token
-    // is from the fixed allowlist above, never from user input.
-    const child = spawn([binary, ...args].join(" "), {
-      cwd,
-      shell: true,
-      windowsHide: true,
-    });
-    let output = "";
-    let timedOut = false;
-    let settled = false;
-    const collect = (chunk: Buffer | string) => {
-      output += typeof chunk === "string" ? chunk : chunk.toString("utf8");
-      if (output.length > limits.maxOutputChars * 4) {
-        output = output.slice(-limits.maxOutputChars * 4);
-      }
-    };
-    child.stdout?.on("data", collect);
-    child.stderr?.on("data", collect);
-    const timer = setTimeout(() => {
-      timedOut = true;
-      if (process.platform === "win32" && child.pid !== undefined) {
-        // Kill the whole tree: the shell shim is not the process holding the
-        // script's node child alive.
-        spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true });
-      } else {
-        // Recorded limitation: on POSIX this SIGKILLs the shell, so a script
-        // that spawned its own children may leave them running after the
-        // typed timeout — the runner stops WAITING either way. A
-        // process-group kill is the follow-up hardening.
-        child.kill("SIGKILL");
-      }
-    }, limits.perCommandTimeoutMs);
-    const finish = (exitCode: number | null) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      clearTimeout(timer);
-      resolve({ ok: !timedOut && exitCode === 0, timedOut, exitCode, output });
-    };
-    child.on("close", (code) => finish(code));
-    child.on("error", () => {
-      // The package manager binary itself could not run.
-      output += "\n(the validation command could not be started)";
-      finish(1);
-    });
-  });
-}
+// The command-line construction and the spawn itself live in the process
+// adapter seam (adapters/process/validation-command-spawn.ts — D23 rule 2);
+// this module owns detection, sequencing, and the recorded result.
 
 function condense(text: string, limits: ValidationLimits): string {
   const flat = text.replace(/\r\n/g, "\n").trim();
@@ -265,9 +197,9 @@ export class ValidationRunner {
     const summary: string[] = [];
     let failed: string | null = null;
     for (const scriptName of plan.commands) {
-      const [binary, ...args] = commandLine(plan.manager, scriptName);
+      const [binary, ...args] = validationCommandLine(plan.manager, scriptName);
       const label = `${binary} ${args.join(" ")}`;
-      const result = await runCommand(
+      const result = await runValidationCommand(
         plan.manager,
         scriptName,
         worktree.worktree_path,

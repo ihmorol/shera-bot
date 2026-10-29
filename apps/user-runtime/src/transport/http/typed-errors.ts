@@ -57,6 +57,7 @@ import {
 } from "../../modules/agents/agent-folders.service.ts";
 import { AgentSettingsResetUnavailableError } from "../../modules/agents/agents.service.ts";
 import { ConversationsServiceError } from "../../modules/conversations/conversations.types.ts";
+import { ProviderGateError } from "../../modules/providers/provider-gate.ts";
 import { EventsServiceError } from "../../modules/events/events.service.ts";
 import { OperationsServiceError } from "../../modules/operations/operations.service.ts";
 import { GitServiceError } from "../../modules/git/git.service.ts";
@@ -467,6 +468,23 @@ export function toSheraErrorResponse(error: unknown, correlationId?: string): Ht
         safe_message: mapping.safe_message,
         retryable: false,
         user_action: mapping.user_action,
+      },
+    };
+  }
+
+  // S23 (D17): the provider gate's configuration states — the resolution's
+  // own authored safe_message is what the UI renders (no internal detail;
+  // G3). The 409 state class: the request was coherent, the workspace's
+  // provider configuration is what refuses it.
+  if (error instanceof ProviderGateError) {
+    return {
+      status: 409,
+      body: {
+        code: error.code,
+        category: "state",
+        safe_message: error.safe_message,
+        retryable: false,
+        user_action: "Configure a provider in Settings → Providers & models.",
         internal_details: null,
         correlation_id,
       },

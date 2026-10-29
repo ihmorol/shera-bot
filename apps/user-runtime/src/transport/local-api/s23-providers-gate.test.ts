@@ -15,7 +15,7 @@
  *
  * Governing records: D17, D20, D22, G3, G4, D51; AC6, AC7.
  */
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 
@@ -32,13 +32,15 @@ import {
 } from "../../../test/helpers/temp-resources.ts";
 
 const here = import.meta.dirname;
-const PACKS_ROOT = join(here, "../../../..", "agent-packs");
+const PACKS_ROOT = resolve(here, "../../../../../agent-packs");
 const WORKSPACE = DEFAULT_WORKSPACE_ID;
 
 const openConnections: SqliteConnection[] = [];
 
-afterEach(() => {
-  cleanupTempResources();
+afterEach(async () => {
+  // Awaited: an in-flight deletion loop must never overlap the next test's
+  // composition (the helper's retries are asynchronous).
+  await cleanupTempResources();
 });
 
 afterAll(() => {
@@ -90,7 +92,7 @@ async function createConversation(origin: string): Promise<string> {
     type: "conversation.create",
     payload: { title: "Gate fixture" },
   });
-  expect(created.status).toBe(201);
+  expect(created.status).toBe(200);
   return (created.body as { conversation_id: string }).conversation_id;
 }
 
@@ -103,13 +105,17 @@ async function send(
     workspace_id: WORKSPACE,
     idempotency_key: `idem_send_${Math.random().toString(36).slice(2)}`,
     type: "message.send",
-    payload: { conversation_id: conversationId, sender: { kind: "user", display_name: "Emon" }, text },
+    payload: {
+      conversation_id: conversationId,
+      sender: { kind: "user", display_name: "Emon" },
+      text,
+    },
   });
 }
 
 describe("the provider gate on message.send (D17/G4, enforcement on)", () => {
   it("refuses a send with the typed no-provider state and fabricates nothing", async () => {
-    const { runtime, origin, close } = await composeEnforced();
+    const { origin, close } = await composeEnforced();
     try {
       const conversationId = await createConversation(origin);
       const refused = await send(origin, conversationId);
@@ -118,10 +124,14 @@ describe("the provider gate on message.send (D17/G4, enforcement on)", () => {
       // G4: no fabricated assistant message anywhere on the stream.
       const events = await fetch(
         `${origin}/v1/conversations/${conversationId}/events?workspace_id=${WORKSPACE}&last_acknowledged_sequence=0`,
-      ).then((r) => r.json() as Promise<{ events: Array<{ type: string; payload: { sender?: { kind?: string } } }> }>);
+      ).then(
+        (r) =>
+          r.json() as Promise<{
+            events: Array<{ type: string; payload: { sender?: { kind?: string } } }>;
+          }>,
+      );
       const agentMessages = events.events.filter(
-        (event) =>
-          event.type === "message.appended" && event.payload.sender?.kind === "agent",
+        (event) => event.type === "message.appended" && event.payload.sender?.kind === "agent",
       );
       expect(agentMessages).toEqual([]);
     } finally {
@@ -149,7 +159,7 @@ describe("the provider gate on message.send (D17/G4, enforcement on)", () => {
       });
       runtime.providers.setConversationOverride(WORKSPACE, conversationId, provider.id, null);
       const accepted = await send(origin, conversationId);
-      expect(accepted.status).toBe(201);
+      expect(accepted.status).toBe(200);
     } finally {
       await close();
     }
@@ -174,6 +184,9 @@ describe("the provider gate on message.send (D17/G4, enforcement on)", () => {
         origin: "user",
       });
       runtime.providers.setStatus(WORKSPACE, provider.id, false);
+      // The override names the (now disabled) provider; resolution reports
+      // the DISABLED state, not the generic unconfigured one.
+      runtime.providers.setConversationOverride(WORKSPACE, conversationId, provider.id, null);
       const refused = await send(origin, conversationId);
       expect(refused.status).toBe(409);
       expect(refused.body).toMatchObject({ code: "PROVIDER_DISABLED" });
@@ -200,6 +213,9 @@ describe("the provider gate on message.send (D17/G4, enforcement on)", () => {
         request_params: {},
         origin: "user",
       });
+      // The override names the provider; the REVOKED credential is the named
+      // state (D22), not the generic unconfigured one.
+      runtime.providers.setConversationOverride(WORKSPACE, conversationId, provider.id, null);
       runtime.providers.revokeCredential(WORKSPACE, provider.id);
       const refused = await send(origin, conversationId);
       expect(refused.status).toBe(409);

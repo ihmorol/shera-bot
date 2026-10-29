@@ -323,6 +323,11 @@ export async function startRuntimeNode(config: RuntimeNodeConfig = {}): Promise<
     dbPath,
     workspaceId: defaultWorkspaceId,
     packsRoot,
+    // S23 (D17/G4): the REAL runtime enforces provider custody — a turn or
+    // run without a usable provider is refused with the typed configuration
+    // state. The E2E mock keeps its own posture (no enforcement; the
+    // scripted producer is the selected D51 mock harness, never a fallback).
+    providerEnforcement: true,
     // S12 (D32 layer 2): the supervised warm Agent session when a harness
     // command is configured; absent otherwise (supervisor disabled, G4).
     ...(sessionHarness ? { sessionHarness } : {}),

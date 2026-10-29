@@ -270,6 +270,28 @@ export class ProviderService {
     };
   }
 
+  /** Whether one provider entry has a stored credential (custody read-only). */
+  hasCredential(workspaceId: string, providerId: string): boolean {
+    return this.deps.credentials.hasCredential(workspaceId, providerId);
+  }
+
+  /**
+   * The effective provider for one Agent's DEFAULT pair (no conversation
+   * exists yet — the Operation-coordinator path). Same honest union.
+   */
+  resolveForAgent(workspaceId: string, agentId: string): EffectiveProvider {
+    const pair = this.deps.agentDefaults.getDefaultProvider(workspaceId, agentId);
+    if (!pair) {
+      return {
+        configured: false,
+        code: "PROVIDER_NOT_CONFIGURED",
+        safe_message:
+          "No provider is configured for this Agent yet. Set the Agent's default in Settings → Agents.",
+      };
+    }
+    return this.resolveEntry(workspaceId, pair.provider_id, pair.model, "agent_default");
+  }
+
   /**
    * The per-conversation override (AC11): a later turn uses it; the Agent's
    * default is never rewritten. `providerId = null` clears the override.

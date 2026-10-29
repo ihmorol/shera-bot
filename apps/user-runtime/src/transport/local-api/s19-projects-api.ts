@@ -53,7 +53,6 @@ import type {
 import { GitServiceError } from "../../modules/git/git.service.ts";
 import type { ValidationRunner } from "../../modules/git/validation-runner.ts";
 import { rebuildRunProjection, type ApprovalsApiHandle } from "./s20-approvals-api.ts";
-import { contractValidationResponse } from "../http/typed-errors.ts";
 
 // ---------------------------------------------------------------------------
 // Route paths (the contracts convention: literal constants, one definition)

@@ -20,22 +20,17 @@
  *      403), reject and request-changes leave the target branch untouched.
  *   5. Every route is workspace-scoped (E12).
  */
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve as resolvePath } from "node:path";
 import { dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { afterAll, afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { simpleGit } from "simple-git";
 import type { TypedExecutionEvent } from "@shera-bot/contracts";
 
 import { DEFAULT_WORKSPACE_ID, composeRuntime, type RuntimeHandle } from "./compose.ts";
-import {
-  cleanupTempResources,
-  makeTempDir,
-  trackConnection,
-} from "../../../test/helpers/temp-resources.ts";
+import { makeTempDir, trackConnection } from "../../../test/helpers/temp-resources.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 /** The pinned student pack: the run machinery needs the real pack snapshot. */

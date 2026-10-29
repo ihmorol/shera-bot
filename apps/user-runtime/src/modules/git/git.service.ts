@@ -761,7 +761,7 @@ export class GitService {
         await repo.branch([branchName]);
       }
       await repo.raw(["worktree", "add", worktreePath, branchName]);
-    } catch (error) {
+    } catch {
       rmSync(join(this.deps.projectsRoot, input.project_id, "worktrees", worktreeId), {
         recursive: true,
         force: true,
@@ -844,7 +844,7 @@ export class GitService {
           // The SAFE delete: refuses to drop an unmerged branch.
           await repo.raw(["branch", "-d", row.branch_name]);
         }
-      } catch (error) {
+      } catch {
         this.fault("s19_worktree_release_failed", {
           workspace_id: input.workspace_id,
           project_id: input.project_id,
@@ -931,7 +931,7 @@ export class GitService {
     // The change set: commits + files on the task branch that the target
     // branch does not have (merge-base diff — the D35 preview's diff).
     let changedFiles: string[] = [];
-    let commitCount = 0;
+    let commitCount: number;
     try {
       changedFiles = splitLines(
         await repo.raw(["diff", "--name-only", `${targetBranch}...${sourceBranch}`]),
@@ -1200,7 +1200,7 @@ export class GitService {
     try {
       // Plain merge only: no rebase, no force (E6, PRD §10).
       await repo.merge(["--no-ff", "--no-edit", row.source_branch]);
-    } catch (error) {
+    } catch {
       // Abort restores the target branch and index exactly (G5: the conflict
       // queues as a recorded failure — never a half-merged tree).
       await repo.raw(["merge", "--abort"]).catch(() => {});

@@ -40,7 +40,7 @@
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { simpleGit } from "simple-git";
@@ -64,7 +64,6 @@ import {
   ValidationRunner,
 } from "./validation-runner.ts";
 
-const here = dirname(fileURLToPath(import.meta.url));
 const WS = "ws_s19_validation";
 const USER = { type: "user", id: "user_001" } as const;
 const AGENT_ID = "agent_general_assistant";
@@ -267,7 +266,7 @@ describe("validation runner: detection heuristic (documented Node package.json s
 
 describe("validation runner: real execution inside the task worktree", () => {
   it("records `passed` with the exact commands when every declared script exits 0", async () => {
-    const { env, projectId, mergeRequestId, worktreePath } = await preparedMergeRequest({
+    const { env, projectId, mergeRequestId } = await preparedMergeRequest({
       test: 'node -e "process.exit(0)"',
       lint: 'node -e "process.exit(0)"',
     });

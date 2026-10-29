@@ -227,7 +227,6 @@ export class ProjectsRepository {
     at: string,
     exec?: DatabaseSync,
   ): void {
-    const db = exec ?? this.tx.connection();
     this.requireProject(workspaceId, projectId, exec);
     const apply = (e: DatabaseSync) => {
       e.prepare(`DELETE FROM project_agent_access WHERE workspace_id = ? AND project_id = ?`).run(

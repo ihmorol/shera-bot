@@ -97,6 +97,10 @@ export function safeEntryPath(rawName: string): string | null {
   if (rawName.length === 0 || rawName.length > MAX_NAME_LENGTH) {
     throw new ArchiveImportError("ARCHIVE_UNSAFE_ENTRY", "an entry name has an unusable length");
   }
+  // The control characters are the point: this is the path-traversal guard
+  // that REJECTS entries carrying NUL/C0/DEL bytes, so the rule is suppressed
+  // deliberately (not an accidental control regex).
+  // eslint-disable-next-line no-control-regex
   if (/[\u0000-\u001f\u007f]/.test(rawName)) {
     throw new ArchiveImportError(
       "ARCHIVE_UNSAFE_ENTRY",

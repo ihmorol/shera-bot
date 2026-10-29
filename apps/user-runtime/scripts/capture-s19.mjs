@@ -22,8 +22,11 @@
  * 360/768/1440, keyboard-only focus, prefers-reduced-motion, and the
  * Operation runs panel with the git-aware run cards.
  */
+// `document` is used only inside page.evaluate callbacks, which run in the
+// BROWSER context, not Node — declared for the linter.
+/* global document */
 import { spawn, execSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -165,14 +168,6 @@ const post = async (path, body) => {
   }
   return payload;
 };
-const get = async (path) => {
-  const response = await fetch(origin + path);
-  const payload = await response.json().catch(() => ({}));
-  if (response.status >= 400) {
-    throw new Error(`GET ${path} -> ${response.status}: ${JSON.stringify(payload)}`);
-  }
-  return payload;
-};
 
 // ---------------------------------------------------------------------------
 // 2. The seed: a real Operation run joined to real git work + the review state
@@ -231,7 +226,12 @@ const seeded = await seedGitServices(dbPath);
     },
   });
   if (decidedB.outcome !== "action_rejected") throw new Error("reject failed");
-  git.recordMergeDecision(WS, project.project_id, preparedB.merge_request.merge_request_id, "rejected");
+  git.recordMergeDecision(
+    WS,
+    project.project_id,
+    preparedB.merge_request.merge_request_id,
+    "rejected",
+  );
   await git.releaseWorktree({
     workspace_id: WS,
     project_id: project.project_id,
@@ -262,7 +262,12 @@ const seeded = await seedGitServices(dbPath);
     change_summary: "Fix the login validation.",
     run: makeRun(runId, "RUNNING"),
   });
-  console.log("merge request", preparedA.merge_request.merge_request_id, "validation:", preparedA.merge_request.validation_status);
+  console.log(
+    "merge request",
+    preparedA.merge_request.merge_request_id,
+    "validation:",
+    preparedA.merge_request.validation_status,
+  );
 
   // A third task: QUEUED behind the run (G5: the wait is visible).
   const queued = await git.allocateWorktree({
@@ -331,7 +336,9 @@ const control = createServer((req, res) => {
       headers: { "content-type": "application/json" },
       ...(chunks.length ? { body: Buffer.concat(chunks) } : {}),
     });
-    res.writeHead(upstream.status, { "content-type": upstream.headers.get("content-type") ?? "application/json" });
+    res.writeHead(upstream.status, {
+      "content-type": upstream.headers.get("content-type") ?? "application/json",
+    });
     res.end(await upstream.text());
   })().catch(() => {
     res.writeHead(500);
@@ -343,16 +350,25 @@ const controlPort = control.address().port;
 cleanups.push(() => control.close());
 
 const webOrigin = "http://127.0.0.1:4319";
-const next = spawn(process.execPath, [join(repoRoot, "apps", "web", "node_modules", "next", "dist", "bin", "next"), "dev", "--port", "4319"], {
-  cwd: join(repoRoot, "apps", "web"),
-  env: {
-    ...process.env,
-    CONTROL_PLANE_URL: `http://127.0.0.1:${controlPort}`,
-    SHERA_WEB_ORIGIN: webOrigin,
-    BROWSER: "none",
+const next = spawn(
+  process.execPath,
+  [
+    join(repoRoot, "apps", "web", "node_modules", "next", "dist", "bin", "next"),
+    "dev",
+    "--port",
+    "4319",
+  ],
+  {
+    cwd: join(repoRoot, "apps", "web"),
+    env: {
+      ...process.env,
+      CONTROL_PLANE_URL: `http://127.0.0.1:${controlPort}`,
+      SHERA_WEB_ORIGIN: webOrigin,
+      BROWSER: "none",
+    },
+    stdio: ["ignore", "pipe", "pipe"],
   },
-  stdio: ["ignore", "pipe", "pipe"],
-});
+);
 let nextLog = "";
 next.stdout.on("data", (d) => (nextLog += d.toString()));
 next.stderr.on("data", (d) => (nextLog += d.toString()));
@@ -387,7 +403,13 @@ console.log("probe status:", probeStatus.status, (await probeStatus.text()).slic
 const browser = await chromium.launch({
   // The pre-cached chromium build (playwright-core's registry expects a
   // different revision; the explicit executablePath reuses the cache).
-  executablePath: join(process.env["LOCALAPPDATA"] ?? "", "ms-playwright", "chromium-1248", "chrome-win64", "chrome.exe"),
+  executablePath: join(
+    process.env["LOCALAPPDATA"] ?? "",
+    "ms-playwright",
+    "chromium-1248",
+    "chrome-win64",
+    "chrome.exe",
+  ),
 });
 
 async function capture(name, path, viewport, opts = {}) {
@@ -396,7 +418,9 @@ async function capture(name, path, viewport, opts = {}) {
     reducedMotion: opts.reducedMotion ? "reduce" : "no-preference",
   });
   const page = await context.newPage();
-  page.on("console", (message) => console.log("[console]", message.type(), message.text().slice(0, 220)));
+  page.on("console", (message) =>
+    console.log("[console]", message.type(), message.text().slice(0, 220)),
+  );
   page.on("pageerror", (error) => console.log("[pageerror]", String(error).slice(0, 220)));
   // The surfaces poll on the presence cadence — networkidle never settles.
   await page.goto(webOrigin + path, { waitUntil: "domcontentloaded" });
@@ -428,10 +452,30 @@ async function capture(name, path, viewport, opts = {}) {
   await context.close();
 }
 
-await capture("git-review-1440.png", "/app/settings/git", { width: 1440, height: 900 }, { waitFor: "[data-testid=merge-request-card]" });
-await capture("git-review-768.png", "/app/settings/git", { width: 768, height: 1024 }, { waitFor: "[data-testid=merge-request-card]" });
-await capture("git-review-360.png", "/app/settings/git", { width: 360, height: 740 }, { fullPage: true, waitFor: "[data-testid=merge-request-card]" });
-await capture("git-review-reduced-motion-1440.png", "/app/settings/git", { width: 1440, height: 900 }, { reducedMotion: true, waitFor: "[data-testid=merge-request-card]" });
+await capture(
+  "git-review-1440.png",
+  "/app/settings/git",
+  { width: 1440, height: 900 },
+  { waitFor: "[data-testid=merge-request-card]" },
+);
+await capture(
+  "git-review-768.png",
+  "/app/settings/git",
+  { width: 768, height: 1024 },
+  { waitFor: "[data-testid=merge-request-card]" },
+);
+await capture(
+  "git-review-360.png",
+  "/app/settings/git",
+  { width: 360, height: 740 },
+  { fullPage: true, waitFor: "[data-testid=merge-request-card]" },
+);
+await capture(
+  "git-review-reduced-motion-1440.png",
+  "/app/settings/git",
+  { width: 1440, height: 900 },
+  { reducedMotion: true, waitFor: "[data-testid=merge-request-card]" },
+);
 
 // Keyboard-only: tab until a decision control holds focus, then capture.
 {
@@ -456,8 +500,18 @@ await capture("git-review-reduced-motion-1440.png", "/app/settings/git", { width
 }
 
 // The git-aware run cards on the Operation chat.
-await capture("run-cards-git-1440.png", `/app/operation/${operationId}`, { width: 1440, height: 900 }, { waitFor: "[data-testid=operation-run-git]" });
-await capture("run-cards-git-360.png", `/app/operation/${operationId}`, { width: 360, height: 740 }, { fullPage: true, waitFor: "[data-testid=operation-run-git]" });
+await capture(
+  "run-cards-git-1440.png",
+  `/app/operation/${operationId}`,
+  { width: 1440, height: 900 },
+  { waitFor: "[data-testid=operation-run-git]" },
+);
+await capture(
+  "run-cards-git-360.png",
+  `/app/operation/${operationId}`,
+  { width: 360, height: 740 },
+  { fullPage: true, waitFor: "[data-testid=operation-run-git]" },
+);
 await browser.close();
 console.log("DONE — captures in", CAPTURE_OUT);
 next.kill();

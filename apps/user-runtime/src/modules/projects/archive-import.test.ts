@@ -36,7 +36,6 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { crc32, deflateRawSync, gzipSync } from "node:zlib";
 
 import { afterAll, afterEach, describe, expect, it } from "vitest";
@@ -55,10 +54,8 @@ import { CredentialVault } from "./credential-vault.ts";
 import { ArchiveImportError, extractArchiveInto, type ArchiveLimits } from "./archive-import.ts";
 import { GitService } from "../git/git.service.ts";
 
-const here = dirname(fileURLToPath(import.meta.url));
 const WS = "ws_s19_archive";
 const USER = { type: "user", id: "user_001" } as const;
-const AGENT_ID = "agent_general_assistant";
 const NOW = "2026-10-29T12:00:00.000Z";
 
 const tempDirs: string[] = [];

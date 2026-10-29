@@ -65,6 +65,21 @@ export function isBrowserRuntimePath(method: string, path: string): boolean {
       // allocation.
       /^\/v1\/projects\/[a-zA-Z0-9_-]+\/merge-requests\/[a-zA-Z0-9_-]+\/decision$/.test(path) ||
       /^\/v1\/projects\/[a-zA-Z0-9_-]+\/merge-requests\/[a-zA-Z0-9_-]+\/validation$/.test(path)
+      // S21 (PRD §7, E4, G6): the tools mutations the web UI offers — the
+      // PURE creation preview (a POST because it carries a typed body; zero
+      // side effects, the D30 posture), the creation command, the
+      // runtime-grant activation, and the disable/enable switch (the switch
+      // that beats any grant). Every actor on these paths is bound
+      // SERVER-SIDE from the authenticated session (the proxy rebuilds
+      // `actor` — an agent-asserted identity cannot create, activate, or
+      // disable a tool through the browser path). Tool EXECUTION has no
+      // browser route at all: agents propose through the runtime, the
+      // executor decides (G2) — the browser can only manage the inventory.
+      path === "/v1/tools/creation-preview" ||
+      path === "/v1/tools/create" ||
+      path === "/v1/tools/activate" ||
+      path === "/v1/tools/disable" ||
+      path === "/v1/tools/enable"
     );
   }
   if (method === "PUT") {

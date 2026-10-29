@@ -44,6 +44,7 @@ import { MessageSender } from "../../modules/events/events.types.ts";
 import type { OperationsService } from "../../modules/operations/operations.service.ts";
 import type { WorkerAdmissionReadout } from "../../modules/workers/task-worker-supervisor.service.ts";
 import { registerApprovalsRoutes, type ApprovalsApiHandle } from "./s20-approvals-api.ts";
+import { registerToolsRoutes, type ToolsApiHandle } from "./s21-tools-api.ts";
 import {
   registerLiveViewsRoutes,
   type BrowserLiveViewHandle,
@@ -427,6 +428,13 @@ export interface LocalApiDeps {
    * passive until the scripted trigger files a request — no G4 concern).
    */
   approvals?: ApprovalsApiHandle;
+  /**
+   * S21: the tools facade — the inventory read model, the redacted tool
+   * history, the preview-gated creation, the runtime-grant activation, and
+   * the disable switch. Workspace-scoped (E12); every rule lives in the
+   * inventory service and the executor (the routes relay, never re-derive).
+   */
+  tools?: ToolsApiHandle;
   /**
    * S18 chunk 1: the read-only terminal live-views surface — the durable
    * replay of terminal events, one execution's record, and the current
@@ -1190,6 +1198,13 @@ export function createLocalApi(deps: LocalApiDeps): Express {
   // :approval_id ordering (Express matches in registration order).
   if (deps.approvals) {
     registerApprovalsRoutes(app, deps.approvals);
+  }
+
+  // S21: the tools surface — inventory + history reads, and the POST command
+  // mutations (preview/create/activate/disable/enable) in the D23 rule 6
+  // convention. The browser allowlist mirrors exactly this inventory.
+  if (deps.tools) {
+    registerToolsRoutes(app, deps.tools);
   }
 
   // S18 chunk 1+2: the read-only terminal AND browser live-views surface —

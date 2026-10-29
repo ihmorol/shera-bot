@@ -23,6 +23,15 @@ const SESSION_ACTOR_BINDINGS: ReadonlyArray<{ pathPattern: RegExp; bodyField: st
     pathPattern: /^\/v1\/projects\/[a-zA-Z0-9_-]+\/merge-requests\/[a-zA-Z0-9_-]+\/decision$/,
     bodyField: "decided_by",
   },
+  // S21 (PRD §7, E4, G6): the tool inventory mutations — the authorizing
+  // actor is the session identity, never a client-asserted one. Creation,
+  // activation, and the disable/enable switch are USER decisions (the
+  // runtime refuses agent actors; the owner agent is a separate field the
+  // form chooses).
+  { pathPattern: /^\/v1\/tools\/create$/, bodyField: "actor" },
+  { pathPattern: /^\/v1\/tools\/activate$/, bodyField: "actor" },
+  { pathPattern: /^\/v1\/tools\/disable$/, bodyField: "actor" },
+  { pathPattern: /^\/v1\/tools\/enable$/, bodyField: "actor" },
 ];
 
 /** The 401 failure shape for a request whose session carries no usable identity. */

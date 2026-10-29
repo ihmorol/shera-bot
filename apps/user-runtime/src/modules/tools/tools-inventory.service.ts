@@ -138,7 +138,23 @@ export interface ToolsInventoryDeps {
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 export class ToolsInventoryService {
-  constructor(private readonly deps: ToolsInventoryDeps) {}
+  /**
+   * The pinned pack's allow-list, late-bound by the composition (the pack
+   * loads after the wiring). The default is EMPTY — fail-closed: without a
+   * pinned pack the intersection is empty and every creation is refused at
+   * the pack layer (G4 — never a fake allowance).
+   */
+  private packAllowList: ReadonlyArray<{ tool_id: string; version: string }>;
+
+  constructor(private readonly deps: ToolsInventoryDeps) {
+    // The composition's allow-list seeds the late-bound field (a test or a
+    // caller without a late pack load still enforces its deps' list).
+    this.packAllowList = deps.packToolAllowList;
+  }
+
+  setPackToolAllowList(allowList: ReadonlyArray<{ tool_id: string; version: string }>): void {
+    this.packAllowList = allowList;
+  }
 
   private now(): string {
     return this.deps.now ? this.deps.now() : new Date().toISOString();
@@ -147,7 +163,7 @@ export class ToolsInventoryService {
   /** The D38 pack layer: the capability union of the allow-listed tools. */
   private packAllowedCapabilities(): Set<string> {
     const allowed = new Set<string>();
-    for (const ref of this.deps.packToolAllowList) {
+    for (const ref of this.packAllowList) {
       const capabilities = PLATFORM_TOOL_CATALOG[ref.tool_id];
       if (capabilities) {
         for (const capability of capabilities) {

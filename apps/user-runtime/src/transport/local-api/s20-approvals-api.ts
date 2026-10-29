@@ -173,8 +173,12 @@ const LIFECYCLE_EVENT_TYPES: ReadonlySet<string> = new Set<string>(TASK_LIFECYCL
  * version = 1 + the lifecycle count). A stream without a contract-valid
  * task.created (or without the creation-time pack pin) is not honestly
  * rebuildable — the typed mismatch refusal, never an invented projection (G4).
+ *
+ * Exported for the S19 projects surface, whose merge-request preparation
+ * needs the same journal-rebuilt projection (one rebuild, one authority —
+ * never a second projection rule).
  */
-function rebuildRunProjection(
+export function rebuildRunProjection(
   journal: Pick<EventJournalRepository, "readFrom">,
   workspaceId: string,
   taskId: string,
@@ -270,12 +274,21 @@ function rebuildRunProjection(
   };
 }
 
-/** Compose-built handle over the approvals service + repository + journal. */
+/**
+ * Compose-built handle over the approvals service + repository + journal.
+ * `executeForApproval` (S19) lets the composition attach the REAL gated
+ * action to an approval whose recorded resource names a merge request: the
+ * callback runs ONLY after the decision transaction commits (the S20 rule),
+ * so the merge can never precede its durable grant. When it returns
+ * undefined the withheld execution stays the no-op scripted one — the S20
+ * behavior, unchanged.
+ */
 export function buildApprovalsApiHandle(deps: {
   approvals: ApprovalsService;
   approvalsRepository: ApprovalsRepository;
   journal: Pick<EventJournalRepository, "readFrom">;
   now: () => string;
+  executeForApproval?: (request: ApprovalRequest) => (() => void) | undefined;
 }): ApprovalsApiHandle {
   const { approvals, approvalsRepository, journal } = deps;
   return {
@@ -323,10 +336,11 @@ export function buildApprovalsApiHandle(deps: {
         choice: input.choice,
         decided_by: input.decidedBy,
         run,
-        // The gated action's real execution is the tools slice' concern; this
-        // slice's approved execution is the no-op scripted one, whose
-        // completion consumes a one-time grant (the service's own semantics).
-        execute: () => {},
+        // The gated action's real execution: the composition's executor for
+        // approvals that name a merge request (S19), else the no-op scripted
+        // execution whose completion consumes a one-time grant (the
+        // service's own semantics).
+        execute: deps.executeForApproval?.(request) ?? (() => {}),
       });
     },
 

@@ -60,6 +60,7 @@ import {
   type RedactedLogger,
 } from "../http/typed-errors.ts";
 import { registerWorkspaceApiRoutes, type WorkspaceApiDeps } from "./s17-workspace-api.ts";
+import { registerProjectsRoutes, type ProjectsApiHandle } from "./s19-projects-api.ts";
 
 export const SUBMIT_CONVERSATION_COMMAND_PATH = "/v1/conversations/commands" as const;
 export const LIST_CONVERSATION_EVENTS_PATH = "/v1/conversations/:conversation_id/events" as const;
@@ -445,6 +446,14 @@ export interface LocalApiDeps {
    * the routes then answer the honest `configured: false` (G4).
    */
   browser?: BrowserLiveViewHandle;
+  /**
+   * S19: the projects seam — import/clone, per-repository credentials, the
+   * task-scoped worktrees with their conflict queue, and the merge requests
+   * (the PRD §10 surface) behind their own route module. Every rule lives in
+   * the git service and the approval machinery; the routes validate and
+   * delegate (G2). Present at every runtime composition.
+   */
+  projects?: ProjectsApiHandle;
   /**
    * B-1: the redacted sink untyped HTTP faults are recorded to — the generic
    * INTERNAL_ERROR's correlation_id is logged with it, so "The failure has
@@ -1190,6 +1199,11 @@ export function createLocalApi(deps: LocalApiDeps): Express {
   // criterion is the inventory itself.
   if (deps.terminals) {
     registerLiveViewsRoutes(app, deps.terminals, deps.browser);
+  }
+  // S19 chunk 1: the projects surface — registered BEFORE the error
+  // handlers like every other module surface.
+  if (deps.projects) {
+    registerProjectsRoutes(app, deps.projects);
   }
 
   // Typed failures and unknown routes: the SheraError taxonomy, never an

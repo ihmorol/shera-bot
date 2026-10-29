@@ -19,6 +19,7 @@
     "@shera-bot/pi-protocol": "workspace:*",
     "express": "5.2.1",
     "playwright": "1.64.1",
+    "simple-git": "^4.0.2",
     "socket.io": "4.8.4",
     "zod": "4.6.5"
   },

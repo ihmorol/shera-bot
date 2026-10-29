@@ -59,6 +59,7 @@ import { AgentSettingsResetUnavailableError } from "../../modules/agents/agents.
 import { ConversationsServiceError } from "../../modules/conversations/conversations.types.ts";
 import { EventsServiceError } from "../../modules/events/events.service.ts";
 import { OperationsServiceError } from "../../modules/operations/operations.service.ts";
+import { GitServiceError } from "../../modules/git/git.service.ts";
 
 interface HttpErrorMapping {
   status: number;
@@ -209,6 +210,116 @@ const APPROVALS_REJECTIONS: Record<
 };
 
 /**
+ * S19: the git boundary rejections (the module service's typed errors).
+ * Import failures answer 400 (nothing was registered — the caller may retry),
+ * unknown entities the 404 class, queue and merge-state conflicts the 409
+ * class, and the G6 refusals (unapproved merge, unauthorized Agent) the 403
+ * policy class. The safe messages are authored UI copy; no git error text —
+ * which can quote credential-bearing URLs — ever crosses (G3).
+ */
+const GIT_REJECTIONS: Record<
+  GitServiceError["code"],
+  { status: number; safe_message: string; user_action: string | null }
+> = {
+  GIT_PROJECT_IMPORT_FAILED: {
+    status: 400,
+    safe_message: "The project import failed; nothing was registered.",
+    user_action: "Check the source and retry the import.",
+  },
+  GIT_PROJECT_NOT_FOUND: {
+    status: 404,
+    safe_message: "The project does not exist in this workspace.",
+    user_action: null,
+  },
+  GIT_AGENT_NOT_AUTHORIZED: {
+    status: 403,
+    safe_message: "This project is restricted and this Agent is not on its access list.",
+    user_action: null,
+  },
+  GIT_WORKTREE_ALLOCATION_FAILED: {
+    status: 409,
+    safe_message: "The worktree allocation failed; the repository state was left unchanged.",
+    user_action: "Retry the allocation.",
+  },
+  GIT_WORKTREE_NOT_FOUND: {
+    status: 404,
+    safe_message: "The worktree does not exist for this project.",
+    user_action: null,
+  },
+  GIT_WORKTREE_RELEASE_FAILED: {
+    status: 409,
+    safe_message: "The worktree release failed; the project slot is unchanged.",
+    user_action: null,
+  },
+  GIT_CREDENTIAL_NOT_FOUND: {
+    status: 404,
+    safe_message: "The credential does not exist for this project.",
+    user_action: null,
+  },
+  GIT_CREDENTIAL_REVOKED: {
+    status: 409,
+    safe_message: "This credential has been revoked and can no longer be used.",
+    user_action: "Store a replacement credential to continue.",
+  },
+  GIT_CREDENTIAL_ACTIVE_EXISTS: {
+    status: 409,
+    safe_message:
+      "An active credential of this kind already exists; revoke it before storing a replacement.",
+    user_action: "Revoke the current credential first, or replace it directly.",
+  },
+  GIT_URL_INVALID: {
+    status: 400,
+    safe_message: "The git URL is not usable in this form.",
+    user_action: null,
+  },
+  GIT_CREDENTIAL_INVALID: {
+    status: 400,
+    safe_message: "The credential is not usable in this form.",
+    user_action: "Provide a non-empty secret.",
+  },
+  GIT_ARCHIVE_INVALID: {
+    status: 400,
+    safe_message: "The archive import was refused; nothing was registered.",
+    user_action: "Check the archive and retry the import.",
+  },
+  GIT_FETCH_FAILED: {
+    status: 400,
+    safe_message: "The origin fetch failed; the local clone is unchanged.",
+    user_action: "Check the project's credential and remote, then retry.",
+  },
+  GIT_VALIDATION_TARGET_INVALID: {
+    status: 409,
+    safe_message: "The validation has no worktree to run against.",
+    user_action: "The task's worktree must be active to run validation.",
+  },
+  GIT_MERGE_REQUEST_NOT_FOUND: {
+    status: 404,
+    safe_message: "The merge request does not exist for this project.",
+    user_action: null,
+  },
+  GIT_MERGE_REQUEST_INVALID: {
+    status: 409,
+    safe_message: "The merge request cannot move in its current state.",
+    user_action: "Reload the merge request and retry.",
+  },
+  GIT_MERGE_NOT_APPROVED: {
+    status: 403,
+    safe_message: "The merge is not approved; the runtime never merges without a valid approval.",
+    user_action: null,
+  },
+  GIT_MERGE_CONFLICT: {
+    status: 409,
+    safe_message: "The merge conflicted at execution time; the target branch was left untouched.",
+    user_action: "Revise the change set and prepare a new merge request.",
+  },
+  GIT_REPO_DIRTY: {
+    status: 409,
+    safe_message: "The target working copy has uncommitted changes.",
+    user_action: "Resolve the uncommitted changes before merging.",
+  },
+};
+
+/**
  * S13: the operations boundary rejections (the module service's typed
  * errors). NOT_FOUND* codes answer the 404-class, *_INVALID the 400
  * validation class, and OPERATION_ROSTER_REFUSED the 403 policy class —
@@ -334,6 +445,24 @@ export function toSheraErrorResponse(error: unknown, correlationId?: string): Ht
         code: error.code,
         // The service's "forbidden" (G6 refusals) is the wire taxonomy's
         // "policy" — a permission rule, not an authentication failure.
+        category: error.category === "forbidden" ? "policy" : error.category,
+        safe_message: mapping.safe_message,
+        retryable: false,
+        user_action: mapping.user_action,
+        internal_details: null,
+        correlation_id,
+      },
+    };
+  }
+
+  if (error instanceof GitServiceError) {
+    const mapping = GIT_REJECTIONS[error.code];
+    return {
+      status: mapping.status,
+      body: {
+        code: error.code,
+        // The git boundary's "forbidden" refusals (an unapproved merge, a
+        // restricted project) are the wire taxonomy's "policy".
         category: error.category === "forbidden" ? "policy" : error.category,
         safe_message: mapping.safe_message,
         retryable: false,
@@ -746,6 +875,7 @@ function isUntypedFault(error: unknown): boolean {
     !(error instanceof ConversationsServiceError) &&
     !(error instanceof EventsServiceError) &&
     !(error instanceof ApprovalsServiceError) &&
+    !(error instanceof GitServiceError) &&
     !(error instanceof OperationsServiceError) &&
     !(error instanceof TerminalEventsRepositoryError) &&
     !(error instanceof AgentNotFoundError) &&

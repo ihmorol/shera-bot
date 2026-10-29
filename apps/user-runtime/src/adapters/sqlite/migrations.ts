@@ -259,6 +259,50 @@
  * cannot yet be observed; the execution slices (S26) will write through the
  * same recorder/repository, and the read-only surface never offers control
  * (PRD §4.3, §20 — no takeover affordance).
+ *
+ * v15 —— projects, repository credentials, task worktrees, merge requests
+ * (S19 chunk 1; PRD §10, E6, D6, D22, D35, E12). The git coordination
+ * surfaces. The working copies themselves live on the CONTAINER FILESYSTEM
+ * (per-project clone directories and git worktrees beside them, under the
+ * composition's projects root) — SQLite stores only the control records:
+ *
+ * projects: one imported/cloned repository per row, keyed
+ * (workspace_id, project_id) (E12). source_kind names how it arrived
+ * (cloned from a URL or imported from a local directory); source_url stores
+ * the SANITIZED origin label — credential material never enters the record
+ * (D22/G3; the credential rows below are the only custody). access_mode is
+ * 'shared' (the PRD §10 default) or 'restricted'; a restricted project
+ * admits only the Agents listed in project_agent_access (replaced as a
+ * whole by the writer), so the restriction is queryable at the storage
+ * layer rather than buried in a JSON blob.
+ *
+ * project_credentials: one secret per (project, kind), scoped to exactly
+ * that repository (PRD §10). The secret is stored ONLY as AES-256-GCM
+ * ciphertext + iv + auth tag (D22: encrypted inside the user container,
+ * decrypted only at call time) — no plaintext column exists, and a partial
+ * UNIQUE index admits at most one ACTIVE (unrevoked) row per
+ * (workspace, project, kind), so the replace flow must revoke first and a
+ * revoked credential is history, not authority.
+ *
+ * project_worktrees: one coding task's isolated branch + worktree (E6).
+ * status: 'active' | 'queued' | 'admitted' | 'released' | 'merged'. THE
+ * CONFLICT QUEUE IS A STORAGE-LEVEL INVARIANT (D6): a partial UNIQUE index
+ * admits at most one ACTIVE worktree per (workspace, project), so two
+ * coding tasks can never hold the same project simultaneously — the second
+ * is recorded as 'queued' with its visible queue_reason (G5), never granted.
+ *
+ * merge_requests: the D35/E6 merge record the coordinating Agent prepares.
+ * Exactly the PRD §10 minimal fields — change_summary, changed_files_json,
+ * validation_status ('not_run' until the validation runner slice),
+ * conflict_status (+ conflict_files_json), target_branch (source_branch
+ * rides along) — plus the approval linkage (approval_id, resolved through
+ * the S20 approval machinery; there is no parallel approval path) and the
+ * lifecycle state: 'awaiting_approval' | 'queued' | 'approved' | 'merged' |
+ * 'rejected' | 'changes_requested' | 'failed'.
+ *
+ * Every table is workspace-scoped as PRIMARY KEY prefix (E12); project/agent
+ * references are validated by the writers, so no FOREIGN KEY is declared —
+ * the v4/v5/v6/v8 discipline.
  */
 import type { DatabaseSync } from "node:sqlite";
 
@@ -777,6 +821,149 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
 
       CREATE INDEX IF NOT EXISTS terminal_events_by_agent_idx
         ON terminal_events (workspace_id, agent_id);
+    `,
+  },
+  {
+    version: 15,
+    name: "projects-and-git",
+    sql: `
+      CREATE TABLE IF NOT EXISTS projects (
+        workspace_id    TEXT    NOT NULL,
+        project_id      TEXT    NOT NULL,
+        name            TEXT    NOT NULL CHECK (length(name) BETWEEN 1 AND 255),
+        source_kind     TEXT    NOT NULL CHECK (source_kind IN ('git_url', 'directory')),
+        source_url      TEXT    NOT NULL,
+        repo_path       TEXT    NOT NULL,
+        default_branch  TEXT    NOT NULL,
+        access_mode     TEXT    NOT NULL CHECK (access_mode IN ('shared', 'restricted')),
+        created_by_type TEXT    NOT NULL CHECK (created_by_type IN ('user', 'agent', 'runtime', 'admin', 'system')),
+        created_by_id   TEXT    NOT NULL,
+        created_at      TEXT    NOT NULL,
+        updated_at      TEXT    NOT NULL,
+        PRIMARY KEY (workspace_id, project_id)
+      ) STRICT;
+
+      CREATE TABLE IF NOT EXISTS project_agent_access (
+        workspace_id TEXT NOT NULL,
+        project_id   TEXT NOT NULL,
+        agent_id     TEXT NOT NULL,
+        added_at     TEXT NOT NULL,
+        PRIMARY KEY (workspace_id, project_id, agent_id)
+      ) STRICT;
+
+      CREATE TABLE IF NOT EXISTS project_credentials (
+        workspace_id      TEXT    NOT NULL,
+        project_id        TEXT    NOT NULL,
+        credential_id     TEXT    NOT NULL,
+        credential_kind   TEXT    NOT NULL CHECK (credential_kind IN ('token', 'password', 'ssh_key')),
+        username          TEXT,
+        secret_ciphertext BLOB    NOT NULL,
+        secret_iv         BLOB    NOT NULL,
+        secret_tag        BLOB    NOT NULL,
+        key_version       INTEGER NOT NULL CHECK (key_version >= 1),
+        created_by_type   TEXT    NOT NULL CHECK (created_by_type IN ('user', 'agent', 'runtime', 'admin', 'system')),
+        created_by_id     TEXT    NOT NULL,
+        created_at        TEXT    NOT NULL,
+        revoked_at        TEXT,
+        PRIMARY KEY (workspace_id, project_id, credential_id)
+      ) STRICT;
+
+      CREATE UNIQUE INDEX IF NOT EXISTS project_credentials_active_idx
+        ON project_credentials (workspace_id, project_id, credential_kind)
+        WHERE revoked_at IS NULL;
+
+      CREATE TABLE IF NOT EXISTS project_worktrees (
+        workspace_id  TEXT    NOT NULL,
+        project_id    TEXT    NOT NULL,
+        worktree_id   TEXT    NOT NULL,
+        task_id       TEXT    NOT NULL,
+        agent_id      TEXT,
+        branch_name   TEXT    NOT NULL,
+        worktree_path TEXT    NOT NULL,
+        status        TEXT    NOT NULL CHECK (status IN ('active', 'queued', 'admitted', 'released', 'merged')),
+        queue_reason  TEXT,
+        created_at    TEXT    NOT NULL,
+        updated_at    TEXT    NOT NULL,
+        PRIMARY KEY (workspace_id, project_id, worktree_id),
+        UNIQUE (workspace_id, project_id, worktree_path),
+        CHECK (status != 'queued' OR queue_reason IS NOT NULL)
+      ) STRICT;
+
+      CREATE UNIQUE INDEX IF NOT EXISTS project_worktrees_active_idx
+        ON project_worktrees (workspace_id, project_id)
+        WHERE status = 'active';
+
+      CREATE INDEX IF NOT EXISTS project_worktrees_by_task_idx
+        ON project_worktrees (workspace_id, project_id, task_id);
+
+      CREATE TABLE IF NOT EXISTS merge_requests (
+        workspace_id        TEXT    NOT NULL,
+        project_id          TEXT    NOT NULL,
+        merge_request_id    TEXT    NOT NULL,
+        task_id             TEXT    NOT NULL,
+        agent_id            TEXT    NOT NULL,
+        source_branch       TEXT    NOT NULL,
+        target_branch       TEXT    NOT NULL,
+        change_summary      TEXT    NOT NULL CHECK (length(change_summary) BETWEEN 1 AND 2000),
+        changed_files_json  TEXT    NOT NULL CHECK (json_valid(changed_files_json)),
+        validation_status   TEXT    NOT NULL CHECK (validation_status IN ('not_run', 'passed', 'failed')),
+        validation_note     TEXT,
+        conflict_status     TEXT    NOT NULL CHECK (conflict_status IN ('unknown', 'clean', 'conflict')),
+        conflict_files_json TEXT    CHECK (conflict_files_json IS NULL OR json_valid(conflict_files_json)),
+        approval_id         TEXT,
+        status              TEXT    NOT NULL CHECK (status IN (
+          'awaiting_approval', 'queued', 'approved', 'merged',
+          'rejected', 'changes_requested', 'failed')),
+        status_reason       TEXT,
+        merged_commit       TEXT,
+        created_at          TEXT    NOT NULL,
+        updated_at          TEXT    NOT NULL,
+        PRIMARY KEY (workspace_id, project_id, merge_request_id)
+      ) STRICT;
+
+      CREATE INDEX IF NOT EXISTS merge_requests_by_approval_idx
+        ON merge_requests (workspace_id, approval_id);
+
+      CREATE INDEX IF NOT EXISTS merge_requests_by_task_idx
+        ON merge_requests (workspace_id, project_id, task_id);
+    `,
+  },
+  {
+    // S19 chunk 2 (issue #20): the archive import source. SQLite cannot ALTER
+    // a CHECK constraint, so the projects table is rebuilt (create-copy-drop-
+    // rename) with source_kind widened to admit 'archive' — the repository
+    // snapshot import (the "download ZIP" flow). The rebuild preserves every
+    // column, the STRICT discipline, and the primary key; the widened CHECK
+    // still refuses every kind outside the three.
+    version: 16,
+    name: "projects-archive-source",
+    sql: `
+      CREATE TABLE IF NOT EXISTS projects_v16 (
+        workspace_id    TEXT    NOT NULL,
+        project_id      TEXT    NOT NULL,
+        name            TEXT    NOT NULL CHECK (length(name) BETWEEN 1 AND 255),
+        source_kind     TEXT    NOT NULL CHECK (source_kind IN ('git_url', 'directory', 'archive')),
+        source_url      TEXT    NOT NULL,
+        repo_path       TEXT    NOT NULL,
+        default_branch  TEXT    NOT NULL,
+        access_mode     TEXT    NOT NULL CHECK (access_mode IN ('shared', 'restricted')),
+        created_by_type TEXT    NOT NULL CHECK (created_by_type IN ('user', 'agent', 'runtime', 'admin', 'system')),
+        created_by_id   TEXT    NOT NULL,
+        created_at      TEXT    NOT NULL,
+        updated_at      TEXT    NOT NULL,
+        PRIMARY KEY (workspace_id, project_id)
+      ) STRICT;
+
+      INSERT INTO projects_v16
+        (workspace_id, project_id, name, source_kind, source_url, repo_path,
+         default_branch, access_mode, created_by_type, created_by_id, created_at, updated_at)
+      SELECT
+        workspace_id, project_id, name, source_kind, source_url, repo_path,
+        default_branch, access_mode, created_by_type, created_by_id, created_at, updated_at
+      FROM projects;
+
+      DROP TABLE projects;
+      ALTER TABLE projects_v16 RENAME TO projects;
     `,
   },
 ];

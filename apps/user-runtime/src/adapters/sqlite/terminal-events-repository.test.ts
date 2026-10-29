@@ -13,7 +13,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterAll, afterEach, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 
 import { openDatabase, type SqliteConnection } from "./connection.ts";
 import { appliedMigrationVersions, applyMigrations, MIGRATIONS } from "./migrations.ts";

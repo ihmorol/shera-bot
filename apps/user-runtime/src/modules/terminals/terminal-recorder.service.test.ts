@@ -37,7 +37,6 @@ afterAll(() => {
 
 const WS = "ws-local-default";
 const AGENT = "agent_general_assistant";
-const clock = "2026-10-29T12:00:00.000Z";
 
 interface Fixture {
   conn: SqliteConnection;

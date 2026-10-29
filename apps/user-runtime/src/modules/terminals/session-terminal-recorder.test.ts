@@ -138,7 +138,7 @@ function spawnRequest(): SessionSpawnRequest {
 
 describe("session spawn seam terminal recorder (S18 chunk 1)", () => {
   it("records the harness launch as a terminal execution with truthful fields", () => {
-    const { conn, tx } = newDb();
+    const { tx } = newDb();
     const journal = new EventJournalRepository(tx);
     const repo = new TerminalEventsRepository(tx);
     const recorder = new TerminalRecorder({
@@ -190,7 +190,7 @@ describe("session spawn seam terminal recorder (S18 chunk 1)", () => {
   });
 
   it("streams the child's stderr through the redaction boundary as output events", () => {
-    const { conn, tx } = newDb();
+    const { tx } = newDb();
     const journal = new EventJournalRepository(tx);
     const repo = new TerminalEventsRepository(tx);
     const recorder = new TerminalRecorder({
@@ -240,7 +240,7 @@ describe("session spawn seam terminal recorder (S18 chunk 1)", () => {
   });
 
   it("records the child's exit and closes the execution", async () => {
-    const { conn, tx } = newDb();
+    const { tx } = newDb();
     const journal = new EventJournalRepository(tx);
     const repo = new TerminalEventsRepository(tx);
     const recorder = new TerminalRecorder({
@@ -280,7 +280,7 @@ describe("session spawn seam terminal recorder (S18 chunk 1)", () => {
   });
 
   it("contains recorder failures: the supervisor still receives a working child", () => {
-    const { conn, tx } = newDb();
+    const { tx } = newDb();
     const repo = new TerminalEventsRepository(tx);
     // A recorder whose journal seam always fails.
     const failingEvents = {

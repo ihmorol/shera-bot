@@ -206,14 +206,23 @@ export type BrowserTabState =
 
 /**
  * Fold the view + state readouts into the tab's state union. The view's own
- * lifecycle arm wins (it is captured atomically with the screenshot); the
- * state readout's lifecycle fills the same honest answer.
+ * lifecycle arm wins (it is captured atomically with the screenshot); before
+ * any view read has landed, the state readout's lifecycle fills the same
+ * honest answer where it can — the unconfigured composition and the
+ * non-running arms carry no image to wait for (G4). A running browser whose
+ * first capture is still in flight stays on the loading skeleton.
  */
 export function browserTabState(
   view: BrowserViewPayload | null,
-  _state: BrowserStatePayload | null,
+  state: BrowserStatePayload | null,
 ): BrowserTabState {
   if (view === null) {
+    if (state?.configured === false) {
+      return { kind: "unconfigured" };
+    }
+    if (state?.configured === true && state.lifecycle_state !== "running") {
+      return { kind: "browser-state", lifecycle: state.lifecycle_state };
+    }
     return { kind: "loading" };
   }
   if (view.configured === false) {

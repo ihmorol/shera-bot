@@ -213,6 +213,43 @@ describe("browserTabState mapping", () => {
     ).toEqual({ kind: "unconfigured" });
   });
 
+  it("lets the state readout answer honestly before any view read lands (G4)", () => {
+    // Unconfigured: the composition is known without a view round-trip.
+    expect(browserTabState(null, { configured: false, workspace_id: WORKSPACE })).toEqual({
+      kind: "unconfigured",
+    });
+    // Non-running lifecycle: the honest arm carries NO image to wait for.
+    for (const lifecycle of ["stopped", "starting", "crashed"] as const) {
+      expect(
+        browserTabState(null, {
+          configured: true,
+          workspace_id: WORKSPACE,
+          lifecycle_state: lifecycle,
+          owner: null,
+          idle_timeout_ms: 120000,
+          inbound_listen: "none",
+          profile_dir: "/p",
+          required_capability: "browser-research",
+        }),
+      ).toEqual({ kind: "browser-state", lifecycle });
+    }
+    // A running browser whose first capture is still in flight: loading.
+    expect(
+      browserTabState(null, {
+        configured: true,
+        workspace_id: WORKSPACE,
+        lifecycle_state: "running",
+        owner: null,
+        idle_timeout_ms: 120000,
+        inbound_listen: "none",
+        profile_dir: "/p",
+        required_capability: "browser-research",
+      }),
+    ).toEqual({ kind: "loading" });
+    // No readout of either kind yet: loading.
+    expect(browserTabState(null, null)).toEqual({ kind: "loading" });
+  });
+
   it("answers live with the ACTUAL page when the browser is running", () => {
     const tab = browserTabState(
       {

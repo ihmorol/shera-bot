@@ -33,7 +33,10 @@ const agentDefaults = {
     if (conversationId === "conv_direct") return "agent_researcher";
     return null;
   },
-  getDefaultProvider(workspaceId: string, agentId: string): { provider_id: string; model: string } | null {
+  getDefaultProvider(
+    workspaceId: string,
+    agentId: string,
+  ): { provider_id: string; model: string } | null {
     if (agentId === "agent_researcher") return { provider_id: "prov_openai", model: "gpt-4o-mini" };
     return null;
   },
@@ -167,9 +170,9 @@ describe("provider service configuration (masked everywhere, G3)", () => {
         origin: "user",
       }),
     ).toThrowError(expect.objectContaining({ code: "PROVIDER_CONFIG_INVALID" }));
-    expect(() =>
-      service.setCredential(WS, "prov_local", "should-not-exist"),
-    ).toThrowError(expect.objectContaining({ code: "PROVIDER_CONFIG_INVALID" }));
+    expect(() => service.setCredential(WS, "prov_local", "should-not-exist")).toThrowError(
+      expect.objectContaining({ code: "PROVIDER_CONFIG_INVALID" }),
+    );
   });
 
   it("lists masked views and enables/disables", () => {
@@ -240,7 +243,7 @@ describe("effective provider resolution (AC11)", () => {
       configured: false,
       code: "PROVIDER_NOT_CONFIGURED",
     });
-    expect(effective.safe_message).toMatch(/no provider/i);
+    expect(effective.configured ? "" : effective.safe_message).toMatch(/no provider/i);
   });
 
   it("refuses a disabled provider with its own typed state", () => {

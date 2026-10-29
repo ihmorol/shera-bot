@@ -26,6 +26,10 @@ import { createServer } from "node:http";
 
 import { chromium } from "playwright";
 
+// The page.evaluate closures below run INSIDE the browser context and
+// reference browser globals (document/window) by design.
+/* global document, window */
+
 import { composeRuntime, DEFAULT_WORKSPACE_ID } from "../src/transport/local-api/compose.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));

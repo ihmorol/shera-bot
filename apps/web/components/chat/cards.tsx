@@ -1,8 +1,11 @@
-import { FileText, Play, Wrench } from "lucide-react";
+import { Check, CircleAlert, Clock, FileText, Play, ShieldCheck, Wrench, X } from "lucide-react";
 import type { ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import type { ArtifactRef, RunState, TaskRun, TypedExecutionEvent } from "@shera-bot/contracts";
 
 import { agentById, RUNS, toolInfoById } from "@/lib/fixtures";
+import { useContainerResolution } from "@/lib/container-connection";
+import { fetchToolHistory, type ToolHistoryEntry } from "@/lib/tools-api";
 import { cn } from "@/lib/utils";
 
 /**
@@ -86,29 +89,144 @@ function CardHeader({
 }
 
 /**
+ * The executor-recorded status of one proposal, joined by (task, tool,
+ * args_digest) — the digest IS the arguments identity both surfaces carry
+ * (G3). Null when the runtime holds no history row (the fixtures, or a run
+ * whose execution has not been recorded yet): the card then shows the
+ * EVENT-only truth, never a guess (G2).
+ */
+function useRuntimeToolStatus(event: TypedExecutionEvent): ToolHistoryEntry | null | undefined {
+  const resolution = useContainerResolution();
+  const workspaceId = resolution.data?.kind === "ready" ? resolution.data.workspace_id : null;
+  const taskId = "task_id" in event ? String(event.task_id) : null;
+  const digest =
+    event.event_type === "tool.proposed" || event.event_type === "approval.requested"
+      ? String(event.payload.args_digest ?? "")
+      : "";
+  const enabled = workspaceId !== null && taskId !== null && digest !== "";
+  const query = useQuery({
+    queryKey: ["tool-history", workspaceId, taskId],
+    queryFn: () => fetchToolHistory(workspaceId ?? "", { task_id: taskId ?? "" }),
+    enabled,
+    refetchOnWindowFocus: false,
+    refetchInterval: () => (typeof document !== "undefined" && document.hidden ? false : 5_000),
+    refetchIntervalInBackground: false,
+  });
+  if (!enabled || !query.data) {
+    return query.data === undefined ? undefined : null;
+  }
+  return (
+    query.data.find(
+      (row) =>
+        row.task_id === taskId &&
+        row.tool_id === String((event.payload as { tool_id?: string }).tool_id ?? "") &&
+        row.args_digest === digest,
+    ) ?? null
+  );
+}
+
+/** The live status line vocabulary (§5: proposed → validated → running → …). */
+function statusPresentation(status: ToolHistoryEntry["status"]): {
+  label: string;
+  icon: ReactNode;
+  className: string;
+} {
+  switch (status) {
+    case "succeeded":
+      return {
+        label: "Succeeded",
+        icon: <Check className="size-3.5" aria-hidden="true" />,
+        className: "text-success",
+      };
+    case "failed":
+      return {
+        label: "Failed",
+        icon: <X className="size-3.5" aria-hidden="true" />,
+        className: "text-failed",
+      };
+    case "blocked":
+      return {
+        label: "Blocked by policy",
+        icon: <CircleAlert className="size-3.5" aria-hidden="true" />,
+        className: "text-failed",
+      };
+    case "awaiting_approval":
+      return {
+        label: "Pausing for your approval",
+        icon: <ShieldCheck className="size-3.5" aria-hidden="true" />,
+        className: "text-approval",
+      };
+    case "running":
+      return {
+        label: "Running",
+        icon: <Clock className="size-3.5" aria-hidden="true" />,
+        className: "text-sky",
+      };
+    default:
+      return {
+        label: "Proposed · awaiting runtime validation",
+        icon: <CircleDashedIcon />,
+        className: "text-muted",
+      };
+  }
+}
+
+function CircleDashedIcon(): ReactNode {
+  return <Clock className="size-3.5" aria-hidden="true" />;
+}
+
+/**
  * Tool-call card. `proposed` = the runtime has not validated anything yet;
- * `pausing_for_approval` = an external/risky action is paused for a decision
- * (§7 copy: "pausing for your approval"). The five-choice approval dialog
- * lands with the approvals surface — this card never offers decisions.
+ * when the executor has recorded the execution, the card shows the RUNTIME's
+ * status + the approval linkage (G2: never "done" before the runtime says
+ * so — the status is the history row's, polled on the visible-tab cadence).
+ * The five-choice approval dialog lands with the approvals surface — this
+ * card never offers decisions.
  */
 export function ToolCallCard({ event }: { event: TypedExecutionEvent }) {
+  // Rules of hooks: the status lookup runs on EVERY render (it is a no-op
+  // query for non-proposal events — disabled by its own guard below).
+  const runtimeStatus = useRuntimeToolStatus(event);
   if (event.event_type === "tool.proposed") {
     const payload = event.payload;
     const info = toolInfoById(payload.tool_id);
+    const live = runtimeStatus ?? null;
     return (
       <CardShell live="assertive">
         <CardHeader
           icon={<Wrench className="size-4 shrink-0 text-sky" aria-hidden="true" />}
           title={info?.name ?? payload.tool_id}
           meta={payload.tool_version}
-          badge={info ? <RiskBadge riskClass={info.risk_class} /> : undefined}
+          badge={<RiskBadge riskClass={info?.risk_class ?? live?.risk_class ?? "READ_ONLY"} />}
         />
         <p className="mt-2 text-sm text-muted">{payload.proposal_summary}</p>
-        <p className="mt-2 flex items-center gap-1.5 font-mono text-[11px] text-muted">
-          <span className="size-1.5 rounded-full bg-sky" aria-hidden="true" />
-          Proposed · awaiting runtime validation
-          <span className="sr-only">— nothing has run yet</span>
-        </p>
+        {live ? (
+          <div className="mt-2 space-y-1.5">
+            <p
+              className={`flex items-center gap-1.5 font-mono text-[11px] ${statusPresentation(live.status).className}`}
+            >
+              {statusPresentation(live.status).icon}
+              {statusPresentation(live.status).label}
+            </p>
+            {live.approval_id ? (
+              <p className="font-mono text-[11px] text-approval">
+                approval linked — decided from its own card
+              </p>
+            ) : null}
+            {live.result_summary ? (
+              <p className="text-[13px] text-muted">{live.result_summary}</p>
+            ) : null}
+            {live.error_code ? (
+              <p className="font-mono text-[11px] text-failed">{live.error_code}</p>
+            ) : null}
+          </div>
+        ) : (
+          <p className="mt-2 flex items-center gap-1.5 font-mono text-[11px] text-muted">
+            <span className="size-1.5 rounded-full bg-sky" aria-hidden="true" />
+            Proposed · awaiting runtime validation
+            <span className="sr-only">— nothing has run yet</span>
+          </p>
+        )}
       </CardShell>
     );
   }

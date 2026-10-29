@@ -64,7 +64,22 @@ export function isBrowserRuntimePath(method: string, path: string): boolean {
       // project import/clone, credential store/revoke, or worktree
       // allocation.
       /^\/v1\/projects\/[a-zA-Z0-9_-]+\/merge-requests\/[a-zA-Z0-9_-]+\/decision$/.test(path) ||
-      /^\/v1\/projects\/[a-zA-Z0-9_-]+\/merge-requests\/[a-zA-Z0-9_-]+\/validation$/.test(path)
+      /^\/v1\/projects\/[a-zA-Z0-9_-]+\/merge-requests\/[a-zA-Z0-9_-]+\/validation$/.test(path) ||
+      // S21 (PRD §7, E4, G6): the tools mutations the web UI offers — the
+      // PURE creation preview (a POST because it carries a typed body; zero
+      // side effects, the D30 posture), the creation command, the
+      // runtime-grant activation, and the disable/enable switch (the switch
+      // that beats any grant). Every actor on these paths is bound
+      // SERVER-SIDE from the authenticated session (the proxy rebuilds
+      // `actor` — an agent-asserted identity cannot create, activate, or
+      // disable a tool through the browser path). Tool EXECUTION has no
+      // browser route at all: agents propose through the runtime, the
+      // executor decides (G2) — the browser can only manage the inventory.
+      path === "/v1/tools/creation-preview" ||
+      path === "/v1/tools/create" ||
+      path === "/v1/tools/activate" ||
+      path === "/v1/tools/disable" ||
+      path === "/v1/tools/enable"
     );
   }
   if (method === "PUT") {
@@ -109,6 +124,11 @@ export function isBrowserRuntimePath(method: string, path: string): boolean {
       // /v1/operations/launch, allowlisted above).
       path === "/v1/operation-definitions" ||
       /^\/v1\/operation-definitions\/[a-zA-Z0-9_-]+\/preview$/.test(path) ||
+      // S21 (PRD §7, E4): the tool inventory + the redacted tool history —
+      // strictly GET reads (the mutation arm is the POST list above). The
+      // reserved literal segment: /v1/tools/history must NOT answer a POST.
+      path === "/v1/tools" ||
+      path === "/v1/tools/history" ||
       // S17 chunk 4 (E12/AC16): the workspace panel reads — the shared
       // workspace:// tree listing, file bytes (base64 prototype body), the
       // active write leases (the conflict tooltip's data source, G5), and the

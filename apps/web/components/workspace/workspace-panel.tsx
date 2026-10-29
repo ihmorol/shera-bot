@@ -18,6 +18,7 @@ import type { PanelImperativeHandle, PanelSize } from "react-resizable-panels";
 import { FilesTab } from "@/components/workspace/files-tab";
 import { EditorTab } from "@/components/workspace/editor-tab";
 import { ArtifactsTab } from "@/components/workspace/artifacts-tab";
+import { ToolsTab } from "@/components/workspace/tools-tab";
 import { BrowserTab } from "@/components/workspace/browser-tab";
 import { PrivateFilesTab } from "@/components/workspace/private-files-tab";
 import { TerminalTab } from "@/components/workspace/terminal-tab";
@@ -356,6 +357,8 @@ export function WorkspacePanelBody({
           <BrowserTab workspaceId={workspaceId} />
         ) : activeTab === "private" ? (
           <PrivateFilesTab workspaceId={workspaceId} />
+        ) : activeTab === "tools" ? (
+          <ToolsTab workspaceId={workspaceId} />
         ) : (
           <ArtifactsTab workspaceId={workspaceId} />
         )}

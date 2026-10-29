@@ -1,4 +1,5 @@
 import { createElement, type ReactElement } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -15,7 +16,10 @@ import { threadItemsFromEvents } from "../lib/runtime-thread";
  * state, and no fixture-derived presence or unread state leaks onto real data.
  */
 
-const render = (element: ReactElement): string => renderToStaticMarkup(element);
+const render = (element: ReactElement): string =>
+  // S21: the chat surfaces' tool cards read the runtime tool history
+  // through TanStack Query — every tree renders under a fresh provider.
+  renderToStaticMarkup(createElement(QueryClientProvider, { client: new QueryClient() }, element));
 
 const AGENT = agentById("agent_general_assistant")!;
 const CONVERSATION = conversationForAgent("agent_general_assistant")!;

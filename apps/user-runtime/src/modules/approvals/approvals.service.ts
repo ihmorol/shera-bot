@@ -1178,6 +1178,24 @@ export class ApprovalsService {
     return { allowed: true, grant_id: grant.grant_id };
   }
 
+  /**
+   * Stamp one one-time grant consumed (S21: the executor's grant-driven fast
+   * path). The approval-path consumption stays inside applyDecision (its
+   * callback is synchronous); the executor's grant-driven executions complete
+   * synchronously inside its own call and consume HERE, after the effect.
+   * Reusable grants are never consumed; unknown or already-consumed grants
+   * answer false (the executor's post-effect consumption is best-effort — the
+   * gate itself already refused a consumed grant, so the fail-closed posture
+   * holds either way).
+   */
+  consumeOneTimeGrant(workspaceId: string, grantId: string): boolean {
+    const lookup = this.deps.approvals.getGrant(workspaceId, grantId);
+    if (lookup === null || !lookup.one_time || lookup.consumed_at !== null) {
+      return false;
+    }
+    return this.deps.approvals.consumeGrant(workspaceId, grantId, this.now());
+  }
+
   // -------------------------------------------------------------------------
   // Reminder firing + mutes (S20 chunk 3 — E3, D32)
   // -------------------------------------------------------------------------

@@ -101,6 +101,7 @@ import {
   type SetMuteInput,
 } from "../../modules/approvals/approvals.service.ts";
 import { taskStreamId } from "../../modules/tasks/task-events.ts";
+import { ToolExecutor } from "../../modules/tools/tool-executor.service.ts";
 
 // ---------------------------------------------------------------------------
 // Route paths (the contracts convention: literal constants, one definition)
@@ -288,7 +289,15 @@ export function buildApprovalsApiHandle(deps: {
   approvalsRepository: ApprovalsRepository;
   journal: Pick<EventJournalRepository, "readFrom">;
   now: () => string;
+  /** S19: the per-request execute for approvals that name a merge request. */
   executeForApproval?: (request: ApprovalRequest) => (() => void) | undefined;
+  /**
+   * S21 (the P0): the withheld gated execution's post-commit callback — the
+   * runtime tool executor's runWithheld for this approval. Absent (legacy
+   * callers): the S20 no-op posture (the approval still resolves; nothing
+   * executes — fail-closed, never a silent effect).
+   */
+  decideExecute?: (approvalId: string) => void;
 }): ApprovalsApiHandle {
   const { approvals, approvalsRepository, journal } = deps;
   return {
@@ -337,10 +346,18 @@ export function buildApprovalsApiHandle(deps: {
         decided_by: input.decidedBy,
         run,
         // The gated action's real execution: the composition's executor for
-        // approvals that name a merge request (S19), else the no-op scripted
-        // execution whose completion consumes a one-time grant (the
-        // service's own semantics).
-        execute: deps.executeForApproval?.(request) ?? (() => {}),
+        // approvals that name a merge request (S19), else the S21 runtime
+        // tool executor's withheld one — runWithheld runs ONLY here, after
+        // the decision transaction commits (AC3's decision side). Without
+        // either hook the S20 posture stands: the approval resolves and
+        // NOTHING executes (fail-closed, never a silent effect).
+        execute:
+          deps.executeForApproval?.(request) ??
+          (deps.decideExecute
+            ? () => {
+                deps.decideExecute?.(input.approvalId);
+              }
+            : () => {}),
       });
     },
 
@@ -692,6 +709,49 @@ export interface ScriptedToolDefinition {
 }
 
 /**
+ * The scripted tools' response budget (the executor's AC5 check for the
+ * no-op family; the real per-tool budgets are each record's own field).
+ */
+export const SCRIPTED_TOOL_MAX_RESPONSE_BYTES = 65_536;
+
+/**
+ * The runtime-owned ToolDefinition record a scripted configuration registers
+ * into the tool registry (D38: the RUNTIME owns tool definitions). The
+ * scripted definition names identity, capability, risk class, and scope; the
+ * runtime supplies the structural defaults (schemas, limits, policies) —
+ * authored configuration, never a classification of proposal text (G2).
+ */
+export function scriptedToolDefinitionRecord(
+  config: ScriptedToolProposalConfig,
+  workspaceId: string,
+): unknown {
+  return {
+    tool_id: config.tool.tool_id,
+    workspace_id: workspaceId,
+    version: config.tool.tool_version,
+    name: config.tool.tool_id,
+    purpose: config.proposal_summary,
+    owner: { kind: "platform" },
+    inventory_scope: "shared",
+    input_schema: { type: "object" },
+    output_schema: { type: "object" },
+    capabilities: [config.tool.capability],
+    risk_class: config.tool.risk_class,
+    timeout_ms: 30_000,
+    resource_limits: {
+      max_memory_mb: 256,
+      max_cpu_seconds: 30,
+      max_processes: 4,
+      max_disk_mb: 64,
+    },
+    redaction_policy: "standard",
+    approval_policy:
+      config.tool.risk_class === "READ_ONLY" ? "auto_read_only" : "approval_required",
+    created_at: new Date().toISOString(),
+  };
+}
+
+/**
  * The composition's scripted tool-proposal configuration: the proposing
  * Agent (the scripted fixture attribution), the typed tool definition, the
  * sha256 arguments digest (G3: the digest IS the arguments surface), and the
@@ -702,22 +762,30 @@ export interface ScriptedToolProposalConfig {
   tool: ScriptedToolDefinition;
   args_digest: string;
   proposal_summary: string;
+  /**
+   * S21: the raw arguments the runtime holds in memory for the scripted
+   * execution (NEVER persisted; the executor digests and verifies them
+   * against the journalled digest). Absent -> the executor executes with {}
+   * and trusts the journalled digest (the digest-only scripted posture).
+   */
+  args?: Record<string, unknown>;
 }
 
 /**
- * The gateway-side handler for one scripted TYPED tool.proposed envelope:
- * resolve the typed definition, build the chunk-1 TypedToolProposal (identity
- * fields from the JOURNALLED envelope — tool_id, tool_version, args_digest —
- * definition fields from the configuration), and run the approvals boundary
- * with the execute callback withheld (the no-op scripted execution of this
- * slice). Gated risk class → the run pauses (the returned projection);
- * READ_ONLY → the no-op ran and the run continues (G6). Anything the
- * definition does not name exactly is recorded and left un-gated — a proposal
- * is never classified into a risk class (G2). Runs inside the harness's
- * atomic unit, so the pause and its journal events commit or not as one.
+ * The gateway-side handler for one scripted TYPED tool.proposed envelope
+ * (S21 — the P0): resolve the typed definition through the runtime tool
+ * REGISTRY (registered at composition from the same configuration), and run
+ * the RUNTIME EXECUTOR — the one validation/gating/limits/redaction path —
+ * over the proposal. Gated risk class -> the run pauses through the S20
+ * machinery and the executor withholds the real execution until the decision
+ * machinery calls runWithheld; READ_ONLY -> the tool executes automatically
+ * (G6). A proposal the configuration does not name is fault-logged and left
+ * un-gated — a proposal is never classified into a risk class (G2). Runs
+ * inside the harness's atomic unit, so the pause and its journal events
+ * commit or not as one.
  */
 export function applyScriptedToolProposal(
-  approvals: ApprovalsService,
+  executor: ToolExecutor,
   config: ScriptedToolProposalConfig,
   event: TypedExecutionEvent & {
     payload: { tool_id: string; tool_version: string; args_digest: string };
@@ -734,28 +802,26 @@ export function applyScriptedToolProposal(
     });
     return run;
   }
-  const result = approvals.createRequestFromTypedProposal({
+  const result = executor.executeProposal({
     proposal: {
       workspace_id: run.workspace_id,
       task_id: run.task_id,
       conversation_id: run.conversation_id,
-      agent_id: config.agent_id,
       tool_id: tool.tool_id,
       tool_version: tool.tool_version,
       capability: tool.capability,
-      risk_class: tool.risk_class,
-      resource_scope: tool.resource_scope,
       args_digest: event.payload.args_digest,
-      side_effect_summary: tool.side_effect_summary,
+      proposal_summary: config.proposal_summary,
     },
     run,
-    // The execute callback is WITHHELD (the S20 AC): this slice's approved
-    // execution is the no-op scripted one; the real action is the tools slice'.
-    execute: () => {},
+    agent_id: config.agent_id,
+    // The scripted definition's explicit D9 resource scope and authored
+    // side-effect text (G3: the free-text surfaces pass the approvals
+    // boundary's own redaction pass).
+    resource_scope: tool.resource_scope,
+    side_effect_summary: tool.side_effect_summary,
+    ...(config.args !== undefined ? { rawArgs: config.args } : {}),
   });
-  if (result.outcome === "paused_for_approval") {
-    return result.run;
-  }
   if (result.outcome === "transition_rejected") {
     logFault("approval_scripted_pause_rejected", {
       workspace_id: run.workspace_id,
@@ -763,5 +829,5 @@ export function applyScriptedToolProposal(
       code: result.rejection.code,
     });
   }
-  return run;
+  return result.run;
 }

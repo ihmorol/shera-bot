@@ -7,11 +7,13 @@ import { cn } from "@/lib/utils";
 /**
  * The workspace panel's tab strip (UI_DESIGN §4 S7). The S17 tabs (Files,
  * Editor, Private files, Artifacts) are joined by the S18 read-only live
- * views — Terminal and Browser sit after Editor in the S7 order. Tasks and
- * Tool history remain future tabs.
+ * views — Terminal and Browser sit after Editor in the S7 order — and by the
+ * S21 tool history (the executor's redacted execution records), which closes
+ * that line of the S7 list.
  */
 
-export type WorkspaceTabId = "files" | "editor" | "terminal" | "browser" | "private" | "artifacts";
+export type WorkspaceTabId =
+  "files" | "editor" | "terminal" | "browser" | "private" | "artifacts" | "tools";
 
 export const WORKSPACE_TABS: ReadonlyArray<{ id: WorkspaceTabId; label: string }> = [
   { id: "files", label: "Files" },
@@ -20,6 +22,7 @@ export const WORKSPACE_TABS: ReadonlyArray<{ id: WorkspaceTabId; label: string }
   { id: "browser", label: "Browser" },
   { id: "private", label: "Private files" },
   { id: "artifacts", label: "Artifacts" },
+  { id: "tools", label: "Tool history" },
 ];
 
 export function TabStrip({

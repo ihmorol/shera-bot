@@ -49,6 +49,7 @@ const WORKSPACE_TAB_IDS: readonly string[] = [
   "browser",
   "private",
   "artifacts",
+  "tools",
 ];
 
 export function workspaceTabFromParam(value: unknown): WorkspaceTabId {

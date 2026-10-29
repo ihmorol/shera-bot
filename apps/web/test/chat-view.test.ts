@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createElement, type ReactElement } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -32,7 +33,10 @@ import { insertDaySeparators, withSentMessages, type TimelineItem } from "../lib
 
 const APP_DIR = join(import.meta.dirname, "..");
 
-const render = (element: ReactElement): string => renderToStaticMarkup(element);
+const render = (element: ReactElement): string =>
+  // S21: the chat surfaces' tool cards read the runtime tool history
+  // through TanStack Query — every tree renders under a fresh provider.
+  renderToStaticMarkup(createElement(QueryClientProvider, { client: new QueryClient() }, element));
 
 function messageItem(message: ChatMessage): ThreadItem {
   return { kind: "message", at: message.sent_at, message };

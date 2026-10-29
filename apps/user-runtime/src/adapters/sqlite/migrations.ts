@@ -227,7 +227,8 @@
  * requires the deciding user actor and stamps its id. Muting is a user
  * notification decision (the G6 family): the row is the audit record of WHO
  * silenced which reminders.
- *
+ */
+/**
  * v14 — terminal event storage (S18 chunk 1; PRD §4.3, §19 AC19/AC21, §20,
  * D10, D27, E12, G3): the durable rows behind the read-only terminal live
  * view. One table, journal-shaped: a terminal execution is an ordered stream
@@ -964,6 +965,152 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
 
       DROP TABLE projects;
       ALTER TABLE projects_v16 RENAME TO projects;
+    `,
+  },
+
+  /**
+   * v17 — tool inventory, execution history, activation grants, disablements
+   * (S21 chunk 1; PRD §7, E4, E13, E12, D23 rule 2, G3): the durable rows behind
+   * the runtime-owned tool executor. FOUR tables, all STRICT and workspace-
+   * scoped (E12 — the same tool_id in two workspaces is an independent row
+   * space):
+   *
+   *   tool_inventory — the declarative, versioned agent-created tool records
+   *   (E4: name, purpose, owner, private/shared scope, input/output JSON Schema,
+   *   capabilities, risk class, per-tool limits, redaction policy, approval
+   *   policy). The E13 recovery class is a NOT NULL column DEFAULTED to
+   *   'needs_human' at the storage layer — the safe default is stored DATA, not
+   *   per-call inference. Lifecycle states are the checked vocabulary
+   *   ('created' | 'active' | 'disabled'); built-in tools live in the runtime
+   *   registry and never get inventory rows.
+   *
+   *   tool_execution_history — one row per executor-mediated execution with the
+   *   G3 fields: args_digest plus a BOUNDED, PRE-REDACTED args summary and
+   *   result summary (the repository stores what the executor hands it — the
+   *   redaction happens BEFORE any write), the risk class + E13 recovery class
+   *   exposed per row, the per-tool limits as recorded data, and the approval /
+   *   grant linkage (approval_id, grant_id). Statuses are the checked ladder
+   *   vocabulary proposed/validated/running/awaiting_approval/succeeded/failed/
+   *   blocked/cancelled.
+   *
+   *   tool_activation_grants — the runtime-owned activation grants (E4:
+   *   activation into an Agent's or Operation's toolset requires a runtime
+   *   grant; grants are created ONLY through the inventory service's
+   *   user-decision path, never from agent input). The primary key makes a
+   *   duplicate activation grant unrepresentable (the idempotent replay
+   *   answers "already granted").
+   *
+   *   tool_disablements — workspace-scoped disable switches. A disablement row
+   *   beats any grant: the executor consults it BEFORE the approval machinery
+   *   (AC6 — disabling a tool prevents execution even when a grant exists).
+   *
+   * Integration note: this migration was authored as v15 while the sibling
+   * S19 chain (its v15/v16 projects migrations) was still in flight; at the
+   * integration rebase onto main-with-S19 it renumbers to v17 — the
+   * orchestrator-owned renumber the slice's migration note anticipated. No
+   * other slice renumbered, and the chain carries exactly one tool-inventory
+   * entry.
+   */
+  {
+    version: 17,
+    name: "tool-inventory",
+    sql: `
+      CREATE TABLE IF NOT EXISTS tool_inventory (
+        workspace_id       TEXT    NOT NULL,
+        tool_id            TEXT    NOT NULL,
+        version            TEXT    NOT NULL,
+        name               TEXT    NOT NULL,
+        purpose            TEXT    NOT NULL,
+        owner_kind         TEXT    NOT NULL CHECK (owner_kind IN ('platform', 'agent')),
+        owner_agent_id     TEXT,
+        inventory_scope    TEXT    NOT NULL CHECK (inventory_scope IN ('private', 'shared')),
+        input_schema_json  TEXT    NOT NULL CHECK (json_valid(input_schema_json)),
+        output_schema_json TEXT    NOT NULL CHECK (json_valid(output_schema_json)),
+        capabilities_json  TEXT    NOT NULL CHECK (json_valid(capabilities_json)),
+        risk_class         TEXT    NOT NULL CHECK (risk_class IN (
+          'READ_ONLY', 'LOCAL_MUTATION', 'DESTRUCTIVE_LOCAL', 'EXTERNAL_WRITE',
+          'CREDENTIAL_ACCESS', 'DEPLOYMENT', 'FINANCIAL_OR_IRREVERSIBLE')),
+        timeout_ms         INTEGER NOT NULL CHECK (timeout_ms >= 1 AND timeout_ms <= 600000),
+        resource_limits_json TEXT  NOT NULL CHECK (json_valid(resource_limits_json)),
+        redaction_policy   TEXT    NOT NULL CHECK (redaction_policy IN ('standard', 'strict')),
+        approval_policy    TEXT    NOT NULL CHECK (approval_policy IN (
+          'auto_read_only', 'preview_required', 'approval_required')),
+        recovery           TEXT    NOT NULL DEFAULT 'needs_human' CHECK (recovery IN (
+          'replayable', 'idempotent_retry', 'needs_human')),
+        state              TEXT    NOT NULL CHECK (state IN ('created', 'active', 'disabled')),
+        enabled            INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+        max_response_bytes INTEGER NOT NULL CHECK (max_response_bytes >= 1),
+        created_by_agent_id TEXT,
+        created_at         TEXT    NOT NULL,
+        updated_at         TEXT,
+        PRIMARY KEY (workspace_id, tool_id, version),
+        CHECK (
+          (owner_kind = 'platform' AND owner_agent_id IS NULL AND created_by_agent_id IS NULL)
+          OR (owner_kind = 'agent' AND owner_agent_id IS NOT NULL)
+        )
+      ) STRICT;
+
+      CREATE INDEX IF NOT EXISTS tool_inventory_by_workspace_idx
+        ON tool_inventory (workspace_id, tool_id);
+
+      CREATE TABLE IF NOT EXISTS tool_execution_history (
+        workspace_id      TEXT    NOT NULL,
+        execution_id      TEXT    NOT NULL,
+        task_id           TEXT    NOT NULL,
+        conversation_id   TEXT    NOT NULL,
+        agent_id          TEXT    NOT NULL,
+        tool_id           TEXT    NOT NULL,
+        tool_version      TEXT    NOT NULL,
+        capability        TEXT    NOT NULL,
+        risk_class        TEXT    NOT NULL CHECK (risk_class IN (
+          'READ_ONLY', 'LOCAL_MUTATION', 'DESTRUCTIVE_LOCAL', 'EXTERNAL_WRITE',
+          'CREDENTIAL_ACCESS', 'DEPLOYMENT', 'FINANCIAL_OR_IRREVERSIBLE')),
+        recovery          TEXT    NOT NULL CHECK (recovery IN (
+          'replayable', 'idempotent_retry', 'needs_human')),
+        args_digest       TEXT    NOT NULL,
+        args_summary      TEXT    NOT NULL,
+        preview_json      TEXT    CHECK (preview_json IS NULL OR json_valid(preview_json)),
+        status            TEXT    NOT NULL CHECK (status IN (
+          'proposed', 'validated', 'running', 'awaiting_approval',
+          'succeeded', 'failed', 'blocked', 'cancelled')),
+        approval_id       TEXT,
+        grant_id          TEXT,
+        error_code        TEXT,
+        result_summary    TEXT,
+        timeout_ms        INTEGER NOT NULL,
+        max_response_bytes INTEGER NOT NULL,
+        resource_limits_json TEXT NOT NULL CHECK (json_valid(resource_limits_json)),
+        started_at        TEXT    NOT NULL,
+        finished_at       TEXT,
+        PRIMARY KEY (workspace_id, execution_id)
+      ) STRICT;
+
+      CREATE INDEX IF NOT EXISTS tool_executions_by_task_idx
+        ON tool_execution_history (workspace_id, task_id, started_at);
+
+      CREATE INDEX IF NOT EXISTS tool_executions_by_tool_idx
+        ON tool_execution_history (workspace_id, tool_id, started_at);
+
+      CREATE TABLE IF NOT EXISTS tool_activation_grants (
+        workspace_id TEXT NOT NULL,
+        tool_id      TEXT NOT NULL,
+        tool_version TEXT NOT NULL,
+        target_kind  TEXT NOT NULL CHECK (target_kind IN ('agent', 'operation', 'workspace')),
+        target_id    TEXT NOT NULL,
+        granted_by   TEXT NOT NULL,
+        granted_at   TEXT NOT NULL,
+        revoked_at   TEXT,
+        PRIMARY KEY (workspace_id, tool_id, tool_version, target_kind, target_id)
+      ) STRICT;
+
+      CREATE TABLE IF NOT EXISTS tool_disablements (
+        workspace_id TEXT NOT NULL,
+        tool_id      TEXT NOT NULL,
+        disabled_by  TEXT NOT NULL,
+        disabled_at  TEXT NOT NULL,
+        PRIMARY KEY (workspace_id, tool_id)
+      ) STRICT;
+
     `,
   },
 ];

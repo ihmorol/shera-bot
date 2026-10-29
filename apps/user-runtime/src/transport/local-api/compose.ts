@@ -41,6 +41,7 @@ import type { PackAgentSeed } from "../../adapters/sqlite/agents-repository.ts";
 import { ArtifactsRepository } from "../../adapters/sqlite/artifacts-repository.ts";
 import { ApprovalsRepository } from "../../adapters/sqlite/approvals-repository.ts";
 import { ProjectsRepository } from "../../adapters/sqlite/projects-repository.ts";
+import { ToolsRepository } from "../../adapters/sqlite/tools-repository.ts";
 import { CommandReceiptsRepository } from "../../adapters/sqlite/command-receipts-repository.ts";
 import { ConversationsRepository } from "../../adapters/sqlite/conversations-repository.ts";
 import { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
@@ -77,6 +78,19 @@ import { ApprovalsService } from "../../modules/approvals/approvals.service.ts";
 import { CredentialVault } from "../../modules/projects/credential-vault.ts";
 import { GitService } from "../../modules/git/git.service.ts";
 import { ValidationRunner } from "../../modules/git/validation-runner.ts";
+import { ToolRegistry } from "../../modules/tools/tool-registry.ts";
+import { ToolsInventoryService } from "../../modules/tools/tools-inventory.service.ts";
+import { ToolExecutor } from "../../modules/tools/tool-executor.service.ts";
+import { makeNoteBindings, makeScriptedNoopBinding } from "../../modules/tools/tool-binding.ts";
+import {
+  SCRIPTED_TOOL_MAX_RESPONSE_BYTES,
+  scriptedToolDefinitionRecord,
+} from "./s20-approvals-api.ts";
+import {
+  buildToolsApiHandle,
+  registerBuiltinNoteTools,
+  type ToolsApiHandle,
+} from "./s21-tools-api.ts";
 import { HarnessRunService } from "../../modules/runtime/harness-run-service.ts";
 import { loadWorkspacePack, type WorkspacePack } from "../../modules/runtime/pack-pin.ts";
 import { seedAgentsFromPack } from "../../adapters/sqlite/agents-repository.ts";
@@ -139,6 +153,12 @@ const DEFAULT_PACK: PackSnapshot = {
 };
 
 export interface ComposeLocalApiOptions {
+  /**
+   * S21: late-bound pack allow-list hook — the composition calls it once the
+   * pinned pack loads (the D38 pack layer resolves from it; fail-closed
+   * empty until then).
+   */
+  toolsInventoryHook?: (allowList: ReadonlyArray<{ tool_id: string; version: string }>) => void;
   /** Path of the container-local SQLite database file. */
   dbPath: string;
   /** Post-commit live fanout hook (HTTP-only composition; tests). */
@@ -174,6 +194,13 @@ export interface ComposeLocalApiOptions {
 }
 
 export interface LocalApiHandle {
+  /**
+   * S21: the runtime tool executor + registry — the ONE execution path every
+   * capability goes through (AC1), exposed for the tools API surface.
+   */
+  tools: ToolExecutor;
+  toolRegistry: ToolRegistry;
+  toolsApi: ToolsApiHandle;
   app: Express;
   /**
    * S20 chunk 4: the approvals service seam — the boundary the API routes
@@ -341,6 +368,15 @@ export interface RuntimeHandle {
    */
   approvals: ApprovalsService;
   /**
+   * S21: the runtime tool executor — the ONE execution path every capability
+   * goes through (registry + the D35 ladder + the approval machinery's first
+   * production caller), and the registry the composition registered the
+   * built-in/scripted definitions into.
+   */
+  tools: ToolExecutor;
+  toolRegistry: ToolRegistry;
+  toolsApi: ToolsApiHandle;
+  /**
    * S18 chunk 1: the terminal recorder seam — the ONLY writer of
    * terminal_events and the terminal.* journal vocabulary. The session spawn
    * seam is already wired through it when a session harness is configured;
@@ -379,6 +415,10 @@ interface Wired {
   operations: OperationsService;
   workers: TaskWorkerSystem | undefined;
   approvals: ApprovalsService;
+  tools: ToolExecutor;
+  toolRegistry: ToolRegistry;
+  toolsApi: ToolsApiHandle;
+  toolsInventoryHook: (allowList: ReadonlyArray<{ tool_id: string; version: string }>) => void;
   terminals: TerminalRecorder;
   browser: BrowserService | undefined;
   projects: ProjectsApiHandle;
@@ -490,10 +530,13 @@ function wire(
     sessionPolicy?: Partial<SessionSupervisorPolicy> | undefined;
     workerHarness?: TaskWorkerHarnessConfig | undefined;
     workerAdmissionPolicy?: Partial<AdmissionPolicy> | undefined;
+    scriptedToolProposal?: ScriptedToolProposalConfig | undefined;
+    workspaceId?: string | undefined;
     workerPolicy?: Partial<TaskWorkerSupervisorPolicy> | undefined;
   },
 ): Wired {
   const logFault = options.logUntypedFault ?? consoleRedactedLogger;
+  const wireWorkspaceId = options.workspaceId ?? DEFAULT_WORKSPACE_ID;
   const conn = openDatabase(options.dbPath);
   applyMigrations(conn.db);
 
@@ -859,6 +902,50 @@ function wire(
   // request resolves to a merge request executes THAT merge through the git
   // service — after the decision transaction commits (the S20 rule), never
   // before. Any other approval keeps the no-op scripted execution (G4).
+
+  // S21 (the P0): the runtime tool executor — checkExecutionAllowed's first
+  // production caller. The composition registers the built-in/scripted tool
+  // definitions into the runtime registry (authored configuration — never a
+  // classification of proposal text, G2) and hands the executor the same
+  // transaction every other writer uses. The scripted no-op binding keeps the
+  // S20 demo posture: its effect is the run's own continuation, now recorded
+  // in the tool history like every real tool.
+  const toolRegistry = new ToolRegistry();
+  toolRegistry.registerBinding("scripted-noop", makeScriptedNoopBinding());
+  // S21: the platform's own built-in tools (the prototype's REAL demo
+  // family): the workspace note store the S21 tools operate on — read
+  // (READ_ONLY, auto) and append (LOCAL_MUTATION, preview-gated). Their
+  // capabilities sit inside the pinned pack's union so the D38 intersection
+  // admits agent-created tools in the same families. The scripted no-op
+  // binding stays the S20 demo posture (no external effect, honest result).
+  const noteBindings = makeNoteBindings();
+  toolRegistry.registerBinding("notes-read", noteBindings.read);
+  toolRegistry.registerBinding("notes-append", noteBindings.append);
+  const toolsRepository = new ToolsRepository(conn.db);
+  // S21: the agent-created inventory (E4) — late-bound pack allow-list (the
+  // pack loads after the wiring; the default is fail-closed empty).
+  const toolsInventory = new ToolsInventoryService({
+    tx,
+    tools: toolsRepository,
+    registry: toolRegistry,
+    packToolAllowList: [],
+  });
+  const toolExecutor = new ToolExecutor({
+    registry: toolRegistry,
+    tools: toolsRepository,
+    tx,
+    approvals,
+    ...(options.now ? { now: options.now } : {}),
+  });
+  if (options.scriptedToolProposal) {
+    toolRegistry.registerBuiltinTool({
+      definition: scriptedToolDefinitionRecord(options.scriptedToolProposal, wireWorkspaceId),
+      enabled: true,
+      max_response_bytes: SCRIPTED_TOOL_MAX_RESPONSE_BYTES,
+      bindingName: "scripted-noop",
+    });
+  }
+  registerBuiltinNoteTools(toolRegistry, wireWorkspaceId);
   const approvalsApi = buildApprovalsApiHandle({
     approvals,
     approvalsRepository,
@@ -882,6 +969,19 @@ function wire(
           .catch(() => {}); // the row records the failure (G5)
       };
     },
+    // S21: the approved TOOL execution IS the executor's withheld one —
+    // runWithheld runs only here, after the decision transaction commits.
+    // Precedence: the S19 per-request hook (merge-request approvals), then
+    // the executor, then the S20 no-op (fail-closed).
+    decideExecute: (approvalId) => {
+      toolExecutor.runWithheld(approvalId);
+    },
+  });
+  // S21: the tools API facade over the registry + inventory + history.
+  const toolsApi = buildToolsApiHandle({
+    registry: toolRegistry,
+    tools: toolsRepository,
+    inventory: toolsInventory,
   });
   const projectsApi = buildProjectsApiHandle({
     git: gitService,
@@ -942,6 +1042,7 @@ function wire(
       artifacts: workspaceArtifacts,
     },
     approvals: approvalsApi,
+    tools: toolsApi,
     // S18 chunk 1: the read-only terminal live-views surface — durable
     // replay, one execution's record, and the current session terminal
     // state. Three GET routes; the no-takeover criterion is the inventory.
@@ -970,6 +1071,10 @@ function wire(
     operations,
     workers,
     approvals,
+    tools: toolExecutor,
+    toolRegistry,
+    toolsApi,
+    toolsInventoryHook: (allowList) => toolsInventory.setPackToolAllowList(allowList),
     terminals,
     browser,
     projects: projectsApi,
@@ -984,6 +1089,9 @@ export function composeLocalApi(options: ComposeLocalApiOptions): LocalApiHandle
   return {
     app: wired.app,
     approvals: wired.approvals,
+    tools: wired.tools,
+    toolRegistry: wired.toolRegistry,
+    toolsApi: wired.toolsApi,
     browser: wired.browser,
     close: () => wired.conn.close(),
   };
@@ -1030,6 +1138,8 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
   // seeds are ALSO the D16 recommended-default source for the settings
   // surface (S11 chunk 3) — late-bound onto the service like the publish hook.
   if (pack) {
+    // S21: the D38 pack layer resolves from the pinned manifest's allow-list.
+    wired.toolsInventoryHook?.(pack.manifest.tool_allow_list);
     seedAgentsFromPack(wired.tx, workspaceId, pack.manifest);
     wired.agents.setPackAgents(pack.manifest.agents);
     // S13 (D36): the operations service validates rosters and coordinators
@@ -1130,14 +1240,10 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
           approvals: {
             // The delegate runs INSIDE startRun's atomic unit: the pause and
             // its journal events commit (or not) with the run's own writes.
+            // S21: the executor is the delegate — validation, the D35 ladder,
+            // the grant fast-path, limits, and redaction all happen there.
             onToolProposed: (event, run) =>
-              applyScriptedToolProposal(
-                wired.approvals,
-                scriptedToolProposal,
-                event,
-                run,
-                logFault,
-              ),
+              applyScriptedToolProposal(wired.tools, scriptedToolProposal, event, run, logFault),
           },
         }
       : {}),
@@ -1176,6 +1282,9 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     sessions: wired.sessions,
     workers: wired.workers,
     approvals: wired.approvals,
+    tools: wired.tools,
+    toolRegistry: wired.toolRegistry,
+    toolsApi: wired.toolsApi,
     terminals: wired.terminals,
     browser: wired.browser,
     projects: wired.projects,

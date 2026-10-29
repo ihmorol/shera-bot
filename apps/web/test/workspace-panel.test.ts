@@ -619,6 +619,7 @@ describe("panel chrome (tab strip)", () => {
       "browser",
       "private",
       "artifacts",
+      "tools",
     ]);
     expect(WORKSPACE_TABS.map((tab) => tab.label)).toEqual([
       "Files",
@@ -627,6 +628,7 @@ describe("panel chrome (tab strip)", () => {
       "Browser",
       "Private files",
       "Artifacts",
+      "Tool history",
     ]);
   });
 });

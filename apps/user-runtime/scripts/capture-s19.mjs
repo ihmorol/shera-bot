@@ -15,16 +15,25 @@
  *      TaskRun — the only fabricated input; the shape the harness produces),
  *      one REJECTED merge request recorded, and one queued worktree entry
  *      (the G5 queue with its visible reason).
- *   3. A control-plane stub (the e2e harness identity) + `next dev`, so the
- *      browser drives the app's own routes through its own proxy.
+ *   3. A control-plane stub (the e2e harness identity) + the web server, so
+ *      the browser drives the app's own routes through its own proxy. The
+ *      PRODUCTION server (`next start` over `next build`) is the default:
+ *      dev-mode hydration of this app does not reliably complete inside the
+ *      capture window, and the chunk-2 captures committed at quota-end showed
+ *      the pre-hydration container gate on every device — never the surfaces
+ *      they attest to (fixed in the S19 review round; S19_WEB_MODE=dev opts
+ *      back into `next dev` for interactive debugging).
  *
  * Captures: apps/web/.impeccable/review/s19/*.png — Settings → Git at
  * 360/768/1440, keyboard-only focus, prefers-reduced-motion, and the
- * Operation runs panel with the git-aware run cards.
+ * Operation runs panel with the git-aware run cards at 360/768/1440.
+ * Run: pnpm exec next build (apps/web), then
+ *      node --experimental-transform-types apps/user-runtime/scripts/capture-s19.mjs
  */
 // `document` is used only inside page.evaluate callbacks, which run in the
 // BROWSER context, not Node — declared for the linter.
 /* global document */
+import { randomUUID } from "node:crypto";
 import { spawn, execSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -305,10 +314,14 @@ const control = createServer((req, res) => {
     }
     if (req.url === "/api/runtime/status") {
       // The workspace container is READY (the stub IS the deployment here).
+      // The handle carries the OpaqueRuntimeHandle contract shape (rt_ + 32
+      // hex) — the review round fixed the stub, whose pre-format "rt_capture"
+      // failed the browser-side contract parse and left the gate in its
+      // honest typed-error state.
       res.writeHead(200, { "content-type": "application/json" });
       res.end(
         JSON.stringify({
-          runtime_handle: "rt_capture",
+          runtime_handle: `rt_${randomUUID().replaceAll("-", "")}`,
           account_id: "capture-user",
           tier: "balanced",
           provisioning_status: "running",
@@ -350,11 +363,18 @@ const controlPort = control.address().port;
 cleanups.push(() => control.close());
 
 const webOrigin = "http://127.0.0.1:4319";
+// WEB MODE (the review-round fix): the harness defaults to the PRODUCTION
+// web server (`next start` over an existing `next build`) because dev-mode
+// hydration of this app does not reliably complete inside the capture window
+// — the chunk-2 captures committed at quota-end showed the pre-hydration
+// container gate on every device, never the surfaces they attest to.
+// S19_WEB_MODE=dev opts back into `next dev` for interactive debugging.
+const webMode = process.env["S19_WEB_MODE"] === "dev" ? "dev" : "start";
 const next = spawn(
   process.execPath,
   [
     join(repoRoot, "apps", "web", "node_modules", "next", "dist", "bin", "next"),
-    "dev",
+    webMode,
     "--port",
     "4319",
   ],
@@ -400,16 +420,32 @@ console.log("probe status:", probeStatus.status, (await probeStatus.text()).slic
 // 4. The captures
 // ---------------------------------------------------------------------------
 
+// The pre-cached chromium build (playwright-core's registry expects a
+// different revision; the explicit executablePath reuses the cache).
+// Platform-aware: the Windows device keeps chrome-win64/chrome.exe under
+// LOCALAPPDATA, Linux keeps chrome-linux64/chrome under ~/.cache, and
+// S19_CHROMIUM overrides both (the review-round portability fix).
+const chromiumExecutable =
+  process.env["S19_CHROMIUM"] ??
+  (process.platform === "win32"
+    ? join(
+        process.env["LOCALAPPDATA"] ?? "",
+        "ms-playwright",
+        "chromium-1248",
+        "chrome-win64",
+        "chrome.exe",
+      )
+    : join(
+        process.env["HOME"] ?? "",
+        ".cache",
+        "ms-playwright",
+        "chromium-1248",
+        "chrome-linux64",
+        "chrome",
+      ));
+
 const browser = await chromium.launch({
-  // The pre-cached chromium build (playwright-core's registry expects a
-  // different revision; the explicit executablePath reuses the cache).
-  executablePath: join(
-    process.env["LOCALAPPDATA"] ?? "",
-    "ms-playwright",
-    "chromium-1248",
-    "chrome-win64",
-    "chrome.exe",
-  ),
+  executablePath: chromiumExecutable,
 });
 
 async function capture(name, path, viewport, opts = {}) {
@@ -504,6 +540,12 @@ await capture(
   "run-cards-git-1440.png",
   `/app/operation/${operationId}`,
   { width: 1440, height: 900 },
+  { waitFor: "[data-testid=operation-run-git]" },
+);
+await capture(
+  "run-cards-git-768.png",
+  `/app/operation/${operationId}`,
+  { width: 768, height: 1024 },
   { waitFor: "[data-testid=operation-run-git]" },
 );
 await capture(

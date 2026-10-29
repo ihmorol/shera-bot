@@ -415,7 +415,7 @@ describe("the adapter seam is proposal-only (S21 chunk 2, AC1)", () => {
     let sinkKeys: string[] = [];
     const probeAdapter = {
       harness: "fake" as const,
-      driveRun(_request: unknown, sink: { propose: unknown }) {
+      driveRun(_request: unknown, sink: { propose: (proposal: unknown) => void }) {
         sinkKeys = Object.keys(sink);
         sink.propose({
           kind: "task_command",

@@ -76,6 +76,8 @@ export type ToolExecutorFailureCode =
   | "TOOL_RESPONSE_TOO_LARGE"
   | "TOOL_BINDING_FAILED"
   | "TOOL_APPROVAL_UNAVAILABLE"
+  | "TOOL_NOT_ACTIVATED"
+  | "TOOL_NOT_SHARED"
   | "EXECUTION_AUTHORITY_MISSING";
 
 /**
@@ -291,6 +293,38 @@ export class ToolExecutor {
     if (!resolved.enabled || this.deps.tools.isDisabled(run.workspace_id, definition.tool_id)) {
       this.recordBlockedRow(input, execution_id, resolved, startedAt, "TOOL_DISABLED", null);
       return { outcome: "blocked", execution_id, error_code: "TOOL_DISABLED", run };
+    }
+
+    // E4/AC8: agent-created tools execute only through their lifecycle — the
+    // proposing Agent needs an activation grant targeting them (or a
+    // workspace-wide one), and a private-scope tool refuses every other
+    // Agent outright. No grant or state below can bypass this (the D38
+    // intersection: a toolset membership is itself a runtime grant).
+    if (resolved.origin === "agent_created") {
+      const owner = definition.owner.kind === "agent" ? definition.owner.agent_id : null;
+      const isOwner = owner !== null && owner === input.agent_id;
+      if (definition.inventory_scope === "private" && !isOwner) {
+        this.recordBlockedRow(input, execution_id, resolved, startedAt, "TOOL_NOT_SHARED", null);
+        return { outcome: "blocked", execution_id, error_code: "TOOL_NOT_SHARED", run };
+      }
+      const activatedForAgent = this.deps.tools.hasActivationGrant(
+        run.workspace_id,
+        definition.tool_id,
+        definition.version,
+        "agent",
+        input.agent_id,
+      );
+      const activatedForWorkspace = this.deps.tools.hasActivationGrant(
+        run.workspace_id,
+        definition.tool_id,
+        definition.version,
+        "workspace",
+        run.workspace_id,
+      );
+      if (!activatedForAgent && !activatedForWorkspace) {
+        this.recordBlockedRow(input, execution_id, resolved, startedAt, "TOOL_NOT_ACTIVATED", null);
+        return { outcome: "blocked", execution_id, error_code: "TOOL_NOT_ACTIVATED", run };
+      }
     }
 
     // Typed args validation against the tool's own input schema.

@@ -272,6 +272,11 @@ const GIT_REJECTIONS: Record<
     safe_message: "The git URL is not usable in this form.",
     user_action: null,
   },
+  GIT_CREDENTIAL_INVALID: {
+    status: 400,
+    safe_message: "The credential is not usable in this form.",
+    user_action: "Provide a non-empty secret.",
+  },
   GIT_ARCHIVE_INVALID: {
     status: 400,
     safe_message: "The archive import was refused; nothing was registered.",

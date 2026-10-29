@@ -49,6 +49,7 @@ import type { TaskRun } from "@shera-bot/contracts";
 
 import {
   MergeRequestNotFoundError,
+  ProjectCredentialActiveExistsError,
   ProjectNotFoundError,
   type MergeRequestRow,
   type ProjectCredentialRow,
@@ -80,6 +81,7 @@ export type GitServiceFailureCode =
   | "GIT_CREDENTIAL_NOT_FOUND"
   | "GIT_CREDENTIAL_REVOKED"
   | "GIT_CREDENTIAL_ACTIVE_EXISTS"
+  | "GIT_CREDENTIAL_INVALID"
   | "GIT_URL_INVALID"
   | "GIT_ARCHIVE_INVALID"
   | "GIT_FETCH_FAILED"
@@ -1294,7 +1296,7 @@ export class GitService {
     this.requireProject(input.workspace_id, input.project_id);
     if (input.secret.length === 0) {
       throw new GitServiceError(
-        "GIT_URL_INVALID",
+        "GIT_CREDENTIAL_INVALID",
         "validation",
         "the credential secret must not be empty",
       );
@@ -1320,7 +1322,7 @@ export class GitService {
       this.deps.projects.insertCredential(row);
     } catch (error) {
       // One ACTIVE credential per (project, kind): replace = revoke first.
-      if (error instanceof Error && error.name === "ProjectCredentialActiveExistsError") {
+      if (error instanceof ProjectCredentialActiveExistsError) {
         throw new GitServiceError(
           "GIT_CREDENTIAL_ACTIVE_EXISTS",
           "state",

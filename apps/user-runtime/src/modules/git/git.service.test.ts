@@ -342,6 +342,24 @@ describe("git.service: project import/clone atomicity", () => {
     expect(serialized).not.toContain(secret);
     expect(env.projects.listProjects(WS)).toEqual([]);
     expect(readdirSync(env.projectsRoot)).toEqual([]);
+
+    // The userinfo guard is SCHEME-AGNOSTIC: an ssh URL with an embedded
+    // password is refused on the same terms (the review-round fix) — its
+    // credential-bearing form would otherwise survive sanitizeGitUrl into
+    // the persisted source_url.
+    const sshSecret = "s3cr3t_ssh_password";
+    const sshCredUrl = `ssh://deploy:${sshSecret}@127.0.0.1:1/repo.git`;
+    await expect(
+      env.git.importProject({
+        workspace_id: WS,
+        name: "private-ssh",
+        actor: USER,
+        source: { kind: "git_url", url: sshCredUrl },
+      }),
+    ).rejects.toThrow(GitServiceError);
+    expect(JSON.stringify(env.faults)).not.toContain(sshSecret);
+    expect(env.projects.listProjects(WS)).toEqual([]);
+    expect(readdirSync(env.projectsRoot)).toEqual([]);
   });
 });
 
@@ -648,8 +666,17 @@ describe("credential vault: AES-256-GCM custody inside the container", () => {
   it("masks secrets for display and strips credentials from persisted URLs", () => {
     expect(maskSecret("ghp_abcdef1234567890")).toBe("••••7890");
     expect(maskSecret("short")).toBe("••••••");
+    expect(maskSecret("0123456789a")).toBe("••••••");
     expect(sanitizeGitUrl("https://user:pass@example.invalid/u/r.git")).toBe(
       "https://example.invalid/u/r.git",
+    );
+    // Scheme-agnostic: a non-https userinfo URL is stripped on the same terms,
+    // while the scp-like form (no scheme, no password) passes untouched.
+    expect(sanitizeGitUrl("ssh://user:pass@example.invalid/u/r.git")).toBe(
+      "ssh://example.invalid/u/r.git",
+    );
+    expect(sanitizeGitUrl("git@example.invalid:owner/repo.git")).toBe(
+      "git@example.invalid:owner/repo.git",
     );
     expect(sanitizeGitUrl("https://example.invalid/u/r.git")).toBe(
       "https://example.invalid/u/r.git",

@@ -161,6 +161,10 @@ function runCommand(
         // script's node child alive.
         spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true });
       } else {
+        // Recorded limitation: on POSIX this SIGKILLs the shell, so a script
+        // that spawned its own children may leave them running after the
+        // typed timeout — the runner stops WAITING either way. A
+        // process-group kill is the follow-up hardening.
         child.kill("SIGKILL");
       }
     }, limits.perCommandTimeoutMs);

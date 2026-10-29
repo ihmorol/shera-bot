@@ -91,7 +91,9 @@ export class CredentialVault {
         throw new CredentialVaultError("the key file could not be read");
       }
       const key = randomBytes(KEY_BYTES);
-      writeFileSync(this.keyPath, key);
+      // Owner-only: the key file is the D22 bootstrap key — a 0644 default
+      // would hand every same-host process the whole vault.
+      writeFileSync(this.keyPath, key, { mode: 0o600 });
       this.key = key;
       return key;
     }
@@ -123,15 +125,21 @@ export class CredentialVault {
 /**
  * The masked display value (D22: "the UI shows masked values with
  * revoke/replace"). Reveals only the final four characters of a secret long
- * enough to make that safe; anything shorter is fully masked.
+ * enough to make that safe — below 12 characters a four-character reveal is
+ * too large a fraction of the secret, so anything shorter is fully masked.
  */
 export function maskSecret(plaintext: string): string {
   const trimmed = plaintext.trim();
-  if (trimmed.length < 8) {
+  if (trimmed.length < 12) {
     return "••••••";
   }
   return `••••${trimmed.slice(-4)}`;
 }
+
+/** Any scheme's `//user:password@` userinfo (https, ssh, git, ftp, …). The
+ * scp-like form (`git@host:owner/repo.git`, no scheme, no `//`) deliberately
+ * does not match — it carries no password and is standard git syntax. */
+const USERINFO_URL = /^([A-Za-z][A-Za-z0-9+.-]*):\/\/([^/\s:@]+):([^/\s@]+)@/;
 
 /**
  * Strip any userinfo component from a git URL (G3: the credential-free form
@@ -139,12 +147,12 @@ export function maskSecret(plaintext: string): string {
  * userinfo pass through unchanged.
  */
 export function sanitizeGitUrl(url: string): string {
-  return url.replace(/^(https?:\/\/)([^/\s:@]+):([^/\s@]+)@/i, "$1");
+  return url.replace(USERINFO_URL, "$1://");
 }
 
-/** True when the URL carries an embedded userinfo component. */
+/** True when the URL carries an embedded userinfo component (any scheme). */
 export function urlHasEmbeddedCredentials(url: string): boolean {
-  return /^(https?:\/\/)([^/\s:@]+):([^/\s@]+)@/i.test(url);
+  return USERINFO_URL.test(url);
 }
 
 /**

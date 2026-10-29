@@ -31,8 +31,9 @@
  *   - no symlink or hardlink entries AT ALL: the writer never materializes
  *     one, so a link-escape is unrepresentable;
  *   - size caps: per-entry (checked against the DECLARED size BEFORE
- *     decompression — the zip-bomb guard), total extracted bytes, entry
- *     count, and the archive file itself;
+ *     decompression — the zip-bomb guard), the whole tar.gz stream capped
+ *     WHILE it decompresses (a gzip bomb never materializes in memory), the
+ *     total extracted bytes, entry count, and the archive file itself;
  *   - a refused entry fails the WHOLE extraction typed and writes NOTHING:
  *     files are created only after their entry is admitted, so a refusal
  *     leaves the destination untouched (the atomicity the git service
@@ -41,7 +42,8 @@
 import { existsSync, readdirSync, renameSync, rmSync, statSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { gunzipSync, inflateRawSync } from "node:zlib";
+import { Readable } from "node:stream";
+import { createGunzip, inflateRawSync } from "node:zlib";
 
 export class ArchiveImportError extends Error {
   readonly code:
@@ -367,6 +369,39 @@ function parsePaxRecords(data: Buffer): Record<string, string> {
   return records;
 }
 
+/**
+ * Stream-decompress the gzip stream with a HARD decompressed-size ceiling:
+ * the whole inflated stream never exists beyond `capBytes` — a gzip bomb is
+ * refused mid-stream (typed ARCHIVE_LIMIT_EXCEEDED) instead of being
+ * gunzipSync'd into memory first. The stream bounds the file data plus the
+ * tar framing, so it can only refuse archives whose extracted bytes would
+ * blow the total cap anyway (the safe direction).
+ */
+async function gunzipCapped(raw: Buffer, capBytes: number): Promise<Buffer> {
+  const gunzip = createGunzip();
+  const source = Readable.from(raw).pipe(gunzip);
+  const chunks: Buffer[] = [];
+  let total = 0;
+  try {
+    for await (const chunk of source) {
+      total += (chunk as Buffer).length;
+      if (total > capBytes) {
+        throw new ArchiveImportError(
+          "ARCHIVE_LIMIT_EXCEEDED",
+          "the archive decompresses above the total size cap",
+        );
+      }
+      chunks.push(chunk as Buffer);
+    }
+  } catch (error) {
+    if (error instanceof ArchiveImportError) {
+      throw error;
+    }
+    throw new ArchiveImportError("ARCHIVE_UNREADABLE", "the gzip stream failed to decompress");
+  }
+  return Buffer.concat(chunks);
+}
+
 async function extractTar(
   archivePath: string,
   destDir: string,
@@ -374,7 +409,7 @@ async function extractTar(
   gzipped: boolean,
 ): Promise<ArchiveExtractionResult> {
   const raw = await readFile(archivePath);
-  const buffer = gzipped ? gunzipSync(raw) : raw;
+  const buffer = gzipped ? await gunzipCapped(raw, limits.maxTotalBytes) : raw;
   if (buffer.length % TAR_BLOCK !== 0) {
     throw new ArchiveImportError("ARCHIVE_UNREADABLE", "the tar stream is not block-aligned");
   }

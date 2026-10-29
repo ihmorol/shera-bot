@@ -527,6 +527,28 @@ describe("archive extraction: size and count caps", () => {
     expect(existsSync(join(dest, "out"))).toBe(false);
   });
 
+  it("refuses a tar.gz whose decompressed stream exceeds the cap mid-stream (gzip bomb guard)", async () => {
+    const dest = makeTempDir("shera-s19-cap-gzip-");
+    // A small compressed file whose INFLATED stream is far over the total cap
+    // while every entry fits the per-entry cap: only the mid-stream guard can
+    // refuse this — the reader throws DURING decompression, so the whole
+    // inflated stream never materializes in memory (the review-round fix).
+    const bomb = gzipSync(
+      writeTar([
+        { name: "a.txt", data: Buffer.alloc(700, 48) },
+        { name: "b.txt", data: Buffer.alloc(700, 48) },
+        { name: "c.txt", data: Buffer.alloc(700, 48) },
+      ]),
+    );
+    expect(bomb.length).toBeLessThan(2048);
+    const archive = join(dest, "bomb.tar.gz");
+    writeFileSync(archive, bomb);
+    await expect(extractArchiveInto(archive, join(dest, "out"), tightLimits)).rejects.toThrow(
+      /decompresses above the total size cap/,
+    );
+    expect(existsSync(join(dest, "out"))).toBe(false);
+  });
+
   it("refuses archives above the total-bytes cap and the entry-count cap", async () => {
     const dest = makeTempDir("shera-s19-cap-total-");
     const total = join(dest, "total.tar");

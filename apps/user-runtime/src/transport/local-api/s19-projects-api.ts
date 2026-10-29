@@ -34,8 +34,6 @@
  * actor in the query when needed; mutations carry it in the body. The S05/S06
  * authenticated transport binds the workspace; nothing here invents auth.
  */
-import { randomUUID } from "node:crypto";
-
 import type { Express } from "express";
 import { z } from "zod";
 
@@ -53,6 +51,7 @@ import type {
 import { GitServiceError } from "../../modules/git/git.service.ts";
 import type { ValidationRunner } from "../../modules/git/validation-runner.ts";
 import { rebuildRunProjection, type ApprovalsApiHandle } from "./s20-approvals-api.ts";
+import { contractValidationResponse } from "../http/typed-errors.ts";
 
 // ---------------------------------------------------------------------------
 // Route paths (the contracts convention: literal constants, one definition)
@@ -358,16 +357,9 @@ export function buildProjectsApiHandle(deps: {
 // The routes
 // ---------------------------------------------------------------------------
 
+/** The shared CONTRACT_VALIDATION_FAILED shape (the s17 pattern, one source). */
 function validationFailure(safeMessage: string) {
-  return {
-    code: "CONTRACT_VALIDATION_FAILED",
-    category: "validation" as const,
-    safe_message: safeMessage,
-    retryable: false,
-    user_action: null,
-    internal_details: null,
-    correlation_id: randomUUID(),
-  };
+  return contractValidationResponse(safeMessage).body;
 }
 
 export function registerProjectsRoutes(app: Express, deps: ProjectsApiHandle): void {

@@ -84,9 +84,12 @@ describe("S19 v15 migration (projects-and-git)", () => {
     expect(v15?.name).toBe("projects-and-git");
     const v16 = MIGRATIONS.find((migration) => migration.version === 16);
     expect(v16?.name).toBe("projects-archive-source");
-    expect(MIGRATIONS.at(-1)?.version).toBe(16);
+    // The S21 integration appended v17 (tool-inventory) after this migration;
+    // the S19 entries themselves never move once merged.
+    expect(MIGRATIONS.at(-1)?.version).toBe(17);
+    expect(MIGRATIONS.at(-2)?.name).toBe("projects-archive-source");
     const applied = appliedMigrationVersions(conn.db);
-    expect(applied.at(-1)).toBe(16);
+    expect(applied.at(-1)).toBe(17);
   });
 
   it("v16 widens projects.source_kind to admit archives while keeping the strict enum", () => {

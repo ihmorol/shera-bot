@@ -82,16 +82,15 @@ import { ToolRegistry } from "../../modules/tools/tool-registry.ts";
 import { ToolsInventoryService } from "../../modules/tools/tools-inventory.service.ts";
 import { ToolExecutor } from "../../modules/tools/tool-executor.service.ts";
 import { makeNoteBindings, makeScriptedNoopBinding } from "../../modules/tools/tool-binding.ts";
-import { SCRIPTED_TOOL_MAX_RESPONSE_BYTES, scriptedToolDefinitionRecord } from "./s20-approvals-api.ts";
-import { buildToolsApiHandle, registerBuiltinNoteTools, type ToolsApiHandle } from "./s21-tools-api.ts";
-import { ToolsInventoryService } from "../../modules/tools/tools-inventory.service.ts";
+import {
+  SCRIPTED_TOOL_MAX_RESPONSE_BYTES,
+  scriptedToolDefinitionRecord,
+} from "./s20-approvals-api.ts";
 import {
   buildToolsApiHandle,
   registerBuiltinNoteTools,
   type ToolsApiHandle,
-import {
-  SCRIPTED_TOOL_MAX_RESPONSE_BYTES,
-  scriptedToolDefinitionRecord,
+} from "./s21-tools-api.ts";
 import { HarnessRunService } from "../../modules/runtime/harness-run-service.ts";
 import { loadWorkspacePack, type WorkspacePack } from "../../modules/runtime/pack-pin.ts";
 import { seedAgentsFromPack } from "../../adapters/sqlite/agents-repository.ts";
@@ -882,7 +881,6 @@ function wire(
     ...(options.now ? { clock: options.now } : {}),
   });
 
-
   // S19 chunk 1: the git coordination seam over the SAME transaction and
   // repositories every other writer uses. The credential vault's key file
   // and every project clone live beside the database in the container's data
@@ -912,7 +910,6 @@ function wire(
   // transaction every other writer uses. The scripted no-op binding keeps the
   // S20 demo posture: its effect is the run's own continuation, now recorded
   // in the tool history like every real tool.
-  const wireWorkspaceId = options.workspaceId ?? DEFAULT_WORKSPACE_ID;
   const toolRegistry = new ToolRegistry();
   toolRegistry.registerBinding("scripted-noop", makeScriptedNoopBinding());
   // S21: the platform's own built-in tools (the prototype's REAL demo

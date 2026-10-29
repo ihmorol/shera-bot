@@ -54,7 +54,7 @@ import type {
   ExecutionRecheckResult,
 } from "../approvals/approvals.service.ts";
 import type { ToolsRepository } from "../../adapters/sqlite/tools-repository.ts";
-import type { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
+import type { SqliteExec, SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import { RISK_CLASS_LADDER, resolvePreviewKind } from "./risk-ladder.ts";
 import {
   makeExecutionAuthority,
@@ -789,7 +789,7 @@ export class ToolExecutor {
   // History-row helpers (all inside the caller's transaction)
   // -------------------------------------------------------------------------
 
-  private exec(): import("node:sqlite").DatabaseSync {
+  private exec(): SqliteExec {
     return this.deps.tx.connection();
   }
 

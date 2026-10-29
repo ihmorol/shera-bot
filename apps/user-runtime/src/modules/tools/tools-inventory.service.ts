@@ -32,7 +32,7 @@ import {
 } from "@shera-bot/contracts";
 
 import type { ToolsRepository } from "../../adapters/sqlite/tools-repository.ts";
-import type { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
+import type { SqliteExec, SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import type { ToolRegistry } from "./tool-registry.ts";
 
 /**
@@ -296,7 +296,7 @@ export class ToolsInventoryService {
     }
 
     this.deps.tx.transaction((exec) => {
-      const dbExec = exec as import("node:sqlite").DatabaseSync;
+      const dbExec = exec as SqliteExec;
       const existing = this.deps.tools.getAgentTool(
         input.workspace_id,
         input.tool.tool_id,

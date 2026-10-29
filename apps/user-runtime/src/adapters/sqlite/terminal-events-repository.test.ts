@@ -70,11 +70,11 @@ describe("terminal_events storage (S18 migration v14)", () => {
   it("appends the terminal-events migration as version 14 of the committed chain", () => {
     const v14 = MIGRATIONS.find((migration) => migration.version === 14);
     expect(v14?.name).toBe("terminal-events");
-    // S21 appends v15 (tool-inventory) after this migration, so the chain head
-    // is 15 on this branch; v14 itself stays in place (the orchestrator owns
-    // renumbering when the sibling S19 chain integrates).
-    expect(MIGRATIONS.at(-1)?.version).toBe(15);
-    expect(MIGRATIONS.at(-2)?.version).toBe(14);
+    // The S19 integration appended v15/v16 (projects) and the S21 integration
+    // appended v17 (tool-inventory) after this migration; v14 itself stays in
+    // place (each slice's own entries never move once merged).
+    expect(MIGRATIONS.at(-1)?.version).toBe(17);
+    expect(MIGRATIONS.at(-4)?.version).toBe(14);
   });
 
   it("creates the STRICT terminal_events table through the migration runner", () => {

@@ -965,6 +965,8 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
 
       DROP TABLE projects;
       ALTER TABLE projects_v16 RENAME TO projects;
+    `,
+  },
 
   /**
    * v17 — tool inventory, execution history, activation grants, disablements
@@ -1002,55 +1004,12 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
    *   beats any grant: the executor consults it BEFORE the approval machinery
    *   (AC6 — disabling a tool prevents execution even when a grant exists).
    *
-   * Integration note: this migration was authored as v15 while the sibling S19
-   * chain (its v15/v16 projects migrations) was still in flight; at the
+   * Integration note: this migration was authored as v15 while the sibling
+   * S19 chain (its v15/v16 projects migrations) was still in flight; at the
    * integration rebase onto main-with-S19 it renumbers to v17 — the
    * orchestrator-owned renumber the slice's migration note anticipated. No
-   * other slice renumbered here. The duplicate v15 doc paragraph above
-   * (between v14 and the S19 entries) is retained verbatim from the branch's
-   * file-header documentation; the version literal is the migration's
-   * identity, and the chain below carries exactly one tool-inventory entry.
-   */
-
-  /**
-   * v17 — tool inventory, execution history, activation grants, disablements
-   * (S21 chunk 1; PRD §7, E4, E13, E12, D23 rule 2, G3): the durable rows behind
-   * the runtime-owned tool executor. FOUR tables, all STRICT and workspace-
-   * scoped (E12 — the same tool_id in two workspaces is an independent row
-   * space):
-   *
-   *   tool_inventory — the declarative, versioned agent-created tool records
-   *   (E4: name, purpose, owner, private/shared scope, input/output JSON Schema,
-   *   capabilities, risk class, per-tool limits, redaction policy, approval
-   *   policy). The E13 recovery class is a NOT NULL column DEFAULTED to
-   *   'needs_human' at the storage layer — the safe default is stored DATA, not
-   *   per-call inference. Lifecycle states are the checked vocabulary
-   *   ('created' | 'active' | 'disabled'); built-in tools live in the runtime
-   *   registry and never get inventory rows.
-   *
-   *   tool_execution_history — one row per executor-mediated execution with the
-   *   G3 fields: args_digest plus a BOUNDED, PRE-REDACTED args summary and
-   *   result summary (the repository stores what the executor hands it — the
-   *   redaction happens BEFORE any write), the risk class + E13 recovery class
-   *   exposed per row, the per-tool limits as recorded data, and the approval /
-   *   grant linkage (approval_id, grant_id). Statuses are the checked ladder
-   *   vocabulary proposed/validated/running/awaiting_approval/succeeded/failed/
-   *   blocked/cancelled.
-   *
-   *   tool_activation_grants — the runtime-owned activation grants (E4:
-   *   activation into an Agent's or Operation's toolset requires a runtime
-   *   grant; grants are created ONLY through the inventory service's
-   *   user-decision path, never from agent input). The primary key makes a
-   *   duplicate activation grant unrepresentable (the idempotent replay
-   *   answers "already granted").
-   *
-   *   tool_disablements — workspace-scoped disable switches. A disablement row
-   *   beats any grant: the executor consults it BEFORE the approval machinery
-   *   (AC6 — disabling a tool prevents execution even when a grant exists).
-   *
-   * Migration note: this slice pins the chain head at v15. A sibling slice in
-   * flight carries its own v14+v15 pair; the orchestrator renumbers at
-   * integration — this branch does not renumber anything.
+   * other slice renumbered, and the chain carries exactly one tool-inventory
+   * entry.
    */
   {
     version: 17,

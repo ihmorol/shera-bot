@@ -64,7 +64,7 @@ export function isBrowserRuntimePath(method: string, path: string): boolean {
       // project import/clone, credential store/revoke, or worktree
       // allocation.
       /^\/v1\/projects\/[a-zA-Z0-9_-]+\/merge-requests\/[a-zA-Z0-9_-]+\/decision$/.test(path) ||
-      /^\/v1\/projects\/[a-zA-Z0-9_-]+\/merge-requests\/[a-zA-Z0-9_-]+\/validation$/.test(path)
+      /^\/v1\/projects\/[a-zA-Z0-9_-]+\/merge-requests\/[a-zA-Z0-9_-]+\/validation$/.test(path) ||
       // S21 (PRD §7, E4, G6): the tools mutations the web UI offers — the
       // PURE creation preview (a POST because it carries a typed body; zero
       // side effects, the D30 posture), the creation command, the

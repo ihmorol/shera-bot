@@ -119,3 +119,39 @@ describe("workspace panel allowlist (S17, D6/D39/G6)", () => {
       expect(isBrowserRuntimePath(method, path)).toBe(false);
   });
 });
+
+describe("live views allowlist (S18, G6 — read-only, no takeover)", () => {
+  it("allowlists the five read-only live-view GETs the panels render", () => {
+    for (const path of [
+      "/v1/terminals/events",
+      "/v1/terminals/state",
+      "/v1/terminals/term_01",
+      "/v1/browser/view",
+      "/v1/browser/state",
+    ])
+      expect(isBrowserRuntimePath("GET", path), `GET ${path}`).toBe(true);
+  });
+
+  it("opens NO mutation path on the live-view resources (no takeover affordance)", () => {
+    // The UI gate's no-takeover rule starts here: the browser cannot even
+    // REACH a terminal stdin write, a signal send, or a browser navigation —
+    // the proxy refuses every non-GET verb on the live-view paths before the
+    // runtime is consulted (and the runtime itself registers only GETs).
+    for (const [method, path] of [
+      ["POST", "/v1/terminals/events"],
+      ["POST", "/v1/terminals/state"],
+      ["POST", "/v1/terminals/term_01"],
+      ["PUT", "/v1/terminals/term_01"],
+      ["DELETE", "/v1/terminals/term_01"],
+      ["PATCH", "/v1/terminals/term_01"],
+      ["POST", "/v1/browser/view"],
+      ["POST", "/v1/browser/state"],
+      ["PUT", "/v1/browser/state"],
+      ["DELETE", "/v1/browser/state"],
+      ["POST", "/v1/browser/navigate"],
+      ["POST", "/v1/terminals/term_01/stdin"],
+      ["POST", "/v1/terminals/term_01/signal"],
+    ] as const)
+      expect(isBrowserRuntimePath(method, path), `${method} ${path}`).toBe(false);
+  });
+});

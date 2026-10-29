@@ -125,10 +125,13 @@ function RuntimeAgentDirectChat({
 
   // S17 chunk 4: the workspace panel mounts in the shell's reserved region,
   // registered to THIS conversation while it is mounted (the toggle lives in
-  // the chat header; width + membership persist per conversation). Until the
-  // direct-chat binding resolves there is no conversation id to register, so
-  // the toggle stays out of the header (never a control that half-works).
-  useWorkspacePanelRegistration(real.directChatId, workspaceId);
+  // the chat header; width + membership persist per conversation). S18: the
+  // conversation's Agent rides the registration — the Terminal tab's live
+  // view is per-Agent (the journal streams and the terminal API are
+  // agent-scoped). Until the direct-chat binding resolves there is no
+  // conversation id to register, so the toggle stays out of the header
+  // (never a control that half-works).
+  useWorkspacePanelRegistration(real.directChatId, workspaceId, agent.agent_id);
 
   const workspaceToggle =
     real.directChatId !== null ? <WorkspacePanelToggle chatId={real.directChatId} /> : undefined;

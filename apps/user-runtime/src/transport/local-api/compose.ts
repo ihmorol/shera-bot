@@ -45,6 +45,7 @@ import { ConversationsRepository } from "../../adapters/sqlite/conversations-rep
 import { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
 import { OperationsRepository } from "../../adapters/sqlite/operations-repository.ts";
 import { TaskWorkersRepository } from "../../adapters/sqlite/task-workers-repository.ts";
+import { TerminalEventsRepository } from "../../adapters/sqlite/terminal-events-repository.ts";
 import { WorkspaceFilesRepository } from "../../adapters/sqlite/workspace-files-repository.ts";
 import { WriteLeasesRepository } from "../../adapters/sqlite/write-leases-repository.ts";
 import { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
@@ -77,10 +78,15 @@ import { loadWorkspacePack, type WorkspacePack } from "../../modules/runtime/pac
 import { seedAgentsFromPack } from "../../adapters/sqlite/agents-repository.ts";
 import { WorkspacesRepository } from "../../adapters/sqlite/workspaces-repository.ts";
 import {
+  DEFAULT_SESSION_POLICY,
   SessionSupervisor,
   type SessionSupervisorPolicy,
 } from "../../modules/sessions/session-supervisor.service.ts";
 import { SessionReplyBridge } from "../../modules/sessions/session-reply-bridge.ts";
+import { TerminalRecorder } from "../../modules/terminals/terminal-recorder.service.ts";
+import { observeSessionSpawnWithTerminalRecorder } from "../../modules/terminals/session-terminal-recorder.ts";
+import { BrowserService } from "../../modules/browser/browser.service.ts";
+import { buildLiveViewsApiHandle, type BrowserLiveViewHandle } from "./s18-live-views-api.ts";
 import {
   TaskWorkerAdmissionGate,
   DEFAULT_WORKER_ADMISSION_POLICY,
@@ -146,6 +152,20 @@ export interface ComposeLocalApiOptions {
    * clock; the E8 mock mode pins it so runs are byte-comparable.
    */
   now?: () => string;
+  /**
+   * S18 chunk 2 (G4 opt-in): the container's shared browser profile service —
+   * ONE Chromium profile per user container (PRD §6) in a container-local
+   * directory, started on demand by the Agent's browser driver, idle-closed
+   * after `idleTimeoutMs` (default 120000), and persistent across restarts
+   * (AC19; the profile dir is the D22 custody store). When it is NOT set the
+   * composition has NO browser service: no browser process ever spawns and
+   * the /v1/browser routes answer the honest `configured: false` — the same
+   * optional-seam shape as the session supervisor and the worker system (G4).
+   */
+  browser?: {
+    profileDir: string;
+    idleTimeoutMs?: number;
+  };
 }
 
 export interface LocalApiHandle {
@@ -155,6 +175,11 @@ export interface LocalApiHandle {
    * relay into; tests and operators may consult the AC26 gate directly.
    */
   approvals: ApprovalsService;
+  /**
+   * S18 chunk 2: the shared browser profile service seam when configured;
+   * undefined otherwise (G4 — no browser process ever spawns without it).
+   */
+  browser: BrowserService | undefined;
   /** Closes the SQLite connection. The caller owns the database file. */
   close(): void;
 }
@@ -310,6 +335,20 @@ export interface RuntimeHandle {
    * gate, reminders, and mutes; the HTTP surface relays into it.
    */
   approvals: ApprovalsService;
+  /**
+   * S18 chunk 1: the terminal recorder seam — the ONLY writer of
+   * terminal_events and the terminal.* journal vocabulary. The session spawn
+   * seam is already wired through it when a session harness is configured;
+   * tests and later slices (the S26 execution tools) drive it directly.
+   */
+  terminals: TerminalRecorder;
+  /**
+   * S18 chunk 2: the shared browser profile service seam — the browser's
+   * lifecycle, its D6 single-owner control boundary, and the driver seam the
+   * Agent's browser work runs through. Undefined when no browser is
+   * configured (G4); the read-only /v1/browser routes then answer honestly.
+   */
+  browser: BrowserService | undefined;
   /** Closes the gateway (and with it the HTTP server), then SQLite. */
   close(): Promise<void>;
 }
@@ -329,6 +368,8 @@ interface Wired {
   operations: OperationsService;
   workers: TaskWorkerSystem | undefined;
   approvals: ApprovalsService;
+  terminals: TerminalRecorder;
+  browser: BrowserService | undefined;
   setPublisher(publisher: ConversationPublisher): void;
 }
 
@@ -373,6 +414,34 @@ function operationPackCatalog(pack: WorkspacePack): OperationPackCatalog {
       return agents.some((agent) => agent.agent_id === agentId) ? pack.manifest.pack_id : null;
     },
   };
+}
+
+/**
+ * S18 chunk 1: the supervision facts recorded with every session-seam
+ * terminal execution — the bounds the runtime ACTUALLY enforces on the child,
+ * merged from the composition's policy overrides the same way the supervisor
+ * merges them. `os_resource_limits` is recorded as null by the observer (no
+ * OS-level limits exist on session children in this slice) — the policy
+ * never claims a limit that is not enforced (G4).
+ */
+function supervisionRecordFrom(
+  overrides: Partial<SessionSupervisorPolicy> | undefined,
+): SessionSupervisionRecordShape {
+  const policy = { ...DEFAULT_SESSION_POLICY, ...overrides };
+  return {
+    heartbeat_interval_ms: policy.heartbeatIntervalMs,
+    watchdog_window_ms: policy.heartbeatIntervalMs * policy.missedHeartbeatLimit,
+    stderr_max_bytes: policy.stderrMaxBytes,
+    escalation: "shutdown_frame_then_sigterm_then_sigkill",
+  };
+}
+
+/** The supervision record shape the session spawn observer records. */
+interface SessionSupervisionRecordShape {
+  heartbeat_interval_ms: number;
+  watchdog_window_ms: number;
+  stderr_max_bytes: number;
+  escalation: "shutdown_frame_then_sigterm_then_sigkill";
 }
 
 /**
@@ -446,6 +515,42 @@ function wire(
     publish: containFanout((event) => publisher(event), logFault),
   });
 
+  // S18 chunk 1: the terminal recorder — the one writer of terminal_events
+  // and the terminal.* journal vocabulary, over the SAME transaction and
+  // journal every other writer uses (D10: each row and its entry commit in
+  // one transaction; the recorder owns that composition). Always composed:
+  // the read-only API surface exists on every stack and reads honestly empty
+  // until an execution is recorded (G4).
+  const terminalEvents = new TerminalEventsRepository(tx);
+  const terminals = new TerminalRecorder({
+    tx,
+    terminals: terminalEvents,
+    events,
+  });
+
+  // S18 chunk 2: the shared browser profile service — opt-in (G4). One
+  // Chromium profile per user container in a container-local directory; the
+  // browser starts on demand, idles out per its policy, and keeps cookies in
+  // the profile dir across restarts (AC19; D22 custody). The service owns
+  // the D6 single-owner control boundary and the D27 capability posture; the
+  // HTTP surface gets ONLY the read-only handle below. Without the option
+  // nothing browser-shaped exists and the routes answer configured:false.
+  const browser = options.browser
+    ? new BrowserService({
+        profileDir: options.browser.profileDir,
+        ...(options.browser.idleTimeoutMs !== undefined
+          ? { idleTimeoutMs: options.browser.idleTimeoutMs }
+          : {}),
+        logFault: (event, fields) => logFault(event, fields),
+      })
+    : undefined;
+  const browserHandle: BrowserLiveViewHandle | undefined = browser
+    ? {
+        state: (workspaceId) => browser.stateReadout(workspaceId),
+        view: (workspaceId) => browser.snapshotView(workspaceId),
+      }
+    : undefined;
+
   // S12 (D32 layer 2): the supervised warm Agent session when a harness
   // command IS configured; when it is NOT, the runtime composes with the
   // supervisor DISABLED — presence "none" everywhere, no process ever spawns,
@@ -455,7 +560,20 @@ function wire(
   const sessions = options.sessionHarness
     ? new SessionSupervisor({
         events,
-        spawnChild: createSessionProcessSpawn(options.sessionHarness),
+        // S18 chunk 1: the spawn seam is observed by the terminal recorder —
+        // every session child the runtime launches is recorded (command,
+        // workdir, resource policy, approval state), its stderr streams
+        // through the redaction boundary, and its exit closes the record.
+        // Contained: a recording failure never costs the Agent its session.
+        spawnChild: observeSessionSpawnWithTerminalRecorder(
+          {
+            recorder: terminals,
+            harness: options.sessionHarness,
+            supervision: supervisionRecordFrom(options.sessionPolicy),
+            logFault: (event, fields) => logFault(event, fields),
+          },
+          createSessionProcessSpawn(options.sessionHarness),
+        ),
         contextProvider: (workspaceId, agentId) => {
           const agent = agents.getAgent(workspaceId, agentId);
           return {
@@ -760,6 +878,16 @@ function wire(
       artifacts: workspaceArtifacts,
     },
     approvals: approvalsApi,
+    // S18 chunk 1: the read-only terminal live-views surface — durable
+    // replay, one execution's record, and the current session terminal
+    // state. Three GET routes; the no-takeover criterion is the inventory.
+    terminals: buildLiveViewsApiHandle({
+      terminals: terminalEvents,
+      journal,
+    }),
+    // S18 chunk 2: the read-only browser live-view surface when a browser is
+    // configured (two GET routes; the routes relay into the service).
+    ...(browserHandle ? { browser: browserHandle } : {}),
     ...(options.logUntypedFault ? { logUntypedFault: options.logUntypedFault } : {}),
   });
   return {
@@ -777,6 +905,8 @@ function wire(
     operations,
     workers,
     approvals,
+    terminals,
+    browser,
     setPublisher(next) {
       publisher = next;
     },
@@ -785,7 +915,12 @@ function wire(
 
 export function composeLocalApi(options: ComposeLocalApiOptions): LocalApiHandle {
   const wired = wire(options);
-  return { app: wired.app, approvals: wired.approvals, close: () => wired.conn.close() };
+  return {
+    app: wired.app,
+    approvals: wired.approvals,
+    browser: wired.browser,
+    close: () => wired.conn.close(),
+  };
 }
 
 /**
@@ -975,6 +1110,8 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     sessions: wired.sessions,
     workers: wired.workers,
     approvals: wired.approvals,
+    terminals: wired.terminals,
+    browser: wired.browser,
     close: async () => {
       replyStreamer?.stopAll();
       // S16: drain every live worker child through the escalation BEFORE the
@@ -983,6 +1120,10 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
       // S12: drain every live session child through the escalation BEFORE the
       // transport goes down — a stopped runtime never leaves an orphan.
       await wired.sessions?.stopAll();
+      // S18 chunk 2: close the shared browser cleanly BEFORE the transport
+      // goes down — the persistent profile flushes its session state (AC19)
+      // and no Chromium orphan outlives the runtime.
+      await wired.browser?.dispose("shutdown");
       // io.close() also closes the attached HTTP server (socket.io v4).
       await gateway.close();
       wired.conn.close();

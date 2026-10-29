@@ -45,6 +45,11 @@ import type { OperationsService } from "../../modules/operations/operations.serv
 import type { WorkerAdmissionReadout } from "../../modules/workers/task-worker-supervisor.service.ts";
 import { registerApprovalsRoutes, type ApprovalsApiHandle } from "./s20-approvals-api.ts";
 import {
+  registerLiveViewsRoutes,
+  type BrowserLiveViewHandle,
+  type TerminalsApiHandle,
+} from "./s18-live-views-api.ts";
+import {
   ADHOC_AUTO_LABEL_PATTERN,
   type PackSummary,
 } from "../../modules/operations/operations.service.ts";
@@ -421,6 +426,25 @@ export interface LocalApiDeps {
    * passive until the scripted trigger files a request — no G4 concern).
    */
   approvals?: ApprovalsApiHandle;
+  /**
+   * S18 chunk 1: the read-only terminal live-views surface — the durable
+   * replay of terminal events, one execution's record, and the current
+   * session terminal state. READ-ONLY BY ROUTE INVENTORY (PRD §4.3/§20): the
+   * module registers only GET routes — no stdin, no signals, no execution —
+   * and its contract test pins the exact inventory. Present on every
+   * composed stack; the surface reads honestly empty until an execution is
+   * recorded (G4).
+   */
+  terminals?: TerminalsApiHandle;
+  /**
+   * S18 chunk 2: the read-only browser live-view surface over the shared
+   * browser profile service — the ACTUAL current page (url, title, fresh
+   * screenshot) and the lifecycle/ownership/posture readout. GET-only like
+   * the terminal surface: the no-takeover inventory covers the browser panel
+   * too (PRD §4.3/§20). Absent when the composition configured no browser —
+   * the routes then answer the honest `configured: false` (G4).
+   */
+  browser?: BrowserLiveViewHandle;
   /**
    * B-1: the redacted sink untyped HTTP faults are recorded to — the generic
    * INTERNAL_ERROR's correlation_id is logged with it, so "The failure has
@@ -1157,6 +1181,15 @@ export function createLocalApi(deps: LocalApiDeps): Express {
   // :approval_id ordering (Express matches in registration order).
   if (deps.approvals) {
     registerApprovalsRoutes(app, deps.approvals);
+  }
+
+  // S18 chunk 1+2: the read-only terminal AND browser live-views surface —
+  // three terminal GET routes plus two browser GET routes, literal segments
+  // before the :terminal_id capture (the module owns its ordering). No
+  // mutation route exists on either surface: the no-takeover acceptance
+  // criterion is the inventory itself.
+  if (deps.terminals) {
+    registerLiveViewsRoutes(app, deps.terminals, deps.browser);
   }
 
   // Typed failures and unknown routes: the SheraError taxonomy, never an

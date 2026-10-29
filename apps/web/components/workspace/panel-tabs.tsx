@@ -5,17 +5,19 @@ import type { ReactElement } from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * The workspace panel's tab strip (UI_DESIGN §4 S7). All four S7 tabs are
- * shipped as of chunk 5 — Files, Editor, Private files, and Artifacts each
- * render their real surface, so the designed "lands in the next build
- * increment" states retired with the last tab.
+ * The workspace panel's tab strip (UI_DESIGN §4 S7). The S17 tabs (Files,
+ * Editor, Private files, Artifacts) are joined by the S18 read-only live
+ * views — Terminal and Browser sit after Editor in the S7 order. Tasks and
+ * Tool history remain future tabs.
  */
 
-export type WorkspaceTabId = "files" | "editor" | "private" | "artifacts";
+export type WorkspaceTabId = "files" | "editor" | "terminal" | "browser" | "private" | "artifacts";
 
 export const WORKSPACE_TABS: ReadonlyArray<{ id: WorkspaceTabId; label: string }> = [
   { id: "files", label: "Files" },
   { id: "editor", label: "Editor" },
+  { id: "terminal", label: "Terminal" },
+  { id: "browser", label: "Browser" },
   { id: "private", label: "Private files" },
   { id: "artifacts", label: "Artifacts" },
 ];

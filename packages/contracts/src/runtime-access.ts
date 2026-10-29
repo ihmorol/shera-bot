@@ -108,7 +108,22 @@ export function isBrowserRuntimePath(method: string, path: string): boolean {
       path === "/v1/workspace/files" ||
       path === "/v1/workspace/leases" ||
       path === "/v1/workspace/artifacts" ||
-      /^\/v1\/workspace\/artifacts\/[a-zA-Z0-9_-]+$/.test(path))
+      /^\/v1\/workspace\/artifacts\/[a-zA-Z0-9_-]+$/.test(path) ||
+      // S18 (issue #19, G6): the terminal and browser READ-ONLY live views —
+      // the durable terminal replay, one Agent's current terminal state, one
+      // execution's record, the shared browser's actual page, and its
+      // lifecycle readout. Strictly GET: the runtime registers zero
+      // mutation routes on these paths (the no-takeover criterion IS the
+      // route inventory), and the allowlist mirrors that — no POST/PUT/
+      // DELETE/PATCH arm exists for any /v1/terminals/* or /v1/browser/*
+      // path, so a stdin write, a signal send, or a browser navigation is
+      // unreachable from the browser by construction. Every read is
+      // workspace-scoped (E12) via the workspace_id query binding above.
+      path === "/v1/terminals/events" ||
+      path === "/v1/terminals/state" ||
+      /^\/v1\/terminals\/[a-zA-Z0-9_-]+$/.test(path) ||
+      path === "/v1/browser/view" ||
+      path === "/v1/browser/state")
   );
 }
 

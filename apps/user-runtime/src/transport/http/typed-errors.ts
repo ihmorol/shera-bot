@@ -50,6 +50,7 @@ import {
   WriteLeaseRequiredError,
 } from "../../adapters/sqlite/write-leases-repository.ts";
 import { ApprovalsServiceError } from "../../modules/approvals/approvals.service.ts";
+import { TerminalEventsRepositoryError } from "../../adapters/sqlite/terminal-events-repository.ts";
 import {
   AgentFolderAccessDeniedError,
   AgentFolderUriInvalidError,
@@ -660,6 +661,28 @@ export function toSheraErrorResponse(error: unknown, correlationId?: string): Ht
     };
   }
 
+  // S18 chunk 1 — the terminal live-views boundary rejections. The READ-ONLY
+  // surface throws only TERMINAL_NOT_FOUND (an unknown/foreign-workspace
+  // terminal id); the write-conflict codes are typed for the recorder's
+  // future writer surfaces (S26) and answer the 409 conflict class.
+  if (error instanceof TerminalEventsRepositoryError) {
+    const notFound = error.code === "TERMINAL_NOT_FOUND";
+    return {
+      status: notFound ? 404 : 409,
+      body: {
+        code: error.code,
+        category: error.category,
+        safe_message: notFound
+          ? "The terminal execution record does not exist in this workspace."
+          : "The terminal execution record is not in a state that allows this.",
+        retryable: false,
+        user_action: null,
+        internal_details: null,
+        correlation_id,
+      },
+    };
+  }
+
   // Body-parser failures (invalid JSON, oversized body) are client errors
   // with well-known types; answer with the contract's validation failure
   // instead of the generic 500 fallback.
@@ -724,6 +747,7 @@ function isUntypedFault(error: unknown): boolean {
     !(error instanceof EventsServiceError) &&
     !(error instanceof ApprovalsServiceError) &&
     !(error instanceof OperationsServiceError) &&
+    !(error instanceof TerminalEventsRepositoryError) &&
     !(error instanceof AgentNotFoundError) &&
     !(error instanceof AgentSettingsValidationError) &&
     !(error instanceof AgentSettingsResetUnavailableError) &&

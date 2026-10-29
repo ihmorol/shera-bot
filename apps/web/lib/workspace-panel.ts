@@ -42,7 +42,14 @@ export const MOBILE_MAX_WIDTH = 767;
 
 import type { WorkspaceTabId } from "../components/workspace/panel-tabs";
 
-const WORKSPACE_TAB_IDS: readonly string[] = ["files", "editor", "private", "artifacts"];
+const WORKSPACE_TAB_IDS: readonly string[] = [
+  "files",
+  "editor",
+  "terminal",
+  "browser",
+  "private",
+  "artifacts",
+];
 
 export function workspaceTabFromParam(value: unknown): WorkspaceTabId {
   return typeof value === "string" && WORKSPACE_TAB_IDS.includes(value)

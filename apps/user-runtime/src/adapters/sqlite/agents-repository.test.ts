@@ -83,13 +83,14 @@ describe("agent identities (S11 migration v4)", () => {
     // chunk 3's v7 (operation chat binding + addressing) after that,
     // S16's v8 (task workers) after that,
     // S17 chunk 1's v9 (workspace storage) after that, and
-    // S20's v10–v13 (approval records, grant digest, consumption, mute creator) after that.
+    // S20's v10–v13 (approval records, grant digest, consumption, mute creator) after that, and
+    // S18 chunk 1's v14 (terminal event storage) after that.
     const v4 = MIGRATIONS.find((migration) => migration.version === 4);
     const v5 = MIGRATIONS.find((migration) => migration.version === 5);
     expect(v4?.name).toBe("agent-identities");
     expect(v5?.name).toBe("agent-direct-chat-binding");
-    expect(MIGRATIONS.at(-1)?.version).toBe(13);
-    expect(MIGRATIONS.at(-1)?.name).toBe("approval-mute-creator");
+    expect(MIGRATIONS.at(-1)?.version).toBe(14);
+    expect(MIGRATIONS.at(-1)?.name).toBe("terminal-events");
   });
 
   it("seeds the six student-pack agents with pack-owned fields", () => {

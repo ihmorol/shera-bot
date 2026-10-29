@@ -408,3 +408,56 @@ describe("READ_ONLY auto-execution and records (S21 chunk 2)", () => {
 });
 
 export type { ToolBinding };
+
+describe("the adapter seam is proposal-only (S21 chunk 2, AC1)", () => {
+  it("the sink handed to adapters exposes propose and nothing else", async () => {
+    const rt = buildRuntime();
+    let sinkKeys: string[] = [];
+    const probeAdapter = {
+      harness: "fake" as const,
+      driveRun(_request: unknown, sink: { propose: unknown }) {
+        sinkKeys = Object.keys(sink);
+        sink.propose({
+          kind: "task_command",
+          command: {
+            type: "complete_task",
+            command_id: "cmd_x",
+            idempotency_key: "idem_x",
+            expected_version: 2,
+            workspace_id: WS,
+            task_id: TASK,
+            actor: { type: "runtime", id: "harness:fake" },
+            issued_at: NOW_ISO,
+          },
+        });
+      },
+    };
+    const { HarnessRunService } = await import("../runtime/harness-run-service.ts");
+    const service = new HarnessRunService({
+      adapter: probeAdapter as never,
+      tx: { transaction: (fn: (exec: unknown) => unknown) => fn({}) } as never,
+      journal: { nextSequence: () => 1, findById: () => null } as never,
+      events: { appendEvent: () => ({}) as never } as never,
+      pinned_pack: { pack_id: "p", pack_version: "1.0.0", pack_hash: "a".repeat(64) },
+      workspace_id: WS,
+      policy: { max_retries: 3 },
+    });
+    service.startRun({
+      event_id: "evt_probe_trigger",
+      stream_id: `conversation:${CONV}`,
+      sequence: 1,
+      event_version: 1,
+      actor: { type: "system", id: "scheduler" },
+      task_id: TASK,
+      conversation_id: CONV,
+      occurred_at: NOW_ISO,
+      redaction_class: "internal",
+      event_type: "trigger.scheduled",
+      payload: { schedule_id: "sch_probe", due_at: NOW_ISO },
+    });
+    // AC1: the ONLY thing an adapter can do with the sink is PROPOSE — the
+    // execution authority lives behind the executor, unreachable from here.
+    expect(sinkKeys).toEqual(["propose"]);
+    rt.conn.close();
+  });
+});

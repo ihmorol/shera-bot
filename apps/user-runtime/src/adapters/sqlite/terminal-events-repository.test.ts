@@ -70,11 +70,11 @@ describe("terminal_events storage (S18 migration v14)", () => {
   it("appends the terminal-events migration as version 14 of the committed chain", () => {
     const v14 = MIGRATIONS.find((migration) => migration.version === 14);
     expect(v14?.name).toBe("terminal-events");
-    // The S19 integration appended v15/v16 (projects) and the S21 integration
-    // appended v17 (tool-inventory) after this migration; v14 itself stays in
-    // place (each slice's own entries never move once merged).
-    expect(MIGRATIONS.at(-1)?.version).toBe(17);
-    expect(MIGRATIONS.at(-4)?.version).toBe(14);
+    // The S19/S21/S23 integrations appended v15-v18 after this migration;
+    // v14 itself stays in place (each slice's own entries never move once
+    // merged).
+    expect(MIGRATIONS.at(-1)?.version).toBe(18);
+    expect(MIGRATIONS.at(-4)?.version).toBe(15);
   });
 
   it("creates the STRICT terminal_events table through the migration runner", () => {

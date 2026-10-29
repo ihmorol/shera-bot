@@ -17,6 +17,7 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import { openDatabase, type SqliteConnection } from "./connection.ts";
 import { appliedMigrationVersions, applyMigrations, MIGRATIONS } from "./migrations.ts";
+import { ConversationsRepository } from "./conversations-repository.ts";
 import {
   ProvidersRepository,
   ProvidersRepositoryError,
@@ -79,11 +80,7 @@ describe("provider catalog storage (S23 migration v15)", () => {
   it("creates the STRICT tables through the migration runner", () => {
     const { conn } = newDb();
     expect(appliedMigrationVersions(conn.db)).toContain(15);
-    for (const table of [
-      "providers",
-      "provider_credentials",
-      "conversation_provider_overrides",
-    ]) {
+    for (const table of ["providers", "provider_credentials", "conversation_provider_overrides"]) {
       const row = conn.db
         .prepare("SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = ?")
         .get(table) as { sql: string } | undefined;
@@ -139,9 +136,9 @@ describe("provider catalog storage (S23 migration v15)", () => {
         }),
       ),
     ).toThrowError(expect.objectContaining({ code: "PROVIDER_CONFIG_INVALID" }));
-    expect(() =>
-      repo.create(providerInput({ id: "prov_empty", display_name: "  " })),
-    ).toThrowError(expect.objectContaining({ code: "PROVIDER_CONFIG_INVALID" }));
+    expect(() => repo.create(providerInput({ id: "prov_empty", display_name: "  " }))).toThrowError(
+      expect.objectContaining({ code: "PROVIDER_CONFIG_INVALID" }),
+    );
   });
 
   it("refuses a no_key entry that still declares a base URL-less native protocol without a model", () => {
@@ -179,7 +176,14 @@ describe("provider catalog storage (S23 migration v15)", () => {
     const { tx } = newDb();
     const repo = new ProvidersRepository(tx);
     repo.create(providerInput());
-    repo.create(providerInput({ id: "prov_0002", display_name: "Local Ollama", protocol: "ollama", api_mode: "no_key" }));
+    repo.create(
+      providerInput({
+        id: "prov_0002",
+        display_name: "Local Ollama",
+        protocol: "ollama",
+        api_mode: "no_key",
+      }),
+    );
     expect(repo.list(WS).map((row) => row.id)).toEqual(["prov_0001", "prov_0002"]);
     expect(repo.list(OTHER_WS)).toEqual([]);
     expect(repo.get(OTHER_WS, "prov_0001")).toBeNull();
@@ -188,6 +192,16 @@ describe("provider catalog storage (S23 migration v15)", () => {
   it("stores one per-conversation override and clears it (AC11)", () => {
     const { tx } = newDb();
     const repo = new ProvidersRepository(tx);
+    // The override writer validates the conversation in the SAME workspace
+    // (E12) — seed one real conversation row first.
+    new ConversationsRepository(tx).create({
+      id: "conv_0001",
+      workspace_id: WS,
+      title: "Direct chat",
+      revision: 1,
+      created_at: clock,
+      updated_at: clock,
+    });
     repo.create(providerInput());
     const override: ProviderOverrideInput = {
       workspace_id: WS,
@@ -205,19 +219,27 @@ describe("provider catalog storage (S23 migration v15)", () => {
     repo.setOverride({ ...override, model: null, updated_at: "2026-10-30T12:30:00.000Z" });
     expect(repo.getOverride(WS, "conv_0001")?.model).toBeNull();
     // The override writer validates the provider in the SAME workspace (E12).
-    expect(() =>
-      repo.setOverride({ ...override, conversation_id: "conv_0002", provider_id: "prov_absent" }),
-    ).toThrowError(expect.objectContaining({ code: "PROVIDER_NOT_FOUND" }));
+    expect(() => repo.setOverride({ ...override, provider_id: "prov_absent" })).toThrowError(
+      expect.objectContaining({ code: "PROVIDER_NOT_FOUND" }),
+    );
+    expect(() => repo.setOverride({ ...override, conversation_id: "conv_absent" })).toThrowError(
+      expect.objectContaining({ code: "CONVERSATION_NOT_FOUND" }),
+    );
     repo.clearOverride(WS, "conv_0001");
     expect(repo.getOverride(WS, "conv_0001")).toBeNull();
-    expect(() =>
-      repo.setOverride({ ...override, conversation_id: "conv_absent" }),
-    ).toThrowError(expect.objectContaining({ code: "CONVERSATION_NOT_FOUND" }));
   });
 
   it("resolves a conversation override only when its provider is enabled", () => {
     const { tx } = newDb();
     const repo = new ProvidersRepository(tx);
+    new ConversationsRepository(tx).create({
+      id: "conv_0001",
+      workspace_id: WS,
+      title: "Direct chat",
+      revision: 1,
+      created_at: clock,
+      updated_at: clock,
+    });
     repo.create(providerInput());
     repo.setOverride({
       workspace_id: WS,

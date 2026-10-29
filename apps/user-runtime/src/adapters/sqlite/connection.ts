@@ -79,3 +79,23 @@ function readPragma(db: DatabaseSync, name: string): string | number | null {
   }
   return value ?? null;
 }
+
+/**
+ * S23 custody-scan support (and the E11 backup shape): force a WAL
+ * checkpoint so the main database file carries every committed page. The
+ * at-rest scan reads the FILE bytes; without the checkpoint the newest pages
+ * may live only in the WAL sidecar.
+ */
+export function walCheckpointTruncate(db: DatabaseSync): void {
+  db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+}
+
+/**
+ * The E11 backup mechanism (recorded at the D13 spike): a consistent
+ * `VACUUM INTO` copy of the whole database. The custody scan produces one to
+ * prove a DEFAULT backup carries the sealed credential payloads and never
+ * the plaintext (D22's backup exclusion, in its at-rest form).
+ */
+export function vacuumIntoBackup(db: DatabaseSync, targetPath: string): void {
+  db.exec(`VACUUM INTO '${targetPath.replaceAll("'", "''")}'`);
+}

@@ -13,7 +13,7 @@
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { afterAll, afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { DEFAULT_WORKSPACE_ID, composeRuntime } from "./compose.ts";
 import {

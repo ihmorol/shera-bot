@@ -92,7 +92,7 @@ function InventoryRow({
           <dt className="ml-2 font-mono text-[11px] uppercase tracking-[0.16em] text-muted">
             State
           </dt>
-          <dd className="text-text">{stateCopy[tool.state]}</dd>
+          <dd className="text-text">{tool.disabled ? "Disabled" : stateCopy[tool.state]}</dd>
         </div>
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
           <dt className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted">

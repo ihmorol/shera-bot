@@ -541,6 +541,20 @@ export class ToolsRepository {
     return rows.map(executionRowToRecord);
   }
 
+  listExecutionsByWorkspace(
+    workspaceId: string,
+    exec?: import("node:sqlite").DatabaseSync,
+  ): ToolExecutionRecord[] {
+    const db = exec ?? this.db;
+    const rows = db
+      .prepare(
+        `SELECT ${EXECUTION_COLUMNS} FROM tool_execution_history
+         WHERE workspace_id = ? ORDER BY started_at DESC, execution_id DESC LIMIT 200`,
+      )
+      .all(workspaceId) as Record<string, unknown>[];
+    return rows.map(executionRowToRecord);
+  }
+
   listExecutionsByTool(
     workspaceId: string,
     toolId: string,

@@ -289,11 +289,13 @@ export function buildToolsApiHandle(deps: {
     },
 
     listHistory(workspaceId, filter) {
+      // No filter: the workspace-wide history, newest first (the Tool history
+      // tab's read). E12: the workspace predicate scopes every branch.
       const rows = filter.tool_id
         ? tools.listExecutionsByTool(workspaceId, filter.tool_id)
         : filter.task_id
           ? tools.listExecutionsByTask(workspaceId, filter.task_id)
-          : [];
+          : tools.listExecutionsByWorkspace(workspaceId);
       return rows.map((row) => ({
         execution_id: row.execution_id,
         task_id: row.task_id,

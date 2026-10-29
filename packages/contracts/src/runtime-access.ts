@@ -124,6 +124,11 @@ export function isBrowserRuntimePath(method: string, path: string): boolean {
       // /v1/operations/launch, allowlisted above).
       path === "/v1/operation-definitions" ||
       /^\/v1\/operation-definitions\/[a-zA-Z0-9_-]+\/preview$/.test(path) ||
+      // S21 (PRD §7, E4): the tool inventory + the redacted tool history —
+      // strictly GET reads (the mutation arm is the POST list above). The
+      // reserved literal segment: /v1/tools/history must NOT answer a POST.
+      path === "/v1/tools" ||
+      path === "/v1/tools/history" ||
       // S17 chunk 4 (E12/AC16): the workspace panel reads — the shared
       // workspace:// tree listing, file bytes (base64 prototype body), the
       // active write leases (the conflict tooltip's data source, G5), and the

@@ -162,7 +162,9 @@ export class ToolsInventoryService {
    * The D38 intersection check (AC7): every declared capability must be
    * platform-implementable AND pack-allowed. The refusal names the layer.
    */
-  private checkIntersection(capabilities: readonly string[]): ToolCreationPreview | null {
+  private checkIntersection(
+    capabilities: readonly string[],
+  ): Extract<ToolCreationPreview, { ok: false }> | null {
     for (const capability of capabilities) {
       const platformImplements = Object.values(PLATFORM_TOOL_CATALOG).some((set) =>
         set.includes(capability),
@@ -413,7 +415,7 @@ export class ToolsInventoryService {
         "active",
       );
       this.deps.registry.register({
-        definition: this.toDefinition(row, "active"),
+        definition: this.toDefinition(row),
         enabled: true,
         max_response_bytes: 262_144,
         origin: "agent_created",
@@ -449,7 +451,6 @@ export class ToolsInventoryService {
   /** Rebuild the contracts definition from a stored row (registration shape). */
   private toDefinition(
     row: ReturnType<ToolsRepository["getAgentTool"]> & object,
-    _state: string,
   ): ToolDefinitionType {
     return {
       tool_id: row.tool_id,

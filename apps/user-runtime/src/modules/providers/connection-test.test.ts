@@ -27,10 +27,9 @@ let baseUrl = "";
 
 beforeAll(async () => {
   server = createServer((req, res) => {
-    let body = "";
-    req.on("data", (chunk) => {
-      body += chunk;
-    });
+    // The request body is consumed (never parsed) — the fixture keys off the
+    // Authorization header alone.
+    req.resume();
     req.on("end", () => {
       const auth = req.headers["authorization"] ?? "";
       if (auth !== `Bearer ${FIXTURE_KEY}`) {

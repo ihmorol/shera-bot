@@ -50,18 +50,21 @@ function fromApiCallError(error: APICallError): ConnectionTestResult {
   // The URL's HOST is display-safe (it is the configured endpoint, not a
   // secret); strip userinfo and any query so nothing credential-adjacent can
   // survive (G3).
-  let host = "";
+  // The URL's HOST is display-safe (it is the configured endpoint, not a
+  // secret); strip userinfo and any query so nothing credential-adjacent can
+  // survive (G3).
+  let host: string | null = null;
   try {
-    const parsed = new URL(error.url);
-    host = `${parsed.protocol}//${parsed.host}`;
+    host = `${new URL(error.url).protocol}//${new URL(error.url).host}`;
   } catch {
-    host = "";
+    // An unparseable URL contributes no endpoint display text.
   }
+  const endpointSuffix = host ? ` Endpoint: ${host}.` : "";
   if (status === 401 || status === 403) {
     return {
       ok: false,
       code: "PROVIDER_CONNECTION_TEST_AUTH_FAILED",
-      safe_message: `The provider rejected the credential (HTTP ${status}). Revoke and replace the key, then test again.${host ? ` Endpoint: ${host}.` : ""}`,
+      safe_message: `The provider rejected the credential (HTTP ${status}). Revoke and replace the key, then test again.${endpointSuffix}`,
       http_status: status,
     };
   }
@@ -69,7 +72,7 @@ function fromApiCallError(error: APICallError): ConnectionTestResult {
     return {
       ok: false,
       code: "PROVIDER_CONNECTION_TEST_NOT_FOUND",
-      safe_message: `The endpoint or model was not found (HTTP 404). Check the base URL and model id.${host ? ` Endpoint: ${host}.` : ""}`,
+      safe_message: `The endpoint or model was not found (HTTP 404). Check the base URL and model id.${endpointSuffix}`,
       http_status: status,
     };
   }
@@ -77,7 +80,7 @@ function fromApiCallError(error: APICallError): ConnectionTestResult {
     return {
       ok: false,
       code: "PROVIDER_CONNECTION_TEST_FAILED",
-      safe_message: `The provider endpoint failed server-side (HTTP ${status}).${host ? ` Endpoint: ${host}.` : ""}`,
+      safe_message: `The provider endpoint failed server-side (HTTP ${status}).${endpointSuffix}`,
       http_status: status,
     };
   }

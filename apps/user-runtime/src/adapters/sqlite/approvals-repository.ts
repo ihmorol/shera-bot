@@ -310,6 +310,20 @@ export class ApprovalsRepository {
     ).map(grantRowToRecord);
   }
 
+  /** One grant by id (E12-scoped); null when absent — the S21 executor's
+   * consumption writer consults this before stamping consumed_at. */
+  getGrant(workspaceId: string, grantId: string, exec?: DatabaseSync): ApprovalGrantRecord | null {
+    const db = exec ?? this.tx.connection();
+    const row = db
+      .prepare(
+        `SELECT ${GRANT_COLUMNS}
+         FROM approval_grants
+         WHERE workspace_id = ? AND grant_id = ?`,
+      )
+      .get(workspaceId, grantId) as unknown as Record<string, unknown> | undefined;
+    return row ? grantRowToRecord(row) : null;
+  }
+
   /**
    * Stamp revoked_at on one grant; false when no UNREVOKED row matched
    * (E12-scoped). The stamp is write-once (S20 review fix F4b): a raced

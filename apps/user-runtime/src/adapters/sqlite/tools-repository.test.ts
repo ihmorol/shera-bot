@@ -52,7 +52,7 @@ afterAll(() => {
   }
 });
 
-function agentToolRow(overrides: Partial<Parameters<ToolsRepository["insertAgentTool"]>[0]> = {}) {
+function agentToolRow() {
   return {
     workspace_id: WS,
     tool_id: "tool_summarize",

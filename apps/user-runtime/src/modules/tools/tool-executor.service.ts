@@ -128,6 +128,18 @@ export interface ToolProposalInput {
    * Absent on the scripted demo path (digest-only trust, documented).
    */
   rawArgs?: Record<string, unknown>;
+  /**
+   * The explicit D9 resource scope (D9: resource scope must be explicit).
+   * Callers that own a typed definition supply it verbatim (the scripted
+   * composition path); the default is the honest task scope.
+   */
+  resource_scope?: string;
+  /**
+   * The typed definition's authored side-effect text (what the approval card
+   * shows). Authored configuration — never tool arguments (G3); the
+   * approvals boundary redacts it before any record or journal write.
+   */
+  side_effect_summary?: string;
 }
 
 export type ToolProposalOutcome =
@@ -197,7 +209,27 @@ function canonicalJson(value: unknown): string {
 const ARGS_SUMMARY_BUDGET_BYTES = 512;
 const RESULT_SUMMARY_BUDGET_BYTES = 2_048;
 
+/** One withheld gated execution, keyed by its approval id until decided. */
+interface WithheldExecution {
+  input: ToolProposalInput;
+  execution_id: string;
+  resolved: NonNullable<ReturnType<ToolRegistry["resolve"]>>;
+  rawArgs: Record<string, unknown>;
+  argsSummary: string;
+  preview: ToolPreview | null;
+  startedAt: string;
+}
+
 export class ToolExecutor {
+  /**
+   * The withheld gated executions (AC3): stored at pause time, popped and
+   * run ONLY by the approval machinery's post-commit callback — nowhere else
+   * can reach an effect. In-memory by design: the pause and its decision live
+   * within one gateway lifetime (the S20 prototype posture; a restart leaves
+   * the approval pending and nothing executes — fail-closed).
+   */
+  private readonly withheld = new Map<string, WithheldExecution>();
+
   constructor(private readonly deps: ToolExecutorDeps) {}
 
   private nowMs(): number {
@@ -465,6 +497,15 @@ export class ToolExecutor {
       );
     }
 
+    const withheld: WithheldExecution = {
+      input,
+      execution_id,
+      resolved,
+      rawArgs: args.rawArgs,
+      argsSummary: args.argsSummary,
+      preview,
+      startedAt,
+    };
     const result = approvals.createRequestFromTypedProposal({
       proposal: {
         workspace_id: run.workspace_id,
@@ -477,37 +518,23 @@ export class ToolExecutor {
         risk_class: definition.risk_class,
         resource_scope: resourceScopeOf(input),
         args_digest: proposal.args_digest,
-        side_effect_summary: preview?.text ?? proposal.proposal_summary,
+        side_effect_summary:
+          input.side_effect_summary ?? preview?.text ?? proposal.proposal_summary,
       },
       run,
-      // The gated action, withheld until the decision commits. The authority
-      // is minted HERE (per execution) and the binding refuses without it —
-      // the callback is not reachable from anywhere else (AC1).
-      execute: () => {
-        const outcome = this.executeNow({
-          input,
-          execution_id,
-          resolved,
-          binding: resolved.binding,
-          rawArgs: args.rawArgs,
-          argsSummary,
-          preview,
-          previewKind: resolvePreviewKind(definition.risk_class, definition.capabilities),
-          startedAt: this.now(),
-          grantId: null,
-          approvalId: null,
-          resumeRow: false,
-        });
-        // The callback cannot return a value (S20's () => void contract);
-        // failures are already recorded on the history row by executeNow.
-        if (outcome.outcome === "execution_failed" || outcome.outcome === "blocked") {
-          return;
-        }
-      },
+      // The gated action is WITHHELD (AC3): the S20 pause never executes
+      // pre-decision, so this callback (the pause path's auto-execute hook)
+      // is a deliberate no-op — the real effect runs only through
+      // runWithheld, which the decision machinery's post-commit callback
+      // invokes. The authority is minted THERE, per execution (AC1).
+      execute: () => {},
     });
 
     if (result.outcome === "paused_for_approval") {
-      // The history row lands as awaiting_approval with the linkage.
+      // Withhold the gated execution until the decision machinery calls
+      // runWithheld (the post-commit callback); the history row lands as
+      // awaiting_approval with the linkage.
+      this.withheld.set(result.approval_id, withheld);
       this.recordAwaitingRow({
         input,
         execution_id,
@@ -671,6 +698,39 @@ export class ToolExecutor {
       this.exec(),
     );
     return { outcome: "executed", execution_id, result_summary: resultSummary, run };
+  }
+
+  /**
+   * Run one withheld execution (the approval machinery's post-commit callback
+   * — AC3's decision side). The authority is minted HERE; the row created at
+   * pause time advances awaiting_approval -> running -> terminal. Absent id:
+   * a typed false (nothing was withheld — e.g. an idempotent replay), never a
+   * silent execution.
+   */
+  runWithheld(approvalId: string): boolean {
+    const withheld = this.withheld.get(approvalId);
+    if (withheld === undefined) {
+      return false;
+    }
+    this.withheld.delete(approvalId);
+    const outcome = this.executeNow({
+      input: withheld.input,
+      execution_id: withheld.execution_id,
+      resolved: withheld.resolved,
+      binding: withheld.resolved.binding,
+      rawArgs: withheld.rawArgs,
+      argsSummary: withheld.argsSummary,
+      preview: withheld.preview,
+      previewKind: resolvePreviewKind(
+        withheld.resolved.definition.risk_class,
+        withheld.resolved.definition.capabilities,
+      ),
+      startedAt: withheld.startedAt,
+      grantId: null,
+      approvalId,
+      resumeRow: false,
+    });
+    return outcome.outcome === "executed";
   }
 
   // -------------------------------------------------------------------------
@@ -857,7 +917,7 @@ function matchesType(value: unknown, propertySchema: Record<string, unknown>): b
 
 /** The D9 resource scope of one proposal (explicit — never inferred widely). */
 function resourceScopeOf(input: ToolProposalInput): string {
-  return `task:${input.run.task_id}`;
+  return input.resource_scope ?? `task:${input.run.task_id}`;
 }
 
 /** Re-export for the resource-limits type (contracts-only data, no logic). */

@@ -187,3 +187,29 @@ export function makeNoteBindings(): {
 
   return { notes, read, append };
 }
+
+/**
+ * The scripted demo family's no-op binding (S21 compose wiring): the S20
+ * scripted tool's "effect" is the run's own continuation — recorded in the
+ * tool history like every real tool, with no external effect. Keeps the S20
+ * demo posture under the executor's validation, ladder, limits, and records.
+ */
+export function makeScriptedNoopBinding(): ToolBinding {
+  return {
+    name: "scripted-noop",
+    preview() {
+      return null; // the side-effect summary is the preview surface (S20)
+    },
+    execute(_args, ctx) {
+      assertExecutionAuthority(ctx.authority);
+      if (ctx.nowMs() > ctx.deadline) {
+        return {
+          ok: false,
+          errorCode: "TOOL_EXECUTION_TIMEOUT",
+          message: `the tool exceeded its ${ctx.deadline} ms deadline`,
+        };
+      }
+      return { ok: true, text: "scripted execution completed" };
+    },
+  };
+}

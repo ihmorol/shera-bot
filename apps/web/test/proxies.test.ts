@@ -672,6 +672,87 @@ describe("runtime proxy — S13 Operation surfaces (allowlist additions)", () =>
   });
 });
 
+describe("runtime proxy — S23 provider surface (allowlist additions)", () => {
+  /** The stubbed fetch answer for a forwarded provider call. */
+  function providerResponse(): Response {
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }
+
+  it("forwards the masked provider list and the effective readout", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const { calls } = stubFetch(providerResponse);
+
+    const list = await proxyToLocalApi(
+      new Request("http://web.test/api/runtime/v1/providers?workspace_id=ws_1"),
+      "/v1/providers",
+    );
+    expect(list.status).toBe(200);
+    const effective = await proxyToLocalApi(
+      new Request(
+        "http://web.test/api/runtime/v1/providers/effective?workspace_id=ws_1&conversation_id=conv_1",
+      ),
+      "/v1/providers/effective",
+    );
+    expect(effective.status).toBe(200);
+    expect(calls.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("forwards the user-facing provider mutations (configure, credential, revoke, status, test, override)", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    stubFetch(providerResponse);
+
+    for (const [path, body] of [
+      ["/v1/providers", { workspace_id: "ws_1" }],
+      ["/v1/providers/prov_1/credential", { workspace_id: "ws_1", credential: "x" }],
+      ["/v1/providers/prov_1/revoke", { workspace_id: "ws_1" }],
+      ["/v1/providers/prov_1/status", { workspace_id: "ws_1", enabled: false }],
+      ["/v1/providers/prov_1/test", { workspace_id: "ws_1" }],
+      [
+        "/v1/providers/overrides",
+        { workspace_id: "ws_1", conversation_id: "conv_1", provider_id: null, model: null },
+      ],
+    ] as const) {
+      const response = await proxyToLocalApi(
+        new Request(`http://web.test/api/runtime${path}`, {
+          method: "POST",
+          body: JSON.stringify(body),
+          headers: { "content-type": "application/json" },
+        }),
+        path,
+      );
+      expect(response.status, path).toBe(200);
+    }
+  });
+
+  it("still refuses the platform provisioning route — admin writes never ride the browser", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const calls: FetchCall[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({ input, init });
+        return Promise.resolve(new Response(null, { status: 500 }));
+      }),
+    );
+
+    const request = new Request("http://web.test/api/runtime/v1/providers/platform", {
+      method: "PUT",
+      body: JSON.stringify({ workspace_id: "ws_1" }),
+      headers: { "content-type": "application/json" },
+    });
+    const response = await proxyToLocalApi(request, "/v1/providers/platform");
+
+    expect(response.status).toBe(404);
+    expect(calls).toHaveLength(0);
+  });
+});
+
 describe("runtime proxy — S16 worker admission readout (allowlist addition)", () => {
   /** The stubbed fetch answer for a forwarded worker-readout call. */
   function admissionResponse(): Response {

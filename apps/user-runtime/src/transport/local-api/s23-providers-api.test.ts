@@ -32,42 +32,29 @@ afterEach(async () => {
 
 interface Running {
   origin: string;
-  providers: ReturnType<Awaited<ReturnType<typeof compose>>["providers"]>;
+  providers: NonNullable<ReturnType<typeof composeRuntime>["providers"]>;
   close(): Promise<void>;
 }
 
-const composed: Array<{ close(): void | Promise<void> }> = [];
-
-async function compose(): Promise<
-  RuntimeShape & { origin: string; close(): Promise<void> }
-> {
+async function compose(): Promise<Running> {
   const runtime = composeRuntime({
     dbPath: join(makeTempDir("shera-s23-api-"), "runtime.db"),
     packsRoot: PACKS_ROOT,
     providerEnforcement: true,
   });
+  // afterEach's cleanupTempResources closes every tracked handle (the E20
+  // helper); no separate close loop — a double close is a typed error.
   trackConnection(runtime);
   await new Promise<void>((resolveListen) =>
     runtime.httpServer.listen(0, "127.0.0.1", resolveListen),
   );
   const address = runtime.httpServer.address() as { port: number };
-  composed.push(runtime);
-  return Object.assign(runtime, {
+  return {
     origin: `http://127.0.0.1:${address.port}`,
+    providers: runtime.providers,
     close: () => runtime.close(),
-  });
+  };
 }
-
-type RuntimeShape = Awaited<ReturnType<typeof composeRuntimeFactory>>;
-function composeRuntimeFactory(): never {
-  throw new Error("type helper only");
-}
-
-afterAll(async () => {
-  for (const runtime of composed.splice(0).reverse()) {
-    await runtime.close();
-  }
-});
 
 async function getJson(origin: string, path: string) {
   const response = await fetch(`${origin}${path}`);
@@ -130,7 +117,7 @@ describe("the provider HTTP surface (masked everywhere, G3)", () => {
       display_name: "",
     });
     expect(bad.status).toBe(400);
-    expect(bad.body).toMatchObject({ code: "PROVIDER_CONFIG_INVALID" });
+    expect(bad.body).toMatchObject({ code: "CONTRACT_VALIDATION_FAILED" });
     const secretHeader = await postJson(runtime.origin, "/v1/providers", {
       ...VALID_BODY,
       headers: { Authorization: "Bearer leaked" },
@@ -146,15 +133,17 @@ describe("the provider HTTP surface (masked everywhere, G3)", () => {
 
   it("replaces and revokes the credential through the typed routes", async () => {
     const runtime = await compose();
-    const created = (await postJson(runtime.origin, "/v1/providers", VALID_BODY))
-      .body as Record<string, unknown>;
+    const created = (await postJson(runtime.origin, "/v1/providers", VALID_BODY)).body as Record<
+      string,
+      unknown
+    >;
     const providerId = created["id"] as string;
     const replaced = await postJson(runtime.origin, `/v1/providers/${providerId}/credential`, {
       workspace_id: WORKSPACE,
       credential: "sk-replacement-0123456789abcdefNEW",
     });
     expect(replaced.status).toBe(200);
-    expect((replaced.body as Record<string, unknown>)["credential_hint"]).toBe("••••eNEW");
+    expect((replaced.body as Record<string, unknown>)["credential_hint"]).toBe("••••fNEW");
     const revoked = await postJson(runtime.origin, `/v1/providers/${providerId}/revoke`, {
       workspace_id: WORKSPACE,
     });
@@ -242,6 +231,7 @@ describe("the provider HTTP surface (masked everywhere, G3)", () => {
       provider_id: "prov_platform_default",
       display_name: "Platform default provider",
       protocol: "openai",
+      base_url: null,
       api_mode: "api_key",
       credential: "sk-platform-0123456789abcdefADMIN",
       default_model_id: "gpt-4o-mini",
@@ -259,6 +249,7 @@ describe("the provider HTTP surface (masked everywhere, G3)", () => {
       provider_id: "prov_platform_default",
       display_name: "Platform default provider",
       protocol: "openai",
+      base_url: null,
       api_mode: "api_key",
       credential: "sk-platform-0123456789abcdefNEXT",
       default_model_id: "gpt-4o-mini",

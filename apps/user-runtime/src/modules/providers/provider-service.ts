@@ -57,6 +57,8 @@ export interface AgentProviderDefaultsLookup {
 
 export interface ProviderConfigureInput {
   workspace_id: string;
+  /** Optional stable id (the platform-provisioning route pins one for top-ups). */
+  id?: string;
   display_name: string;
   protocol: ProviderProtocol;
   /** Null for the native adapters; http(s) required otherwise. */
@@ -126,7 +128,7 @@ export class ProviderService {
       throw new ProviderServiceError(code ?? "PROVIDER_CONFIG_INVALID", (error as Error).message);
     }
 
-    const id = `prov_${randomUUID()}`;
+    const id = input.id ?? `prov_${randomUUID()}`;
     try {
       this.deps.providers.create({
         id,
@@ -176,6 +178,38 @@ export class ProviderService {
 
   revokeCredential(workspaceId: string, providerId: string): boolean {
     return this.deps.credentials.revoke(workspaceId, providerId);
+  }
+
+  /**
+   * Update one entry's mutable configuration fields (the platform top-up
+   * path keeps a stable id and refreshes the config with it).
+   */
+  updateConfig(
+    workspaceId: string,
+    providerId: string,
+    patch: {
+      display_name?: string;
+      base_url?: string | null;
+      default_model_id?: string;
+      organization?: string | null;
+      project?: string | null;
+      headers?: Record<string, string>;
+      request_params?: Record<string, string | number | boolean>;
+    },
+  ): ProviderView {
+    const updated = this.deps.providers.updateConfig(workspaceId, providerId, {
+      ...(patch.display_name !== undefined ? { display_name: patch.display_name } : {}),
+      ...(patch.base_url !== undefined ? { base_url: patch.base_url } : {}),
+      ...(patch.default_model_id !== undefined ? { default_model_id: patch.default_model_id } : {}),
+      ...(patch.organization !== undefined ? { organization: patch.organization } : {}),
+      ...(patch.project !== undefined ? { project: patch.project } : {}),
+      ...(patch.headers !== undefined ? { headers_json: JSON.stringify(patch.headers) } : {}),
+      ...(patch.request_params !== undefined
+        ? { request_params_json: JSON.stringify(patch.request_params) }
+        : {}),
+      updated_at: this.now(),
+    });
+    return this.toView(workspaceId, updated);
   }
 
   /** Enable/disable (PRD §9). */

@@ -167,7 +167,6 @@ describe("the custody at-rest scan (G3, secret-shaped fixture)", () => {
       const backupPath = join(dirname(fixture.dbPath), "backup.db");
       vacuumIntoBackup(scanConn.db, backupPath);
       assertSecretAbsent(readFileSync(backupPath), "default backup");
-      scanConn.close();
       // The view boundary: masked hint only, never the secret (D22).
       const viewJson = JSON.stringify(
         fixture.runtime.providers.getProviderView(WORKSPACE, fixture.providerId),

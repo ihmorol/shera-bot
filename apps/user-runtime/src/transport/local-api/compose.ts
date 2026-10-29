@@ -1212,6 +1212,10 @@ function wire(
     },
     approvals: approvalsApi,
     tools: toolsApi,
+    // S23: the provider surface — the masked catalog CRUD, the credential
+    // custody routes, the connection test, the override, and the effective
+    // readout. Every rule lives in the service; the routes relay (G2).
+    providers: { providers },
     // S18 chunk 1: the read-only terminal live-views surface — durable
     // replay, one execution's record, and the current session terminal
     // state. Three GET routes; the no-takeover criterion is the inventory.

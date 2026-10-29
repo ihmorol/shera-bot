@@ -328,8 +328,11 @@
  * user container, decrypted only at call time"). One row per provider entry;
  * the payload is the AES-256-GCM seal (12-byte iv, ciphertext, 16-byte tag,
  * key_version) — no plaintext column exists, so an at-rest byte scan of this
- * database never sees a provider key. Revocation = DELETE; replacement =
- * upsert (the sealed payload is never read back through any API).
+ * database never sees a provider key. credential_hint is the ONLY
+ * display-derived column: the mask (at most the final four characters)
+ * computed at store time, exactly what D22's "masked values" surface shows —
+ * the ciphertext is never opened for display. Revocation = DELETE;
+ * replacement = upsert (both seal and hint).
  *
  * conversation_provider_overrides: the AC11 per-conversation override —
  * (workspace_id, conversation_id) keyed, provider_id plus a nullable model
@@ -1184,10 +1187,11 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
       CREATE TABLE IF NOT EXISTS provider_credentials (
         workspace_id TEXT    NOT NULL,
         provider_id  TEXT    NOT NULL,
-        ciphertext   BLOB    NOT NULL CHECK (length(ciphertext) >= 16),
+        ciphertext   BLOB    NOT NULL CHECK (length(ciphertext) >= 1),
         iv           BLOB    NOT NULL CHECK (length(iv) = 12),
         tag          BLOB    NOT NULL CHECK (length(tag) = 16),
         key_version  INTEGER NOT NULL CHECK (key_version >= 1),
+        credential_hint TEXT NOT NULL CHECK (length(credential_hint) <= 8),
         created_at   TEXT    NOT NULL,
         updated_at   TEXT    NOT NULL,
         PRIMARY KEY (workspace_id, provider_id)

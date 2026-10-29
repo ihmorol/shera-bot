@@ -110,9 +110,9 @@ describe("provider credential vault (AES-256-GCM, D22)", () => {
     // A key file of the wrong length is a typed hard failure (never a silent
     // re-key, which would brick every stored ciphertext — G4).
     writeFileSync(join(tempDirs[0]!, "short.key"), Buffer.alloc(8));
-    expect(() => new ProviderCredentialVault(join(tempDirs[0]!, "short.key")).seal(SECRET)).toThrowError(
-      ProviderCredentialError,
-    );
+    expect(() =>
+      new ProviderCredentialVault(join(tempDirs[0]!, "short.key")).seal(SECRET),
+    ).toThrowError(ProviderCredentialError);
   });
 });
 
@@ -124,7 +124,7 @@ describe("provider credential custody service (E9/D22)", () => {
     // Masked display only: never the full secret, at most the final four.
     expect(hint).not.toBe(SECRET);
     expect(hint).toContain("••••");
-    expect(hint.endsWith("CRET")).toBe(true);
+    expect(hint?.endsWith("CRET")).toBe(true);
     expect(hint).not.toContain(SECRET.slice(0, 8));
     expect(service.decryptForCall(WS, "prov_0001")).toBe(SECRET);
   });
@@ -152,7 +152,7 @@ describe("provider credential custody service (E9/D22)", () => {
     const replacement = "sk-replaced-9876543210fedcbaNEWKEY";
     service.store(WS, "prov_0001", replacement, "2026-10-30T12:05:00.000Z");
     expect(service.decryptForCall(WS, "prov_0001")).toBe(replacement);
-    expect(service.credentialHint(WS, "prov_0001").endsWith("EKEY")).toBe(true);
+    expect(service.credentialHint(WS, "prov_0001")?.endsWith("WKEY")).toBe(true);
     expect(service.decryptForCall(WS, "prov_0001")).not.toBe(SECRET);
   });
 
@@ -177,8 +177,8 @@ describe("provider credential custody service (E9/D22)", () => {
     expect(() => service.store(WS, "prov_0001", "   ", "2026-10-30T12:00:01.000Z")).toThrowError(
       expect.objectContaining({ code: "PROVIDER_CREDENTIAL_INVALID" }),
     );
-    expect(() => service.store(WS, "prov_0001", "x".repeat(8193), "2026-10-30T12:00:01.000Z")).toThrowError(
-      expect.objectContaining({ code: "PROVIDER_CREDENTIAL_INVALID" }),
-    );
+    expect(() =>
+      service.store(WS, "prov_0001", "x".repeat(8193), "2026-10-30T12:00:01.000Z"),
+    ).toThrowError(expect.objectContaining({ code: "PROVIDER_CREDENTIAL_INVALID" }));
   });
 });

@@ -21,7 +21,7 @@
  * never a silent re-key (which would brick every stored ciphertext).
  *
  * FORMAT: one sealed payload = 12-byte random iv + ciphertext + 16-byte GCM
- * auth tag, stored as three columns on the credential row (v14). key_version
+ * auth tag, stored as three columns on the credential row (v15). key_version
  * records the generation of the key that sealed it (1 until a rotation slice
  * exists); decryption verifies the tag — tampered or foreign-key ciphertext
  * fails closed with CredentialVaultError (never plaintext, never a guess).
@@ -43,7 +43,7 @@ export class CredentialVaultError extends Error {
   }
 }
 
-/** One sealed (encrypted) secret: the exact shapes the v14 row stores. */
+/** One sealed (encrypted) secret: the exact shapes the v15 row stores. */
 export interface SealedSecret {
   ciphertext: Buffer;
   iv: Buffer;

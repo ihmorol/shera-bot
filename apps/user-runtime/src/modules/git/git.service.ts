@@ -26,7 +26,7 @@
  * (which can quote the authenticated URL).
  *
  * G5 — conflicts queue, nothing is silently resolved. ONE active worktree per
- * project (the v14 partial unique index): a second task's request is a
+ * project (the v15 partial unique index): a second task's request is a
  * RECORDED queue entry with a visible reason naming the holder, never a
  * concurrent grant. An execution-time merge conflict aborts the merge (target
  * branch untouched) and records the failure on the merge request.

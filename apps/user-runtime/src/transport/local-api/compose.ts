@@ -354,6 +354,7 @@ export interface RuntimeHandle {
    * configured (G4); the read-only /v1/browser routes then answer honestly.
    */
   browser: BrowserService | undefined;
+  /**
    * S19 chunk 1: the git coordination seam — project import/clone, per-
    * repository credentials, the task-scoped worktrees with their conflict
    * queue, and the approval-gated merges. The HTTP surface relays into it.

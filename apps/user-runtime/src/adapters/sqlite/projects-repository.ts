@@ -9,7 +9,7 @@
  *
  *  - Workspace scoping is not optional (E12): every method takes
  *    workspace_id and every statement keys rows by it.
- *  - At most ONE active worktree per project (the v14 partial unique index;
+ *  - At most ONE active worktree per project (the v15 partial unique index;
  *    D6: no conflicting simultaneous control). A second insert throws the
  *    typed ProjectWorktreeActiveExistsError — the git service turns that
  *    into a RECORDED queue entry, never a silent grant or a silent refusal.
@@ -294,7 +294,7 @@ export class ProjectsRepository {
         row.revoked_at,
       );
     } catch (error) {
-      // The v14 partial unique index backs the pre-check up under races.
+      // The v15 partial unique index backs the pre-check up under races.
       if (isUniqueViolationOf(error, "project_credentials.credential_kind")) {
         throw new ProjectCredentialActiveExistsError();
       }
@@ -412,7 +412,7 @@ export class ProjectsRepository {
         row.updated_at,
       );
     } catch (error) {
-      // The v14 partial unique index backs the pre-check up under races.
+      // The v15 partial unique index backs the pre-check up under races.
       if (
         isUniqueViolationOf(
           error,

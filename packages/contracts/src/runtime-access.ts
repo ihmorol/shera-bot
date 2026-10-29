@@ -134,7 +134,7 @@ export function isBrowserRuntimePath(method: string, path: string): boolean {
       path === "/v1/terminals/state" ||
       /^\/v1\/terminals\/[a-zA-Z0-9_-]+$/.test(path) ||
       path === "/v1/browser/view" ||
-      path === "/v1/browser/state")
+      path === "/v1/browser/state" ||
       // S19 chunk 2 (PRD §10, E6, G3/G5): the merge-review surface's reads.
       // The workspace's project list, one project's detail (worktrees + merge
       // requests + credential METADATA — masked hints only; no read-back

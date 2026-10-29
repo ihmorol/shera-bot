@@ -50,11 +50,16 @@ export function runValidationCommand(
   const [binary, ...args] = validationCommandLine(manager, scriptName);
   return new Promise((resolve) => {
     // shell: true resolves the .cmd shim on Windows; every interpolated token
-    // is from the fixed allowlist above, never from user input.
+    // is from the fixed allowlist above, never from user input. On POSIX the
+    // child gets its own process group (detached) so the timeout can kill the
+    // whole tree — a bare kill of the shell leaves the package manager and the
+    // script's own children holding the stdio pipes open, which delays
+    // `close` until they exit on their own.
     const child = spawn([binary, ...args].join(" "), {
       cwd,
       shell: true,
       windowsHide: true,
+      detached: process.platform !== "win32",
     });
     let output = "";
     let timedOut = false;
@@ -73,12 +78,16 @@ export function runValidationCommand(
         // Kill the whole tree: the shell shim is not the process holding the
         // script's node child alive.
         spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true });
-      } else {
-        // Recorded limitation: on POSIX this SIGKILLs the shell, so a script
-        // that spawned its own children may leave them running after the
-        // typed timeout — the runner stops WAITING either way. A
-        // process-group kill is the follow-up hardening.
-        child.kill("SIGKILL");
+      } else if (child.pid !== undefined) {
+        // Kill the whole process group (the shell, the package manager, and
+        // the script's own children): with the pipes held open the runner
+        // would otherwise wait for the orphans to exit on their own.
+        try {
+          process.kill(-child.pid, "SIGKILL");
+        } catch {
+          // The group may already be gone; a direct kill is the fallback.
+          child.kill("SIGKILL");
+        }
       }
     }, limits.perCommandTimeoutMs);
     const finish = (exitCode: number | null) => {

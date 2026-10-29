@@ -935,10 +935,10 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
     // snapshot import (the "download ZIP" flow). The rebuild preserves every
     // column, the STRICT discipline, and the primary key; the widened CHECK
     // still refuses every kind outside the three.
-    version: 15,
+    version: 16,
     name: "projects-archive-source",
     sql: `
-      CREATE TABLE IF NOT EXISTS projects_v15 (
+      CREATE TABLE IF NOT EXISTS projects_v16 (
         workspace_id    TEXT    NOT NULL,
         project_id      TEXT    NOT NULL,
         name            TEXT    NOT NULL CHECK (length(name) BETWEEN 1 AND 255),
@@ -954,7 +954,7 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
         PRIMARY KEY (workspace_id, project_id)
       ) STRICT;
 
-      INSERT INTO projects_v15
+      INSERT INTO projects_v16
         (workspace_id, project_id, name, source_kind, source_url, repo_path,
          default_branch, access_mode, created_by_type, created_by_id, created_at, updated_at)
       SELECT
@@ -963,7 +963,7 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
       FROM projects;
 
       DROP TABLE projects;
-      ALTER TABLE projects_v15 RENAME TO projects;
+      ALTER TABLE projects_v16 RENAME TO projects;
     `,
   },
 ];

@@ -1,9 +1,9 @@
 /**
  * S19 chunk 1 — projects + credentials + worktrees + merge requests storage
  * contract tests (issue #20; PRD §10, E6, D6, D22, D35, E12). Red-first: these
- * tests pin the v14 migration and the repository behaviors before they exist.
+ * tests pin the v15 migration and the repository behaviors before they exist.
  *
- *   1. The migration chain appends v14 (projects-and-git) with the four
+ *   1. The migration chain appends v15 (projects-and-git) with the four
  *      product tables plus the restricted-access allowlist table.
  *   2. STRICT table discipline: invalid enum values are unrepresentable.
  *   3. Workspace scoping is not optional (E12): every read and mutation keys
@@ -65,7 +65,7 @@ afterAll(() => {
   }
 });
 
-describe("S19 v14 migration (projects-and-git)", () => {
+describe("S19 v15 migration (projects-and-git)", () => {
   let conn: SqliteConnection;
 
   beforeEach(() => {
@@ -77,21 +77,23 @@ describe("S19 v14 migration (projects-and-git)", () => {
     conn.close();
   });
 
-  it("appends v15 to the committed migration chain", () => {
+  it("appends v16 to the committed migration chain", () => {
     const v14 = MIGRATIONS.find((migration) => migration.version === 14);
-    expect(v14?.name).toBe("projects-and-git");
+    expect(v14?.name).toBe("terminal-events");
     const v15 = MIGRATIONS.find((migration) => migration.version === 15);
-    expect(v15?.name).toBe("projects-archive-source");
-    expect(MIGRATIONS.at(-1)?.version).toBe(15);
+    expect(v15?.name).toBe("projects-and-git");
+    const v16 = MIGRATIONS.find((migration) => migration.version === 16);
+    expect(v16?.name).toBe("projects-archive-source");
+    expect(MIGRATIONS.at(-1)?.version).toBe(16);
     const applied = appliedMigrationVersions(conn.db);
-    expect(applied.at(-1)).toBe(15);
+    expect(applied.at(-1)).toBe(16);
   });
 
-  it("v15 widens projects.source_kind to admit archives while keeping the strict enum", () => {
-    const v15 = MIGRATIONS.find((migration) => migration.version === 15);
-    expect(v15?.sql).toContain("'archive'");
-    expect(v15?.sql).toContain("'git_url'");
-    expect(v15?.sql).toContain("'directory'");
+  it("v16 widens projects.source_kind to admit archives while keeping the strict enum", () => {
+    const v16 = MIGRATIONS.find((migration) => migration.version === 16);
+    expect(v16?.sql).toContain("'archive'");
+    expect(v16?.sql).toContain("'git_url'");
+    expect(v16?.sql).toContain("'directory'");
     // The rebuilt table still refuses an unknown kind (STRICT discipline).
     expect(() =>
       conn.db

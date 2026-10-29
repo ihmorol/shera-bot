@@ -446,6 +446,7 @@ export interface LocalApiDeps {
    * the routes then answer the honest `configured: false` (G4).
    */
   browser?: BrowserLiveViewHandle;
+  /**
    * S19: the projects seam — import/clone, per-repository credentials, the
    * task-scoped worktrees with their conflict queue, and the merge requests
    * (the PRD §10 surface) behind their own route module. Every rule lives in
@@ -1198,6 +1199,7 @@ export function createLocalApi(deps: LocalApiDeps): Express {
   // criterion is the inventory itself.
   if (deps.terminals) {
     registerLiveViewsRoutes(app, deps.terminals, deps.browser);
+  }
   // S19 chunk 1: the projects surface — registered BEFORE the error
   // handlers like every other module surface.
   if (deps.projects) {

@@ -277,6 +277,7 @@ describe("workspace panel tab wiring", () => {
       "browser",
       "private",
       "artifacts",
+      "tools",
     ]);
   });
 

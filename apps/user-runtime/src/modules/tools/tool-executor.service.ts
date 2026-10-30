@@ -39,9 +39,12 @@
  * The executor runs INSIDE the caller's transaction for the gating decision
  * and the history writes (joining the harness's atomic unit, exactly like the
  * S20 pause); the in-process binding family executes synchronously within the
- * same unit (the demo tools' effects are in-memory). Process-backed bindings
- * (S26) arrive through the same interface and own their execution/supervision
- * posture; the cancel seam (ctx.signal) is the S22 escalation hook.
+ * same unit (the demo tools' effects are in-memory). The process-backed
+ * family (S26) dispatches through the OPTIONAL async binding seam: the child
+ * runs OUTSIDE the caller's transaction, the proposal answers `dispatched`
+ * with a completion that settles the row (redacted, bounded) when the process
+ * exits, and `cancel` is the process-tree termination seam — which S22's
+ * run-cancellation fires for the task's in-flight executions (D27).
  */
 import { createHash, randomUUID } from "node:crypto";
 

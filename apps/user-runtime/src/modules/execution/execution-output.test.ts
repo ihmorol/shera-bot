@@ -106,7 +106,6 @@ function buildRuntime(): CaptureRuntime {
     artifacts,
     terminalRecorder,
     logFault: () => {},
-    now: () => NOW,
   };
   registry.registerBinding("code-execution", makeCodeExecutionBinding(deps));
   registry.registerBuiltinTool({
@@ -172,7 +171,6 @@ function buildRuntime(): CaptureRuntime {
     tx,
     approvals,
     nowMs: () => Date.now(),
-    now: () => NOW,
   });
   return { executor, repo, terminals: terminalsRepo, artifacts, conn, dbDir: dir, workspaceRoot };
 }

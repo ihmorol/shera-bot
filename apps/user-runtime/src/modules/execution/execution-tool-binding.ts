@@ -33,7 +33,7 @@
  * setuid is not available unprivileged; the compose deployment (S35) owns
  * that final hardening. Recorded in E36.
  */
-import { accessSync, mkdirSync, writeFileSync } from "node:fs";
+import { accessSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { ArtifactsRepository } from "../../adapters/sqlite/artifacts-repository.ts";
@@ -85,8 +85,6 @@ export interface ExecutionToolDeps {
   artifacts: Pick<ArtifactsRepository, "insertArtifact"> | null;
   /** Contained operator-fault sink (callers own the redaction discipline). */
   logFault: ExecutionFaultLog;
-  /** Injectable clock for the terminal rows; default wall clock. */
-  now?: (() => string) | undefined;
   /** The probed delegated cgroup base (composition); null/undefined = no layer. */
   cgroupBaseDir?: string | null;
 }
@@ -131,7 +129,8 @@ interface DecodedExecution {
   /** The human-facing command line for the terminal record and previews. */
   commandLabel: string;
   workdirAbsolute: string;
-  workdirDisplay: string;
+  /** Runtime-written files to unlink after the exit (best effort). */
+  cleanupFiles: string[];
 }
 
 /**
@@ -143,7 +142,11 @@ function preflight(
   deps: ExecutionToolDeps,
   ctx: ToolExecutionContext,
   requested: { workdir?: unknown },
-  build: (workdirAbsolute: string) => { argv: string[]; commandLabel: string },
+  build: (workdirAbsolute: string) => {
+    argv: string[];
+    commandLabel: string;
+    cleanupFiles?: string[];
+  },
 ): DecodedExecution {
   const root = deps.workspaceRoots[ctx.execution.workspace_id];
   if (root === undefined) {
@@ -170,12 +173,12 @@ function preflight(
   } catch {
     // exists already
   }
-  const { argv, commandLabel } = build(workdir.absolute);
+  const built = build(workdir.absolute);
   return {
-    argv,
-    commandLabel,
+    argv: built.argv,
+    commandLabel: built.commandLabel,
     workdirAbsolute: workdir.absolute,
-    workdirDisplay: workdir.relative,
+    cleanupFiles: built.cleanupFiles ?? [],
   };
 }
 
@@ -331,6 +334,16 @@ async function runSandboxed(
 
   const durationMs = Date.now() - startedAtMs;
   const exitLabel = exit.code !== null ? `exit=${exit.code}` : `signal=${exit.signal ?? "unknown"}`;
+
+  // The runtime-written payload files go away after the exit (best effort):
+  // executed code does not persist as a workspace file behind the run's back.
+  for (const file of execution.cleanupFiles) {
+    try {
+      unlinkSync(file);
+    } catch {
+      // best effort
+    }
+  }
 
   if (deps.terminalRecorder !== null && terminalId !== null) {
     try {
@@ -523,6 +536,9 @@ export function makeCodeExecutionBinding(deps: ExecutionToolDeps): ToolBinding {
         return {
           argv,
           commandLabel: `${language} ${payloadPath.relative} (${code.length} chars)`,
+          // The payload is unlinked after the exit (best effort): executed
+          // code does not persist as a workspace file behind the run's back.
+          cleanupFiles: [payloadPath.absolute],
         };
       });
       return runSandboxed(deps, ctx, execution);
@@ -562,6 +578,7 @@ export function makeTerminalExecutionBinding(deps: ExecutionToolDeps): ToolBindi
       const execution = preflight(deps, ctx, args, () => ({
         argv: ["/bin/sh", "-c", command],
         commandLabel: command,
+        cleanupFiles: [],
       }));
       return runSandboxed(deps, ctx, execution);
     },

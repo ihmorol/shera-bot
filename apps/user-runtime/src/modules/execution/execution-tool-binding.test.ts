@@ -135,7 +135,6 @@ function buildRuntime(options: { seedGrants?: boolean } = {}): ExecutionRuntime 
     artifacts: null,
     terminalRecorder: null,
     logFault: () => {},
-    now: () => NOW,
   };
   const codeBinding = makeCodeExecutionBinding(deps);
   const terminalBinding = makeTerminalExecutionBinding(deps);

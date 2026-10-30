@@ -119,7 +119,6 @@ function buildRuntime(
     artifacts,
     terminalRecorder: null,
     logFault: () => {},
-    now: () => NOW,
     cgroupBaseDir: options.withCgroup === false ? null : cgroupBase,
   };
   registry.registerBinding("code-execution", makeCodeExecutionBinding(deps));
@@ -176,7 +175,6 @@ function buildRuntime(
     tx,
     approvals,
     nowMs: () => Date.now(),
-    now: () => NOW,
   });
   return { executor, repo, conn, workspaceRoot };
 }

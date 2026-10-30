@@ -324,7 +324,7 @@ export async function startRuntimeNode(config: RuntimeNodeConfig = {}): Promise<
   // the first execution resolves, and the sandbox policy layer re-checks
   // every path at execution time).
   const executionWorkspaceRoot = join(dirname(dbPath), "execution-workspaces", defaultWorkspaceId);
-  mkdirSync(executionWorkspaceRoot, { recursive: true });
+  mkdirSync(executionWorkspaceRoot, { recursive: true, mode: 0o700 });
 
   const runtime: RuntimeHandle = composeRuntime({
     dbPath,

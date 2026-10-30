@@ -407,11 +407,23 @@ async function runSandboxed(
     }
   }
 
+  // D27 demonstrated (not asserted): the child's kernel ceilings as the
+  // kernel itself reported them (/proc/<pid>/limits, read during the run) —
+  // they are the TOOL RECORD's limits, which is the "tool-created processes
+  // inherit the parent task's limits" posture made visible. The separators
+  // are spaces/colons deliberately: an underscore/equals chain would read as
+  // ONE high-entropy token and the tool redaction layer would collapse it.
+  const verified = exit.verifiedLimits;
+  const limitsNote =
+    verified !== null
+      ? `\nlimits verified: data=${verified["Max data size"]?.soft ?? "unset"} cpu=${verified["Max cpu time"]?.soft ?? "unset"} nproc=${verified["Max processes"]?.soft ?? "unset"} fsize=${verified["Max file size"]?.soft ?? "unset"}`
+      : "";
   // G3: the result head is the already-redacted capture (redaction happened
   // at the stream boundary, before every sink); the executor's redactAndBound
   // re-covers it — defense in depth.
   const head = capturedChunks.join("").slice(0, OUTPUT_HEAD_CHARS);
-  const text = `${exitLabel} duration_ms=${durationMs}${artifactNote}\n${head}`.trimEnd();
+  const text =
+    `${exitLabel} duration_ms=${durationMs}${limitsNote}${artifactNote}\n${head}`.trimEnd();
   return { ok: true, text };
 }
 

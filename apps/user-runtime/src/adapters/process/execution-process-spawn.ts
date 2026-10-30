@@ -377,7 +377,11 @@ export function spawnSandboxedExecution(
   if (spawnErrorMessage === null) {
     child = spawn(argv[0]!, argv.slice(1), {
       cwd: request.cwd,
-      env: request.env, // verbatim — never process.env (AC5)
+      // Verbatim — never process.env (AC5). The cast is the adapter's data
+      // boundary: the request's env IS the child environment, and the web
+      // surface's Next-typed ProcessEnv augmentation must not narrow what a
+      // sandbox child may receive.
+      env: request.env as NodeJS.ProcessEnv,
       stdio: ["ignore", "pipe", "pipe"],
       // Own process group: the wall clock and cancel() kill the WHOLE tree
       // (the S19 rationale — a bare kill of the leader leaves descendants

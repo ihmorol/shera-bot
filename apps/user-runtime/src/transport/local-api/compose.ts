@@ -27,6 +27,7 @@
  * command the supervisor is disabled and the composition behaves exactly as
  * before (G4).
  */
+import { randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
 import { FileAgentFolderStore } from "../../adapters/fs/agent-folder-store.ts";
 import { createServer, type Server as HTTPServer } from "node:http";
@@ -92,6 +93,15 @@ import {
   type ToolsApiHandle,
 } from "./s21-tools-api.ts";
 import { HarnessRunService } from "../../modules/runtime/harness-run-service.ts";
+import { ProviderCredentialVault } from "../../modules/providers/provider-credential-vault.ts";
+import { ProviderCredentialsService } from "../../modules/providers/provider-credentials.ts";
+import { ProviderCredentialsRepository } from "../../adapters/sqlite/provider-credentials-repository.ts";
+import { ProvidersRepository } from "../../adapters/sqlite/providers-repository.ts";
+import {
+  ProviderService,
+  type AgentProviderDefaultsLookup,
+} from "../../modules/providers/provider-service.ts";
+import { ProviderGate, ProviderGateError } from "../../modules/providers/provider-gate.ts";
 import { loadWorkspacePack, type WorkspacePack } from "../../modules/runtime/pack-pin.ts";
 import { seedAgentsFromPack } from "../../adapters/sqlite/agents-repository.ts";
 import { WorkspacesRepository } from "../../adapters/sqlite/workspaces-repository.ts";
@@ -191,6 +201,20 @@ export interface ComposeLocalApiOptions {
     profileDir: string;
     idleTimeoutMs?: number;
   };
+  /**
+   * S23 (D17/G4): enforce provider custody at the turn and run-start
+   * boundaries — a message.send whose conversation has no usable provider is
+   * refused with the typed configuration state, and a task run whose
+   * provider credential was revoked fails safely instead of spawning a
+   * worker. Default: FALSE — the E2E mock and the test compositions keep
+   * their standing behavior (the FakeHarnessAdapter consumes no provider;
+   * D51 dual-harness). The REAL runtime (main.ts) turns this on; the
+   * recorded rationale lives in the slice's engineering record. The mock
+   * reply producer and enforcement are mutually exclusive (typed startup
+   * failure — the scripted producer fabricates completions, which
+   * enforcement exists to prevent).
+   */
+  providerEnforcement?: boolean;
 }
 
 export interface LocalApiHandle {
@@ -207,6 +231,8 @@ export interface LocalApiHandle {
    * relay into; tests and operators may consult the AC26 gate directly.
    */
   approvals: ApprovalsService;
+  /** S23: the provider registry seam — configuration, custody, resolution. */
+  providers: ProviderService;
   /**
    * S18 chunk 2: the shared browser profile service seam when configured;
    * undefined otherwise (G4 — no browser process ever spawns without it).
@@ -396,6 +422,8 @@ export interface RuntimeHandle {
    * queue, and the approval-gated merges. The HTTP surface relays into it.
    */
   projects: ProjectsApiHandle;
+  /** S23: the provider registry seam — configuration, custody, resolution. */
+  providers: ProviderService;
   /** Closes the gateway (and with it the HTTP server), then SQLite. */
   close(): Promise<void>;
 }
@@ -422,6 +450,7 @@ interface Wired {
   terminals: TerminalRecorder;
   browser: BrowserService | undefined;
   projects: ProjectsApiHandle;
+  providers: ProviderService;
   setPublisher(publisher: ConversationPublisher): void;
 }
 
@@ -550,12 +579,32 @@ function wire(
   // mounts later); the post-commit discipline lives in the service, and the
   // subscriber's failures are contained HERE (B4) — never at the command.
   let publisher: ConversationPublisher = options.publish ?? (() => {});
+  // S23: the provider gate is late-bound the same way (built below, after the
+  // operations repository exists). Under enforcement the conversations
+  // service consults it on every message.send.
+  let turnGateRef: ProviderGate | null = null;
   const conversations = new ConversationsService({
     journal: events,
     conversations: conversationsRepository,
     receipts,
     tx,
     publish: containFanout((event) => publisher(event), logFault),
+    // S23: the gate is late-bound (the provider stack builds below, after the
+    // operations repository); enforcement wires it the moment it exists —
+    // the closure dereferences it only when a send arrives, by which time the
+    // composition has long finished wiring.
+    ...(options.providerEnforcement
+      ? {
+          turnGate: {
+            assertTurnAllowed: (workspaceId: string, conversationId: string): void => {
+              if (turnGateRef === null) {
+                throw new Error("the provider gate was not composed");
+              }
+              turnGateRef.assertTurnAllowed(workspaceId, conversationId);
+            },
+          },
+        }
+      : {}),
   });
 
   // S11: the agents seam shares the SAME late-bound post-commit fanout — a
@@ -708,6 +757,69 @@ function wire(
   // (the agents-seed discipline); without a pack every roster validation is
   // refused typed and nothing Operation-shaped can be created.
   const operationsRepository = new OperationsRepository(tx);
+
+  // S23: the provider registry stack (PRD §9, D17, D20, D22, E9). The vault
+  // key lives beside the database (the container-local volume is the D22
+  // trust boundary); the credentials repository owns the ONLY secret-shaped
+  // storage; the service masks every view. The agent-defaults lookup adapts
+  // the agents repository (the user-owned default pair) for the effective
+  // resolution; the Operation-turn gate adapts the chat binding + the
+  // coordinator Agent's default pair.
+  const providersRepository = new ProvidersRepository(tx);
+  const providerCredentials = new ProviderCredentialsService({
+    vault: new ProviderCredentialVault(join(dirname(options.dbPath), "provider-credentials.key")),
+    credentials: new ProviderCredentialsRepository(tx),
+  });
+  const agentDefaults: AgentProviderDefaultsLookup = {
+    findAgentForDirectChat: (workspaceId, conversationId) => {
+      for (const agent of agentsRepository.listAgents(workspaceId)) {
+        if (agentsRepository.findDirectChat(workspaceId, agent.agent_id) === conversationId) {
+          return agent.agent_id;
+        }
+      }
+      return null;
+    },
+    getDefaultProvider: (workspaceId, agentId) => {
+      const agent = agentsRepository.getAgent(workspaceId, agentId);
+      if (!agent || !agent.default_provider_id || !agent.default_provider_model) {
+        return null;
+      }
+      return { provider_id: agent.default_provider_id, model: agent.default_provider_model };
+    },
+  };
+  const providers = new ProviderService({
+    providers: providersRepository,
+    credentials: providerCredentials,
+    agentDefaults,
+    ...(options.now ? { now: options.now } : {}),
+  });
+  // S23 chunk 5 (D17/G4): the gate exists ONLY under enforcement; without it
+  // the composition behaves exactly as before (the optional-seam shape).
+  const providerGate = options.providerEnforcement ? new ProviderGate({ providers }) : undefined;
+  turnGateRef = providerGate ?? null;
+  const operationTurnGate =
+    providerGate === undefined
+      ? undefined
+      : {
+          assertOperationTurnAllowed: (workspaceId: string, operationId: string): void => {
+            const conversationId = operationsRepository.findChat(workspaceId, operationId);
+            if (conversationId !== null) {
+              providerGate.assertTurnAllowed(workspaceId, conversationId);
+              return;
+            }
+            // No chat binding yet: the turn would run on the coordinator
+            // Agent's default pair (the D42 synthesis role).
+            const record = operationsRepository.getOperation(workspaceId, operationId);
+            if (!record || record.coordinator_agent_id === "none") {
+              throw new ProviderGateError(
+                "PROVIDER_NOT_CONFIGURED",
+                "No provider is configured for this Operation yet. Configure one in Settings → Providers & models.",
+              );
+            }
+            providerGate.assertAgentTurnAllowed(workspaceId, record.coordinator_agent_id);
+          },
+        };
+
   // S16 (D32 layer 3): when a worker harness is configured the composed
   // operations service is the RUN-FLOW variant — applyRunState stays exactly
   // the D8-validated write and additionally drives the worker lifecycle
@@ -723,6 +835,7 @@ function wire(
         agents: agentsRepository,
         tx,
         publish: containFanout((event) => publisher(event), logFault),
+        ...(operationTurnGate ? { turnGate: operationTurnGate } : {}),
       })
     : new OperationsService({
         operations: operationsRepository,
@@ -732,6 +845,7 @@ function wire(
         agents: agentsRepository,
         tx,
         publish: containFanout((event) => publisher(event), logFault),
+        ...(operationTurnGate ? { turnGate: operationTurnGate } : {}),
       });
 
   // S16: the supervised task-worker system (supervisor + E1 admission gate +
@@ -809,6 +923,61 @@ function wire(
     if (operations instanceof RunFlowOperationsService) {
       operations.runFlow = {
         startRunWorker: (workspaceId, runId) => {
+          // S23 (D20/D22, enforcement only): the run-start custody check. A
+          // run whose provider snapshot references a missing, disabled, or
+          // revoked-credential provider NEVER spawns a worker: the run is
+          // driven to FAILED with a typed refusal on its own stream (no
+          // credential material — G3), the fail-safe D22 names for revoked
+          // credentials. Without enforcement the hook behaves exactly as
+          // before (the fake workers consume no provider).
+          if (providerGate) {
+            const spec = specForRun(workspaceId, runId);
+            const providerId = spec.providerSnapshot?.provider_id ?? null;
+            const custody =
+              providerId === null
+                ? {
+                    ok: false as const,
+                    code: "PROVIDER_NOT_CONFIGURED",
+                    safe_message:
+                      "The run has no provider snapshot. Configure a provider and start a new run.",
+                  }
+                : providerGate.checkRunStart(workspaceId, providerId);
+            if (!custody.ok) {
+              const operationId = operationsRepository.findRunOperation(workspaceId, runId);
+              logFault("task_run_provider_refused", {
+                workspace_id: workspaceId,
+                run_id: runId,
+                code: custody.code,
+              });
+              if (operationId !== null) {
+                try {
+                  operations.applyRunState(workspaceId, operationId, runId, "FAILED");
+                  events.appendEvent({
+                    event_id: randomUUID(),
+                    stream_id: runId,
+                    type: "provider.configuration_refused",
+                    payload: {
+                      provider_id: providerId,
+                      code: custody.code as
+                        | "PROVIDER_NOT_CONFIGURED"
+                        | "PROVIDER_DISABLED"
+                        | "PROVIDER_CREDENTIAL_REVOKED",
+                    },
+                    workspace_id: workspaceId,
+                    correlation_id: runId,
+                  });
+                } catch (error: unknown) {
+                  logFault("task_run_provider_refuse_journal_failed", {
+                    workspace_id: workspaceId,
+                    run_id: runId,
+                    name: error instanceof Error ? error.name : "Error",
+                    message: error instanceof Error ? error.message : String(error),
+                  });
+                }
+              }
+              return;
+            }
+          }
           void supervisor
             .startWorker(workspaceId, runId, specForRun(workspaceId, runId))
             .catch((error: unknown) => {
@@ -1043,6 +1212,10 @@ function wire(
     },
     approvals: approvalsApi,
     tools: toolsApi,
+    // S23: the provider surface — the masked catalog CRUD, the credential
+    // custody routes, the connection test, the override, and the effective
+    // readout. Every rule lives in the service; the routes relay (G2).
+    providers: { providers },
     // S18 chunk 1: the read-only terminal live-views surface — durable
     // replay, one execution's record, and the current session terminal
     // state. Three GET routes; the no-takeover criterion is the inventory.
@@ -1078,6 +1251,7 @@ function wire(
     terminals,
     browser,
     projects: projectsApi,
+    providers,
     setPublisher(next) {
       publisher = next;
     },
@@ -1092,6 +1266,7 @@ export function composeLocalApi(options: ComposeLocalApiOptions): LocalApiHandle
     tools: wired.tools,
     toolRegistry: wired.toolRegistry,
     toolsApi: wired.toolsApi,
+    providers: wired.providers,
     browser: wired.browser,
     close: () => wired.conn.close(),
   };
@@ -1104,6 +1279,15 @@ export function composeLocalApi(options: ComposeLocalApiOptions): LocalApiHandle
  * WS layer itself stays read-only (D26).
  */
 export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
+  // S23 (G4/G5): enforcement and the scripted reply producer are mutually
+  // exclusive postures — the scripted producer fabricates completions, which
+  // is exactly what provider enforcement exists to prevent. The combination
+  // is a typed startup failure, never a silent drop.
+  if (options.providerEnforcement === true && options.scriptedReplies !== undefined) {
+    throw new Error(
+      "providerEnforcement and scriptedReplies are mutually exclusive: the scripted reply producer fabricates completions (G4). Use one posture or the other.",
+    );
+  }
   const wired = wire(options);
   const workspaceId = options.workspaceId ?? DEFAULT_WORKSPACE_ID;
   const httpServer = createServer(wired.app);
@@ -1288,6 +1472,7 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     terminals: wired.terminals,
     browser: wired.browser,
     projects: wired.projects,
+    providers: wired.providers,
     close: async () => {
       replyStreamer?.stopAll();
       // S16: drain every live worker child through the escalation BEFORE the

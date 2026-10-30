@@ -304,6 +304,42 @@
  * Every table is workspace-scoped as PRIMARY KEY prefix (E12); project/agent
  * references are validated by the writers, so no FOREIGN KEY is declared —
  * the v4/v5/v6/v8 discipline.
+ *
+ * v15 — provider catalog, credential custody, and per-conversation overrides
+ * (S23 chunk 1; PRD §9, §19 AC10/AC11, D17, D20, D22, E9, E12, G3): the three
+ * durable tables behind the provider registry.
+ *
+ * providers: one configured provider entry per row — the PRD §9 field list
+ * (display name, protocol type, base URL, API-key or no-key mode, default
+ * model identifier, optional organization/project, optional headers, optional
+ * request parameters) plus origin ('platform' = admin-provisioned, E9's
+ * platform credential; 'user' = user-configured) and enable/disable. There is
+ * NO credential column and there never will be one: the schema makes a
+ * catalog row that carries a key unrepresentable, and the credential's only
+ * storage is provider_credentials below (D22). base_url is NULL for the
+ * native adapters (their endpoints are the protocols' own) and http(s) only
+ * otherwise — the CHECK refuses every other scheme, so a file:// or
+ * credentials-bearing URL cannot be persisted even by a buggy writer.
+ * headers_json/request_params_json are validated JSON OBJECTs (json_type
+ * CHECK) — a secret-bearing header is refused by the service layer before a
+ * row exists (G3); the schema guarantees object shape only.
+ *
+ * provider_credentials: the sealed custody rows (D22 "encrypted inside the
+ * user container, decrypted only at call time"). One row per provider entry;
+ * the payload is the AES-256-GCM seal (12-byte iv, ciphertext, 16-byte tag,
+ * key_version) — no plaintext column exists, so an at-rest byte scan of this
+ * database never sees a provider key. credential_hint is the ONLY
+ * display-derived column: the mask (at most the final four characters)
+ * computed at store time, exactly what D22's "masked values" surface shows —
+ * the ciphertext is never opened for display. Revocation = DELETE;
+ * replacement = upsert (both seal and hint).
+ *
+ * conversation_provider_overrides: the AC11 per-conversation override —
+ * (workspace_id, conversation_id) keyed, provider_id plus a nullable model
+ * (NULL = the provider's default model). The writer validates both the
+ * conversation and the provider in the same workspace (E12, v5/v7
+ * discipline); the override applies to subsequent turns and never rewrites
+ * the Agent's default (AC11).
  */
 import type { DatabaseSync } from "node:sqlite";
 
@@ -1111,6 +1147,70 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
         PRIMARY KEY (workspace_id, tool_id)
       ) STRICT;
 
+    `,
+  },
+  {
+    version: 18,
+    name: "provider-catalog",
+    sql: `
+      CREATE TABLE IF NOT EXISTS providers (
+        workspace_id        TEXT    NOT NULL,
+        id                  TEXT    NOT NULL,
+        display_name        TEXT    NOT NULL CHECK (length(display_name) BETWEEN 1 AND 120),
+        protocol            TEXT    NOT NULL CHECK (protocol IN (
+          'openai', 'anthropic', 'google', 'ollama', 'openai-compatible')),
+        base_url            TEXT    CHECK (base_url IS NULL OR substr(base_url, 1, 8) = 'https://' OR substr(base_url, 1, 7) = 'http://'),
+        api_mode            TEXT    NOT NULL CHECK (api_mode IN ('api_key', 'no_key')),
+        default_model_id    TEXT    NOT NULL CHECK (length(default_model_id) BETWEEN 1 AND 256),
+        organization        TEXT,
+        project             TEXT,
+        headers_json        TEXT    NOT NULL CHECK (json_type(headers_json) = 'object'),
+        request_params_json TEXT    NOT NULL CHECK (json_type(request_params_json) = 'object'),
+        origin              TEXT    NOT NULL CHECK (origin IN ('platform', 'user')),
+        status              TEXT    NOT NULL CHECK (status IN ('enabled', 'disabled')),
+        created_at          TEXT    NOT NULL,
+        updated_at          TEXT    NOT NULL,
+        PRIMARY KEY (workspace_id, id)
+      ) STRICT;
+
+      CREATE INDEX IF NOT EXISTS providers_by_workspace_idx
+        ON providers (workspace_id, created_at);
+
+      -- D22/E9 custody: the ONLY storage a provider credential may have. The
+      -- payload is the sealed AES-256-GCM shape (iv + ciphertext + auth tag +
+      -- key generation); there is deliberately NO plaintext column anywhere in
+      -- the schema, and no catalog table references a secret value. The
+      -- writer validates the provider row in the same workspace (the v4/v5
+      -- discipline), so no FOREIGN KEY is declared. Revocation = DELETE;
+      -- replacement = UPDATE of the sealed payload (key_version records the
+      -- sealing key's generation).
+      CREATE TABLE IF NOT EXISTS provider_credentials (
+        workspace_id TEXT    NOT NULL,
+        provider_id  TEXT    NOT NULL,
+        ciphertext   BLOB    NOT NULL CHECK (length(ciphertext) >= 1),
+        iv           BLOB    NOT NULL CHECK (length(iv) = 12),
+        tag          BLOB    NOT NULL CHECK (length(tag) = 16),
+        key_version  INTEGER NOT NULL CHECK (key_version >= 1),
+        credential_hint TEXT NOT NULL CHECK (length(credential_hint) <= 8),
+        created_at   TEXT    NOT NULL,
+        updated_at   TEXT    NOT NULL,
+        PRIMARY KEY (workspace_id, provider_id)
+      ) STRICT;
+
+      -- AC11 per-conversation override: one row per conversation at most
+      -- (UNIQUE conversation_id inside the workspace keeps the mapping
+      -- one-to-one). model NULL means "use the provider's default model".
+      -- conversation_id and provider_id are validated by the writer in the
+      -- same transaction (the v5/v7 discipline), so no FOREIGN KEY is
+      -- declared.
+      CREATE TABLE IF NOT EXISTS conversation_provider_overrides (
+        workspace_id    TEXT    NOT NULL,
+        conversation_id TEXT    NOT NULL,
+        provider_id     TEXT    NOT NULL,
+        model           TEXT    CHECK (model IS NULL OR length(model) BETWEEN 1 AND 256),
+        updated_at      TEXT    NOT NULL,
+        PRIMARY KEY (workspace_id, conversation_id)
+      ) STRICT;
     `,
   },
 ];

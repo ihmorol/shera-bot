@@ -8,6 +8,8 @@ import { useContainerResolution, useSessionIdentity } from "@/lib/container-conn
 import type { ContainerResolutionState } from "@/lib/container-resolution";
 import { useRealConversationThread } from "@/lib/runtime-data";
 import { useLiveConversation, useSameOriginRuntimeSocketUrl } from "@/lib/runtime-live";
+import { useEffectiveProvider } from "@/lib/provider-data";
+import { ConversationModelControl } from "@/components/chat/model-control";
 
 /**
  * The General Assistant direct chat's data source (S09 chunk 1).
@@ -98,6 +100,15 @@ function RuntimeGeneralAssistantChat({
   // — so real mode carries unread_count 0 instead of the demo count (G4).
   const summary: ConversationSummary = { ...conversation, unread_count: 0 };
 
+  // S23 (AC11/D17): the conversation's effective provider readout gates the
+  // composer and drives the header's model control. Until the conversation id
+  // resolves the readout stays "unknown" — the composer is disabled while the
+  // readout is pending (an unresolved provider is never a sendable one).
+  const provider = useEffectiveProvider(workspaceId, real.conversationId);
+  const modelControl = (
+    <ConversationModelControl workspaceId={workspaceId} conversationId={real.conversationId} />
+  );
+
   if (liveEnabled) {
     return (
       <AgentChatView
@@ -121,6 +132,8 @@ function RuntimeGeneralAssistantChat({
         surfaceState={live.error ? "error" : live.loading ? "loading" : "ready"}
         safeErrorMessage={live.error ?? real.safeErrorMessage}
         mode="runtime"
+        providerState={provider.state}
+        modelControl={modelControl}
       />
     );
   }
@@ -133,6 +146,8 @@ function RuntimeGeneralAssistantChat({
       surfaceState={real.surfaceState}
       safeErrorMessage={real.safeErrorMessage}
       mode="runtime"
+      providerState={provider.state}
+      modelControl={modelControl}
     />
   );
 }

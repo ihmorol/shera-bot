@@ -6,6 +6,7 @@ import { AgentSettingsSurface } from "@/components/settings/agent-settings";
 import { GitSettingsSurface } from "@/components/settings/git-settings";
 import { PermissionsSettingsSurface } from "@/components/settings/permissions-settings";
 import { ToolsSettingsSurface } from "@/components/settings/tools-settings";
+import { ProvidersSettingsSurface } from "@/components/settings/providers-settings";
 import { WorkersSettingsSurface } from "@/components/settings/worker-admission-readout";
 import { SurfaceFrame } from "@/components/shell/surface-frame";
 import { findAgent } from "@/lib/navigation";
@@ -65,6 +66,19 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
     return (
       <SurfaceFrame title="Settings" meta="Tools">
         <ToolsSettingsSurface />
+      </SurfaceFrame>
+    );
+  }
+
+  // S23 (§S9, PRD §9, AC10, D17/D22): the masked provider catalog — masked
+  // credentials with revoke/replace only, the full custom-provider form, the
+  // honest connection test, enable/disable.
+  if (section?.length === 1 && section[0] === "providers") {
+    return (
+      <SurfaceFrame title="Settings" meta="Providers & models">
+        <div className="mx-auto max-w-xl">
+          <ProvidersSettingsSurface />
+        </div>
       </SurfaceFrame>
     );
   }
@@ -129,7 +143,16 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
             </Link>
             <span className="font-mono text-xs uppercase tracking-[0.16em] text-muted">open</span>
           </li>
-          {["Profile", "Providers", "Memory", "Credits", "Workspace"].map((item) => (
+          <li className="flex items-center justify-between rounded-xl border border-line bg-surface px-4 py-3">
+            <Link
+              href={routes.settings("providers")}
+              className="text-sm text-text underline underline-offset-4 hover:text-cool-highlight"
+            >
+              Providers &amp; models
+            </Link>
+            <span className="font-mono text-xs uppercase tracking-[0.16em] text-muted">open</span>
+          </li>
+          {["Profile", "Memory", "Credits", "Workspace"].map((item) => (
             <li
               key={item}
               className="flex items-center justify-between rounded-xl border border-line bg-surface px-4 py-3"

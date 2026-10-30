@@ -43,6 +43,13 @@ export interface ConversationsServiceDeps {
   tx: SqliteTransactions;
   /** Post-commit live fanout (WebSocket layer); optional in tests. */
   publish?: ConversationPublisher;
+  /**
+   * S23 (D17/G4, providerEnforcement compositions): the provider gate — a
+   * message.send whose conversation has no usable provider is refused BEFORE
+   * anything is written, so nothing can fabricate a completion. Absent in
+   * the mock/test compositions (the recorded optional-seam shape).
+   */
+  turnGate?: { assertTurnAllowed(workspaceId: string, conversationId: string): void };
 }
 
 interface StoredReceipt {
@@ -225,6 +232,10 @@ export class ConversationsService {
   private executeMessageSend(
     command: Extract<ConversationCommand, { type: "message.send" }>,
   ): ConversationCommandResult {
+    // S23 (D17/G4): the provider gate runs FIRST — a refused turn writes
+    // nothing (no message, no receipt), so no run can start and nothing can
+    // fabricate a completion.
+    this.deps.turnGate?.assertTurnAllowed(command.workspace_id, command.payload.conversation_id);
     return this.runWithReceipt(command, (exec) => {
       const existing = this.deps.conversations.findById(
         command.workspace_id,

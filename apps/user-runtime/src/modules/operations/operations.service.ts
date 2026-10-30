@@ -330,6 +330,13 @@ export interface OperationsServiceDeps {
   /** Injected clock (ISO strings); defaults to the system clock. */
   clock?: () => string;
   /**
+   * S23 (D17/G4, providerEnforcement compositions): the provider gate over
+   * the Operation chat's turn — a thread message whose conversation has no
+   * usable provider is refused before anything is written. Absent in the
+   * mock/test compositions (the recorded optional-seam shape).
+   */
+  turnGate?: { assertOperationTurnAllowed(workspaceId: string, operationId: string): void };
+  /**
    * S13 chunk 3 — the Operation chat is a REAL conversation (D41): these deps
    * compose the conversation row, the journal appends, the read stream, and
    * the seeded Agent identities (thread display names). Compositions that
@@ -1878,6 +1885,10 @@ export class OperationsService {
     input: SendOperationMessageInput,
   ): OperationMessageSendResult {
     this.requireOperation(workspaceId, operationId);
+    // S23 (D17/G4): the provider gate runs FIRST — a refused turn writes
+    // nothing (no message, no receipt), so no run can start and nothing can
+    // fabricate a completion.
+    this.deps.turnGate?.assertOperationTurnAllowed(workspaceId, operationId);
     if (
       typeof input.idempotency_key !== "string" ||
       input.idempotency_key.length < 8 ||

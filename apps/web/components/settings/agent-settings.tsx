@@ -10,6 +10,7 @@ import type {
   AgentCapabilities,
   AgentToolDefault,
   ProviderDefault,
+  ProviderView,
 } from "@shera-bot/contracts";
 import { EDITABLE_AGENT_SETTING_KEYS } from "@shera-bot/contracts";
 
@@ -18,6 +19,7 @@ import { ErrorState } from "@/components/shell/states";
 import { Button } from "@/components/ui/button";
 import type { AgentSettingsAction } from "@/lib/agent-api";
 import { safeRuntimeMessage, useAgentSettings } from "@/lib/agent-data";
+import { useProviders } from "@/lib/provider-data";
 import { useContainerResolution } from "@/lib/container-connection";
 import { cn } from "@/lib/utils";
 
@@ -83,6 +85,12 @@ export interface AgentSettingsViewProps {
   onUpdateInstructions: (value: string | null) => void;
   onUpdateDefaultProvider: (provider: ProviderDefault) => void;
   onUpdateToolDefaults: (defaults: AgentToolDefault[]) => void;
+  /**
+   * S23 (AC11): the masked provider catalog for the default-provider picker.
+   * Undefined on unwired callers (tests, fixtures mode) — the editor keeps
+   * its manual entry fallback, never a fabricated catalog.
+   */
+  providerCatalog?: ProviderView[] | undefined;
   /** Arm (or re-arm) a reset; nothing fires until onResetConfirm. */
   onResetClick: (key: PendingResetKey) => void;
   onResetConfirm: () => void;
@@ -272,6 +280,7 @@ function EntryValue({
   onUpdateInstructions,
   onUpdateDefaultProvider,
   onUpdateToolDefaults,
+  providerCatalog,
 }: {
   entry: AgentSettingEntry;
   agentName: string;
@@ -280,6 +289,7 @@ function EntryValue({
   onUpdateInstructions: AgentSettingsViewProps["onUpdateInstructions"];
   onUpdateDefaultProvider: AgentSettingsViewProps["onUpdateDefaultProvider"];
   onUpdateToolDefaults: AgentSettingsViewProps["onUpdateToolDefaults"];
+  providerCatalog?: AgentSettingsViewProps["providerCatalog"];
 }) {
   switch (entry.key) {
     case "role":
@@ -329,6 +339,7 @@ function EntryValue({
           key={settingsEditorKey(entry)}
           entry={entry}
           saved={saved}
+          providerCatalog={providerCatalog}
           onUpdateDefaultProvider={onUpdateDefaultProvider}
         />
       );
@@ -403,35 +414,76 @@ function UserInstructionsEditor({
 function DefaultProviderEditor({
   entry,
   saved,
+  providerCatalog,
   onUpdateDefaultProvider,
 }: {
   entry: Extract<AgentSettingEntry, { key: "default_provider" }>;
   saved: boolean;
+  providerCatalog?: AgentSettingsViewProps["providerCatalog"];
   onUpdateDefaultProvider: AgentSettingsViewProps["onUpdateDefaultProvider"];
 }) {
   const [providerId, setProviderId] = useState(entry.value.provider_id);
   const [model, setModel] = useState(entry.value.model);
+  // S23: with a catalog the editor offers the REAL masked entries (any
+  // status — an Agent default may reference a provider that is temporarily
+  // disabled, which then resolves to the honest D17 state); without one the
+  // manual entry stays (the platform ids are never invented here).
+  const catalog = providerCatalog ?? [];
+  const selectId = `default-provider-choice-${entry.key}`;
   return (
     <div className="space-y-2">
       <p>
         <ProviderValue provider={entry.value} />
       </p>
-      <div className="grid gap-2 sm:grid-cols-2">
-        <input
-          value={providerId}
-          onChange={(event) => setProviderId(event.target.value)}
-          aria-label="Default provider id"
-          placeholder="provider id"
-          className="w-full rounded-lg border border-line bg-surface-elevated px-3 py-2 font-mono text-xs text-text placeholder:text-muted"
-        />
-        <input
-          value={model}
-          onChange={(event) => setModel(event.target.value)}
-          aria-label="Default model"
-          placeholder="model id"
-          className="w-full rounded-lg border border-line bg-surface-elevated px-3 py-2 font-mono text-xs text-text placeholder:text-muted"
-        />
-      </div>
+      {catalog.length > 0 ? (
+        <div className="space-y-2">
+          <label htmlFor={selectId} className="block text-xs font-medium text-muted">
+            Provider from the workspace catalog
+          </label>
+          <select
+            id={selectId}
+            value={providerId}
+            onChange={(event) => {
+              setProviderId(event.target.value);
+              const chosen = catalog.find((provider) => provider.id === event.target.value);
+              setModel(chosen ? chosen.default_model_id : "");
+            }}
+            className="w-full rounded-lg border border-line bg-surface-elevated px-3 py-2 text-sm text-text"
+          >
+            <option value="">Choose a provider…</option>
+            {catalog.map((provider) => (
+              <option key={provider.id} value={provider.id}>
+                {provider.display_name} ({provider.default_model_id})
+                {provider.status === "disabled" ? " — disabled" : ""}
+              </option>
+            ))}
+          </select>
+          <input
+            value={model}
+            onChange={(event) => setModel(event.target.value)}
+            aria-label="Default model"
+            placeholder="model id"
+            className="w-full rounded-lg border border-line bg-surface-elevated px-3 py-2 font-mono text-xs text-text placeholder:text-muted"
+          />
+        </div>
+      ) : (
+        <div className="grid gap-2 sm:grid-cols-2">
+          <input
+            value={providerId}
+            onChange={(event) => setProviderId(event.target.value)}
+            aria-label="Default provider id"
+            placeholder="provider id"
+            className="w-full rounded-lg border border-line bg-surface-elevated px-3 py-2 font-mono text-xs text-text placeholder:text-muted"
+          />
+          <input
+            value={model}
+            onChange={(event) => setModel(event.target.value)}
+            aria-label="Default model"
+            placeholder="model id"
+            className="w-full rounded-lg border border-line bg-surface-elevated px-3 py-2 font-mono text-xs text-text placeholder:text-muted"
+          />
+        </div>
+      )}
       {entry.recommended_default ? (
         <RecommendedDefaultLine>
           {entry.recommended_default.provider_id} · {entry.recommended_default.model}
@@ -511,6 +563,7 @@ function AgentSettingsEditor({
   pendingResetKey,
   defaultAdvancedOpen,
   savedKeys,
+  providerCatalog,
   onUpdateInstructions,
   onUpdateDefaultProvider,
   onUpdateToolDefaults,
@@ -523,6 +576,7 @@ function AgentSettingsEditor({
   pendingResetKey: PendingResetKey;
   defaultAdvancedOpen: boolean;
   savedKeys: readonly string[];
+  providerCatalog?: AgentSettingsViewProps["providerCatalog"];
   onUpdateInstructions: AgentSettingsViewProps["onUpdateInstructions"];
   onUpdateDefaultProvider: AgentSettingsViewProps["onUpdateDefaultProvider"];
   onUpdateToolDefaults: AgentSettingsViewProps["onUpdateToolDefaults"];
@@ -560,6 +614,7 @@ function AgentSettingsEditor({
             entry={entry}
             agentName={agentName}
             saved={saved(entry)}
+            providerCatalog={providerCatalog}
             onUpdateInstructions={onUpdateInstructions}
             onUpdateDefaultProvider={onUpdateDefaultProvider}
             onUpdateToolDefaults={onUpdateToolDefaults}
@@ -596,6 +651,7 @@ function AgentSettingsEditor({
                     entry={entry}
                     agentName={agentName}
                     saved={saved(entry)}
+                    providerCatalog={providerCatalog}
                     onUpdateInstructions={onUpdateInstructions}
                     onUpdateDefaultProvider={onUpdateDefaultProvider}
                     onUpdateToolDefaults={onUpdateToolDefaults}
@@ -705,6 +761,7 @@ export function AgentSettingsView(props: AgentSettingsViewProps) {
           pendingResetKey={pendingResetKey}
           defaultAdvancedOpen={defaultAdvancedOpen}
           savedKeys={savedKeys}
+          providerCatalog={props.providerCatalog}
           onUpdateInstructions={props.onUpdateInstructions}
           onUpdateDefaultProvider={props.onUpdateDefaultProvider}
           onUpdateToolDefaults={props.onUpdateToolDefaults}
@@ -762,6 +819,10 @@ function commandTargetKeys(action: AgentSettingsAction): readonly string[] {
 
 function RuntimeAgentSettings({ workspaceId, agentId }: { workspaceId: string; agentId: string }) {
   const { detailQuery, settingsQuery, commandMutation } = useAgentSettings(workspaceId, agentId);
+  // S23 (AC11): the masked catalog powers the default-provider picker. A
+  // failed or unwired catalog degrades to the manual-entry fallback inside
+  // the editor — never a fabricated choice list.
+  const providerCatalog = useProviders(workspaceId);
   const [pendingResetKey, setPendingResetKey] = useState<PendingResetKey>(null);
   // §6.3 visible command feedback: the cards a settled command affected show a
   // brief "Saved" confirmation, cleared after a moment (and immediately when a
@@ -834,6 +895,7 @@ function RuntimeAgentSettings({ workspaceId, agentId }: { workspaceId: string; a
       pendingResetKey={pendingResetKey}
       commandPending={commandMutation.isPending}
       savedKeys={savedKeys}
+      providerCatalog={providerCatalog.state === "ready" ? providerCatalog.providers : undefined}
       commandError={
         commandMutation.isError
           ? safeRuntimeMessage(commandMutation.error, "The settings command was not accepted.")

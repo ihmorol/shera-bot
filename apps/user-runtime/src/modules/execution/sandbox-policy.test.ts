@@ -117,9 +117,12 @@ describe("sandbox policy — the child environment (D27 env-secret prevention, A
 
   it("never carries more env than the allowlist, whatever the caller passes", () => {
     // The v1 posture: no caller-supplied environment at all. The signature
-    // accepts none — pinned by the fixed key set.
+    // accepts none — every runtime-env key OUTSIDE the fixed allowlist is
+    // invisible to the child.
+    const allowlist = new Set(["PATH", "HOME", "TMPDIR", "LANG", "TERM"]);
     const env = buildSandboxEnv("/w");
     for (const key of Object.keys(process.env)) {
+      if (allowlist.has(key)) continue;
       expect(env[key]).toBeUndefined();
     }
   });

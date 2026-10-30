@@ -1,6 +1,6 @@
 /**
  * S23 chunk 1 provider catalog storage contract tests (PRD §9, §19 AC10/AC11,
- * D17, D20, D22, E9, E12, G3): the v15 migration creates the STRICT provider
+ * D17, D20, D22, E9, E12, G3): the v18 migration creates the STRICT provider
  * catalog, per-conversation override, and credential-custody tables, and the
  * repositories enforce the writer-side rules — validated configuration shapes,
  * workspace scoping (E12), and a schema where a provider key can never live in
@@ -70,11 +70,11 @@ function providerInput(overrides: Partial<ProviderCreateInput> = {}): ProviderCr
   };
 }
 
-describe("provider catalog storage (S23 migration v15)", () => {
+describe("provider catalog storage (S23 migration v18)", () => {
   it("appends the provider catalog as version 15 of the committed chain", () => {
-    const v15 = MIGRATIONS.find((migration) => migration.version === 15);
-    expect(v15?.name).toBe("provider-catalog");
-    expect(MIGRATIONS.at(-1)?.version).toBe(15);
+    const v18 = MIGRATIONS.find((migration) => migration.version === 18);
+    expect(v18?.name).toBe("provider-catalog");
+    expect(MIGRATIONS.at(-1)?.version).toBe(18);
   });
 
   it("creates the STRICT tables through the migration runner", () => {

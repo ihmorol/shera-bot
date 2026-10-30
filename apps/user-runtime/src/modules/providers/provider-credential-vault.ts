@@ -22,7 +22,7 @@
  * brick every stored ciphertext).
  *
  * FORMAT: one sealed payload = 12-byte random iv + ciphertext + 16-byte GCM
- * auth tag, stored as three columns on the custody row (v15). key_version
+ * auth tag, stored as three columns on the custody row (v18). key_version
  * records the generation of the key that sealed it (1 until a rotation slice
  * exists); decryption verifies the tag — tampered or foreign-key ciphertext
  * fails closed (never plaintext, never a guess).
@@ -46,7 +46,7 @@ export class ProviderCredentialError extends Error {
   }
 }
 
-/** One sealed (encrypted) secret: the exact shapes the v15 row stores. */
+/** One sealed (encrypted) secret: the exact shapes the v18 row stores. */
 export interface SealedSecret {
   ciphertext: Buffer;
   iv: Buffer;

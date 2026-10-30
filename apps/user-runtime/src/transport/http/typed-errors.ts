@@ -468,6 +468,8 @@ export function toSheraErrorResponse(error: unknown, correlationId?: string): Ht
         safe_message: mapping.safe_message,
         retryable: false,
         user_action: mapping.user_action,
+        internal_details: null,
+        correlation_id,
       },
     };
   }

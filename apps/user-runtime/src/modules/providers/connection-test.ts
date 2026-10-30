@@ -209,6 +209,10 @@ export async function runConnectionTest(
       model,
       prompt: TEST_PROMPT,
       maxOutputTokens: TEST_MAX_OUTPUT_TOKENS,
+      // The test is ONE real minimal request (E34): the AI SDK's default
+      // retry/backoff would silently turn it into three and stretch an
+      // unreachable endpoint's honest failure past any useful budget.
+      maxRetries: 0,
       abortSignal: AbortSignal.timeout(TEST_TIMEOUT_MS),
       ...ProviderAdapters.requestParams(entry),
     });

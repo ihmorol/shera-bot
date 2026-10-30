@@ -663,11 +663,11 @@ describe("S22 — the worker-failure decision seam (runtime-owned retry policy)"
 
     await harness.supervisor.startWorker(WS, runA);
     await until(() => {
-      return harness.journal.listStream(runA, WS).find((row) => row.event_type === "worker.crashed");
+      return harness.journal
+        .listStream(runA, WS)
+        .find((row) => row.event_type === "worker.crashed");
     });
-    await until(() =>
-      harness.seamWrites.some((write) => write.state === "RECOVERY_REQUIRED"),
-    );
+    await until(() => harness.seamWrites.some((write) => write.state === "RECOVERY_REQUIRED"));
     expect(harness.seamWrites).toContainEqual({ run_id: runA, state: "RECOVERY_REQUIRED" });
   });
 
@@ -683,11 +683,11 @@ describe("S22 — the worker-failure decision seam (runtime-owned retry policy)"
 
     await harness.supervisor.startWorker(WS, runA);
     await until(() => {
-      return harness.journal.listStream(runA, WS).find((row) => row.event_type === "worker.crashed");
+      return harness.journal
+        .listStream(runA, WS)
+        .find((row) => row.event_type === "worker.crashed");
     });
-    await until(() =>
-      harness.seamWrites.some((write) => write.state === "RECOVERY_REQUIRED"),
-    );
+    await until(() => harness.seamWrites.some((write) => write.state === "RECOVERY_REQUIRED"));
     expect(reports).toHaveLength(0);
     expect(harness.seamWrites).toContainEqual({ run_id: runA, state: "RECOVERY_REQUIRED" });
   });

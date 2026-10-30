@@ -86,7 +86,10 @@ interface RunningRuntime {
 
 const runtimes: RunningRuntime[] = [];
 
-async function composeOn(dbPath: string, harness: ReturnType<typeof workerHarness>): Promise<RunningRuntime> {
+async function composeOn(
+  dbPath: string,
+  harness: ReturnType<typeof workerHarness>,
+): Promise<RunningRuntime> {
   const runtime = composeRuntime({
     dbPath,
     packsRoot: PACKS_ROOT,
@@ -217,7 +220,12 @@ describe("S22 run-control API — cancellation over the real stack (AC15, AC7, A
     );
     const { operationId, runId } = await createOperationAndRun(runtime.origin, "run_s22_tree");
     // Preserve an artifact BEFORE the cancel (AC6's partial output).
-    runtime.runtime.operations.publishRunArtifact(WORKSPACE, operationId, runId, "artifact_partial");
+    runtime.runtime.operations.publishRunArtifact(
+      WORKSPACE,
+      operationId,
+      runId,
+      "artifact_partial",
+    );
     runtime.runtime.operations.applyRunState(WORKSPACE, operationId, runId, "RUNNING");
 
     const descendantPid = await until(() => {
@@ -300,7 +308,9 @@ describe("S22 run-control API — cancellation over the real stack (AC15, AC7, A
     }
     runtime.runtime.operations.applyRunState(WORKSPACE, operationId, parentId, "RUNNING");
     runtime.runtime.operations.applyRunState(WORKSPACE, operationId, childId, "QUEUED");
-    await until(async () => ((await runStateOf(runtime.origin, operationId, parentId)) === "RUNNING" ? true : null));
+    await until(async () =>
+      (await runStateOf(runtime.origin, operationId, parentId)) === "RUNNING" ? true : null,
+    );
 
     const cancel = await postJson(
       runtime.origin,
@@ -339,12 +349,7 @@ describe("S22 run-control API — retries and events over the real stack (AC14, 
   it("a transient worker failure walks exactly three retries then pauses (fast backoff)", async () => {
     const runtime = await composeOn(
       join(makeTempDir("shera-s22-api-retry-"), "runtime.db"),
-      workerHarness([
-        "--error-on-step",
-        "1",
-        "--error-class",
-        "TOOL_EXECUTION_TIMEOUT",
-      ]),
+      workerHarness(["--error-on-step", "1", "--error-class", "TOOL_EXECUTION_TIMEOUT"]),
     );
     const { operationId, runId } = await createOperationAndRun(runtime.origin, "run_s22_retry");
     runtime.runtime.operations.applyRunState(WORKSPACE, operationId, runId, "RUNNING");
@@ -394,9 +399,7 @@ describe("S22 run-control API — retries and events over the real stack (AC14, 
     expect(scheduled.length).toBeGreaterThanOrEqual(1);
     // The attempt number comes from the envelope payload — the UI renders
     // THIS number, never a hardcoded "2 of 3".
-    expect(
-      (scheduled[0]!.payload as { payload: { attempt: number } }).payload["attempt"],
-    ).toBe(1);
+    expect((scheduled[0]!.payload as { payload: { attempt: number } }).payload["attempt"]).toBe(1);
     const decisions = list.filter((event) => event.type === "run.failure_decided");
     expect(decisions.length).toBeGreaterThanOrEqual(1);
   });

@@ -220,9 +220,7 @@ function createRun(harness: CancelHarness, state: string): string {
 }
 
 function activeLeasesFor(harness: CancelHarness, runId: string): unknown[] {
-  return harness.leases
-    .listActiveLeases(WS)
-    .filter((lease) => lease.task_id === runId);
+  return harness.leases.listActiveLeases(WS).filter((lease) => lease.task_id === runId);
 }
 
 function lifecycleTypes(harness: CancelHarness, runId: string): string[] {
@@ -298,9 +296,7 @@ describe("RunCancellationService — the recorded D8 two-step cancellation", () 
     expect(harness.ops.getRun(WS, harness.operationId, runId).artifacts).toEqual([
       "artifact_partial_1",
     ]);
-    expect(
-      harness.journal.readFrom(WS, taskStreamId(runId), 0, 1_000).length,
-    ).toBeGreaterThan(0);
+    expect(harness.journal.readFrom(WS, taskStreamId(runId), 0, 1_000).length).toBeGreaterThan(0);
   });
 });
 
@@ -323,7 +319,11 @@ describe("RunCancellationService — idempotency and races (AC7)", () => {
     harness.ops.applyRunState(WS, harness.operationId, runId, "SUCCEEDED");
 
     const outcome = await harness.service.cancelRun({ workspaceId: WS, runId, actor: USER });
-    expect(outcome).toMatchObject({ outcome: "already_settled", run_id: runId, state: "SUCCEEDED" });
+    expect(outcome).toMatchObject({
+      outcome: "already_settled",
+      run_id: runId,
+      state: "SUCCEEDED",
+    });
     // The terminal state was not corrupted.
     expect(harness.ops.getRun(WS, harness.operationId, runId).state).toBe("SUCCEEDED");
     expect(lifecycleTypes(harness, runId)).toEqual([]);
@@ -358,7 +358,11 @@ describe("RunCancellationService — children and approvals (AC5, AC9)", () => {
     // AC names): cancelling the parent must prevent it from EVER starting.
     harness.ops.applyRunState(WS, harness.operationId, childId, "QUEUED");
 
-    const outcome = await harness.service.cancelRun({ workspaceId: WS, runId: parentId, actor: USER });
+    const outcome = await harness.service.cancelRun({
+      workspaceId: WS,
+      runId: parentId,
+      actor: USER,
+    });
     if (outcome.outcome !== "cancelled") return;
     expect(outcome.cancelled_child_run_ids).toEqual([childId]);
     // The child is CANCELLED (never started; the dequeue drops terminal runs).
@@ -388,7 +392,11 @@ describe("RunCancellationService — children and approvals (AC5, AC9)", () => {
         workspace_id: WS,
         conversation_id: harness.operationId,
         created_from: { trigger_event_type: "tool.proposed", trigger_event_id: "evt_x" },
-        pack_snapshot: { pack_id: "pack_cancel_test", pack_version: "1.0.0", pack_hash: "a".repeat(64) },
+        pack_snapshot: {
+          pack_id: "pack_cancel_test",
+          pack_version: "1.0.0",
+          pack_hash: "a".repeat(64),
+        },
         roster: [AGENT],
         state: "RUNNING",
         version: 1,

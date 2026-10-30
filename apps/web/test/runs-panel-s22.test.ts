@@ -40,10 +40,7 @@ function run(overrides: Partial<OperationRun> = {}): OperationRun {
   };
 }
 
-function renderRuns(
-  runs: OperationRun[],
-  props: Record<string, unknown> = {},
-): string {
+function renderRuns(runs: OperationRun[], props: Record<string, unknown> = {}): string {
   return renderToStaticMarkup(
     createElement(OperationRunsPanel, {
       runs,
@@ -60,7 +57,10 @@ function renderRuns(
 describe("S22 — the stop control (§S3/S4, AC15)", () => {
   it("an ACTIVE run carries the stop control; a terminal one does not", () => {
     const html = renderRuns(
-      [run({ run_id: "run_live", state: "RUNNING" }), run({ run_id: "run_done", state: "SUCCEEDED" })],
+      [
+        run({ run_id: "run_live", state: "RUNNING" }),
+        run({ run_id: "run_done", state: "SUCCEEDED" }),
+      ],
       { onCancelRun: () => undefined },
     );
     expect(html).toContain('data-testid="operation-run-stop"');

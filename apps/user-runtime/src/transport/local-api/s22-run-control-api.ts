@@ -179,9 +179,7 @@ export function registerRunControlRoutes(app: Express, deps: RunControlApiHandle
     if (!runId.success || !query.success) {
       res
         .status(400)
-        .json(
-          validationFailure("The events request is not valid: a workspace_id is required."),
-        );
+        .json(validationFailure("The events request is not valid: a workspace_id is required."));
       return;
     }
     res.status(200).json({

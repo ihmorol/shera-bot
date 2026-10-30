@@ -139,10 +139,7 @@ import {
 } from "../../modules/workers/worker-reconciliation.ts";
 import { RetryCoordinator } from "../../modules/tasks/retry-coordinator.service.ts";
 import { RunCancellationService } from "../../modules/tasks/run-cancellation.service.ts";
-import {
-  buildRunControlApiHandle,
-  type RunControlApiHandle,
-} from "./s22-run-control-api.ts";
+import { buildRunControlApiHandle, type RunControlApiHandle } from "./s22-run-control-api.ts";
 import { createLocalApi } from "./app.ts";
 import {
   applyScriptedToolProposal,
@@ -1232,8 +1229,17 @@ function wire(
     events,
     operations: operationsRepository,
     runControl: new OperationsRunSeam(operations),
-    ...(workers ? { workers: { stopWorker: (workspaceId, runId, reason) => workers.supervisor.stopWorker(workspaceId, runId, reason as "requested" | "shutdown") } } : {}),
-    executor: { cancelForTask: (workspaceId, taskId) => toolExecutor.cancelForTask(workspaceId, taskId) },
+    ...(workers
+      ? {
+          workers: {
+            stopWorker: (workspaceId, runId, reason) =>
+              workers.supervisor.stopWorker(workspaceId, runId, reason as "requested" | "shutdown"),
+          },
+        }
+      : {}),
+    executor: {
+      cancelForTask: (workspaceId, taskId) => toolExecutor.cancelForTask(workspaceId, taskId),
+    },
     leases: writeLeases,
     reservations: {
       releaseForRun: (workspaceId, runId) => {

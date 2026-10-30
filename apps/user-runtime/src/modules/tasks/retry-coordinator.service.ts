@@ -75,12 +75,16 @@ export type RetryFailureOutcome =
   | { outcome: "retry_scheduled"; attempt: number; delayMs: number; state: RunState }
   | { outcome: "paused"; reason: "retry_exhausted"; state: RunState }
   | { outcome: "failed"; code: string; state: RunState }
-  | { outcome: "paused_for_review"; reason: "ambiguous_external_effect"; code: string; state: RunState }
+  | {
+      outcome: "paused_for_review";
+      reason: "ambiguous_external_effect";
+      code: string;
+      state: RunState;
+    }
   | { outcome: "skipped"; reason: string; state: RunState | null };
 
 export type RetryStartOutcome =
-  | { outcome: "retry_started"; attempt: number }
-  | { outcome: "skipped"; reason: string };
+  { outcome: "retry_started"; attempt: number } | { outcome: "skipped"; reason: string };
 
 /** One decision applied to one run (the test/composition surface). */
 export interface RunFailureInput {
@@ -275,7 +279,11 @@ export class RetryCoordinator {
    * the backoff elapsed (cancelled, paused, terminal) is a typed skip — the
    * stale timer never resurrects anything.
    */
-  startRetryAttempt(input: { workspaceId: string; runId: string; attempt: number }): RetryStartOutcome {
+  startRetryAttempt(input: {
+    workspaceId: string;
+    runId: string;
+    attempt: number;
+  }): RetryStartOutcome {
     const { workspaceId, runId } = input;
     this.pendingRetries.delete(`${workspaceId}:${runId}`);
     const operationId = this.deps.operations.findRunOperation(workspaceId, runId);
@@ -311,11 +319,13 @@ export class RetryCoordinator {
   private armRetry(workspaceId: string, runId: string, attempt: number, delayMs: number): void {
     const key = `${workspaceId}:${runId}`;
     this.cancelPendingRetry(workspaceId, runId);
-    const schedule = this.deps.schedule ?? ((ms: number, fn: () => void) => {
-      const timer = setTimeout(fn, ms);
-      timer.unref?.();
-      return () => clearTimeout(timer);
-    });
+    const schedule =
+      this.deps.schedule ??
+      ((ms: number, fn: () => void) => {
+        const timer = setTimeout(fn, ms);
+        timer.unref?.();
+        return () => clearTimeout(timer);
+      });
     const cancel = schedule(delayMs, () => {
       try {
         const outcome = this.startRetryAttempt({ workspaceId, runId, attempt });

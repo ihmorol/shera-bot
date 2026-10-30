@@ -30,6 +30,10 @@ import { createServer } from "node:http";
 
 import { chromium } from "playwright";
 
+// The page.evaluate closures below run INSIDE the browser context and
+// reference browser globals (document/window) by design.
+/* global document */
+
 import { composeRuntime, DEFAULT_WORKSPACE_ID } from "../src/transport/local-api/compose.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -186,10 +190,7 @@ await createRun("run_capture_done");
 }
 
 const seededRuns = runtime.operations.listRuns(WS, operationId);
-console.log(
-  "seeded runs:",
-  seededRuns.map((run) => `${run.run_id}:${run.state}`).join(", "),
-);
+console.log("seeded runs:", seededRuns.map((run) => `${run.run_id}:${run.state}`).join(", "));
 
 // ---------------------------------------------------------------------------
 // 3. The control-plane stub + next dev (the S19/S21 harness pattern)
@@ -346,7 +347,12 @@ async function capture(name, path, viewport, opts = {}) {
   page.on("pageerror", (error) => console.log("[pageerror]", String(error).slice(0, 220)));
   if (opts.debugRequests) {
     page.on("requestfailed", (request) =>
-      console.log("[requestfailed]", request.method(), request.url().slice(0, 140), request.failure()?.errorText),
+      console.log(
+        "[requestfailed]",
+        request.method(),
+        request.url().slice(0, 140),
+        request.failure()?.errorText,
+      ),
     );
     page.on("response", (response) => {
       const url = response.url();
@@ -354,7 +360,9 @@ async function capture(name, path, viewport, opts = {}) {
         console.log("[response]", response.status(), url.slice(0, 140));
       }
     });
-    page.on("console", (message) => console.log("[console-all]", message.type(), message.text().slice(0, 200)));
+    page.on("console", (message) =>
+      console.log("[console-all]", message.type(), message.text().slice(0, 200)),
+    );
   }
   await page.goto(webOrigin + path, { waitUntil: "domcontentloaded" });
   if (opts.waitFor !== undefined) {
@@ -396,9 +404,14 @@ async function capture(name, path, viewport, opts = {}) {
 }
 
 // The panel at 1440: RUNNING (live) + RETRYING (true attempt) + CANCELLED.
-await capture("s22-runs-1440.png", RUNS_PATH, { width: 1440, height: 900 }, {
-  waitFor: '[data-testid="operation-run"][data-run-state="RETRYING"]',
-});
+await capture(
+  "s22-runs-1440.png",
+  RUNS_PATH,
+  { width: 1440, height: 900 },
+  {
+    waitFor: '[data-testid="operation-run"][data-run-state="RETRYING"]',
+  },
+);
 
 // The inline stop confirmation: press Stop on the live run; the confirm
 // names the worker tree, the tool work, and the kept outputs.
@@ -434,20 +447,32 @@ await capture("s22-runs-1440.png", RUNS_PATH, { width: 1440, height: 900 }, {
 }
 
 // 768 and 360 (the aside stacks below the thread on narrow viewports).
-await capture("s22-runs-768.png", RUNS_PATH, { width: 768, height: 1024 }, {
-  waitFor: '[data-testid="operation-run"]',
-});
-await capture("s22-runs-360.png", RUNS_PATH, { width: 360, height: 740 }, {
-  fullPage: true,
-  waitFor: '[data-testid="operation-run"]',
-});
+await capture(
+  "s22-runs-768.png",
+  RUNS_PATH,
+  { width: 768, height: 1024 },
+  {
+    waitFor: '[data-testid="operation-run"]',
+  },
+);
+await capture(
+  "s22-runs-360.png",
+  RUNS_PATH,
+  { width: 360, height: 740 },
+  {
+    fullPage: true,
+    waitFor: '[data-testid="operation-run"]',
+  },
+);
 
 // Keyboard-only: tab to the stop control, capture focus visibility + trail.
 {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
   await page.goto(webOrigin + RUNS_PATH, { waitUntil: "domcontentloaded" });
-  await page.waitForSelector('[data-testid="operation-run-stop"]', { timeout: 25000 }).catch(() => {});
+  await page
+    .waitForSelector('[data-testid="operation-run-stop"]', { timeout: 25000 })
+    .catch(() => {});
   await page.waitForTimeout(1000);
   const trail = [];
   let reached = false;
@@ -463,7 +488,9 @@ await capture("s22-runs-360.png", RUNS_PATH, { width: 360, height: 740 }, {
   console.log("keyboard reached a stop control:", reached);
   // Enter opens the inline confirmation; focus lands on the confirming action.
   await page.keyboard.press("Enter");
-  await page.waitForSelector('[data-testid="operation-run-stop-confirm"]', { timeout: 10_000 }).catch(() => {});
+  await page
+    .waitForSelector('[data-testid="operation-run-stop-confirm"]', { timeout: 10_000 })
+    .catch(() => {});
   await page.waitForTimeout(300);
   const confirmFocus = await page.evaluate(() => document.activeElement?.textContent?.slice(0, 40));
   console.log("confirm focus:", confirmFocus);
@@ -474,10 +501,15 @@ await capture("s22-runs-360.png", RUNS_PATH, { width: 360, height: 740 }, {
 }
 
 // prefers-reduced-motion.
-await capture("s22-runs-reduced-motion-1440.png", RUNS_PATH, { width: 1440, height: 900 }, {
-  reducedMotion: true,
-  waitFor: '[data-testid="operation-run"]',
-});
+await capture(
+  "s22-runs-reduced-motion-1440.png",
+  RUNS_PATH,
+  { width: 1440, height: 900 },
+  {
+    reducedMotion: true,
+    waitFor: '[data-testid="operation-run"]',
+  },
+);
 
 await browser.close();
 for (const cleanup of cleanups.splice(0)) cleanup();

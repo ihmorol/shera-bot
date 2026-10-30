@@ -59,7 +59,8 @@ export interface RunCancellationDeps {
   /** The run boundary (state reads + authoritative writes + flow hooks). */
   runControl: TaskRunOperationsSeam;
   /** The task-worker supervisor port (the process-group kill awaits here). */
-  workers?: { stopWorker(workspaceId: string, runId: string, reason: string): Promise<void> } | undefined;
+  workers?:
+    { stopWorker(workspaceId: string, runId: string, reason: string): Promise<void> } | undefined;
   /** The S21 executor seam (withheld drop + non-terminal row sweep). */
   executor?: { cancelForTask(workspaceId: string, taskId: string): string[] } | undefined;
   /** The S17 write-lease force-release (the runtime's only lease steal). */
@@ -213,9 +214,7 @@ export class RunCancellationService {
 
     const operationId = this.deps.operations.findRunOperation(workspaceId, runId);
     const runRow =
-      operationId !== null
-        ? this.deps.operations.getRun(workspaceId, operationId, runId)
-        : null;
+      operationId !== null ? this.deps.operations.getRun(workspaceId, operationId, runId) : null;
     return {
       outcome: "cancelled",
       run_id: runId,
@@ -227,12 +226,8 @@ export class RunCancellationService {
       reservation_release_requested: this.reservationRequested.has(runId),
       preserved: {
         artifact_ids: runRow?.artifacts ?? [],
-        journal_event_count: this.deps.journal.readFrom(
-          workspaceId,
-          taskStreamId(runId),
-          0,
-          10_000,
-        ).length,
+        journal_event_count: this.deps.journal.readFrom(workspaceId, taskStreamId(runId), 0, 10_000)
+          .length,
       },
     };
   }
@@ -337,7 +332,11 @@ export class RunCancellationService {
         });
       }
       for (const child of children) {
-        if (child.state === "CANCELLED" || child.state === "SUCCEEDED" || child.state === "FAILED") {
+        if (
+          child.state === "CANCELLED" ||
+          child.state === "SUCCEEDED" ||
+          child.state === "FAILED"
+        ) {
           continue;
         }
         const childOutcome = await this.cancelRun({

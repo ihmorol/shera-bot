@@ -27,7 +27,10 @@
  */
 import { TASK_LIFECYCLE_EVENT_TYPES, type RunState } from "@shera-bot/contracts";
 
-import type { EventJournalRepository, EventJournalRow } from "../../adapters/sqlite/event-journal-repository.ts";
+import type {
+  EventJournalRepository,
+  EventJournalRow,
+} from "../../adapters/sqlite/event-journal-repository.ts";
 import type { OperationsRepository } from "../../adapters/sqlite/operations-repository.ts";
 import type { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import type { EventEnvelope } from "../events/events.types.ts";
@@ -84,8 +87,7 @@ export interface RowTransitionInput {
 }
 
 export type RowTransitionResult =
-  | { ok: true; toState: RunState; version: number }
-  | { ok: false; reason: string };
+  { ok: true; toState: RunState; version: number } | { ok: false; reason: string };
 
 /** The lifecycle event types that ARE transitions (task.created is not — it
  * is the version-1 creation the count starts from; the same exclusion the

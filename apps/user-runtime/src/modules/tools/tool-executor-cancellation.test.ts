@@ -148,7 +148,10 @@ afterAll(() => {
 const RAW_ARGS = { path: "notes.md", line: "second line" };
 const RESOURCE_SCOPE = "workspace://notes/notes.md";
 
-function propose(rt: Runtime, run: TaskRun = makeRun()): ReturnType<ToolExecutor["executeProposal"]> {
+function propose(
+  rt: Runtime,
+  run: TaskRun = makeRun(),
+): ReturnType<ToolExecutor["executeProposal"]> {
   return rt.executor.executeProposal({
     proposal: {
       workspace_id: run.workspace_id,

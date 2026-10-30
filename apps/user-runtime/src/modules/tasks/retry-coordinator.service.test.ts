@@ -25,7 +25,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import { EVENT_ENVELOPES, type TaskLifecyclePayload } from "@shera-bot/contracts";
 
 import { openDatabase, type SqliteConnection } from "../../adapters/sqlite/connection.ts";
-import { EventJournalRepository, type EventJournalRow } from "../../adapters/sqlite/event-journal-repository.ts";
+import {
+  EventJournalRepository,
+  type EventJournalRow,
+} from "../../adapters/sqlite/event-journal-repository.ts";
 import { OperationsRepository } from "../../adapters/sqlite/operations-repository.ts";
 import { applyMigrations } from "../../adapters/sqlite/migrations.ts";
 import { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
@@ -179,7 +182,10 @@ function lifecycleEvents(
     .filter((row: EventJournalRow) => row.event_type.startsWith("task."))
     .map((row) => {
       const envelope = (
-        EVENT_ENVELOPES as Record<string, { safeParse(value: unknown): { success: boolean; data?: unknown } } | undefined>
+        EVENT_ENVELOPES as Record<
+          string,
+          { safeParse(value: unknown): { success: boolean; data?: unknown } } | undefined
+        >
       )[row.event_type]!.safeParse(JSON.parse(row.payload));
       if (!envelope.success) throw new Error(`unparseable envelope for ${row.event_type}`);
       return {
@@ -290,7 +296,9 @@ describe("RetryCoordinator — non-transient failures never retry (AC2)", () => 
     expect(outcome).toMatchObject({ outcome: "failed", code: "TOOL_ARGS_INVALID" });
     expect(harness.coordinator.runState(WS, runId)).toBe("FAILED");
     expect(harness.scheduled).toHaveLength(0);
-    const failures = lifecycleEvents(harness, runId).filter((event) => event.type === "task.failed");
+    const failures = lifecycleEvents(harness, runId).filter(
+      (event) => event.type === "task.failed",
+    );
     expect(failures).toHaveLength(1);
     expect(failures[0]!.payload.from_state).toBe("RUNNING");
   });

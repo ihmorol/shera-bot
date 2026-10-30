@@ -607,8 +607,7 @@ export function retryAttemptsFromEvents(events: RunEventReadModelType[]): number
   let max = 0;
   for (const event of events) {
     if (event.type !== "task.retry_scheduled") continue;
-    const attempt = (event.payload as { payload?: { attempt?: unknown } } | null)?.payload
-      ?.attempt;
+    const attempt = (event.payload as { payload?: { attempt?: unknown } } | null)?.payload?.attempt;
     if (typeof attempt === "number" && Number.isInteger(attempt) && attempt > max) {
       max = attempt;
     }

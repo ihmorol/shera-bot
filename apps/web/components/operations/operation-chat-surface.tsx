@@ -165,8 +165,7 @@ function RuntimeOperationChat({
     () =>
       runs
         .filter(
-          (run) =>
-            run.state === "RETRYING" || run.state === "PAUSED" || run.state === "CANCELLED",
+          (run) => run.state === "RETRYING" || run.state === "PAUSED" || run.state === "CANCELLED",
         )
         .map((run) => run.run_id),
     [runs],
@@ -400,9 +399,7 @@ function RuntimeOperationChat({
                 },
               );
             }}
-            cancelPendingRunId={
-              cancelRun.isPending ? (cancelRun.variables?.runId ?? null) : null
-            }
+            cancelPendingRunId={cancelRun.isPending ? (cancelRun.variables?.runId ?? null) : null}
             cancelSafeError={cancelSafeError ?? undefined}
           />
         </aside>

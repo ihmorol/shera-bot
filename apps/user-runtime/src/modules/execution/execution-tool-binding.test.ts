@@ -22,7 +22,15 @@
  *      the sentinel file the child would create does not exist until
  *      runWithheld fires post-decision.
  */
-import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -30,6 +38,7 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import type { ApprovalChoice, TaskRun } from "@shera-bot/contracts";
 
+import { spawnSandboxedExecution } from "../../adapters/process/execution-process-spawn.ts";
 import { ApprovalsRepository } from "../../adapters/sqlite/approvals-repository.ts";
 import { openDatabase, type SqliteConnection } from "../../adapters/sqlite/connection.ts";
 import { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
@@ -91,11 +100,13 @@ interface ExecutionRuntime {
 
 /**
  * Build one execution runtime: a real SQLite stack, the real approvals
- * machinery (for the gated test), and the REAL spawn adapter pointed at a
- * temp workspace scope. `withApprovals` controls whether the S20 port is
- * wired (its absence is the executor's fail-closed refusal for gated tools).
+ * machinery, and the REAL spawn adapter pointed at a temp workspace scope.
+ * By default a reusable task-principal grant ("always approve this tool")
+ * is seeded for both execution tools, so the dispatch tests ride the AC26
+ * grant fast-path exactly as a granted production execution would; the
+ * gating test passes `seedGrants: false` to exercise the pause.
  */
-function buildRuntime(options: { withApprovals?: boolean } = {}): ExecutionRuntime {
+function buildRuntime(options: { seedGrants?: boolean } = {}): ExecutionRuntime {
   const dir = mkdtempSync(join(tmpdir(), "shera-exec-tools-"));
   tempDirs.push(dir);
   const conn = openDatabase(join(dir, "runtime.db"));
@@ -116,8 +127,8 @@ function buildRuntime(options: { withApprovals?: boolean } = {}): ExecutionRunti
   const repo = new ToolsRepository(conn.db);
   const registry = new ToolRegistry();
   const workspaceRoot = join(dir, "workspace");
-  rmSync(workspaceRoot, { force: true });
-  mkdtempSync(workspaceRoot);
+  rmSync(workspaceRoot, { force: true, recursive: true });
+  mkdirSync(workspaceRoot, { recursive: true });
   const deps: ExecutionToolDeps = {
     spawn: (request) => spawnSandboxedExecution(request),
     workspaceRoots: { [WS]: workspaceRoot },
@@ -153,7 +164,11 @@ function buildRuntime(options: { withApprovals?: boolean } = {}): ExecutionRunti
       purpose: "Run a code payload inside the D27 sandbox (network disabled, limited).",
       input_schema: {
         type: "object",
-        properties: { code: { type: "string" }, language: { type: "string" }, workdir: { type: "string" } },
+        properties: {
+          code: { type: "string" },
+          language: { type: "string" },
+          workdir: { type: "string" },
+        },
         required: ["code", "language"],
       },
       capabilities: ["code.execute"],
@@ -189,10 +204,55 @@ function buildRuntime(options: { withApprovals?: boolean } = {}): ExecutionRunti
     registry,
     tools: repo,
     tx,
-    ...(options.withApprovals === false ? {} : { approvals }),
+    approvals,
     nowMs: () => Date.now(),
     now: () => NOW,
   } satisfies ToolExecutorDeps);
+  if (options.seedGrants !== false) {
+    // Seed the reusable task-principal grants the dispatch tests ride (the
+    // AC26 fast-path: a grant skips the prompt, never the policy check).
+    const approvalsRepo2 = new ApprovalsRepository(tx);
+    approvalsRepo2.insertGrant({
+      grant_id: "grant_code_exec",
+      workspace_id: WS,
+      source_choice: "always-approve-this-tool",
+      principal_type: "task",
+      principal_id: TASK,
+      tool_id: "tool_code_exec",
+      tool_version: "1.0.0",
+      capability: "code.execute",
+      resource_scope: `workspace:${WS}`,
+      conversation_scope: "any",
+      workspace_scope: WS,
+      expires_at: null,
+      one_time: false,
+      created_by: USER,
+      approved_at: NOW,
+      revoked_at: null,
+      args_digest: null,
+      consumed_at: null,
+    });
+    approvalsRepo2.insertGrant({
+      grant_id: "grant_terminal_exec",
+      workspace_id: WS,
+      source_choice: "always-approve-this-tool",
+      principal_type: "task",
+      principal_id: TASK,
+      tool_id: "tool_terminal_exec",
+      tool_version: "1.0.0",
+      capability: "terminal.execute",
+      resource_scope: `workspace:${WS}`,
+      conversation_scope: "any",
+      workspace_scope: WS,
+      expires_at: null,
+      one_time: false,
+      created_by: USER,
+      approved_at: NOW,
+      revoked_at: null,
+      args_digest: null,
+      consumed_at: null,
+    });
+  }
   return { executor, registry, repo, approvals, conn, workspaceRoot, deps };
 }
 
@@ -251,7 +311,7 @@ describe("execution tools dispatch through the executor (S26 chunk 3)", () => {
     // The REAL side effect exists inside the workspace scope.
     expect(existsSync(join(rt.workspaceRoot, "side-effect.txt"))).toBe(true);
     // The history row is terminal, honest, and carries the runtime facts.
-    const history = rt.repo.listExecutions(WS, { tool_id: "tool_code_exec" });
+    const history = rt.repo.listExecutionsByTool(WS, "tool_code_exec");
     expect(history).toHaveLength(1);
     expect(history[0]!.status).toBe("succeeded");
     expect(history[0]!.result_summary).toContain("exit=0");
@@ -278,7 +338,7 @@ describe("execution tools dispatch through the executor (S26 chunk 3)", () => {
     expect(readFileSync(join(rt.workspaceRoot, "terminal-out.txt"), "utf8").trim()).toBe(
       "hello-terminal",
     );
-    const history = rt.repo.listExecutions(WS, { tool_id: "tool_terminal_exec" });
+    const history = rt.repo.listExecutionsByTool(WS, "tool_terminal_exec");
     expect(history[0]!.status).toBe("succeeded");
   });
 
@@ -300,10 +360,7 @@ describe("execution tools dispatch through the executor (S26 chunk 3)", () => {
   it("sandbox escapes are typed failures recorded as failed rows, and nothing spawns", async () => {
     const rt = buildRuntime();
     writeFileSync(join(rt.workspaceRoot, "..", "outside-sentinel"), "host");
-    const escapes = [
-      { workdir: "../outside" },
-      { workdir: "/etc" },
-    ];
+    const escapes = [{ workdir: "../outside" }, { workdir: "/etc" }];
     for (const rawArgs of escapes.map((e) => ({ language: "shell", code: `true`, ...e }))) {
       const result = propose(rt, {
         tool_id: "tool_code_exec",
@@ -319,7 +376,7 @@ describe("execution tools dispatch through the executor (S26 chunk 3)", () => {
         expect(settled.error_code).toBe("SANDBOX_PATH_ESCAPE");
       }
     }
-    const history = rt.repo.listExecutions(WS, { tool_id: "tool_code_exec" });
+    const history = rt.repo.listExecutionsByTool(WS, "tool_code_exec");
     expect(history.filter((row) => row.status === "failed")).toHaveLength(2);
   });
 
@@ -365,7 +422,7 @@ describe("execution tools dispatch through the executor (S26 chunk 3)", () => {
       if (settled.outcome === "executed") {
         expect(settled.result_summary).not.toContain("SHERA_S26_EXEC_PLANTED_SECRET");
       }
-      const history = rt.repo.listExecutions(WS, { tool_id: "tool_code_exec" });
+      const history = rt.repo.listExecutionsByTool(WS, "tool_code_exec");
       expect(history[0]!.result_summary).not.toContain(planted);
       expect(history[0]!.result_summary).toContain("env-keys:");
     } finally {
@@ -374,7 +431,7 @@ describe("execution tools dispatch through the executor (S26 chunk 3)", () => {
   });
 
   it("AC7: a gated code execution dispatches NOTHING before the approval decision", async () => {
-    const rt = buildRuntime();
+    const rt = buildRuntime({ seedGrants: false });
     const sentinel = join(rt.workspaceRoot, "post-decision-sentinel.txt");
     const rawArgs = {
       language: "node",
@@ -386,7 +443,7 @@ describe("execution tools dispatch through the executor (S26 chunk 3)", () => {
     expect(existsSync(sentinel)).toBe(false);
     if (result.outcome !== "paused_for_approval") throw new Error("unreachable");
     const approvalId = result.approval_id;
-    const runNow = rt.repo.listExecutions(WS, { tool_id: "tool_code_exec" })[0]!;
+    const runNow = rt.repo.listExecutionsByTool(WS, "tool_code_exec")[0]!;
     expect(runNow.status).toBe("awaiting_approval");
 
     // The user approves; the decision commits, and the composition's
@@ -400,19 +457,19 @@ describe("execution tools dispatch through the executor (S26 chunk 3)", () => {
       run,
       execute: () => {},
     });
-    const dispatched = rt.executor.runWithheld(approvalId);
-    expect(dispatched).not.toBe(false);
-    if (dispatched === false) throw new Error("unreachable");
-    const settled = await dispatched.then((outcome) => outcome);
+    const withheld = rt.executor.runWithheld(approvalId);
+    expect(withheld).not.toBe(false);
+    if (!(withheld instanceof Promise)) throw new Error("expected the dispatched completion");
+    const settled = await withheld;
     expect(settled.outcome).toBe("executed");
     expect(existsSync(sentinel)).toBe(true);
-    const history = rt.repo.listExecutions(WS, { tool_id: "tool_code_exec" });
+    const history = rt.repo.listExecutionsByTool(WS, "tool_code_exec");
     expect(history[0]!.status).toBe("succeeded");
     expect(history[0]!.approval_id).toBe(approvalId);
   });
 
   it("the process-backed bindings refuse a direct sync execute even with genuine authority (AC1)", () => {
-    const rt = buildRuntime();
+    const rt = buildRuntime({ seedGrants: false });
     const code = makeCodeExecutionBinding(rt.deps);
     const authority = makeExecutionAuthority();
     expect(() =>
@@ -430,6 +487,16 @@ describe("execution tools dispatch through the executor (S26 chunk 3)", () => {
             max_disk_mb: 64,
           },
           signal: new AbortController().signal,
+          execution: {
+            execution_id: "exe_test",
+            workspace_id: WS,
+            task_id: TASK,
+            conversation_id: CONV,
+            agent_id: AGENT,
+            capability: "code.execute",
+            approval_id: null,
+            grant_id: null,
+          },
         },
       ),
     ).toThrow(ToolBindingError);

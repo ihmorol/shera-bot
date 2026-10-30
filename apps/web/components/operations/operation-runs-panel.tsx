@@ -1,4 +1,5 @@
-import { ListChecks, Play, GitBranch, FlaskConical } from "lucide-react";
+import { ListChecks, Play, GitBranch, FlaskConical, Square } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import { ErrorState } from "@/components/shell/states";
 import { Button } from "@/components/ui/button";
@@ -24,7 +25,30 @@ import { cn } from "@/lib/utils";
  * (the G5 queue reason included), and the validation status. The linkage is
  * a join over REAL runtime reads keyed on id equality; a run without git
  * work renders no git line at all — never an invented branch.
+ *
+ * S22 (§S3/S4 stop control, S11 run states; PRD §8, AC15): an ACTIVE run
+ * carries the stop control. The inline confirmation names exactly what will
+ * stop — the worker process tree, in-flight tool executions, and any queued
+ * child runs — and what survives (logs and partial outputs), so the
+ * destructive moment is decided on truth, not on a bare "confirm". RETRYING
+ * renders the TRUE attempt count from the run's journal (the runtime's own
+ * task.retry_scheduled envelopes) — never a hardcoded total; a run whose
+ * count cannot be read renders no number at all. CANCELLING is the honest
+ * in-progress state (controls disabled, aria-busy). CANCELLED is "stopped",
+ * never a failure: the muted state with what was kept.
  */
+
+/** The D8 states where the run is live work a stop command can target. */
+const ACTIVE_RUN_STATES: ReadonlySet<OperationRunType["state"]> = new Set([
+  "QUEUED",
+  "PLANNED",
+  "CREATED",
+  "RUNNING",
+  "WAITING_FOR_AGENT",
+  "WAITING_FOR_APPROVAL",
+  "WAITING_FOR_RESOURCE",
+  "RETRYING",
+]);
 
 /** The validation chip inside a git-aware run card (§2.1 status vocabulary). */
 function RunValidationStatus({
@@ -69,6 +93,80 @@ function runStateClass(state: OperationRunType["state"]): string {
       return "text-muted";
   }
 }
+
+/**
+ * The inline stop confirmation (the destructive moment): names what stops
+ * (the worker tree, in-flight tool work, queued child runs) and what stays
+ * (logs and partial outputs). Inline — not a modal — because the decision is
+ * small, scoped to one card, and reversible in the sense that matters here
+ * (cancelled work is preserved, never deleted). Focus lands on the
+ * confirming button; Escape or "Keep running" returns without acting.
+ */
+function StopConfirmation({
+  runId,
+  childCount,
+  pending,
+  safeErrorMessage,
+  onConfirm,
+  onDismiss,
+}: {
+  runId: string;
+  childCount: number;
+  pending: boolean;
+  safeErrorMessage: string | undefined;
+  onConfirm: () => void;
+  onDismiss: () => void;
+}) {
+  // Focus lands on the confirming action the moment the confirmation opens
+  // (the same contract the approval modal records); Escape returns without
+  // acting — the container listens for it explicitly (no Radix wrapper here).
+  const panelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    panelRef.current?.querySelector<HTMLElement>("[data-autofocus]")?.focus();
+  }, []);
+
+  return (
+    <div
+      ref={panelRef}
+      data-testid="operation-run-stop-confirm"
+      role="alertdialog"
+      aria-label={`Stop run ${runId}`}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && !pending) onDismiss();
+      }}
+      className="mt-2 rounded-lg border border-line bg-surface px-3 py-2.5"
+    >
+      <p className="text-xs text-text">
+        Stop this run? The run&apos;s worker process tree and in-flight tool work stop now
+        {childCount > 0
+          ? `, and ${childCount === 1 ? "1 queued child run" : `${childCount} queued child runs`} will never start`
+          : ""}
+        . Logs and partial outputs are kept.
+      </p>
+      {safeErrorMessage ? (
+        <p className="mt-1 text-xs text-failed" role="alert">
+          {safeErrorMessage}
+        </p>
+      ) : null}
+      <div className="mt-2 flex items-center gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          className="border-failed/40 text-failed hover:border-failed hover:bg-surface"
+          disabled={pending}
+          data-autofocus="true"
+          onClick={onConfirm}
+        >
+          {pending ? "Stopping…" : "Stop run"}
+        </Button>
+        <Button size="sm" variant="ghost" disabled={pending} onClick={onDismiss}>
+          Keep running
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function OperationRunsPanel({
   runs,
   state,
@@ -77,6 +175,10 @@ export function OperationRunsPanel({
   onCreateRun,
   createPending,
   gitLinkage,
+  retryAttempts,
+  onCancelRun,
+  cancelPendingRunId,
+  cancelSafeError,
   className,
 }: {
   runs: OperationRunType[];
@@ -87,8 +189,34 @@ export function OperationRunsPanel({
   createPending: boolean;
   /** The task→git join from the workspace's project ledger (S19 chunk 2). */
   gitLinkage?: Record<string, GitRunLinkage>;
+  /**
+   * S22 (AC3): the TRUE retry attempt count per run, read from each run's
+   * journal by the caller. Absent/null → no number renders (never a guess).
+   */
+  retryAttempts?: Record<string, number | null> | undefined;
+  /** S22: the cancel command (absent → the stop control is not offered). */
+  onCancelRun?: (runId: string) => void;
+  cancelPendingRunId?: string | null;
+  cancelSafeError?: string | undefined;
   className?: string;
 }) {
+  // The inline confirmation is panel-local state: one run confirms at a
+  // time. It CLOSES itself the moment the run leaves the confirmable set —
+  // a settled cancel (or any state change that answers the question) must
+  // never leave a stale "Stop this run?" dialog under its own answer.
+  const [confirmingRunId, setConfirmingRunId] = useState<string | null>(null);
+  const confirmingRun =
+    confirmingRunId !== null
+      ? runs.find((candidate) => candidate.run_id === confirmingRunId)
+      : undefined;
+  const confirmVisible =
+    confirmingRun !== undefined &&
+    ACTIVE_RUN_STATES.has(confirmingRun.state) &&
+    confirmingRun.state !== "CANCELLING";
+  if (!confirmVisible && confirmingRunId !== null) {
+    setConfirmingRunId(null);
+  }
+  const cancellingHere = confirmingRunId !== null && cancelPendingRunId === confirmingRunId;
   return (
     <section
       data-testid="operation-runs-panel"
@@ -125,14 +253,39 @@ export function OperationRunsPanel({
         <ul className="flex flex-col gap-2">
           {runs.map((run) => {
             const linkage = gitLinkage?.[run.run_id];
+            const isActive = ACTIVE_RUN_STATES.has(run.state);
+            const attempts = retryAttempts?.[run.run_id];
+            const confirming = confirmingRunId === run.run_id;
+            const childCount = runs.filter(
+              (candidate) => candidate.parent_task_id === run.run_id && isActive,
+            ).length;
             return (
               <li
                 key={run.run_id}
                 data-testid="operation-run"
                 data-run-state={run.state}
-                className="rounded-lg border border-line bg-surface-elevated px-3 py-2"
+                className={cn(
+                  "rounded-lg border border-line bg-surface-elevated px-3 py-2",
+                  confirmVisible && confirming && "border-approval",
+                )}
               >
-                <p className="truncate font-mono text-xs text-text">{run.run_id}</p>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="truncate font-mono text-xs text-text">{run.run_id}</p>
+                  {isActive && onCancelRun !== undefined && run.state !== "CANCELLING" ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="-mr-1.5 -mt-1 h-7 gap-1 px-2 text-muted hover:text-text"
+                      disabled={cancelPendingRunId !== undefined && cancelPendingRunId !== null}
+                      aria-label={`Stop run ${run.run_id}`}
+                      data-testid="operation-run-stop"
+                      onClick={() => setConfirmingRunId(run.run_id)}
+                    >
+                      <Square className="size-3" aria-hidden="true" />
+                      Stop
+                    </Button>
+                  ) : null}
+                </div>
                 <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted">
                   <span
                     data-testid="operation-run-state"
@@ -141,10 +294,19 @@ export function OperationRunsPanel({
                     {run.state === "WAITING_FOR_APPROVAL" ? (
                       <span className="size-1.5 rounded-full bg-approval" aria-hidden="true" />
                     ) : null}
-                    {run.state}
-                    {run.state === "WAITING_FOR_APPROVAL" ? (
-                      <span className="sr-only">— paused for your approval</span>
+                    {run.state === "CANCELLING" ? (
+                      <span className="animate-pulse" aria-hidden="true">
+                        ●
+                      </span>
                     ) : null}
+                    {run.state}
+                    <span className="sr-only">
+                      {run.state === "CANCELLING"
+                        ? "— stopping now"
+                        : run.state === "WAITING_FOR_APPROVAL"
+                          ? "— paused for your approval"
+                          : null}
+                    </span>
                   </span>
                   <span>{run.events_seq_cursor} events</span>
                   <span>
@@ -153,6 +315,33 @@ export function OperationRunsPanel({
                       : `${run.artifacts.length} artifacts`}
                   </span>
                 </p>
+                {run.state === "RETRYING" ? (
+                  // AC3: the TRUE attempt count from the journal — rendered
+                  // only when it is actually known, never a hardcoded total.
+                  <p
+                    className="mt-0.5 text-xs text-sky"
+                    data-testid="operation-run-retrying"
+                    data-attempt={typeof attempts === "number" ? attempts : undefined}
+                  >
+                    {typeof attempts === "number"
+                      ? `Retrying — attempt ${attempts} failed; the next attempt is scheduled.`
+                      : "Retrying after a transient failure."}
+                  </p>
+                ) : null}
+                {run.state === "CANCELLING" ? (
+                  <p
+                    className="mt-0.5 text-xs text-muted"
+                    aria-busy="true"
+                    data-testid="operation-run-cancelling"
+                  >
+                    Stopping the run now — the worker tree and queued work are being cancelled.
+                  </p>
+                ) : null}
+                {run.state === "CANCELLED" ? (
+                  <p className="mt-0.5 text-xs text-muted" data-testid="operation-run-cancelled">
+                    Stopped — logs and partial outputs are kept.
+                  </p>
+                ) : null}
                 {run.state === "WAITING_FOR_APPROVAL" ? (
                   <p className="mt-0.5 text-xs text-approval" data-testid="operation-run-waiting">
                     Paused for your approval — decide from the card in the thread.
@@ -170,6 +359,16 @@ export function OperationRunsPanel({
                   </p>
                 ) : null}
                 {linkage ? <GitLinkageLine linkage={linkage} /> : null}
+                {confirming && confirmVisible && onCancelRun !== undefined ? (
+                  <StopConfirmation
+                    runId={run.run_id}
+                    childCount={childCount}
+                    pending={cancellingHere}
+                    safeErrorMessage={cancellingHere ? cancelSafeError : undefined}
+                    onConfirm={() => onCancelRun(run.run_id)}
+                    onDismiss={() => setConfirmingRunId(null)}
+                  />
+                ) : null}
               </li>
             );
           })}

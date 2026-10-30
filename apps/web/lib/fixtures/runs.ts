@@ -6,8 +6,9 @@ import { STUDENT_PACK } from "./pack";
 
 /**
  * MOCK DATA — §9 #3 run fixtures. Coverage required by §9: RUNNING (with
- * streaming), WAITING_FOR_APPROVAL (external-write example), RETRYING (2 of 3
- * attempts), SUCCEEDED with artifacts, FAILED, PAUSED, RECOVERY_REQUIRED.
+ * streaming), WAITING_FOR_APPROVAL (external-write example), RETRYING (a
+ * mid-retry attempt count), SUCCEEDED with artifacts, FAILED, PAUSED,
+ * RECOVERY_REQUIRED.
  * Typed with the real `TaskRun` contract; the D8 state vocabulary comes from
  * the contract, never invented here.
  */

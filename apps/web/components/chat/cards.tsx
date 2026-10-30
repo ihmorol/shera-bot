@@ -351,7 +351,10 @@ export function RunCard({ run }: { run: TaskRun }) {
         <p className="mt-2 text-sm text-muted">Paused · {pauseReasonLabel(run.pause_reason)}</p>
       ) : null}
       {run.retry_count > 0 ? (
-        <p className="mt-2 font-mono text-[11px] text-muted">retries: {run.retry_count} of 3</p>
+        // S22 (AC3): the count is the run's own journal-derived number — no
+        // hardcoded total. The bound lives in the runtime's policy, not in
+        // UI copy; a fixed " of N" here would outlive any policy change.
+        <p className="mt-2 font-mono text-[11px] text-muted">retries used: {run.retry_count}</p>
       ) : null}
     </CardShell>
   );

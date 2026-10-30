@@ -92,7 +92,7 @@ import { randomUUID } from "node:crypto";
 import { RUN_STATES_TERMINAL, type RunState } from "@shera-bot/contracts";
 
 import type { EventsService } from "../events/events.service.ts";
-import type { WorkerQueuedReason } from "../events/events.types.ts";
+import type { EventEnvelope, WorkerQueuedReason } from "../events/events.types.ts";
 import type { AdmissionGate, AdmissionPolicy } from "./admission.ts";
 import type {
   TaskWorkersRepository,
@@ -244,6 +244,29 @@ export interface TaskWorkerSupervisorDeps {
    * group kill for full tree cancellation without touching this lifecycle.
    */
   killChild?: ((child: TaskWorkerChild, signal: NodeJS.Signals) => void) | undefined;
+  /**
+   * S22 (PRD §8, AC14, AC10): the runtime-owned FAILURE POLICY for
+   * worker-REPORTED errors — the error frame's failure_class is a classified
+   * failure the retry coordinator owns. Called AFTER the escalation completed
+   * and the `worker.crashed` event committed (the aftermath-completion
+   * marker), carrying the crash event id as the failure reference. The
+   * handler owns the run-state decision (RETRYING / PAUSED / FAILED /
+   * RECOVERY_REQUIRED) and performs its own durable write; the supervisor
+   * skips its recovery write when the handler is wired for this cause. A
+   * THROWING handler falls back to the recovery write — a failure is never
+   * silently dropped (G5). Crashes, hangs, protocol violations, and
+   * handshake timeouts NEVER route here: the E27 recovery posture for them
+   * is unchanged.
+   */
+  onWorkerReportedFailure?:
+    | ((info: {
+        workspaceId: string;
+        runId: string;
+        workerId: string;
+        failureClass: string;
+        failureEventId: string | null;
+      }) => void)
+    | undefined;
   /** Bounded, redacted child-stderr sink (G3). Default: discard. */
   stderrSink?: TaskWorkerStderrSink | undefined;
   /** Contained operator-fault sink. Default: discard. */
@@ -1323,7 +1346,7 @@ export class TaskWorkerSupervisor {
         incarnation.worker_id,
         "killed",
       );
-      this.recordEvent(record, "worker.crashed", {
+      const crashedEventId = this.recordEvent(record, "worker.crashed", {
         worker_id: incarnation.worker_id,
         workspace_id: record.workspace_id,
         run_id: record.run_id,
@@ -1333,6 +1356,33 @@ export class TaskWorkerSupervisor {
         error_class: errorClass,
         last_percent: incarnation.lastPercent,
       });
+      // S22: a worker-REPORTED failure is a classified failure the runtime's
+      // retry policy owns. Wired handler → the policy decides (its own
+      // durable write); unwired or throwing → the E27 recovery write stands.
+      if (
+        cause === "worker_error" &&
+        this.deps.onWorkerReportedFailure !== undefined &&
+        errorClass !== null
+      ) {
+        try {
+          this.deps.onWorkerReportedFailure({
+            workspaceId: record.workspace_id,
+            runId: record.run_id,
+            workerId: incarnation.worker_id,
+            failureClass: errorClass,
+            failureEventId: crashedEventId,
+          });
+          return;
+        } catch (error) {
+          this.faultLog("task_worker_failure_policy_failed", {
+            workspace_id: record.workspace_id,
+            run_id: record.run_id,
+            worker_id: incarnation.worker_id,
+            name: error instanceof Error ? error.name : "Error",
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
       this.markRunForRecovery(record);
       // Capacity freed (E1): the dequeue re-admits oldest-first.
       void this.pumpQueue().catch((pumpError) => {
@@ -1593,9 +1643,9 @@ export class TaskWorkerSupervisor {
       | "worker.crashed"
       | "worker.completed"
       | "worker.stopped",
-  >(record: WorkerRecord, type: T, payload: Record<string, unknown>): void {
+  >(record: WorkerRecord, type: T, payload: Record<string, unknown>): string | null {
     try {
-      this.appendEventStrict(record, type, payload);
+      return this.appendEventStrict(record, type, payload).event_id;
     } catch (error) {
       this.faultLog("task_worker_event_failed", {
         workspace_id: record.workspace_id,
@@ -1604,6 +1654,7 @@ export class TaskWorkerSupervisor {
         name: error instanceof Error ? error.name : "Error",
         message: error instanceof Error ? error.message : String(error),
       });
+      return null;
     }
   }
 
@@ -1616,8 +1667,8 @@ export class TaskWorkerSupervisor {
       | "worker.crashed"
       | "worker.completed"
       | "worker.stopped",
-  >(record: WorkerRecord, type: T, payload: Record<string, unknown>): void {
-    this.deps.events.appendEvent({
+  >(record: WorkerRecord, type: T, payload: Record<string, unknown>): EventEnvelope {
+    return this.deps.events.appendEvent({
       event_id: randomUUID(),
       stream_id: record.run_id,
       type,

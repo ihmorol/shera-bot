@@ -257,6 +257,17 @@ export class ToolExecutor {
    */
   private readonly withheld = new Map<string, WithheldExecution>();
 
+  /**
+   * The IN-FLIGHT dispatched executions (S26 process-backed family): the
+   * execution id and its cancel seam (the executor-owned AbortController).
+   * S22's run-cancellation fires these (D27: the child tree terminates with
+   * the task); the dispatch's settlement deregisters.
+   */
+  private readonly inFlight = new Map<
+    string,
+    { workspace_id: string; task_id: string; cancel: () => void }
+  >();
+
   constructor(private readonly deps: ToolExecutorDeps) {}
 
   private nowMs(): number {
@@ -765,14 +776,21 @@ export class ToolExecutor {
               ? ((error.message.split(":")[0] ??
                   "SANDBOX_LAUNCH_FAILED") as ToolExecutorFailureCode)
               : "SANDBOX_LAUNCH_FAILED";
-          this.settleFailedRow(run.workspace_id, execution_id, code);
+          this.settleFailedRow(run.workspace_id, run.task_id, execution_id, code);
           return { outcome: "execution_failed", execution_id, error_code: code, run };
         });
+      this.inFlight.set(execution_id, {
+        workspace_id: run.workspace_id,
+        task_id: run.task_id,
+        cancel: () => cancelController.abort(),
+      });
       return {
         outcome: "dispatched",
         execution_id,
         run,
-        completion,
+        completion: completion.finally(() => {
+          this.inFlight.delete(execution_id);
+        }),
         cancel: () => cancelController.abort(),
       };
     }
@@ -882,7 +900,9 @@ export class ToolExecutor {
    * Settle one dispatched (process-backed) execution when its child exits:
    * the mirror of the sync tail, in a NEW short transaction (the dispatching
    * caller's transaction has long committed). Redact and bound BEFORE the
-   * write (G3); the response budget stays executor-enforced.
+   * write (G3); the response budget stays executor-enforced. A row the S22
+   * run-cancellation sweep already terminalized is never rewritten (G5: a
+   * recorded end stays recorded) — the outcome still answers honestly.
    */
   private settleDispatched(args: {
     input: ToolProposalInput;
@@ -900,16 +920,24 @@ export class ToolExecutor {
 
     if (!result.ok) {
       const code = normalizeBindingCode(result.errorCode);
-      this.settleFailedRow(run.workspace_id, execution_id, code);
+      this.settleFailedRow(run.workspace_id, run.task_id, execution_id, code);
       return { outcome: "execution_failed", execution_id, error_code: code, run };
     }
     // AC5 (response size): the tool's own budget, enforced by the executor.
     if (Buffer.byteLength(result.text, "utf8") > max_response_bytes) {
-      this.settleFailedRow(run.workspace_id, execution_id, "TOOL_RESPONSE_TOO_LARGE");
+      this.settleFailedRow(run.workspace_id, run.task_id, execution_id, "TOOL_RESPONSE_TOO_LARGE");
       return {
         outcome: "execution_failed",
         execution_id,
         error_code: "TOOL_RESPONSE_TOO_LARGE",
+        run,
+      };
+    }
+    if (this.rowIsTerminal(run.workspace_id, run.task_id, execution_id)) {
+      return {
+        outcome: "execution_failed",
+        execution_id,
+        error_code: "TOOL_EXECUTION_CANCELLED",
         run,
       };
     }
@@ -939,9 +967,13 @@ export class ToolExecutor {
   /** The dispatched path's failure writer (its own short transaction). */
   private settleFailedRow(
     workspaceId: string,
+    taskId: string,
     executionId: string,
     code: ToolExecutorFailureCode,
   ): void {
+    if (this.rowIsTerminal(workspaceId, taskId, executionId)) {
+      return;
+    }
     this.deps.tx.transaction((exec) => {
       this.deps.tools.updateExecutionResult(
         workspaceId,
@@ -955,6 +987,112 @@ export class ToolExecutor {
         exec,
       );
     });
+  }
+
+  /** True when the row already reached a terminal state (never rewritten). */
+  private rowIsTerminal(workspaceId: string, taskId: string, executionId: string): boolean {
+    try {
+      const row = this.deps.tools
+        .listExecutionsByTask(workspaceId, taskId)
+        .find((entry) => entry.execution_id === executionId);
+      if (row === undefined) return false;
+      return (
+        row.status === "succeeded" ||
+        row.status === "failed" ||
+        row.status === "blocked" ||
+        row.status === "cancelled"
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Cancel one task's tool work through the executor seam (S22; AC5, D32).
+   * Three honest effects, in order:
+   *
+   *   1. every WITHHELD gated execution of the task is dropped — the effect
+   *      NEVER runs after the cancel (fail-closed; a post-cancel runWithheld
+   *      answers the typed false), and its history row reads `cancelled`
+   *      (D9: a cancelled approval never leaves a grant or an execution);
+   *   2. the task's IN-FLIGHT dispatched executions (the S26 process-backed
+   *      family — E35 recorded this hook and the S26 integration closed it)
+   *      have their cancel seam fired: the child process tree is terminated
+   *      (D27) and the settlement path leaves the row to this sweep;
+   *   3. non-terminal history rows of the task (`running`,
+   *      `awaiting_approval` — the crash-era orphans) sweep to `cancelled`;
+   *      terminal rows keep their outcome (nothing is rewritten — G5).
+   *
+   * The cancelled execution ids are returned (the cancellation evidence the
+   * run-cancel response lists). Idempotent: a second call finds nothing
+   * non-terminal and returns [].
+   */
+  cancelForTask(workspaceId: string, taskId: string): string[] {
+    const cancelled: string[] = [];
+
+    // 1. Drop the task's withheld executions — never execute post-cancel.
+    for (const [approvalId, withheld] of [...this.withheld.entries()]) {
+      const run = withheld.input.run;
+      if (run.workspace_id !== workspaceId || run.task_id !== taskId) continue;
+      this.withheld.delete(approvalId);
+      try {
+        this.deps.tools.updateExecutionResult(
+          workspaceId,
+          withheld.execution_id,
+          {
+            status: "cancelled",
+            result_summary: null,
+            finished_at: this.now(),
+            error_code: null,
+          },
+          this.exec(),
+        );
+        cancelled.push(withheld.execution_id);
+      } catch {
+        // Contained: the withheld entry is dropped regardless (fail-closed
+        // on the effect); the row sweep below still terminalizes the row.
+      }
+    }
+
+    // 2. Fire the in-flight process-backed cancel seams (the D27 termination):
+    // the children die; their settlement skips the already-swept rows (G5).
+    for (const [executionId, inFlight] of [...this.inFlight.entries()]) {
+      if (inFlight.workspace_id !== workspaceId || inFlight.task_id !== taskId) continue;
+      this.inFlight.delete(executionId);
+      try {
+        inFlight.cancel();
+        cancelled.push(executionId);
+      } catch {
+        // Contained: the row sweep below still terminalizes the row.
+      }
+    }
+
+    // 3. Sweep the task's non-terminal rows to `cancelled` (terminal rows
+    // keep their outcome — a finished execution is not rewritten).
+    let rows: Array<{ execution_id: string; status: string }>;
+    try {
+      rows = this.deps.tools
+        .listExecutionsByTask(workspaceId, taskId)
+        .map((row) => ({ execution_id: row.execution_id, status: row.status }));
+    } catch {
+      return cancelled;
+    }
+    for (const row of rows) {
+      if (row.status !== "running" && row.status !== "awaiting_approval") continue;
+      const updated = this.deps.tools.updateExecutionResult(
+        workspaceId,
+        row.execution_id,
+        {
+          status: "cancelled",
+          result_summary: null,
+          finished_at: this.now(),
+          error_code: null,
+        },
+        this.exec(),
+      );
+      if (updated) cancelled.push(row.execution_id);
+    }
+    return cancelled;
   }
 
   // -------------------------------------------------------------------------

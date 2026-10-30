@@ -127,6 +127,12 @@ import {
   reconcileTaskWorkersAfterRestart,
   type WorkerReconciliationReport,
 } from "../../modules/workers/worker-reconciliation.ts";
+import { RetryCoordinator } from "../../modules/tasks/retry-coordinator.service.ts";
+import { RunCancellationService } from "../../modules/tasks/run-cancellation.service.ts";
+import {
+  buildRunControlApiHandle,
+  type RunControlApiHandle,
+} from "./s22-run-control-api.ts";
 import { createLocalApi } from "./app.ts";
 import {
   applyScriptedToolProposal,
@@ -305,6 +311,13 @@ export interface ComposeRuntimeOptions extends ComposeLocalApiOptions {
    * passthrough, the policy semantics live in the supervisor.
    */
   workerPolicy?: Partial<TaskWorkerSupervisorPolicy>;
+  /**
+   * S22: the transient-failure retry policy override (the attempt bound and
+   * the bounded backoff schedule). Default: the recorded PRD §8 policy —
+   * at most three attempts, 1s/2s/4s. Tests pass a fast schedule; the
+   * semantics live in the retry policy module.
+   */
+  retryPolicy?: { maxAttempts: number; backoffScheduleMs: readonly number[] };
 }
 
 /**
@@ -396,6 +409,18 @@ export interface RuntimeHandle {
    * queue, and the approval-gated merges. The HTTP surface relays into it.
    */
   projects: ProjectsApiHandle;
+  /**
+   * S22: the runtime-owned retry coordinator — the bounded transient-failure
+   * policy (at most three attempts, then the run pauses and notifies), the
+   * supervisor's worker-failure decision seam, and the backoff clock owner.
+   */
+  retryCoordinator: RetryCoordinator;
+  /**
+   * S22: the run-control HTTP surface (the user cancel command + the run
+   * journal read). The routes live on the app; the handle is the test and
+   * operator seam.
+   */
+  runControl: RunControlApiHandle;
   /** Closes the gateway (and with it the HTTP server), then SQLite. */
   close(): Promise<void>;
 }
@@ -422,6 +447,9 @@ interface Wired {
   terminals: TerminalRecorder;
   browser: BrowserService | undefined;
   projects: ProjectsApiHandle;
+  retryCoordinator: RetryCoordinator;
+  runCancellation: RunCancellationService;
+  runControl: RunControlApiHandle;
   setPublisher(publisher: ConversationPublisher): void;
 }
 
@@ -533,6 +561,7 @@ function wire(
     scriptedToolProposal?: ScriptedToolProposalConfig | undefined;
     workspaceId?: string | undefined;
     workerPolicy?: Partial<TaskWorkerSupervisorPolicy> | undefined;
+    retryPolicy?: { maxAttempts: number; backoffScheduleMs: readonly number[] } | undefined;
   },
 ): Wired {
   const logFault = options.logUntypedFault ?? consoleRedactedLogger;
@@ -734,6 +763,22 @@ function wire(
         publish: containFanout((event) => publisher(event), logFault),
       });
 
+  // S22: the runtime-owned retry coordinator — the bounded transient-failure
+  // policy (PRD §8: at most three attempts, then the run pauses and notifies).
+  // Built at EVERY composition (the policy is a runtime concern, not a
+  // worker-harness concern); the supervisor's worker-error seam consults it
+  // when a worker harness exists, and the E27 crash/protocol classes stay
+  // RECOVERY_REQUIRED — only worker-REPORTED failures route to the policy.
+  const retryCoordinator = new RetryCoordinator({
+    events,
+    journal,
+    operations: operationsRepository,
+    tx,
+    runControl: new OperationsRunSeam(operations),
+    ...(options.retryPolicy ? { policy: options.retryPolicy } : {}),
+    logFault: (event, fields) => logFault(event, fields),
+  });
+
   // S16: the supervised task-worker system (supervisor + E1 admission gate +
   // run-flow wiring + boot reconciliation). Built ONLY when a worker harness
   // command is configured — no harness, no worker system, no spawns (G4).
@@ -770,6 +815,14 @@ function wire(
       runControl: new OperationsRunSeam(operations),
       admission,
       spawnChild: createTaskWorkerSpawn(harness, { prlimitPath }),
+      onWorkerReportedFailure: (info) => {
+        retryCoordinator.handleRunFailure({
+          workspaceId: info.workspaceId,
+          runId: info.runId,
+          failureCode: info.failureClass,
+          failureEventId: info.failureEventId,
+        });
+      },
       stderrSink: {
         // G3: child stderr is diagnostic — bounded per incarnation by the
         // supervisor, reduced HERE to a classified digest exactly like the
@@ -996,6 +1049,41 @@ function wire(
     now: options.now ?? (() => new Date().toISOString()),
   });
 
+  // S22: the run cancellation service — the user cancel path tears down
+  // EVERYTHING the run holds (worker through the supervisor port, in-flight
+  // tool executions through the executor seam, queued children, write
+  // leases, the S24 credit-reservation seam, pending approvals) and walks
+  // the recorded D8 two-step cancellation. The reservation port is the
+  // HONEST S24 seam: the credit ledger is slice S24 — the composition
+  // records the release request through the redacted fault log and nothing
+  // else (never a fake ledger, G4).
+  const runCancellation = new RunCancellationService({
+    tx,
+    journal,
+    events,
+    operations: operationsRepository,
+    runControl: new OperationsRunSeam(operations),
+    ...(workers ? { workers: { stopWorker: (workspaceId, runId, reason) => workers.supervisor.stopWorker(workspaceId, runId, reason as "requested" | "shutdown") } } : {}),
+    executor: { cancelForTask: (workspaceId, taskId) => toolExecutor.cancelForTask(workspaceId, taskId) },
+    leases: writeLeases,
+    reservations: {
+      releaseForRun: (workspaceId, runId) => {
+        logFault("credit_reservation_release_requested", {
+          workspace_id: workspaceId,
+          run_id: runId,
+          seam: "s24-credit-ledger-not-built",
+        });
+      },
+    },
+    approvals,
+    retryCoordinator,
+    logFault: (event, fields) => logFault(event, fields),
+  });
+  const runControlApi = buildRunControlApiHandle({
+    runCancellation,
+    journal,
+  });
+
   const replay = new ReplayService({
     journal,
     loadSnapshot: (workspaceId, streamId) => {
@@ -1054,6 +1142,7 @@ function wire(
     // configured (two GET routes; the routes relay into the service).
     ...(browserHandle ? { browser: browserHandle } : {}),
     projects: projectsApi,
+    runControl: runControlApi,
     ...(options.logUntypedFault ? { logUntypedFault: options.logUntypedFault } : {}),
   });
   return {
@@ -1078,6 +1167,9 @@ function wire(
     terminals,
     browser,
     projects: projectsApi,
+    retryCoordinator,
+    runCancellation,
+    runControl: runControlApi,
     setPublisher(next) {
       publisher = next;
     },
@@ -1288,7 +1380,12 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     terminals: wired.terminals,
     browser: wired.browser,
     projects: wired.projects,
+    retryCoordinator: wired.retryCoordinator,
+    runControl: wired.runControl,
     close: async () => {
+      // S22: drop every pending retry backoff timer before the transport
+      // goes down (a stopped runtime never fires a scheduled retry).
+      wired.retryCoordinator.dispose();
       replyStreamer?.stopAll();
       // S16: drain every live worker child through the escalation BEFORE the
       // transport goes down — a stopped runtime never leaves an orphan.

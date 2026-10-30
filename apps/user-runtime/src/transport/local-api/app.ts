@@ -62,6 +62,7 @@ import {
 } from "../http/typed-errors.ts";
 import { registerWorkspaceApiRoutes, type WorkspaceApiDeps } from "./s17-workspace-api.ts";
 import { registerProjectsRoutes, type ProjectsApiHandle } from "./s19-projects-api.ts";
+import { registerRunControlRoutes, type RunControlApiHandle } from "./s22-run-control-api.ts";
 
 export const SUBMIT_CONVERSATION_COMMAND_PATH = "/v1/conversations/commands" as const;
 export const LIST_CONVERSATION_EVENTS_PATH = "/v1/conversations/:conversation_id/events" as const;
@@ -462,6 +463,12 @@ export interface LocalApiDeps {
    * delegate (G2). Present at every runtime composition.
    */
   projects?: ProjectsApiHandle;
+  /**
+   * S22: the run-control surface — the user cancel command (idempotent,
+   * deterministic on races) and the run's journal read (the TRUE
+   * attempt-count source). Present at every runtime composition.
+   */
+  runControl?: RunControlApiHandle;
   /**
    * B-1: the redacted sink untyped HTTP faults are recorded to — the generic
    * INTERNAL_ERROR's correlation_id is logged with it, so "The failure has
@@ -1219,6 +1226,12 @@ export function createLocalApi(deps: LocalApiDeps): Express {
   // handlers like every other module surface.
   if (deps.projects) {
     registerProjectsRoutes(app, deps.projects);
+  }
+  // S22: the run-control surface — the cancel command (a state mutation, the
+  // browser proxy's Origin check covers it like every mutation) and the run
+  // journal read. Registered BEFORE the error handlers.
+  if (deps.runControl) {
+    registerRunControlRoutes(app, deps.runControl);
   }
 
   // Typed failures and unknown routes: the SheraError taxonomy, never an

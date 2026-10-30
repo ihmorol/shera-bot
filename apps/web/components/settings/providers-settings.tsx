@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Check, ChevronDown, PlugZap, Plus, RefreshCw } from "lucide-react";
+import { AlertTriangle, Check, PlugZap, Plus, RefreshCw } from "lucide-react";
 import { useId, useRef, useState, type FormEvent } from "react";
 
 import { useContainerResolution } from "@/lib/container-connection";
@@ -756,7 +756,6 @@ export function ProvidersSettingsView(props: ProvidersSettingsViewProps) {
         >
           Open Agent settings
         </a>
-        <ChevronDown className="ms-1 inline size-3" aria-hidden="true" />
       </p>
     </div>
   );

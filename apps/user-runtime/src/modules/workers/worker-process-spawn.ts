@@ -295,7 +295,7 @@ export async function reapWorkerProcessGroup(child: ChildProcess): Promise<void>
   const pgid = -child.pid;
   const deadline = Date.now() + GROUP_REAP_TIMEOUT_MS;
   for (;;) {
-    let alive = false;
+    let alive: boolean;
     try {
       process.kill(pgid, 0);
       alive = true;

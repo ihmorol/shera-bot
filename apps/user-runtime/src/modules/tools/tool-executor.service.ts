@@ -835,7 +835,7 @@ export class ToolExecutor {
 
     // 2. Sweep the task's non-terminal rows to `cancelled` (terminal rows
     // keep their outcome — a finished execution is not rewritten).
-    let rows: Array<{ execution_id: string; status: string }> = [];
+    let rows: Array<{ execution_id: string; status: string }>;
     try {
       rows = this.deps.tools
         .listExecutionsByTask(workspaceId, taskId)

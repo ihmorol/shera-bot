@@ -155,7 +155,9 @@ function RuntimeOperationChat({
   const [draftKey, setDraftKey] = useState(() => newMessageDraftKey());
 
   const operation = detail.detail?.operation ?? null;
-  const runs = detail.detail?.runs ?? [];
+  // Stable identity for the hooks below (react-hooks/exhaustive-deps): the
+  // detail payload object changes per fetch; the run LIST is what matters.
+  const runs = useMemo(() => detail.detail?.runs ?? [], [detail.detail]);
   // The journal-derived attempt counts for the runs whose cards render one
   // (RETRYING and the settled states a retry walk can end in) — AC3's truth
   // source; a failed read renders no number, never a guess.

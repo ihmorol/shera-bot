@@ -18,7 +18,7 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { openDatabase, type SqliteConnection } from "../../adapters/sqlite/connection.ts";
+import { openDatabase } from "../../adapters/sqlite/connection.ts";
 import { applyMigrations } from "../../adapters/sqlite/migrations.ts";
 import { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
 import { OperationsRepository } from "../../adapters/sqlite/operations-repository.ts";

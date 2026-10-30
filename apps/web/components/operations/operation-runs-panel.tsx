@@ -255,7 +255,6 @@ export function OperationRunsPanel({
             const linkage = gitLinkage?.[run.run_id];
             const isActive = ACTIVE_RUN_STATES.has(run.state);
             const attempts = retryAttempts?.[run.run_id];
-            const cancelPending = cancelPendingRunId === run.run_id;
             const confirming = confirmingRunId === run.run_id;
             const childCount = runs.filter(
               (candidate) => candidate.parent_task_id === run.run_id && isActive,

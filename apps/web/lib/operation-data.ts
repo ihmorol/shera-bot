@@ -1,17 +1,25 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type UseQueryResult,
+} from "@tanstack/react-query";
 
 import { RuntimeApiError } from "@/lib/runtime-client";
 import {
   buildOperationRosterCommand,
   createOperation,
   createOperationRun,
+  cancelOperationRun,
   fetchOperationDetail,
   fetchOperationThread,
   fetchOperations,
+  listOperationRunEvents,
   newOperationCommandIds,
   renameOperationMutationOptions,
+  retryAttemptsFromEvents,
   samePackAddRisk,
   sendOperationChatMessage,
   setOperationCoordinator,
@@ -259,6 +267,63 @@ export function useSendOperationMessage(workspaceId: string, operationId: string
         queryKey: ["operation-thread", workspaceId, operationId],
       });
     },
+  });
+}
+
+/**
+ * S22 (PRD §8, AC15): the user's stop control for one run. The cancel is
+ * idempotent server-side (a replay answers already_cancelled), so the
+ * mutation's success is the outcome either way; the detail + list reads
+ * invalidate so the settled D8 state replaces the optimistic one.
+ */
+export function useCancelRun(workspaceId: string, operationId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { runId: string; cancelledBy: { type: "user" | "admin"; id: string } }) =>
+      cancelOperationRun(workspaceId, operationId, input.runId, input.cancelledBy),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["operation-detail", workspaceId, operationId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["operations", workspaceId],
+      });
+    },
+  });
+}
+
+/**
+ * S22 (AC3): the TRUE retry attempt counts of the panel's runs, read from
+ * each run's journal (the task.retry_scheduled envelopes — the runtime's own
+ * ledger). One query for the runs whose cards render a count (RETRYING and
+ * the settled states a retry walk can end in); a run whose fetch fails maps
+ * to null — the card then renders no number at all rather than a guessed
+ * one. The counts are journal-derived, so they can never disagree with the
+ * stream the UI claims to render.
+ */
+export function useRunRetryAttempts(
+  workspaceId: string,
+  operationId: string,
+  runIds: readonly string[],
+): UseQueryResult<Record<string, number | null>, Error> {
+  const key = runIds.join(",");
+  return useQuery({
+    queryKey: ["run-retry-attempts", workspaceId, operationId, key],
+    enabled: runIds.length > 0,
+    queryFn: async () => {
+      const entries = await Promise.all(
+        runIds.map(async (runId) => {
+          try {
+            const events = await listOperationRunEvents(workspaceId, operationId, runId);
+            return [runId, retryAttemptsFromEvents(events)] as const;
+          } catch {
+            return [runId, null] as const;
+          }
+        }),
+      );
+      return Object.fromEntries(entries) as Record<string, number | null>;
+    },
+    staleTime: 5_000,
   });
 }
 

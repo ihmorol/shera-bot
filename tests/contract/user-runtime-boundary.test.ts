@@ -82,6 +82,9 @@ describe("user-runtime SQL boundary (AC7, D23 rule 2)", () => {
     // production task-worker spawn seam is the worker-process-spawn adapter
     // itself (sessions keep their adapters/process/ seam).
     const childProcessExceptions = new Set([
+      // S26: the sandbox containment suites' PAYLOAD strings (see the
+      // boundary-guards rationale — the sandboxed child forks, not the runtime).
+      join("modules", "execution", "execution-sandbox-limits.test.ts"),
       join("modules", "workers", "fake-task-worker.ts"),
       join("modules", "workers", "worker-process-spawn.ts"),
       join("modules", "workers", "fake-task-worker-child.ts"),

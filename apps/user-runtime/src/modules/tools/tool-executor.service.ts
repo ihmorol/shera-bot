@@ -39,9 +39,12 @@
  * The executor runs INSIDE the caller's transaction for the gating decision
  * and the history writes (joining the harness's atomic unit, exactly like the
  * S20 pause); the in-process binding family executes synchronously within the
- * same unit (the demo tools' effects are in-memory). Process-backed bindings
- * (S26) arrive through the same interface and own their execution/supervision
- * posture; the cancel seam (ctx.signal) is the S22 escalation hook.
+ * same unit (the demo tools' effects are in-memory). The process-backed
+ * family (S26) dispatches through the OPTIONAL async binding seam: the child
+ * runs OUTSIDE the caller's transaction, the proposal answers `dispatched`
+ * with a completion that settles the row (redacted, bounded) when the process
+ * exits, and `cancel` is the process-tree termination seam — which S22's
+ * run-cancellation fires for the task's in-flight executions (D27).
  */
 import { createHash, randomUUID } from "node:crypto";
 
@@ -78,7 +81,15 @@ export type ToolExecutorFailureCode =
   | "TOOL_APPROVAL_UNAVAILABLE"
   | "TOOL_NOT_ACTIVATED"
   | "TOOL_NOT_SHARED"
-  | "EXECUTION_AUTHORITY_MISSING";
+  | "EXECUTION_AUTHORITY_MISSING"
+  /** S26: the sandbox policy refused the execution (path/symlink escape). */
+  | "SANDBOX_PATH_ESCAPE"
+  /** S26: the sandbox could not launch (interpreter/enforcement missing). */
+  | "SANDBOX_LAUNCH_FAILED"
+  /** S26: the kernel or wall clock ended the process at an enforced limit. */
+  | "SANDBOX_LIMIT_EXCEEDED"
+  /** S26: the cancel seam fired and the process tree was terminated. */
+  | "TOOL_EXECUTION_CANCELLED";
 
 /**
  * The slice of the S20 approvals boundary the executor consumes. The real
@@ -174,6 +185,20 @@ export type ToolProposalOutcome =
       execution_id: string;
       rejection: TaskRejection;
       run: TaskRun;
+    }
+  /**
+   * S26 process-backed dispatch: the effect was dispatched as a child
+   * process OUTSIDE the caller's transaction; the history row is `running`
+   * and `completion` settles it to its terminal state (redacted, bounded,
+   * exit code and duration recorded) when the process exits. `cancel` is
+   * the D27 process-tree termination seam (SIGKILL to the whole group).
+   */
+  | {
+      outcome: "dispatched";
+      execution_id: string;
+      run: TaskRun;
+      completion: Promise<ToolProposalOutcome>;
+      cancel: () => void;
     };
 
 export interface ToolExecutorDeps {
@@ -234,6 +259,17 @@ export class ToolExecutor {
    * the approval pending and nothing executes — fail-closed).
    */
   private readonly withheld = new Map<string, WithheldExecution>();
+
+  /**
+   * The IN-FLIGHT dispatched executions (S26 process-backed family): the
+   * execution id and its cancel seam (the executor-owned AbortController).
+   * S22's run-cancellation fires these (D27: the child tree terminates with
+   * the task); the dispatch's settlement deregisters.
+   */
+  private readonly inFlight = new Map<
+    string,
+    { workspace_id: string; task_id: string; cancel: () => void }
+  >();
 
   constructor(private readonly deps: ToolExecutorDeps) {}
 
@@ -461,9 +497,18 @@ export class ToolExecutor {
           grantId,
           approvalId: null,
         });
-        // AC26: a consumed one-time grant never authorizes a second run.
+        // AC26: a consumed one-time grant never authorizes a second run —
+        // consumption stays POST-EFFECT, which for the S26 dispatched family
+        // means when the child's completion settles as executed.
+        const matchedGrantId: string = grantId;
         if (executed.outcome === "executed") {
-          grants.consumeOneTimeGrant(run.workspace_id, grantId);
+          grants.consumeOneTimeGrant(run.workspace_id, matchedGrantId);
+        } else if (executed.outcome === "dispatched") {
+          void executed.completion.then((settled) => {
+            if (settled.outcome === "executed") {
+              grants.consumeOneTimeGrant(run.workspace_id, matchedGrantId);
+            }
+          });
         }
         return executed;
       }
@@ -681,14 +726,77 @@ export class ToolExecutor {
       );
     }
 
+    // The cancel seam: the executor owns the controller; the dispatched
+    // outcome exposes cancel() (S22's escalation hook), and aborting it is
+    // the process-backed family's process-tree termination signal (D27).
+    const cancelController = new AbortController();
+
     const ctx: ToolExecutionContext = {
       authority: this.mintExecutionAuthority(),
       deadline,
       nowMs: () => this.nowMs(),
       maxResponseBytes: max_response_bytes,
       resourceLimits: definition.resource_limits,
-      signal: new AbortController().signal,
+      signal: cancelController.signal,
+      execution: {
+        execution_id,
+        workspace_id: run.workspace_id,
+        task_id: run.task_id,
+        conversation_id: run.conversation_id,
+        agent_id: input.agent_id,
+        capability: input.proposal.capability,
+        approval_id: args.approvalId,
+        grant_id: args.grantId,
+      },
     };
+
+    // S26 process-backed family: the OPTIONAL async seam (E33's recorded
+    // arrival). The child runs OUTSIDE the caller's transaction; the
+    // continuation settles the history row when the process exits. The
+    // wall-clock post-check below is deliberately not applied here — the
+    // binding owns the deadline by killing its process tree.
+    if (typeof args.binding.executeAsync === "function") {
+      const executionContext = ctx;
+      const completion = args.binding.executeAsync
+        .call(args.binding, rawArgs, executionContext)
+        .then((result) =>
+          this.settleDispatched({
+            input,
+            execution_id,
+            resolved,
+            startedAt,
+            grantId: args.grantId,
+            approvalId: args.approvalId,
+            result,
+          }),
+        )
+        .catch((error: unknown): ToolProposalOutcome => {
+          // A binding-level refusal (sandbox policy, missing interpreter,
+          // authority) settles the row to failed — the dispatch already
+          // created it, so the row must never hang in `running`.
+          const code =
+            error instanceof Error && error.name === "ToolBindingError"
+              ? ((error.message.split(":")[0] ??
+                  "SANDBOX_LAUNCH_FAILED") as ToolExecutorFailureCode)
+              : "SANDBOX_LAUNCH_FAILED";
+          this.settleFailedRow(run.workspace_id, run.task_id, execution_id, code);
+          return { outcome: "execution_failed", execution_id, error_code: code, run };
+        });
+      this.inFlight.set(execution_id, {
+        workspace_id: run.workspace_id,
+        task_id: run.task_id,
+        cancel: () => cancelController.abort(),
+      });
+      return {
+        outcome: "dispatched",
+        execution_id,
+        run,
+        completion: completion.finally(() => {
+          this.inFlight.delete(execution_id);
+        }),
+        cancel: () => cancelController.abort(),
+      };
+    }
 
     let result: ToolBindingResult;
     try {
@@ -757,9 +865,12 @@ export class ToolExecutor {
    * — AC3's decision side). The authority is minted HERE; the row created at
    * pause time advances awaiting_approval -> running -> terminal. Absent id:
    * a typed false (nothing was withheld — e.g. an idempotent replay), never a
-   * silent execution.
+   * silent execution. A process-backed (S26) withheld execution returns the
+   * dispatched completion's promise, which settles to the final outcome when
+   * the process exits — the decision has already committed; the settlement
+   * only records it.
    */
-  runWithheld(approvalId: string): boolean {
+  runWithheld(approvalId: string): boolean | Promise<ToolProposalOutcome> {
     const withheld = this.withheld.get(approvalId);
     if (withheld === undefined) {
       return false;
@@ -782,7 +893,121 @@ export class ToolExecutor {
       approvalId,
       resumeRow: false,
     });
+    if (outcome.outcome === "dispatched") {
+      return outcome.completion;
+    }
     return outcome.outcome === "executed";
+  }
+
+  /**
+   * Settle one dispatched (process-backed) execution when its child exits:
+   * the mirror of the sync tail, in a NEW short transaction (the dispatching
+   * caller's transaction has long committed). Redact and bound BEFORE the
+   * write (G3); the response budget stays executor-enforced. A row the S22
+   * run-cancellation sweep already terminalized is never rewritten (G5: a
+   * recorded end stays recorded) — the outcome still answers honestly.
+   */
+  private settleDispatched(args: {
+    input: ToolProposalInput;
+    execution_id: string;
+    resolved: NonNullable<ReturnType<ToolRegistry["resolve"]>>;
+    startedAt: string;
+    grantId: string | null;
+    approvalId: string | null;
+    result: ToolBindingResult;
+  }): ToolProposalOutcome {
+    const { input, execution_id, result } = args;
+    const { run } = input;
+    const { max_response_bytes } = args.resolved;
+    void args.startedAt;
+
+    if (!result.ok) {
+      const code = normalizeBindingCode(result.errorCode);
+      this.settleFailedRow(run.workspace_id, run.task_id, execution_id, code);
+      return { outcome: "execution_failed", execution_id, error_code: code, run };
+    }
+    // AC5 (response size): the tool's own budget, enforced by the executor.
+    if (Buffer.byteLength(result.text, "utf8") > max_response_bytes) {
+      this.settleFailedRow(run.workspace_id, run.task_id, execution_id, "TOOL_RESPONSE_TOO_LARGE");
+      return {
+        outcome: "execution_failed",
+        execution_id,
+        error_code: "TOOL_RESPONSE_TOO_LARGE",
+        run,
+      };
+    }
+    if (this.rowIsTerminal(run.workspace_id, run.task_id, execution_id)) {
+      return {
+        outcome: "execution_failed",
+        execution_id,
+        error_code: "TOOL_EXECUTION_CANCELLED",
+        run,
+      };
+    }
+    // G3/AC9: redact and bound BEFORE any history write.
+    const resultSummary = redactAndBound(
+      result.text,
+      Math.min(max_response_bytes, RESULT_SUMMARY_BUDGET_BYTES),
+    );
+    this.deps.tx.transaction((exec) => {
+      this.deps.tools.updateExecutionResult(
+        run.workspace_id,
+        execution_id,
+        {
+          status: "succeeded",
+          result_summary: resultSummary,
+          finished_at: this.now(),
+          error_code: null,
+          grant_id: args.grantId,
+          approval_id: args.approvalId,
+        },
+        exec,
+      );
+    });
+    return { outcome: "executed", execution_id, result_summary: resultSummary, run };
+  }
+
+  /** The dispatched path's failure writer (its own short transaction). */
+  private settleFailedRow(
+    workspaceId: string,
+    taskId: string,
+    executionId: string,
+    code: ToolExecutorFailureCode,
+  ): void {
+    if (this.rowIsTerminal(workspaceId, taskId, executionId)) {
+      return;
+    }
+    this.deps.tx.transaction((exec) => {
+      this.deps.tools.updateExecutionResult(
+        workspaceId,
+        executionId,
+        {
+          status: "failed",
+          result_summary: null,
+          finished_at: this.now(),
+          error_code: code,
+        },
+        exec,
+      );
+    });
+  }
+
+  /** True when the row already reached a terminal state (never rewritten). */
+  private rowIsTerminal(workspaceId: string, taskId: string, executionId: string): boolean {
+    try {
+      const row = this.deps.tools
+        .listExecutionsByTask(workspaceId, taskId)
+        .find((entry) => entry.execution_id === executionId);
+      if (row === undefined) return false;
+      return (
+        row.status === "succeeded" ||
+        row.status === "failed" ||
+        row.status === "blocked" ||
+        row.status === "cancelled"
+      );
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -793,18 +1018,17 @@ export class ToolExecutor {
    *      NEVER runs after the cancel (fail-closed; a post-cancel runWithheld
    *      answers the typed false), and its history row reads `cancelled`
    *      (D9: a cancelled approval never leaves a grant or an execution);
-   *   2. non-terminal history rows of the task (`running`,
+   *   2. the task's IN-FLIGHT dispatched executions (the S26 process-backed
+   *      family — E35 recorded this hook and the S26 integration closed it)
+   *      have their cancel seam fired: the child process tree is terminated
+   *      (D27) and the settlement path leaves the row to this sweep;
+   *   3. non-terminal history rows of the task (`running`,
    *      `awaiting_approval` — the crash-era orphans) sweep to `cancelled`;
-   *      terminal rows keep their outcome (nothing is rewritten — G5);
-   *   3. the cancelled execution ids are returned (the cancellation
-   *      evidence the run-cancel response lists).
+   *      terminal rows keep their outcome (nothing is rewritten — G5).
    *
-   * The in-flight AbortController registry rides ctx.signal for the
-   * process-backed binding family (S26's escalation hook); the in-process
-   * binding family is synchronous, so today's reachable surface is the
-   * withheld executions and the row sweep (recorded in E35).
-   *
-   * Idempotent: a second call finds nothing non-terminal and returns [].
+   * The cancelled execution ids are returned (the cancellation evidence the
+   * run-cancel response lists). Idempotent: a second call finds nothing
+   * non-terminal and returns [].
    */
   cancelForTask(workspaceId: string, taskId: string): string[] {
     const cancelled: string[] = [];
@@ -833,7 +1057,20 @@ export class ToolExecutor {
       }
     }
 
-    // 2. Sweep the task's non-terminal rows to `cancelled` (terminal rows
+    // 2. Fire the in-flight process-backed cancel seams (the D27 termination):
+    // the children die; their settlement skips the already-swept rows (G5).
+    for (const [executionId, inFlight] of [...this.inFlight.entries()]) {
+      if (inFlight.workspace_id !== workspaceId || inFlight.task_id !== taskId) continue;
+      this.inFlight.delete(executionId);
+      try {
+        inFlight.cancel();
+        cancelled.push(executionId);
+      } catch {
+        // Contained: the row sweep below still terminalizes the row.
+      }
+    }
+
+    // 3. Sweep the task's non-terminal rows to `cancelled` (terminal rows
     // keep their outcome — a finished execution is not rewritten).
     let rows: Array<{ execution_id: string; status: string }>;
     try {
@@ -974,7 +1211,14 @@ export class ToolExecutor {
 
 /** Map a binding's typed failure to the executor's code vocabulary. */
 function normalizeBindingCode(code: string): ToolExecutorFailureCode {
-  if (code === "TOOL_EXECUTION_TIMEOUT" || code === "TOOL_RESPONSE_TOO_LARGE") {
+  if (
+    code === "TOOL_EXECUTION_TIMEOUT" ||
+    code === "TOOL_RESPONSE_TOO_LARGE" ||
+    code === "SANDBOX_PATH_ESCAPE" ||
+    code === "SANDBOX_LAUNCH_FAILED" ||
+    code === "SANDBOX_LIMIT_EXCEEDED" ||
+    code === "TOOL_EXECUTION_CANCELLED"
+  ) {
     return code;
   }
   return "TOOL_BINDING_FAILED";

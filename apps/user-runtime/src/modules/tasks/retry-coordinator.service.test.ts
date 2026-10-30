@@ -104,6 +104,7 @@ function makeHarness(): RetryHarness {
     events,
     journal,
     operations: operationsRepo,
+    tx,
     runControl: {
       runState: (_workspaceId, runId) => {
         const opId = operationsRepo.findRunOperation(WS, runId);
@@ -165,9 +166,7 @@ function createRun(harness: RetryHarness, state: "RUNNING" | "RETRYING" = "RUNNI
   harness.runSeq.n += 1;
   const runId = `run_retry_${harness.runSeq.n}`;
   harness.ops.createRun(WS, harness.operationId, { run_id: runId });
-  if (state !== "CREATED") {
-    harness.ops.applyRunState(WS, harness.operationId, runId, state);
-  }
+  harness.ops.applyRunState(WS, harness.operationId, runId, state);
   return runId;
 }
 
@@ -266,12 +265,14 @@ describe("RetryCoordinator — transient retries are bounded and deterministic (
       failureCode: "TOOL_EXECUTION_TIMEOUT",
     });
     harness.scheduled[0]!.fire();
+    harness.scheduled.length = 0; // drop the fired entry (the clock moved on)
     harness.coordinator.handleRunFailure({
       workspaceId: WS,
       runId,
       failureCode: "TOOL_EXECUTION_TIMEOUT",
     });
-    expect(harness.scheduled[0]!.delayMs).toBe(2_000);
+    // The SECOND retry's delay comes from the schedule's second entry.
+    expect(harness.scheduled.at(-1)!.delayMs).toBe(2_000);
   });
 });
 
@@ -316,15 +317,19 @@ describe("RetryCoordinator — ambiguous effects are never blindly retried (AC10
       (event) => event.type === "task.recovery_required",
     );
     expect(recoveries).toHaveLength(1);
-    // The DECISION is recorded as data: what failed, why it paused.
+    // The DECISION is recorded as data: what failed, why it paused. (The
+    // runtime event's stored payload IS the bare decision record — unlike the
+    // contract task.* envelopes, there is no nested envelope.)
     const decisions = harness.journal
       .readFrom(WS, taskStreamId(runId), 0, 1_000)
       .filter((row) => row.event_type === "run.failure_decided");
     expect(decisions).toHaveLength(1);
     const decision = JSON.parse(decisions[0]!.payload) as {
-      payload: { decision: string; failure_code: string; reason: string };
+      decision: string;
+      failure_code: string;
+      reason: string;
     };
-    expect(decision.payload).toMatchObject({
+    expect(decision).toMatchObject({
       decision: "pause_for_review",
       failure_code: "PROVIDER_RESPONSE_AMBIGUOUS",
       reason: "ambiguous_external_effect",
@@ -350,6 +355,7 @@ describe("RetryCoordinator — the attempt ledger is the journal (AC3's truth so
       events: harness.coordinator["deps"]["events"],
       journal: harness.journal,
       operations: harness.operationsRepo,
+      tx: harness.coordinator["deps"]["tx"],
       runControl: harness.coordinator["deps"]["runControl"],
       schedule: (delayMs, fn) => {
         const entry = {
@@ -383,14 +389,16 @@ describe("RetryCoordinator — stale timers and unknown runs are contained", () 
       runId,
       failureCode: "TOOL_EXECUTION_TIMEOUT",
     });
-    // The run is cancelled while the backoff timer is pending.
+    // The run is cancelled while the backoff timer is pending (the direct
+    // service writes bypass the recording seam — capture the write count).
     harness.ops.applyRunState(WS, harness.operationId, runId, "CANCELLING");
     harness.ops.applyRunState(WS, harness.operationId, runId, "CANCELLED");
+    const writesBeforeFire = harness.seamWrites.length;
 
     expect(() => harness.scheduled[0]!.fire()).not.toThrow();
-    // The terminal state is never resurrected.
+    // The terminal state is never resurrected and the stale timer wrote nothing.
     expect(harness.coordinator.runState(WS, runId)).toBe("CANCELLED");
-    expect(harness.seamWrites.at(-1)).toEqual({ run_id: runId, state: "CANCELLED" });
+    expect(harness.seamWrites).toHaveLength(writesBeforeFire);
   });
 
   it("an unknown run is a typed refusal, not a crash", () => {

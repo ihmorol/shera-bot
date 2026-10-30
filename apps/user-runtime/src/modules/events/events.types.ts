@@ -281,6 +281,32 @@ export const WorkerReapedPayload = z.strictObject({
 export type WorkerReapedPayload = z.infer<typeof WorkerReapedPayload>;
 
 /**
+ * The runtime's FAILURE-DECISION audit record (S22; PRD §8, AC3, AC10, E13).
+ * Journaled on the run's task stream (task:<run_id>) in the SAME transaction
+ * as the D8 lifecycle envelope it accompanies, it records WHAT the runtime
+ * decided about one failure and WHY — the machine-readable companion the UI
+ * and the recovery slice read instead of guessing from the state alone. The
+ * attempt ledger itself is the task.retry_scheduled envelopes (contract
+ * payloads); this event never replaces that truth, it explains the decision.
+ * Payloads carry the typed code and bounded reason only — never provider
+ * payloads, arguments, or any secret-shaped material (G3).
+ */
+export const RunFailureDecisionPayload = z.strictObject({
+  workspace_id: z.string().min(1),
+  run_id: z.string().min(1),
+  decision: z.enum(["retry", "pause", "fail", "pause_for_review"]),
+  /** The typed failure code that was classified (bounded — G3). */
+  failure_code: z.string().min(1).max(100),
+  /** Why: retry_exhausted | ambiguous_external_effect | classified_transient | classified_permanent. */
+  reason: z.string().min(1).max(100),
+  /** The attempt this decision schedules (retry) or null. */
+  attempt: z.number().int().min(1).nullable(),
+  /** The bounded backoff delay (retry) or null. */
+  delay_ms: z.number().int().min(0).nullable(),
+});
+export type RunFailureDecisionPayload = z.infer<typeof RunFailureDecisionPayload>;
+
+/**
  * Terminal live-view events (S18 chunk 1; PRD §4.3, D10, D27, G3). Journaled
  * on `terminal:<workspace_id>:<agent_id>` streams, one event per
  * terminal_events row, written in the SAME transaction as its row (D10) by
@@ -372,6 +398,7 @@ export const EVENT_TYPES = {
   "worker.completed": { schema_version: 1, payload: WorkerCompletedPayload },
   "worker.stopped": { schema_version: 1, payload: WorkerStoppedPayload },
   "worker.reaped": { schema_version: 1, payload: WorkerReapedPayload },
+  "run.failure_decided": { schema_version: 1, payload: RunFailureDecisionPayload },
   "terminal.started": { schema_version: 1, payload: TerminalStartedPayload },
   "terminal.output": { schema_version: 1, payload: TerminalOutputPayload },
   "terminal.exited": { schema_version: 1, payload: TerminalExitedPayload },

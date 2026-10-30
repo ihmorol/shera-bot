@@ -136,6 +136,14 @@ interface WorkerHarness {
 interface HarnessOptions {
   spawnSpec?: (spawnIndex: number) => SpawnFakeTaskWorkerOptions;
   policy?: Partial<TaskWorkerSupervisorPolicy>;
+  /** S22: wire the runtime-owned worker-failure policy seam (see the suite). */
+  onWorkerReportedFailure?: (info: {
+    workspaceId: string;
+    runId: string;
+    workerId: string;
+    failureClass: string;
+    failureEventId: string | null;
+  }) => void;
 }
 
 const openHarnesses: WorkerHarness[] = [];
@@ -216,6 +224,9 @@ function makeHarness(options: HarnessOptions = {}): WorkerHarness {
     stderrSink: { write: (chunk) => stderrChunks.push(chunk) },
     // ms-scale policies by default (tests may override per harness).
     policy: { ...WORKER_POLICY, ...(options.policy ?? {}) },
+    ...(options.onWorkerReportedFailure
+      ? { onWorkerReportedFailure: options.onWorkerReportedFailure }
+      : {}),
   });
 
   const harness: WorkerHarness = {
@@ -570,6 +581,114 @@ describe("S16 chunk 1 — crash, stall, worker-reported error (D32 recovery post
     const payload = JSON.parse(crashed.payload) as { cause: string; error_class: string | null };
     expect(payload.cause).toBe("worker_error");
     expect(payload.error_class).toBe("provider_unavailable");
+    expect(harness.seamWrites).toContainEqual({ run_id: runA, state: "RECOVERY_REQUIRED" });
+  });
+});
+
+/**
+ * S22 — the runtime-owned FAILURE POLICY seam (PRD §8, AC14, AC10, E27
+ * unchanged elsewhere): a worker-REPORTED error (the failure_class frame) is
+ * a classified failure the retry policy owns. When the seam is wired, the
+ * escalation still runs to completion (the process is reaped, the crash
+ * event committed — the E27 aftermath discipline) but the RUN-STATE decision
+ * belongs to the policy: the supervisor hands over (workspace, run, failure
+ * class, crash event id) and does NOT write RECOVERY_REQUIRED itself. A
+ * policy that throws falls back to the recovery write — a failure is never
+ * silently dropped (G5). Crashes/hangs/protocol violations NEVER route here.
+ */
+describe("S22 — the worker-failure decision seam (runtime-owned retry policy)", () => {
+  it("routes a worker-reported error to the wired policy (no RECOVERY_REQUIRED write)", async () => {
+    const reports: Array<{
+      workspaceId: string;
+      runId: string;
+      workerId: string;
+      failureClass: string;
+      failureEventId: string | null;
+    }> = [];
+    const harness = makeHarness({
+      spawnSpec: () => ({
+        steps: 3,
+        stepDelayMs: 15,
+        errorOnStep: 1,
+        errorClass: "TOOL_EXECUTION_TIMEOUT",
+      }),
+      onWorkerReportedFailure: (info) => {
+        reports.push(info);
+        // The policy owns the run state: simulate the retry coordinator's
+        // RETRYING decision through the same seam.
+        harness.runControl.applyRunState(info.workspaceId, info.runId, "RETRYING");
+      },
+    });
+    const runA = createRun(harness, WS);
+
+    await harness.supervisor.startWorker(WS, runA);
+    const crashed = await until(() => {
+      return harness.journal
+        .listStream(runA, WS)
+        .find((row) => row.event_type === "worker.crashed");
+    });
+
+    // The escalation completed BEFORE the policy was consulted (the crash
+    // event is the aftermath-completion marker), and the report carries the
+    // failure class and the crash event id (the failure_event_id reference).
+    const payload = JSON.parse(crashed.payload) as { cause: string; error_class: string | null };
+    expect(payload.cause).toBe("worker_error");
+    expect(payload.error_class).toBe("TOOL_EXECUTION_TIMEOUT");
+    await until(() => (reports.length > 0 ? reports : undefined));
+    expect(reports).toHaveLength(1);
+    expect(reports[0]).toMatchObject({
+      workspaceId: WS,
+      runId: runA,
+      failureClass: "TOOL_EXECUTION_TIMEOUT",
+    });
+    expect(reports[0]!.failureEventId).toBe(crashed.event_id);
+    // The POLICY's write is the only run-state write — no RECOVERY_REQUIRED.
+    expect(harness.seamWrites).toContainEqual({ run_id: runA, state: "RETRYING" });
+    expect(harness.seamWrites).not.toContainEqual({ run_id: runA, state: "RECOVERY_REQUIRED" });
+  });
+
+  it("a throwing policy falls back to the recovery write (a failure is never dropped)", async () => {
+    const harness = makeHarness({
+      spawnSpec: () => ({
+        steps: 3,
+        stepDelayMs: 15,
+        errorOnStep: 1,
+        errorClass: "TOOL_EXECUTION_TIMEOUT",
+      }),
+      onWorkerReportedFailure: () => {
+        throw new Error("policy exploded");
+      },
+    });
+    const runA = createRun(harness, WS);
+
+    await harness.supervisor.startWorker(WS, runA);
+    await until(() => {
+      return harness.journal.listStream(runA, WS).find((row) => row.event_type === "worker.crashed");
+    });
+    await until(() =>
+      harness.seamWrites.some((write) => write.state === "RECOVERY_REQUIRED"),
+    );
+    expect(harness.seamWrites).toContainEqual({ run_id: runA, state: "RECOVERY_REQUIRED" });
+  });
+
+  it("a CRASH exit never routes through the policy (E27 recovery posture unchanged)", async () => {
+    const reports: Array<{ failureClass: string }> = [];
+    const harness = makeHarness({
+      spawnSpec: () => ({ steps: 3, stepDelayMs: 15, crashOnStep: 2 }),
+      onWorkerReportedFailure: (info) => {
+        reports.push({ failureClass: info.failureClass });
+      },
+    });
+    const runA = createRun(harness, WS);
+
+    await harness.supervisor.startWorker(WS, runA);
+    await until(() => {
+      return harness.journal.listStream(runA, WS).find((row) => row.event_type === "worker.crashed");
+    });
+    await until(() =>
+      harness.seamWrites.some((write) => write.state === "RECOVERY_REQUIRED"),
+    );
+    expect(reports).toHaveLength(0);
     expect(harness.seamWrites).toContainEqual({ run_id: runA, state: "RECOVERY_REQUIRED" });
   });
 });

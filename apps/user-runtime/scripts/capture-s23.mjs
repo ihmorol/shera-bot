@@ -27,6 +27,10 @@ import { createServer } from "node:http";
 
 import { chromium } from "playwright";
 
+// The page.evaluate closures below run INSIDE the browser context and
+// reference browser globals (document/window) by design.
+/* global document, window */
+
 import { composeRuntime, DEFAULT_WORKSPACE_ID } from "../src/transport/local-api/compose.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -66,8 +70,8 @@ if (runtime) {
   // Seed phase only makes sense against the real runtime; without it the
   // debug run just serves the shell.
 }
-let runtimePort = 0;
-let origin = "http://127.0.0.1:0";
+let runtimePort;
+let origin;
 if (runtime) {
   await new Promise((resolveListen) => runtime.httpServer.listen(0, "127.0.0.1", resolveListen));
   runtimePort = runtime.httpServer.address().port;
@@ -280,11 +284,15 @@ let browser;
 const cleanupAll = async (code) => {
   try {
     if (browser) await browser.close();
-  } catch {}
+  } catch {
+    // Best-effort teardown — the exit code carries the failure.
+  }
   for (const cleanup of cleanups.reverse()) {
     try {
       await cleanup();
-    } catch {}
+    } catch {
+      // Best-effort teardown — never mask the original failure.
+    }
   }
   next.kill();
   if (runtime) runtime.close();

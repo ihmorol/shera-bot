@@ -25,8 +25,6 @@
  * slice's engineering record.
  */
 import { readFileSync, rmSync } from "node:fs";
-void tmpdir;
-import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
 import { afterAll, afterEach, describe, expect, it } from "vitest";

@@ -29,7 +29,14 @@ import {
 import { RunState } from "./state-vocabulary.ts";
 import { OperationSnapshot, PackSnapshot, ProviderSnapshot } from "./snapshots.ts";
 
-/** D34 trigger categories that create task runs (G2). Closed set. */
+/** D34 trigger categories that create task runs (G2). Closed set.
+ *
+ * S28 (PRD §8): the vocabulary gains the four autonomous trigger categories
+ * PRD §8 names that the initial S02 set did not carry — Git changes,
+ * completion of another Agent's task, agent-evaluated conditions, and
+ * external service events. Each is a TYPED payload (never natural-language
+ * classification — G2); the set remains closed and every member has a
+ * committed fixture (tests/contract). */
 export const TASK_TRIGGER_EVENT_TYPES = [
   "tool.proposed",
   "delegation.proposed",
@@ -38,6 +45,10 @@ export const TASK_TRIGGER_EVENT_TYPES = [
   "trigger.scheduled",
   "trigger.webhook",
   "trigger.file_event",
+  "trigger.git_event",
+  "trigger.task_completed",
+  "trigger.condition_met",
+  "trigger.external_event",
 ] as const;
 export type TaskTriggerEventType = (typeof TASK_TRIGGER_EVENT_TYPES)[number];
 
@@ -151,6 +162,64 @@ export const FileEventPayload = z.strictObject({
 });
 export type FileEventPayload = z.infer<typeof FileEventPayload>;
 
+/**
+ * S28 (PRD §8 "Git changes"): a watched repository reference moved. The
+ * payload carries the typed project/branch REFERENCE and the observed commit
+ * sha — never credential material and never a clone URL with embedded
+ * credentials (D22/G3; the digest-only discipline every watcher payload keeps).
+ */
+export const GitEventPayload = z.strictObject({
+  watcher_id: Id,
+  project_id: Id,
+  branch: z.string().min(1).max(256),
+  /** The observed HEAD sha (the watcher's change signature — data, not prose). */
+  commit_sha: z.string().regex(/^[a-f0-9]{7,64}$/, "expected a git commit sha"),
+});
+export type GitEventPayload = z.infer<typeof GitEventPayload>;
+
+/**
+ * S28 (PRD §8 "completion of another Agent's task"): a watched task run
+ * reached a terminal outcome and a follow-up run is warranted. parent_task_id
+ * is the D34/D46 delegation link — the created run's parent (AC6).
+ */
+export const TaskCompletedTriggerPayload = z.strictObject({
+  trigger_id: Id,
+  parent_task_id: Id,
+  outcome: z.enum(["succeeded", "failed", "cancelled"]),
+  completed_at: IsoDateTime,
+});
+export type TaskCompletedTriggerPayload = z.infer<typeof TaskCompletedTriggerPayload>;
+
+/**
+ * S28 (PRD §8 "agent-evaluated conditions"): a declared condition evaluated
+ * true. The evaluation rides the runtime's typed evaluator port (the
+ * agent-session-backed evaluator is the recorded seam); the EVENT is typed
+ * runtime data — the agent never classifies prose into a run (G2).
+ * parent_task_id links the created run to the condition's parent context
+ * when the trigger record declares one (AC6).
+ */
+export const ConditionMetPayload = z.strictObject({
+  trigger_id: Id,
+  parent_task_id: Id.optional(),
+  evaluated_at: IsoDateTime,
+});
+export type ConditionMetPayload = z.infer<typeof ConditionMetPayload>;
+
+/**
+ * S28 (PRD §8 "external service events"): a typed event pushed by an external
+ * service. Bounded, digest-keyed (the dedup key is data — D23 rule 6); the
+ * body summary is the REDACTED transport-level summary only (G3 — raw bodies
+ * never enter the journal).
+ */
+export const ExternalEventPayload = z.strictObject({
+  trigger_id: Id,
+  source: z.string().min(1).max(128),
+  /** sha256:<hex> of the delivery's dedup material (D23 rule 6). */
+  delivery_digest: ArgsDigest,
+  occurred_at: IsoDateTime,
+});
+export type ExternalEventPayload = z.infer<typeof ExternalEventPayload>;
+
 // ---------------------------------------------------------------------------
 // Runtime-emitted payloads
 // ---------------------------------------------------------------------------
@@ -245,6 +314,10 @@ export const EVENT_ENVELOPES = {
   "trigger.scheduled": envelope("trigger.scheduled", ScheduledTriggerPayload),
   "trigger.webhook": envelope("trigger.webhook", TriggerWebhookPayload),
   "trigger.file_event": envelope("trigger.file_event", FileEventPayload),
+  "trigger.git_event": envelope("trigger.git_event", GitEventPayload),
+  "trigger.task_completed": envelope("trigger.task_completed", TaskCompletedTriggerPayload),
+  "trigger.condition_met": envelope("trigger.condition_met", ConditionMetPayload),
+  "trigger.external_event": envelope("trigger.external_event", ExternalEventPayload),
   "task.created": envelope("task.created", TaskCreatedPayload),
   "progress.reported": envelope("progress.reported", ProgressPayload),
   "artifact.published": envelope("artifact.published", ArtifactPublishedPayload),

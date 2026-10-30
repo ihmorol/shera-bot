@@ -28,6 +28,11 @@ const ROUND_TRIP_CASES: ReadonlyArray<{ schema: ContractName; fixture: string }>
   { schema: "TypedExecutionEvent", fixture: "event-trigger-scheduled.json" },
   { schema: "TypedExecutionEvent", fixture: "event-trigger-webhook.json" },
   { schema: "TypedExecutionEvent", fixture: "event-trigger-file.json" },
+  // S28 (PRD §8): the four additional autonomous trigger categories, typed.
+  { schema: "TypedExecutionEvent", fixture: "event-trigger-git.json" },
+  { schema: "TypedExecutionEvent", fixture: "event-trigger-task-completed.json" },
+  { schema: "TypedExecutionEvent", fixture: "event-trigger-condition.json" },
+  { schema: "TypedExecutionEvent", fixture: "event-trigger-external.json" },
   { schema: "TypedExecutionEvent", fixture: "event-task-started.json" },
   { schema: "ApprovalRequest", fixture: "approval-request.json" },
   { schema: "ApprovalGrant", fixture: "approval-grant.json" },

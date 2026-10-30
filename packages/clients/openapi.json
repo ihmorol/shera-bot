@@ -2824,6 +2824,485 @@
                     "event_type": {
                       "type": "string",
                       "enum": [
+                        "trigger.git_event"
+                      ]
+                    },
+                    "payload": {
+                      "type": "object",
+                      "properties": {
+                        "watcher_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "project_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "branch": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "commit_sha": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{7,64}$"
+                        }
+                      },
+                      "required": [
+                        "watcher_id",
+                        "project_id",
+                        "branch",
+                        "commit_sha"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "event_id",
+                    "stream_id",
+                    "sequence",
+                    "event_version",
+                    "actor",
+                    "task_id",
+                    "conversation_id",
+                    "occurred_at",
+                    "redaction_class",
+                    "event_type",
+                    "payload"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "event_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "stream_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "sequence": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0
+                    },
+                    "event_version": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0
+                    },
+                    "actor": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "user",
+                            "agent",
+                            "runtime",
+                            "admin",
+                            "system"
+                          ]
+                        },
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "id"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "task_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "conversation_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "occurred_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "redaction_class": {
+                      "type": "string",
+                      "enum": [
+                        "public",
+                        "internal",
+                        "restricted"
+                      ]
+                    },
+                    "event_type": {
+                      "type": "string",
+                      "enum": [
+                        "trigger.task_completed"
+                      ]
+                    },
+                    "payload": {
+                      "type": "object",
+                      "properties": {
+                        "trigger_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "parent_task_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "outcome": {
+                          "type": "string",
+                          "enum": [
+                            "succeeded",
+                            "failed",
+                            "cancelled"
+                          ]
+                        },
+                        "completed_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "trigger_id",
+                        "parent_task_id",
+                        "outcome",
+                        "completed_at"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "event_id",
+                    "stream_id",
+                    "sequence",
+                    "event_version",
+                    "actor",
+                    "task_id",
+                    "conversation_id",
+                    "occurred_at",
+                    "redaction_class",
+                    "event_type",
+                    "payload"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "event_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "stream_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "sequence": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0
+                    },
+                    "event_version": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0
+                    },
+                    "actor": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "user",
+                            "agent",
+                            "runtime",
+                            "admin",
+                            "system"
+                          ]
+                        },
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "id"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "task_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "conversation_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "occurred_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "redaction_class": {
+                      "type": "string",
+                      "enum": [
+                        "public",
+                        "internal",
+                        "restricted"
+                      ]
+                    },
+                    "event_type": {
+                      "type": "string",
+                      "enum": [
+                        "trigger.condition_met"
+                      ]
+                    },
+                    "payload": {
+                      "type": "object",
+                      "properties": {
+                        "trigger_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "parent_task_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "evaluated_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "trigger_id",
+                        "evaluated_at"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "event_id",
+                    "stream_id",
+                    "sequence",
+                    "event_version",
+                    "actor",
+                    "task_id",
+                    "conversation_id",
+                    "occurred_at",
+                    "redaction_class",
+                    "event_type",
+                    "payload"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "event_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "stream_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "sequence": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0
+                    },
+                    "event_version": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0
+                    },
+                    "actor": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "user",
+                            "agent",
+                            "runtime",
+                            "admin",
+                            "system"
+                          ]
+                        },
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "id"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "task_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "conversation_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "occurred_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "redaction_class": {
+                      "type": "string",
+                      "enum": [
+                        "public",
+                        "internal",
+                        "restricted"
+                      ]
+                    },
+                    "event_type": {
+                      "type": "string",
+                      "enum": [
+                        "trigger.external_event"
+                      ]
+                    },
+                    "payload": {
+                      "type": "object",
+                      "properties": {
+                        "trigger_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "source": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128
+                        },
+                        "delivery_digest": {
+                          "type": "string",
+                          "pattern": "^sha256:[a-f0-9]{64}$"
+                        },
+                        "occurred_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "trigger_id",
+                        "source",
+                        "delivery_digest",
+                        "occurred_at"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "event_id",
+                    "stream_id",
+                    "sequence",
+                    "event_version",
+                    "actor",
+                    "task_id",
+                    "conversation_id",
+                    "occurred_at",
+                    "redaction_class",
+                    "event_type",
+                    "payload"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "event_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "stream_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "sequence": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0
+                    },
+                    "event_version": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0
+                    },
+                    "actor": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "user",
+                            "agent",
+                            "runtime",
+                            "admin",
+                            "system"
+                          ]
+                        },
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "id"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "task_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "conversation_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "occurred_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "redaction_class": {
+                      "type": "string",
+                      "enum": [
+                        "public",
+                        "internal",
+                        "restricted"
+                      ]
+                    },
+                    "event_type": {
+                      "type": "string",
+                      "enum": [
                         "task.created"
                       ]
                     },
@@ -2839,7 +3318,11 @@
                             "operation.confirmed",
                             "trigger.scheduled",
                             "trigger.webhook",
-                            "trigger.file_event"
+                            "trigger.file_event",
+                            "trigger.git_event",
+                            "trigger.task_completed",
+                            "trigger.condition_met",
+                            "trigger.external_event"
                           ]
                         },
                         "trigger_event_id": {
@@ -11679,7 +12162,11 @@
                   "operation.confirmed",
                   "trigger.scheduled",
                   "trigger.webhook",
-                  "trigger.file_event"
+                  "trigger.file_event",
+                  "trigger.git_event",
+                  "trigger.task_completed",
+                  "trigger.condition_met",
+                  "trigger.external_event"
                 ]
               },
               "trigger_event_id": {
@@ -12976,6 +13463,485 @@
               "event_type": {
                 "type": "string",
                 "enum": [
+                  "trigger.git_event"
+                ]
+              },
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "watcher_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "project_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "branch": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "commit_sha": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{7,64}$"
+                  }
+                },
+                "required": [
+                  "watcher_id",
+                  "project_id",
+                  "branch",
+                  "commit_sha"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "event_id",
+              "stream_id",
+              "sequence",
+              "event_version",
+              "actor",
+              "task_id",
+              "conversation_id",
+              "occurred_at",
+              "redaction_class",
+              "event_type",
+              "payload"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "event_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "stream_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "sequence": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "event_version": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "actor": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "user",
+                      "agent",
+                      "runtime",
+                      "admin",
+                      "system"
+                    ]
+                  },
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                },
+                "required": [
+                  "type",
+                  "id"
+                ],
+                "additionalProperties": false
+              },
+              "task_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "conversation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "occurred_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "redaction_class": {
+                "type": "string",
+                "enum": [
+                  "public",
+                  "internal",
+                  "restricted"
+                ]
+              },
+              "event_type": {
+                "type": "string",
+                "enum": [
+                  "trigger.task_completed"
+                ]
+              },
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "trigger_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "parent_task_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "outcome": {
+                    "type": "string",
+                    "enum": [
+                      "succeeded",
+                      "failed",
+                      "cancelled"
+                    ]
+                  },
+                  "completed_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                },
+                "required": [
+                  "trigger_id",
+                  "parent_task_id",
+                  "outcome",
+                  "completed_at"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "event_id",
+              "stream_id",
+              "sequence",
+              "event_version",
+              "actor",
+              "task_id",
+              "conversation_id",
+              "occurred_at",
+              "redaction_class",
+              "event_type",
+              "payload"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "event_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "stream_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "sequence": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "event_version": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "actor": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "user",
+                      "agent",
+                      "runtime",
+                      "admin",
+                      "system"
+                    ]
+                  },
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                },
+                "required": [
+                  "type",
+                  "id"
+                ],
+                "additionalProperties": false
+              },
+              "task_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "conversation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "occurred_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "redaction_class": {
+                "type": "string",
+                "enum": [
+                  "public",
+                  "internal",
+                  "restricted"
+                ]
+              },
+              "event_type": {
+                "type": "string",
+                "enum": [
+                  "trigger.condition_met"
+                ]
+              },
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "trigger_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "parent_task_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "evaluated_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                },
+                "required": [
+                  "trigger_id",
+                  "evaluated_at"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "event_id",
+              "stream_id",
+              "sequence",
+              "event_version",
+              "actor",
+              "task_id",
+              "conversation_id",
+              "occurred_at",
+              "redaction_class",
+              "event_type",
+              "payload"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "event_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "stream_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "sequence": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "event_version": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "actor": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "user",
+                      "agent",
+                      "runtime",
+                      "admin",
+                      "system"
+                    ]
+                  },
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                },
+                "required": [
+                  "type",
+                  "id"
+                ],
+                "additionalProperties": false
+              },
+              "task_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "conversation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "occurred_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "redaction_class": {
+                "type": "string",
+                "enum": [
+                  "public",
+                  "internal",
+                  "restricted"
+                ]
+              },
+              "event_type": {
+                "type": "string",
+                "enum": [
+                  "trigger.external_event"
+                ]
+              },
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "trigger_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "source": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "delivery_digest": {
+                    "type": "string",
+                    "pattern": "^sha256:[a-f0-9]{64}$"
+                  },
+                  "occurred_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                },
+                "required": [
+                  "trigger_id",
+                  "source",
+                  "delivery_digest",
+                  "occurred_at"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "event_id",
+              "stream_id",
+              "sequence",
+              "event_version",
+              "actor",
+              "task_id",
+              "conversation_id",
+              "occurred_at",
+              "redaction_class",
+              "event_type",
+              "payload"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "event_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "stream_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "sequence": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "event_version": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "actor": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "user",
+                      "agent",
+                      "runtime",
+                      "admin",
+                      "system"
+                    ]
+                  },
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                },
+                "required": [
+                  "type",
+                  "id"
+                ],
+                "additionalProperties": false
+              },
+              "task_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "conversation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "occurred_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "redaction_class": {
+                "type": "string",
+                "enum": [
+                  "public",
+                  "internal",
+                  "restricted"
+                ]
+              },
+              "event_type": {
+                "type": "string",
+                "enum": [
                   "task.created"
                 ]
               },
@@ -12991,7 +13957,11 @@
                       "operation.confirmed",
                       "trigger.scheduled",
                       "trigger.webhook",
-                      "trigger.file_event"
+                      "trigger.file_event",
+                      "trigger.git_event",
+                      "trigger.task_completed",
+                      "trigger.condition_met",
+                      "trigger.external_event"
                     ]
                   },
                   "trigger_event_id": {
@@ -18371,7 +19341,11 @@
                   "operation.confirmed",
                   "trigger.scheduled",
                   "trigger.webhook",
-                  "trigger.file_event"
+                  "trigger.file_event",
+                  "trigger.git_event",
+                  "trigger.task_completed",
+                  "trigger.condition_met",
+                  "trigger.external_event"
                 ]
               },
               "trigger_event_id": {
@@ -21083,6 +22057,240 @@
         ],
         "additionalProperties": false
       },
+      "trigger.condition_met": {
+        "type": "object",
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "stream_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "sequence": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
+          "event_version": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
+          "actor": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "user",
+                  "agent",
+                  "runtime",
+                  "admin",
+                  "system"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              }
+            },
+            "required": [
+              "type",
+              "id"
+            ],
+            "additionalProperties": false
+          },
+          "task_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "conversation_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "redaction_class": {
+            "type": "string",
+            "enum": [
+              "public",
+              "internal",
+              "restricted"
+            ]
+          },
+          "event_type": {
+            "type": "string",
+            "enum": [
+              "trigger.condition_met"
+            ]
+          },
+          "payload": {
+            "type": "object",
+            "properties": {
+              "trigger_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "parent_task_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "evaluated_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "trigger_id",
+              "evaluated_at"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "event_id",
+          "stream_id",
+          "sequence",
+          "event_version",
+          "actor",
+          "task_id",
+          "conversation_id",
+          "occurred_at",
+          "redaction_class",
+          "event_type",
+          "payload"
+        ],
+        "additionalProperties": false
+      },
+      "trigger.external_event": {
+        "type": "object",
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "stream_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "sequence": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
+          "event_version": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
+          "actor": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "user",
+                  "agent",
+                  "runtime",
+                  "admin",
+                  "system"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              }
+            },
+            "required": [
+              "type",
+              "id"
+            ],
+            "additionalProperties": false
+          },
+          "task_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "conversation_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "redaction_class": {
+            "type": "string",
+            "enum": [
+              "public",
+              "internal",
+              "restricted"
+            ]
+          },
+          "event_type": {
+            "type": "string",
+            "enum": [
+              "trigger.external_event"
+            ]
+          },
+          "payload": {
+            "type": "object",
+            "properties": {
+              "trigger_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "source": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "delivery_digest": {
+                "type": "string",
+                "pattern": "^sha256:[a-f0-9]{64}$"
+              },
+              "occurred_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "trigger_id",
+              "source",
+              "delivery_digest",
+              "occurred_at"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "event_id",
+          "stream_id",
+          "sequence",
+          "event_version",
+          "actor",
+          "task_id",
+          "conversation_id",
+          "occurred_at",
+          "redaction_class",
+          "event_type",
+          "payload"
+        ],
+        "additionalProperties": false
+      },
       "trigger.file_event": {
         "type": "object",
         "properties": {
@@ -21201,6 +22409,127 @@
         ],
         "additionalProperties": false
       },
+      "trigger.git_event": {
+        "type": "object",
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "stream_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "sequence": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
+          "event_version": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
+          "actor": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "user",
+                  "agent",
+                  "runtime",
+                  "admin",
+                  "system"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              }
+            },
+            "required": [
+              "type",
+              "id"
+            ],
+            "additionalProperties": false
+          },
+          "task_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "conversation_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "redaction_class": {
+            "type": "string",
+            "enum": [
+              "public",
+              "internal",
+              "restricted"
+            ]
+          },
+          "event_type": {
+            "type": "string",
+            "enum": [
+              "trigger.git_event"
+            ]
+          },
+          "payload": {
+            "type": "object",
+            "properties": {
+              "watcher_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "project_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "branch": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "commit_sha": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{7,64}$"
+              }
+            },
+            "required": [
+              "watcher_id",
+              "project_id",
+              "branch",
+              "commit_sha"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "event_id",
+          "stream_id",
+          "sequence",
+          "event_version",
+          "actor",
+          "task_id",
+          "conversation_id",
+          "occurred_at",
+          "redaction_class",
+          "event_type",
+          "payload"
+        ],
+        "additionalProperties": false
+      },
       "trigger.scheduled": {
         "type": "object",
         "properties": {
@@ -21296,6 +22625,130 @@
             "required": [
               "schedule_id",
               "due_at"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "event_id",
+          "stream_id",
+          "sequence",
+          "event_version",
+          "actor",
+          "task_id",
+          "conversation_id",
+          "occurred_at",
+          "redaction_class",
+          "event_type",
+          "payload"
+        ],
+        "additionalProperties": false
+      },
+      "trigger.task_completed": {
+        "type": "object",
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "stream_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "sequence": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
+          "event_version": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
+          "actor": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "user",
+                  "agent",
+                  "runtime",
+                  "admin",
+                  "system"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              }
+            },
+            "required": [
+              "type",
+              "id"
+            ],
+            "additionalProperties": false
+          },
+          "task_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "conversation_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "redaction_class": {
+            "type": "string",
+            "enum": [
+              "public",
+              "internal",
+              "restricted"
+            ]
+          },
+          "event_type": {
+            "type": "string",
+            "enum": [
+              "trigger.task_completed"
+            ]
+          },
+          "payload": {
+            "type": "object",
+            "properties": {
+              "trigger_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "parent_task_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "succeeded",
+                  "failed",
+                  "cancelled"
+                ]
+              },
+              "completed_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "trigger_id",
+              "parent_task_id",
+              "outcome",
+              "completed_at"
             ],
             "additionalProperties": false
           }
@@ -29244,7 +30697,11 @@
                             "operation.confirmed",
                             "trigger.scheduled",
                             "trigger.webhook",
-                            "trigger.file_event"
+                            "trigger.file_event",
+                            "trigger.git_event",
+                            "trigger.task_completed",
+                            "trigger.condition_met",
+                            "trigger.external_event"
                           ]
                         },
                         "trigger_event_id": {
@@ -30368,6 +31825,485 @@
                               "event_type": {
                                 "type": "string",
                                 "enum": [
+                                  "trigger.git_event"
+                                ]
+                              },
+                              "payload": {
+                                "type": "object",
+                                "properties": {
+                                  "watcher_id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  },
+                                  "project_id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  },
+                                  "branch": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  },
+                                  "commit_sha": {
+                                    "type": "string",
+                                    "pattern": "^[a-f0-9]{7,64}$"
+                                  }
+                                },
+                                "required": [
+                                  "watcher_id",
+                                  "project_id",
+                                  "branch",
+                                  "commit_sha"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "event_id",
+                              "stream_id",
+                              "sequence",
+                              "event_version",
+                              "actor",
+                              "task_id",
+                              "conversation_id",
+                              "occurred_at",
+                              "redaction_class",
+                              "event_type",
+                              "payload"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "event_id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 256
+                              },
+                              "stream_id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 256
+                              },
+                              "sequence": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0
+                              },
+                              "event_version": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0
+                              },
+                              "actor": {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "user",
+                                      "agent",
+                                      "runtime",
+                                      "admin",
+                                      "system"
+                                    ]
+                                  },
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "id"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "task_id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 256
+                              },
+                              "conversation_id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 256
+                              },
+                              "occurred_at": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "redaction_class": {
+                                "type": "string",
+                                "enum": [
+                                  "public",
+                                  "internal",
+                                  "restricted"
+                                ]
+                              },
+                              "event_type": {
+                                "type": "string",
+                                "enum": [
+                                  "trigger.task_completed"
+                                ]
+                              },
+                              "payload": {
+                                "type": "object",
+                                "properties": {
+                                  "trigger_id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  },
+                                  "parent_task_id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  },
+                                  "outcome": {
+                                    "type": "string",
+                                    "enum": [
+                                      "succeeded",
+                                      "failed",
+                                      "cancelled"
+                                    ]
+                                  },
+                                  "completed_at": {
+                                    "type": "string",
+                                    "format": "date-time"
+                                  }
+                                },
+                                "required": [
+                                  "trigger_id",
+                                  "parent_task_id",
+                                  "outcome",
+                                  "completed_at"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "event_id",
+                              "stream_id",
+                              "sequence",
+                              "event_version",
+                              "actor",
+                              "task_id",
+                              "conversation_id",
+                              "occurred_at",
+                              "redaction_class",
+                              "event_type",
+                              "payload"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "event_id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 256
+                              },
+                              "stream_id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 256
+                              },
+                              "sequence": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0
+                              },
+                              "event_version": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0
+                              },
+                              "actor": {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "user",
+                                      "agent",
+                                      "runtime",
+                                      "admin",
+                                      "system"
+                                    ]
+                                  },
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "id"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "task_id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 256
+                              },
+                              "conversation_id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 256
+                              },
+                              "occurred_at": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "redaction_class": {
+                                "type": "string",
+                                "enum": [
+                                  "public",
+                                  "internal",
+                                  "restricted"
+                                ]
+                              },
+                              "event_type": {
+                                "type": "string",
+                                "enum": [
+                                  "trigger.condition_met"
+                                ]
+                              },
+                              "payload": {
+                                "type": "object",
+                                "properties": {
+                                  "trigger_id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  },
+                                  "parent_task_id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  },
+                                  "evaluated_at": {
+                                    "type": "string",
+                                    "format": "date-time"
+                                  }
+                                },
+                                "required": [
+                                  "trigger_id",
+                                  "evaluated_at"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "event_id",
+                              "stream_id",
+                              "sequence",
+                              "event_version",
+                              "actor",
+                              "task_id",
+                              "conversation_id",
+                              "occurred_at",
+                              "redaction_class",
+                              "event_type",
+                              "payload"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "event_id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 256
+                              },
+                              "stream_id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 256
+                              },
+                              "sequence": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0
+                              },
+                              "event_version": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0
+                              },
+                              "actor": {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "user",
+                                      "agent",
+                                      "runtime",
+                                      "admin",
+                                      "system"
+                                    ]
+                                  },
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "id"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "task_id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 256
+                              },
+                              "conversation_id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 256
+                              },
+                              "occurred_at": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "redaction_class": {
+                                "type": "string",
+                                "enum": [
+                                  "public",
+                                  "internal",
+                                  "restricted"
+                                ]
+                              },
+                              "event_type": {
+                                "type": "string",
+                                "enum": [
+                                  "trigger.external_event"
+                                ]
+                              },
+                              "payload": {
+                                "type": "object",
+                                "properties": {
+                                  "trigger_id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  },
+                                  "source": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 128
+                                  },
+                                  "delivery_digest": {
+                                    "type": "string",
+                                    "pattern": "^sha256:[a-f0-9]{64}$"
+                                  },
+                                  "occurred_at": {
+                                    "type": "string",
+                                    "format": "date-time"
+                                  }
+                                },
+                                "required": [
+                                  "trigger_id",
+                                  "source",
+                                  "delivery_digest",
+                                  "occurred_at"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "event_id",
+                              "stream_id",
+                              "sequence",
+                              "event_version",
+                              "actor",
+                              "task_id",
+                              "conversation_id",
+                              "occurred_at",
+                              "redaction_class",
+                              "event_type",
+                              "payload"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "event_id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 256
+                              },
+                              "stream_id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 256
+                              },
+                              "sequence": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0
+                              },
+                              "event_version": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0
+                              },
+                              "actor": {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "user",
+                                      "agent",
+                                      "runtime",
+                                      "admin",
+                                      "system"
+                                    ]
+                                  },
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "id"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "task_id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 256
+                              },
+                              "conversation_id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 256
+                              },
+                              "occurred_at": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "redaction_class": {
+                                "type": "string",
+                                "enum": [
+                                  "public",
+                                  "internal",
+                                  "restricted"
+                                ]
+                              },
+                              "event_type": {
+                                "type": "string",
+                                "enum": [
                                   "task.created"
                                 ]
                               },
@@ -30383,7 +32319,11 @@
                                       "operation.confirmed",
                                       "trigger.scheduled",
                                       "trigger.webhook",
-                                      "trigger.file_event"
+                                      "trigger.file_event",
+                                      "trigger.git_event",
+                                      "trigger.task_completed",
+                                      "trigger.condition_met",
+                                      "trigger.external_event"
                                     ]
                                   },
                                   "trigger_event_id": {

@@ -1,0 +1,18 @@
+{
+  "event_id": "evt_00a",
+  "stream_id": "task:task_004",
+  "sequence": 1,
+  "event_type": "trigger.external_event",
+  "event_version": 1,
+  "actor": { "type": "system", "id": "webhook-receiver" },
+  "task_id": "task_004",
+  "conversation_id": "conv_001",
+  "occurred_at": "2026-10-31T09:15:00.000Z",
+  "payload": {
+    "trigger_id": "trg_external_001",
+    "source": "form-service",
+    "delivery_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "occurred_at": "2026-10-31T09:14:59.000Z"
+  },
+  "redaction_class": "internal"
+}

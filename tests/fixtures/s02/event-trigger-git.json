@@ -1,0 +1,18 @@
+{
+  "event_id": "evt_007",
+  "stream_id": "task:task_001",
+  "sequence": 7,
+  "event_type": "trigger.git_event",
+  "event_version": 1,
+  "actor": { "type": "system", "id": "scheduler" },
+  "task_id": "task_001",
+  "conversation_id": "conv_001",
+  "occurred_at": "2026-10-31T09:00:00.000Z",
+  "payload": {
+    "watcher_id": "watch_001",
+    "project_id": "proj_thesis",
+    "branch": "main",
+    "commit_sha": "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b"
+  },
+  "redaction_class": "internal"
+}

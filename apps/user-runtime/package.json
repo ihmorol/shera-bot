@@ -14,9 +14,14 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "4.0.92",
+    "@ai-sdk/google": "4.0.108",
+    "@ai-sdk/openai": "4.0.105",
+    "@ai-sdk/openai-compatible": "3.0.81",
     "@shera-bot/agent-pack-sdk": "workspace:*",
     "@shera-bot/contracts": "workspace:*",
     "@shera-bot/pi-protocol": "workspace:*",
+    "ai": "7.0.157",
     "express": "5.2.1",
     "playwright": "1.64.1",
     "simple-git": "^4.0.2",

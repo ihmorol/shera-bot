@@ -47,6 +47,19 @@
         "Fail the gate on LGPL until distribution terms exist: blocks S01 on a dependency the owner has not yet ruled on.",
         "Vendor and build the library from source: real maintenance cost for a private prototype."
       ]
+    },
+    {
+      "license": "AFL-2.1",
+      "reviewedOn": "2026-10-31",
+      "status": "Delegated - pending owner review",
+      "packages": ["json-schema"],
+      "packagesNote": "json-schema 4.0.0 is a transitive dependency of @ai-sdk/provider 4.0.34 (the Vercel AI SDK's provider core, adopted by S23 — E34). No other package in the tree carries this license.",
+      "rationale": "The package is dual-licensed (AFL-2.1 OR BSD-3-Clause); the project consumes it under the BSD-3-Clause grant, which is already on the allowed list. The exception exists only because the policy's compound-expression rule is deliberately stricter than SPDX: a parenthesized OR requires every component to be acceptable, so the unchosen AFL-2.1 alternative needs a written review. AFL-2.1 itself is a permissive, GPL-compatible University of Illinois license with patent terms comparable to Apache-2.0; the effective obligations taken are BSD-3-Clause's (attribution notice in the inventory artifact). Re-check before any distribution.",
+      "alternatives": [
+        "Drop the AI SDK embed to avoid the transitive dependency: would forfeit the recorded slice-shortener leverage decision (issue #24's open-source note) and hand-roll five protocol adapters.",
+        "Fail the gate until the owner rules: blocks the slice on a permissive dual-license where the consumed grant is already allowed.",
+        "Vendor a BSD-only fork of json-schema: real maintenance cost for zero license-posture change (the consumed grant is already BSD-3-Clause)."
+      ]
     }
   ]
 }

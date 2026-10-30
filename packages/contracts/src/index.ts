@@ -37,3 +37,4 @@ export * from "./api.ts";
 export * from "./runtime.ts";
 export * from "./registry.ts";
 export * from "./runtime-access.ts";
+export * from "./providers.ts";

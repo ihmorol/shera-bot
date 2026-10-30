@@ -85,7 +85,18 @@ export function isBrowserRuntimePath(method: string, path: string): boolean {
       path === "/v1/tools/create" ||
       path === "/v1/tools/activate" ||
       path === "/v1/tools/disable" ||
-      path === "/v1/tools/enable"
+      path === "/v1/tools/enable" ||
+      // S23 (PRD §9, D22, E9, G3): the provider surface's user-facing
+      // mutations — custom-provider configure, credential replace/revoke
+      // (the credential is accepted once and never returned; the masked view
+      // is the whole answer), enable/disable, the connection test, and the
+      // AC11 per-conversation override. The PLATFORM provisioning route
+      // (/v1/providers/platform) is deliberately ABSENT — admin provisioning
+      // writes through the loopback/internal channel only (E9), never from
+      // the browser.
+      path === "/v1/providers" ||
+      /^\/v1\/providers\/[a-zA-Z0-9_-]+\/(?:credential|revoke|status|test)$/.test(path) ||
+      path === "/v1/providers/overrides"
     );
   }
   if (method === "PUT") {
@@ -101,6 +112,10 @@ export function isBrowserRuntimePath(method: string, path: string): boolean {
   return (
     method === "GET" &&
     (path === "/v1/agents" ||
+      // S23: the masked provider list and the AC11 effective readout (the
+      // chat header's data source). Both answer masked views only (G3).
+      path === "/v1/providers" ||
+      path === "/v1/providers/effective" ||
       /^\/v1\/agents\/[a-zA-Z0-9_-]+(?:\/settings)?$/.test(path) ||
       /^\/v1\/conversations\/[a-zA-Z0-9_-]+\/events$/.test(path) ||
       // S13 reads: the operations list, the detail read model, and the merged

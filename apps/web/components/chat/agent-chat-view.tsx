@@ -8,6 +8,7 @@ import Link from "next/link";
 
 import { AgentAvatar } from "@/components/chat/agent-avatar";
 import { Composer, NO_PROVIDER_COMPOSER_COPY } from "@/components/chat/composer";
+import type { EffectiveProviderState } from "@/lib/provider-data";
 import { EmptyThread, ThreadSkeleton } from "@/components/chat/thread-states";
 import { MessageList } from "@/components/chat/message-list";
 import { StreamingMessage } from "@/components/chat/streaming-message";
@@ -260,6 +261,8 @@ export function AgentChatView({
   onRuntimeRetry,
   sessionPresence,
   headerActions,
+  providerState,
+  modelControl,
 }: {
   /** The identity fields the header (and avatar) render — full Agent or the live row. */
   agent: AgentChatIdentity;
@@ -330,6 +333,21 @@ export function AgentChatView({
    * passes nothing and the header is unchanged.
    */
   headerActions?: ReactNode | undefined;
+  /**
+   * S23: the conversation's effective provider readout (AC11), polled by the
+   * caller (useEffectiveProvider). It gates the composer (D17/G4: an
+   * unconfigured resolution disables sending with the runtime's own
+   * explanation) — undefined on surfaces not wired yet, which keeps the S09
+   * no-provider state.
+   */
+  providerState?: EffectiveProviderState | undefined;
+  /**
+   * S23: the header's model control (the AC11 override surface), assembled by
+   * the runtime surfaces from the same readout + the masked catalog. Rendered
+   * in the placeholder slot in runtime mode; demo/unwired callers keep the
+   * disabled placeholder.
+   */
+  modelControl?: ReactNode | undefined;
 }) {
   const [localMessages, setLocalMessages] = useState<ChatMessage[]>([]);
   const timersRef = useRef<number[]>([]);
@@ -372,6 +390,23 @@ export function AgentChatView({
   const runtimeMode = mode === "runtime";
   /** The runtime surface with the live send path wired (chunk 2). */
   const runtimeLive = runtimeMode && onRuntimeSend !== undefined;
+  /**
+   * S23 (D17/G4): the wired provider readout decides whether a send may be
+   * offered AT ALL. An unconfigured resolution disables the composer with the
+   * runtime's own safe_message (the named D17 state — not configured /
+   * disabled / credential revoked); a still-resolving readout never offers a
+   * send either (an unresolved provider is not a sendable one). Undefined
+   * (unwired caller) keeps the S09 behavior.
+   */
+  const providerHoldReason =
+    providerState === undefined
+      ? null
+      : providerState.kind === "unconfigured"
+        ? providerState.safeMessage
+        : providerState.kind === "unknown"
+          ? "Checking the provider configuration…"
+          : null;
+  const composerSendable = runtimeLive && providerHoldReason === null;
 
   // D32 presence: the DEMO derives it from run fixtures — which must never
   // leak onto real rows, so runtime mode takes its presence exclusively from
@@ -520,20 +555,27 @@ export function AgentChatView({
         </div>
         {presence ? <PresencePill presence={presence} /> : null}
         {runtimeMode ? <SessionPresenceChip state={sessionPresence ?? "none"} /> : null}
-        {/* Model placeholder collapses away below md — the identity (name +
-            role) keeps width priority at the 360px min breakpoint (§2.2). */}
-        <button
-          type="button"
-          disabled
-          title={
-            runtimeMode
-              ? "Provider and model overrides arrive with the settings pass"
-              : "Provider and model overrides arrive with the settings pass (demo)"
-          }
-          className="hidden shrink-0 rounded-lg border border-line px-3 py-1.5 text-xs text-muted opacity-70 md:block"
-        >
-          Platform default
-        </button>
+        {/* S23: the runtime surfaces hand in the AC11 model control (effective
+            provider/model + the override panel). Unwired callers keep the
+            disabled placeholder, which collapses away below md — the identity
+            (name + role) keeps width priority at the 360px min breakpoint
+            (§2.2). The real control carries its own breakpoint contract. */}
+        {runtimeMode && modelControl ? (
+          modelControl
+        ) : (
+          <button
+            type="button"
+            disabled
+            title={
+              runtimeMode
+                ? "Provider and model overrides arrive with the settings pass"
+                : "Provider and model overrides arrive with the settings pass (demo)"
+            }
+            className="hidden shrink-0 rounded-lg border border-line px-3 py-1.5 text-xs text-muted opacity-70 md:block"
+          >
+            Platform default
+          </button>
+        )}
         {/* S17 chunk 4: the workspace panel toggle (S7 entry) — provided by
             the runtime surfaces that host the docked panel; demo mode renders
             nothing here. */}
@@ -603,20 +645,23 @@ export function AgentChatView({
         </div>
       )}
 
-      {runtimeLive ? (
+      {composerSendable ? (
         // S09 chunk 2: the real composer — every send is the idempotent
         // message.send command (§6.3); replies are journal events, never a
-        // local fabrication (G4).
+        // local fabrication (G4). S23: sendable only when the effective
+        // provider readout reports a configured resolution.
         <Composer agentName={agent.display_name} onSend={handleSend} />
       ) : runtimeMode ? (
-        // G4 / D17: with no provider configured for the container the composer
-        // is a clear configuration state — never a fake send, never a
-        // fabricated reply. Provider reporting lands with the settings slice.
+        // G4 / D17: with no provider configured (or the readout still
+        // resolving) the composer is a clear configuration state — never a
+        // fake send, never a fabricated reply. The reason is the runtime's
+        // own named state when one exists; the S09 copy is the unwired
+        // fallback.
         <Composer
           agentName={agent.display_name}
           onSend={handleSend}
           disabled
-          disabledReason={NO_PROVIDER_COMPOSER_COPY}
+          disabledReason={providerHoldReason ?? NO_PROVIDER_COMPOSER_COPY}
         />
       ) : (
         <Composer agentName={agent.display_name} onSend={handleSend} />

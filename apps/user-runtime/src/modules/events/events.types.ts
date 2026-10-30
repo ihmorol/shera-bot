@@ -307,6 +307,21 @@ export const RunFailureDecisionPayload = z.strictObject({
 export type RunFailureDecisionPayload = z.infer<typeof RunFailureDecisionPayload>;
 
 /**
+ * Provider configuration refusal (S23 chunk 5; D17, D20, D22, G3). Journaled
+ * on the RUN's stream when the run-start custody check refuses a worker: the
+ * typed configuration state and the provider REFERENCE — never credential
+ * material, never a provider response body (G3). The run row is the
+ * authoritative FAILED state; this event is the stream-visible WHY.
+ */
+export const ProviderConfigurationRefusedPayload = z.strictObject({
+  provider_id: z.string().min(1).nullable(),
+  code: z.enum(["PROVIDER_NOT_CONFIGURED", "PROVIDER_DISABLED", "PROVIDER_CREDENTIAL_REVOKED"]),
+});
+export type ProviderConfigurationRefusedPayload = z.infer<
+  typeof ProviderConfigurationRefusedPayload
+>;
+
+/**
  * Terminal live-view events (S18 chunk 1; PRD §4.3, D10, D27, G3). Journaled
  * on `terminal:<workspace_id>:<agent_id>` streams, one event per
  * terminal_events row, written in the SAME transaction as its row (D10) by
@@ -399,6 +414,10 @@ export const EVENT_TYPES = {
   "worker.stopped": { schema_version: 1, payload: WorkerStoppedPayload },
   "worker.reaped": { schema_version: 1, payload: WorkerReapedPayload },
   "run.failure_decided": { schema_version: 1, payload: RunFailureDecisionPayload },
+  "provider.configuration_refused": {
+    schema_version: 1,
+    payload: ProviderConfigurationRefusedPayload,
+  },
   "terminal.started": { schema_version: 1, payload: TerminalStartedPayload },
   "terminal.output": { schema_version: 1, payload: TerminalOutputPayload },
   "terminal.exited": { schema_version: 1, payload: TerminalExitedPayload },

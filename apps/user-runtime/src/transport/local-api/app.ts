@@ -45,6 +45,7 @@ import type { OperationsService } from "../../modules/operations/operations.serv
 import type { WorkerAdmissionReadout } from "../../modules/workers/task-worker-supervisor.service.ts";
 import { registerApprovalsRoutes, type ApprovalsApiHandle } from "./s20-approvals-api.ts";
 import { registerToolsRoutes, type ToolsApiHandle } from "./s21-tools-api.ts";
+import { registerProvidersRoutes, type ProvidersApiHandle } from "./s23-providers-api.ts";
 import {
   registerLiveViewsRoutes,
   type BrowserLiveViewHandle,
@@ -107,6 +108,22 @@ export const GET_OPERATION_DEFINITION_PREVIEW_PATH =
  * require the :operation_id segment.
  */
 export const OPERATION_LAUNCH_PATH = "/v1/operations/launch" as const;
+
+/**
+ * S23 — the provider surface (PRD §9, D17, D22, E9): the masked catalog CRUD,
+ * credential revoke/replace, enable/disable, the connection test, the AC11
+ * override, the effective readout (the chat header's data source), and the
+ * E9 platform-provisioning route (write-only, NOT browser-allowlisted).
+ */
+export const LIST_PROVIDERS_PATH = "/v1/providers" as const;
+export const CREATE_PROVIDER_PATH = "/v1/providers" as const;
+export const PROVIDER_CREDENTIAL_PATH = "/v1/providers/:provider_id/credential" as const;
+export const PROVIDER_REVOKE_PATH = "/v1/providers/:provider_id/revoke" as const;
+export const PROVIDER_STATUS_PATH = "/v1/providers/:provider_id/status" as const;
+export const PROVIDER_TEST_PATH = "/v1/providers/:provider_id/test" as const;
+export const PROVIDER_OVERRIDES_PATH = "/v1/providers/overrides" as const;
+export const PROVIDER_EFFECTIVE_PATH = "/v1/providers/effective" as const;
+export const PLATFORM_PROVIDER_PATH = "/v1/providers/platform" as const;
 
 /**
  * Replay query (D26): the client's last acknowledged sequence drives exactly
@@ -469,6 +486,14 @@ export interface LocalApiDeps {
    * attempt-count source). Present at every runtime composition.
    */
   runControl?: RunControlApiHandle;
+  /**
+   * S23: the provider registry seam — the masked catalog CRUD, credential
+   * revoke/replace, enable/disable, the connection test, the AC11 override,
+   * the effective readout, and the E9 platform-provisioning route. Present
+   * on every composed stack (the registry starts empty and the honest
+   * unconfigured state answers until something is configured — G4).
+   */
+  providers?: ProvidersApiHandle;
   /**
    * B-1: the redacted sink untyped HTTP faults are recorded to — the generic
    * INTERNAL_ERROR's correlation_id is logged with it, so "The failure has
@@ -1205,6 +1230,12 @@ export function createLocalApi(deps: LocalApiDeps): Express {
   // :approval_id ordering (Express matches in registration order).
   if (deps.approvals) {
     registerApprovalsRoutes(app, deps.approvals);
+
+    // S23: the provider surface — present whenever the composition supplies the
+    // registry seam (every runtime composition does).
+    if (deps.providers) {
+      registerProvidersRoutes(app, deps.providers);
+    }
   }
 
   // S21: the tools surface — inventory + history reads, and the POST command

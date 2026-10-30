@@ -92,6 +92,8 @@ import {
   registerBuiltinNoteTools,
   type ToolsApiHandle,
 } from "./s21-tools-api.ts";
+import { registerExecutionTools } from "./s26-execution-api.ts";
+import { spawnSandboxedExecution } from "../../adapters/process/execution-process-spawn.ts";
 import { HarnessRunService } from "../../modules/runtime/harness-run-service.ts";
 import { ProviderCredentialVault } from "../../modules/providers/provider-credential-vault.ts";
 import { ProviderCredentialsService } from "../../modules/providers/provider-credentials.ts";
@@ -169,6 +171,19 @@ export interface ComposeLocalApiOptions {
    * empty until then).
    */
   toolsInventoryHook?: (allowList: ReadonlyArray<{ tool_id: string; version: string }>) => void;
+  /**
+   * S26: the sandboxed execution tools (code + terminal) — configured with
+   * the workspace scopes they may run inside (the D27 task/workspace scope).
+   * Absent: the tools do not exist (the inventory answers truthfully without
+   * them — G4). Present: the two LOCAL_MUTATION built-ins register through
+   * the executor's binding seam, the D27 workspace roots are the composition's
+   * declaration, and the delegated cgroup base is probed once (overridable
+   * for tests; a null refusal is recorded, never faked).
+   */
+  executionTools?: {
+    workspaceRoots: Record<string, string>;
+    cgroupBaseDir?: string | null;
+  };
   /** Path of the container-local SQLite database file. */
   dbPath: string;
   /** Post-commit live fanout hook (HTTP-only composition; tests). */
@@ -424,6 +439,8 @@ export interface RuntimeHandle {
   projects: ProjectsApiHandle;
   /** S23: the provider registry seam — configuration, custody, resolution. */
   providers: ProviderService;
+  /** The shared transaction primitive (S26 composition tests seed grants here). */
+  tx: SqliteTransactions;
   /** Closes the gateway (and with it the HTTP server), then SQLite. */
   close(): Promise<void>;
 }
@@ -1115,6 +1132,24 @@ function wire(
     });
   }
   registerBuiltinNoteTools(toolRegistry, wireWorkspaceId);
+  // S26: the sandboxed execution tools (code + terminal) — opt-in by
+  // configuration (G4: without the workspace roots the tools do not exist and
+  // the inventory answers truthfully without them). The bindings own every
+  // D27 rule at execution time; the composition supplies the workspace scopes,
+  // the S17 artifact sink (large outputs), the S18 terminal recorder (the
+  // live view), and the probed cgroup base.
+  if (options.executionTools) {
+    registerExecutionTools(toolRegistry, wireWorkspaceId, {
+      spawn: (request) => spawnSandboxedExecution(request),
+      workspaceRoots: options.executionTools.workspaceRoots,
+      artifacts: workspaceArtifacts,
+      terminalRecorder: terminals,
+      logFault: logFault,
+      ...(options.executionTools.cgroupBaseDir !== undefined
+        ? { cgroupBaseDir: options.executionTools.cgroupBaseDir }
+        : {}),
+    });
+  }
   const approvalsApi = buildApprovalsApiHandle({
     approvals,
     approvalsRepository,
@@ -1473,6 +1508,7 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     browser: wired.browser,
     projects: wired.projects,
     providers: wired.providers,
+    tx: wired.tx,
     close: async () => {
       replyStreamer?.stopAll();
       // S16: drain every live worker child through the escalation BEFORE the

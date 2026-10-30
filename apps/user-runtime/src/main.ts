@@ -318,11 +318,21 @@ export async function startRuntimeNode(config: RuntimeNodeConfig = {}): Promise<
     throw new Error("runtime workspace does not match the provisioned account");
   }
   mkdirSync(dirname(dbPath), { recursive: true });
+  // S26 (D27): the sandboxed execution tools run in the REAL runtime — the
+  // workspace scope is a container-local directory beside the database (the
+  // D27 "task/workspace scope"; the per-workspace root is created up front so
+  // the first execution resolves, and the sandbox policy layer re-checks
+  // every path at execution time).
+  const executionWorkspaceRoot = join(dirname(dbPath), "execution-workspaces", defaultWorkspaceId);
+  mkdirSync(executionWorkspaceRoot, { recursive: true });
 
   const runtime: RuntimeHandle = composeRuntime({
     dbPath,
     workspaceId: defaultWorkspaceId,
     packsRoot,
+    executionTools: {
+      workspaceRoots: { [defaultWorkspaceId]: executionWorkspaceRoot },
+    },
     // S23 (D17/G4): the REAL runtime enforces provider custody — a turn or
     // run without a usable provider is refused with the typed configuration
     // state. The E2E mock keeps its own posture (no enforcement; the

@@ -133,8 +133,7 @@ describe("execution tools over the composed runtime (S26 chunk 6)", () => {
           tool_id: "tool_terminal_exec",
           tool_version: "1.0.0",
           capability: "terminal.execute",
-          args_digest:
-            `sha256:${(await import("node:crypto")).createHash("sha256").update(JSON.stringify(rawArgs)).digest("hex")}`,
+          args_digest: `sha256:${(await import("node:crypto")).createHash("sha256").update(JSON.stringify(rawArgs)).digest("hex")}`,
           proposal_summary: "composed terminal execution",
         },
         run: {
@@ -160,7 +159,7 @@ describe("execution tools over the composed runtime (S26 chunk 6)", () => {
 
       // The tool history carries the redacted, bounded result.
       const history = await getJson(running.origin, `/v1/tools/history?workspace_id=${WS}`);
-      const rows = history.body["executions"] as Array<Record<string, unknown>>;
+      const rows = history.body["history"] as Array<Record<string, unknown>>;
       const row = rows.find((entry) => entry["tool_id"] === "tool_terminal_exec");
       expect(row).toBeDefined();
       expect(row!["status"]).toBe("succeeded");

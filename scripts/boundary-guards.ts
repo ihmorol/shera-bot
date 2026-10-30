@@ -61,6 +61,12 @@ const PROCESS_EXCEPTIONS = new Set([
   // children ONLY through its injected spawnChild seam, of which this is the
   // real implementation (the fake factory above is the test exception).
   "apps/user-runtime/src/modules/workers/worker-process-spawn.ts",
+  // The S26 sandbox containment suites: the executed PAYLOADS fork children
+  // (a fork storm, a process tree for the cancellation test) — the
+  // child_process references are payload STRINGS the sandboxed child executes
+  // inside the namespace, not runtime spawning. The production spawn seam is
+  // (and stays) the adapters/process execution adapter.
+  "apps/user-runtime/src/modules/execution/execution-sandbox-limits.test.ts",
   // The fake task worker CHILD script (chunk 2): its --fork-children
   // misbehavior spawns short-lived node children so suites can prove the
   // prlimit --nproc kernel cap at the fork boundary (E1 kernel enforcement).

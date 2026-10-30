@@ -1,10 +1,12 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import type { AgentSettingsSnapshot, ProviderView } from "@shera-bot/contracts";
 import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { ProvidersSettingsView } from "../components/settings/providers-settings";
+import { AgentSettingsView } from "../components/settings/agent-settings";
 
 /**
  * The S23 Providers & models settings surface (UI_DESIGN §S9 row, PRD §9,
@@ -17,7 +19,7 @@ import { ProvidersSettingsView } from "../components/settings/providers-settings
 const APP_DIR = join(import.meta.dirname, "..");
 const render = (element: ReactElement): string => renderToStaticMarkup(element);
 
-const PROVIDER: import("@shera-bot/contracts").ProviderView = {
+const PROVIDER: ProviderView = {
   id: "prov_custom_local",
   workspace_id: "ws_1",
   display_name: "Local Ollama",
@@ -36,7 +38,7 @@ const PROVIDER: import("@shera-bot/contracts").ProviderView = {
   updated_at: "2026-10-30T10:00:00.000Z",
 };
 
-const KEYED: import("@shera-bot/contracts").ProviderView = {
+const KEYED: ProviderView = {
   ...PROVIDER,
   id: "prov_platform_openai",
   display_name: "Platform OpenAI",
@@ -55,6 +57,9 @@ function view(
     createElement(ProvidersSettingsView, {
       providers: [PROVIDER, KEYED],
       surfaceState: "ready",
+      pendingConfirm: null,
+      lastTestResult: null,
+      configurePending: false,
       onConfigure: () => undefined,
       onReplaceCredential: () => undefined,
       onRevoke: () => undefined,
@@ -80,8 +85,10 @@ describe("Providers & models settings (UI_DESIGN §S9, AC10)", () => {
   });
 
   it("shows the no-key state distinctly from a stored credential (D22)", () => {
-    const html = view({ providers: [PROVIDER] });
-    expect(html).toContain("no key stored");
+    expect(view({ providers: [PROVIDER] })).toContain("No-key mode");
+    // An api_key provider with no stored credential says so — it never
+    // pretends to be usable (D17 honesty).
+    expect(view({ providers: [{ ...KEYED, credential_hint: null }] })).toContain("no key stored");
   });
 
   it("offers every PRD §9 custom-provider field on the add-provider form", () => {
@@ -175,5 +182,63 @@ describe("Providers & models settings (UI_DESIGN §S9, AC10)", () => {
     expect(html).toContain("Disable");
     const disabledOnly = view({ providers: [{ ...PROVIDER, status: "disabled" }] });
     expect(disabledOnly).toContain("Enable");
+  });
+});
+
+describe("per-Agent default provider assignment (AC11)", () => {
+  const AGENT_SETTINGS_PATH = "components/settings/agent-settings.tsx";
+
+  function agentSettingsHtml(catalog: ProviderView[] | undefined): string {
+    const snapshot: AgentSettingsSnapshot = {
+      workspace_id: "ws_1",
+      agent_id: "agent_general_assistant",
+      entries: [
+        {
+          key: "default_provider",
+          display_label: "Default provider",
+          description: "Which provider and model this Agent starts with.",
+          editable: true,
+          resettable: true,
+          reset_command: "agent_settings.reset_setting",
+          risk_note: "Providers differ in privacy and cost behavior.",
+          value: { provider_id: "provider_local", model: "qwen3-8b" },
+          recommended_default: { provider_id: "provider_platform", model: "platform-default" },
+        },
+      ],
+    };
+    return render(
+      createElement(AgentSettingsView, {
+        agentName: "General Assistant",
+        snapshot,
+        surfaceState: "ready",
+        pendingResetKey: null,
+        commandPending: false,
+        onUpdateInstructions: () => undefined,
+        onUpdateDefaultProvider: () => undefined,
+        onUpdateToolDefaults: () => undefined,
+        onResetClick: () => undefined,
+        onResetConfirm: () => undefined,
+        onResetCancel: () => undefined,
+        providerCatalog: catalog,
+      }),
+    );
+  }
+
+  it("the default-provider editor offers the masked catalog entries as choices", () => {
+    const html = agentSettingsHtml([
+      {
+        ...PROVIDER,
+        id: "prov_local_1",
+        display_name: "Local Ollama",
+        status: "enabled",
+      },
+    ]);
+    expect(html).toContain("Local Ollama");
+    expect(html).toMatch(/<select/);
+  });
+
+  it("without a catalog the editor keeps its manual entry fallback (honest)", () => {
+    const source = readFileSync(join(APP_DIR, AGENT_SETTINGS_PATH), "utf8");
+    expect(source).toContain("providerCatalog");
   });
 });

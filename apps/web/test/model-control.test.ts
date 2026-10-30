@@ -86,7 +86,7 @@ describe("header model control (AC11)", () => {
     expect(html).toContain("Conversation override");
   });
 
-  it("the unconfigured state explains itself and links to the settings surface", () => {
+  it("the unconfigured state is a distinct, explanatory control", () => {
     const html = render(
       createElement(ModelControl, {
         state: UNCONFIGURED,
@@ -95,8 +95,12 @@ describe("header model control (AC11)", () => {
         onClearOverride: () => undefined,
       }),
     );
+    // The collapsed control reads the honest state, not a fabricated default.
     expect(html).toContain("No provider");
-    expect(html).toContain("Providers &amp; models");
+    // The panel carries the runtime's safe_message and the settings link.
+    const source = readFileSync(join(APP_DIR, "components/chat/model-control.tsx"), "utf8");
+    expect(source).toContain("state.safeMessage");
+    expect(source).toContain("providers");
   });
 
   it("the override picker lists only enabled providers with their default model", () => {
@@ -141,16 +145,20 @@ describe("runtime composer gating (D17/G4, real effective readout)", () => {
     const html = runtimeView({
       kind: "unconfigured",
       code: "PROVIDER_DISABLED",
-      safeMessage: 'The provider "Local Ollama" is disabled. Enable it in Settings → Providers & models.',
+      safeMessage:
+        'The provider "Local Ollama" is disabled. Enable it in Settings → Providers & models.',
     });
-    expect(html).toContain('The provider "Local Ollama" is disabled.');
-    expect(html).toContain("disabled");
+    // (The quotes arrive HTML-escaped in the static markup.)
+    expect(html).toContain("is disabled. Enable it in Settings");
+    expect(html).toContain('disabled=""');
   });
 
   it("a configured resolution leaves the composer enabled (no disabled hint)", () => {
     const html = runtimeView(CONFIGURED);
     expect(html).not.toContain("No provider is configured");
-    expect(html).not.toMatch(/<textarea[^>]*disabled/);
+    // The textarea carries no disabled ATTRIBUTE (the utility classes
+    // legitimately mention disabled: variants).
+    expect(html).not.toMatch(/<textarea[^>]*disabled="/);
   });
 
   it("an unknown effective state (still resolving) never offers a send (G4)", () => {

@@ -8,6 +8,8 @@ import { useContainerResolution, useSessionIdentity } from "@/lib/container-conn
 import type { ContainerResolutionState } from "@/lib/container-resolution";
 import { useAgentDirectChat, useAgentSessionPresence } from "@/lib/agent-data";
 import { useLiveConversation, useSameOriginRuntimeSocketUrl } from "@/lib/runtime-live";
+import { useEffectiveProvider } from "@/lib/provider-data";
+import { ConversationModelControl } from "@/components/chat/model-control";
 import {
   WorkspacePanelToggle,
   useWorkspacePanelRegistration,
@@ -136,6 +138,15 @@ function RuntimeAgentDirectChat({
   const workspaceToggle =
     real.directChatId !== null ? <WorkspacePanelToggle chatId={real.directChatId} /> : undefined;
 
+  // S23 (AC11/D17): the conversation's effective provider readout gates the
+  // composer and drives the header's model control — the runtime's honest
+  // union (configured resolution or the named configuration state), polled on
+  // the established 5s visible-tab cadence.
+  const provider = useEffectiveProvider(workspaceId, real.directChatId);
+  const modelControl = (
+    <ConversationModelControl workspaceId={workspaceId} conversationId={real.directChatId} />
+  );
+
   if (liveEnabled) {
     return (
       <AgentChatView
@@ -161,6 +172,8 @@ function RuntimeAgentDirectChat({
         safeErrorMessage={live.error ?? real.safeErrorMessage}
         mode="runtime"
         headerActions={workspaceToggle}
+        providerState={provider.state}
+        modelControl={modelControl}
       />
     );
   }
@@ -175,6 +188,8 @@ function RuntimeAgentDirectChat({
       safeErrorMessage={real.safeErrorMessage}
       mode="runtime"
       headerActions={workspaceToggle}
+      providerState={provider.state}
+      modelControl={modelControl}
     />
   );
 }

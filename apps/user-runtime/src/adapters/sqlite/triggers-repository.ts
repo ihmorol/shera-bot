@@ -111,6 +111,7 @@ export interface TriggerRecordInsert {
   catch_up_policy: TriggerCatchUpPolicy;
   state: TriggerState;
   pause_reason: TriggerPauseReason | null;
+  next_occurrence_at?: string | null;
   created_by_type: string;
   created_by_id: string;
   created_at: string;
@@ -204,7 +205,7 @@ export class TriggersRepository {
         catch_up_policy, state, pause_reason, last_condition_state,
         last_fired_at, last_occurrence_at, next_occurrence_at,
         created_by_type, created_by_id, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?)`,
       [
         input.workspace_id,
         input.trigger_id,
@@ -215,6 +216,7 @@ export class TriggersRepository {
         input.catch_up_policy,
         input.state,
         input.pause_reason,
+        input.next_occurrence_at ?? null,
         input.created_by_type,
         input.created_by_id,
         input.created_at,

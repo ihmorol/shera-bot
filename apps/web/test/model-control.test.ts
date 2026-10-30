@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -18,7 +19,13 @@ import type { EffectiveProviderState } from "../lib/provider-data";
  */
 
 const APP_DIR = join(import.meta.dirname, "..");
-const render = (element: ReactElement): string => renderToStaticMarkup(element);
+// S21's tool cards use react-query for the runtime status readout, so every
+// render rides the same provider wrapper the app shell supplies.
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { retry: false } },
+});
+const render = (element: ReactElement): string =>
+  renderToStaticMarkup(createElement(QueryClientProvider, { client: queryClient }, element));
 
 const AGENT = agentById("agent_general_assistant")!;
 const CONVERSATION = conversationForAgent("agent_general_assistant")!;

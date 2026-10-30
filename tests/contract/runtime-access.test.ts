@@ -75,6 +75,32 @@ describe("browser runtime trust boundary", () => {
   });
 });
 
+describe("run-control allowlist (S22, PRD §8, AC3/AC15)", () => {
+  it("allowlists the run journal read and the idempotent cancel command — nothing more", () => {
+    // AC3: the run's journal events are the TRUE attempt-count source the
+    // runs panel renders; the browser reads them (GET, workspace-scoped).
+    expect(
+      isBrowserRuntimePath("GET", "/v1/operations/op_01/runs/run_01/events"),
+    ).toBe(true);
+    // AC15: the user's stop control — the idempotent cancel command. The
+    // acting user is bound SERVER-SIDE by the proxy (the S20 decision
+    // convention); the browser never asserts an identity.
+    expect(
+      isBrowserRuntimePath("POST", "/v1/operations/op_01/runs/run_01/cancel"),
+    ).toBe(true);
+    // The exact-shape guard: no other run-segment mutation opens up.
+    for (const [method, path] of [
+      ["POST", "/v1/operations/op_01/runs/run_01"],
+      ["POST", "/v1/operations/op_01/runs/run_01/start"],
+      ["POST", "/v1/operations/op_01/runs/run_01/resume"],
+      ["DELETE", "/v1/operations/op_01/runs/run_01"],
+      ["GET", "/v1/operations/op_01/runs/run_01/cancel"],
+      ["POST", "/v1/operations/op_01/runs/../runs/run_01/cancel"],
+    ] as const)
+      expect(isBrowserRuntimePath(method, path), `${method} ${path}`).toBe(false);
+  });
+});
+
 describe("workspace panel allowlist (S17, D6/D39/G6)", () => {
   it("allows the workspace reads the panel renders", () => {
     for (const path of [

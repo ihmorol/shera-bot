@@ -32,6 +32,8 @@ import {
   trackConnection,
 } from "../../../test/helpers/temp-resources.ts";
 import { openDatabase } from "../../adapters/sqlite/connection.ts";
+import { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
+import { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import { DEFAULT_WORKSPACE_ID, composeRuntime, type RuntimeHandle } from "./compose.ts";
 import type { TaskWorkerSupervisorPolicy } from "../../modules/workers/task-worker-supervisor.service.ts";
 
@@ -186,17 +188,15 @@ interface JournalRow {
 }
 
 function readRunJournal(dbPath: string, runId: string): JournalRow[] {
+  // Through the REPOSITORY — the AC7 boundary contract keeps every SQL
+  // statement inside adapters/sqlite (the cross-connection durability check
+  // opens a second connection, never a second SQL surface).
   const conn = openDatabase(dbPath);
   try {
+    const journal = new EventJournalRepository(new SqliteTransactions(conn.db));
     const rows: JournalRow[] = [];
     for (const stream of [runId, `task:${runId}`]) {
-      const result = conn.db
-        .prepare(
-          `SELECT event_type, payload FROM event_journal
-           WHERE workspace_id = ? AND stream_id = ? ORDER BY sequence`,
-        )
-        .all(WORKSPACE, stream) as Array<{ event_type: string; payload: string }>;
-      for (const row of result) {
+      for (const row of journal.readFrom(WORKSPACE, stream, 0, 10_000)) {
         rows.push({ type: row.event_type, payload: JSON.parse(row.payload) });
       }
     }

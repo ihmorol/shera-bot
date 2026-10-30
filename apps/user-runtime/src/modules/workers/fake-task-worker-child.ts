@@ -84,6 +84,10 @@ const forkChildren = numberArg("fork-children", 0);
 // id in another (the detached-spawn proof: pgid === pid means the worker
 // LEADS its own group, so a negative-pid kill reaches the whole tree).
 const spawnDescendant = args["spawn-descendant"] === "true";
+// S22 capture/test scoping: apply the scripted error to ONE run id only
+// (the harness command is shared across runs; a run-scoped error lets one
+// run fail transiently while its siblings stay healthy).
+const errorOnRun = args["error-on-run"] ?? "";
 const descendantMarkerFile = args["descendant-marker-file"] ?? "";
 const groupMarkerFile = args["group-marker-file"] ?? "";
 
@@ -204,7 +208,7 @@ async function run(): Promise<void> {
       // independently of any final frame).
       process.exit(137);
     }
-    if (errorOnStep === step) {
+    if (errorOnStep === step && (errorOnRun === "" || errorOnRun === args["run-id"])) {
       emit({
         v: protocolVersion,
         type: "error",

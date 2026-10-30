@@ -11,9 +11,9 @@
  *     byte-level assertion that covers EVERY table at once: the journal,
  *     the command receipts, the memory/artifact/worker channels, and the
  *     custody table itself);
- *   - a DEFAULT BACKUP produced the E11 way (`VACUUM INTO`, the recorded
- *     backup mechanism) — the backup carries the SEALED payload, never the
- *     plaintext;
+ *   - a DEFAULT BACKUP produced the E11 way (the recorded backup-export
+ *     helper on the adapter) — the backup carries the SEALED payload, never
+ *     the plaintext;
  *   - the redacted fault-log sink (every untyped fault flows through it);
  *   - the service/API view (masked hints only).
  *

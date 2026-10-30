@@ -22,8 +22,7 @@
  * Admin provisioning (E9) stores the platform credential through this same
  * service and never reads it back.
  */
-import type { DatabaseSync } from "node:sqlite";
-
+import type { SqliteExec } from "../../adapters/sqlite/transactions.ts";
 import type { ProviderCredentialsRepository } from "../../adapters/sqlite/provider-credentials-repository.ts";
 import {
   ProviderCredentialError,
@@ -76,12 +75,12 @@ export class ProviderCredentialsService {
     return this.deps.credentials.delete(workspaceId, providerId);
   }
 
-  hasCredential(workspaceId: string, providerId: string, exec?: DatabaseSync): boolean {
+  hasCredential(workspaceId: string, providerId: string, exec?: SqliteExec): boolean {
     return this.deps.credentials.has(workspaceId, providerId, exec);
   }
 
   /** The store-time masked hint for display; null when none is stored. */
-  credentialHint(workspaceId: string, providerId: string, exec?: DatabaseSync): string | null {
+  credentialHint(workspaceId: string, providerId: string, exec?: SqliteExec): string | null {
     return this.deps.credentials.getHint(workspaceId, providerId, exec);
   }
 
@@ -90,7 +89,7 @@ export class ProviderCredentialsService {
    * request (D22). A revoked (or never-stored) credential is a typed
    * configuration state, not an exception to recover from.
    */
-  decryptForCall(workspaceId: string, providerId: string, exec?: DatabaseSync): string {
+  decryptForCall(workspaceId: string, providerId: string, exec?: SqliteExec): string {
     const sealed = this.deps.credentials.getSealed(workspaceId, providerId, exec);
     if (!sealed) {
       throw new ProviderCredentialError(

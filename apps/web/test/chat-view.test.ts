@@ -171,7 +171,10 @@ describe("inline cards (G2 honest placeholders)", () => {
     const html = render(createElement(RunCard, { run: paused }));
     expect(html).toContain("Paused · insufficient credits");
     const retrying = RUNS.find((candidate) => candidate.state === "RETRYING")!;
-    expect(render(createElement(RunCard, { run: retrying }))).toContain("retries: 2 of 3");
+    // S22 (AC3): the count is the run's own data — the hardcoded " of 3"
+    // total is the recorded fixture-truthfulness defect class and is banned.
+    expect(render(createElement(RunCard, { run: retrying }))).toContain("retries used: 2");
+    expect(render(createElement(RunCard, { run: retrying }))).not.toContain(" of 3");
   });
 });
 

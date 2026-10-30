@@ -28,6 +28,7 @@ import {
 } from "@/lib/operation-api";
 import {
   safeOperationMessage,
+  useCancelRun,
   useCoordinatorCommand,
   useCreateOperation,
   useCreateRun,
@@ -35,8 +36,10 @@ import {
   useOperationThread,
   useRenameOperation,
   useRosterCommand,
+  useRunRetryAttempts,
   useSendOperationMessage,
 } from "@/lib/operation-data";
+import { TypedHttpError } from "@/lib/typed-error";
 import { useGitLinkage } from "@/lib/projects-data";
 import { routes } from "@/lib/routes";
 
@@ -132,6 +135,11 @@ function RuntimeOperationChat({
   const coordinatorCommand = useCoordinatorCommand(workspaceId, operationId);
   const createRun = useCreateRun(workspaceId, operationId);
   const sendMessage = useSendOperationMessage(workspaceId, operationId);
+  // S22 (PRD §8, AC15): the runs panel's stop control — the idempotent
+  // cancel command and the TRUE retry attempt counts (read from each run's
+  // journal, never hardcoded).
+  const cancelRun = useCancelRun(workspaceId, operationId);
+  const [cancelSafeError, setCancelSafeError] = useState<string | null>(null);
   // S14 (D41/D23 rule 6): the user-owned rename, wired to the header affordance.
   const renameOperation = useRenameOperation(workspaceId, operationId);
 
@@ -147,7 +155,22 @@ function RuntimeOperationChat({
   const [draftKey, setDraftKey] = useState(() => newMessageDraftKey());
 
   const operation = detail.detail?.operation ?? null;
-  const runs = detail.detail?.runs ?? [];
+  // Stable identity for the hooks below (react-hooks/exhaustive-deps): the
+  // detail payload object changes per fetch; the run LIST is what matters.
+  const runs = useMemo(() => detail.detail?.runs ?? [], [detail.detail]);
+  // The journal-derived attempt counts for the runs whose cards render one
+  // (RETRYING and the settled states a retry walk can end in) — AC3's truth
+  // source; a failed read renders no number, never a guess.
+  const retryAttemptRunIds = useMemo(
+    () =>
+      runs
+        .filter(
+          (run) => run.state === "RETRYING" || run.state === "PAUSED" || run.state === "CANCELLED",
+        )
+        .map((run) => run.run_id),
+    [runs],
+  );
+  const retryAttempts = useRunRetryAttempts(workspaceId, operationId, retryAttemptRunIds);
   // S19 chunk 2: the task→git join that makes coding run cards git-aware.
   const gitLinkage = useGitLinkage(workspaceId);
   const pending =
@@ -357,6 +380,27 @@ function RuntimeOperationChat({
             createPending={createRun.isPending}
             onCreateRun={() => createRun.mutate()}
             gitLinkage={gitLinkage.linkage}
+            retryAttempts={retryAttempts.data ?? undefined}
+            onCancelRun={(runId) => {
+              setCancelSafeError(null);
+              cancelRun.mutate(
+                {
+                  runId,
+                  cancelledBy: { type: "user", id: session.data?.google_sub ?? "" },
+                },
+                {
+                  onError: (error) => {
+                    setCancelSafeError(
+                      error instanceof TypedHttpError
+                        ? error.sheraError.safe_message
+                        : "The run could not be stopped; it may have already finished.",
+                    );
+                  },
+                },
+              );
+            }}
+            cancelPendingRunId={cancelRun.isPending ? (cancelRun.variables?.runId ?? null) : null}
+            cancelSafeError={cancelSafeError ?? undefined}
           />
         </aside>
       </div>

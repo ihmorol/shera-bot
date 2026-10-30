@@ -785,6 +785,82 @@ export class ToolExecutor {
     return outcome.outcome === "executed";
   }
 
+  /**
+   * Cancel one task's tool work through the executor seam (S22; AC5, D32).
+   * Three honest effects, in order:
+   *
+   *   1. every WITHHELD gated execution of the task is dropped — the effect
+   *      NEVER runs after the cancel (fail-closed; a post-cancel runWithheld
+   *      answers the typed false), and its history row reads `cancelled`
+   *      (D9: a cancelled approval never leaves a grant or an execution);
+   *   2. non-terminal history rows of the task (`running`,
+   *      `awaiting_approval` — the crash-era orphans) sweep to `cancelled`;
+   *      terminal rows keep their outcome (nothing is rewritten — G5);
+   *   3. the cancelled execution ids are returned (the cancellation
+   *      evidence the run-cancel response lists).
+   *
+   * The in-flight AbortController registry rides ctx.signal for the
+   * process-backed binding family (S26's escalation hook); the in-process
+   * binding family is synchronous, so today's reachable surface is the
+   * withheld executions and the row sweep (recorded in E35).
+   *
+   * Idempotent: a second call finds nothing non-terminal and returns [].
+   */
+  cancelForTask(workspaceId: string, taskId: string): string[] {
+    const cancelled: string[] = [];
+
+    // 1. Drop the task's withheld executions — never execute post-cancel.
+    for (const [approvalId, withheld] of [...this.withheld.entries()]) {
+      const run = withheld.input.run;
+      if (run.workspace_id !== workspaceId || run.task_id !== taskId) continue;
+      this.withheld.delete(approvalId);
+      try {
+        this.deps.tools.updateExecutionResult(
+          workspaceId,
+          withheld.execution_id,
+          {
+            status: "cancelled",
+            result_summary: null,
+            finished_at: this.now(),
+            error_code: null,
+          },
+          this.exec(),
+        );
+        cancelled.push(withheld.execution_id);
+      } catch {
+        // Contained: the withheld entry is dropped regardless (fail-closed
+        // on the effect); the row sweep below still terminalizes the row.
+      }
+    }
+
+    // 2. Sweep the task's non-terminal rows to `cancelled` (terminal rows
+    // keep their outcome — a finished execution is not rewritten).
+    let rows: Array<{ execution_id: string; status: string }>;
+    try {
+      rows = this.deps.tools
+        .listExecutionsByTask(workspaceId, taskId)
+        .map((row) => ({ execution_id: row.execution_id, status: row.status }));
+    } catch {
+      return cancelled;
+    }
+    for (const row of rows) {
+      if (row.status !== "running" && row.status !== "awaiting_approval") continue;
+      const updated = this.deps.tools.updateExecutionResult(
+        workspaceId,
+        row.execution_id,
+        {
+          status: "cancelled",
+          result_summary: null,
+          finished_at: this.now(),
+          error_code: null,
+        },
+        this.exec(),
+      );
+      if (updated) cancelled.push(row.execution_id);
+    }
+    return cancelled;
+  }
+
   // -------------------------------------------------------------------------
   // History-row helpers (all inside the caller's transaction)
   // -------------------------------------------------------------------------

@@ -176,6 +176,14 @@ export function prlimitArgv(
  * no shell) and expose it through the supervisor's raw TaskWorkerChild seam.
  * resourceLimits === null spawns the command unwrapped (chunk-1 behavior
  * when no admission policy is configured).
+ *
+ * S22 (AC15, D32, D27; the S19 recorded pattern): the child spawns in its
+ * OWN process group (detached on POSIX — prlimit execs the worker, so the
+ * worker IS the group leader), every kill goes to the WHOLE GROUP
+ * (negative-pid, with the direct kill as fallback), and waitForExit resolves
+ * only after the group has been reaped — a worker that exits gracefully on
+ * the shutdown frame must not orphan its descendants (they hold the stdio
+ * pipes; the S19 validation-runner lesson, applied to the worker tree).
  */
 export function spawnTaskWorkerChild(
   request: TaskWorkerSpawnRequest,
@@ -190,8 +198,10 @@ export function spawnTaskWorkerChild(
       ? null
       : (options.prlimitPath ?? resolvePrlimitBinary());
   const argv = prlimitArgv(request, command, prlimitPath ?? "");
+  const detached = process.platform !== "win32";
   const child: ChildProcess = spawn(argv[0]!, argv.slice(1), {
     stdio: ["pipe", "pipe", "pipe"],
+    detached,
   });
 
   let resolveExit!: (exit: TaskWorkerChildExit) => void;
@@ -239,8 +249,66 @@ export function spawnTaskWorkerChild(
       child.stdin?.write(encodeWorkerFrame(frame));
     },
     kill: (signal: NodeJS.Signals = "SIGKILL") => {
-      child.kill(signal);
+      killWorkerProcessGroup(child, signal);
     },
-    waitForExit: () => exitPromise,
+    // The exit is not settled until the whole GROUP is gone (bounded reap).
+    waitForExit: () => exitPromise.then((exit) => reapWorkerProcessGroup(child).then(() => exit)),
   };
+}
+
+/**
+ * Kill the worker's WHOLE process group (negative-pid signal — the child is
+ * the group leader because it spawns detached), falling back to the direct
+ * kill when the group is already gone or the platform refuses it. This is
+ * the recorded S19 validation-command pattern (orphaned package managers
+ * hold stdio pipes; a bare kill of the shell leaves the tree alive).
+ */
+export function killWorkerProcessGroup(child: ChildProcess, signal: NodeJS.Signals): void {
+  if (child.pid === undefined) return;
+  if (process.platform !== "win32") {
+    try {
+      process.kill(-child.pid, signal);
+      return;
+    } catch {
+      // The group may already be gone (or the platform refuses it) — the
+      // direct kill below is the fallback either way.
+    }
+  }
+  try {
+    child.kill(signal);
+  } catch {
+    // Already dead — a kill race is not a failure.
+  }
+}
+
+/**
+ * Bounded post-exit group reap: while any group member is still alive
+ * (kill(-pgid, 0) succeeds), SIGKILL the group and yield. Resolves within
+ * ~1s worst case; a SIGKILL cannot be caught, so members cannot survive the
+ * deadline in practice. Idempotent — every waitForExit caller reaps safely.
+ */
+const GROUP_REAP_TIMEOUT_MS = 1_000;
+const GROUP_REAP_POLL_MS = 10;
+
+export async function reapWorkerProcessGroup(child: ChildProcess): Promise<void> {
+  if (child.pid === undefined || process.platform === "win32") return;
+  const pgid = -child.pid;
+  const deadline = Date.now() + GROUP_REAP_TIMEOUT_MS;
+  for (;;) {
+    let alive: boolean;
+    try {
+      process.kill(pgid, 0);
+      alive = true;
+    } catch {
+      alive = false;
+    }
+    if (!alive) return;
+    if (Date.now() > deadline) return; // bounded; SIGKILL already landed
+    try {
+      process.kill(pgid, "SIGKILL");
+    } catch {
+      // Gone between the probe and the kill — done on the next poll.
+    }
+    await new Promise((resolve) => setTimeout(resolve, GROUP_REAP_POLL_MS));
+  }
 }

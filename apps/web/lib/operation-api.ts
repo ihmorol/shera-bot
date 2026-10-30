@@ -505,6 +505,116 @@ export function createOperationRun(
   );
 }
 
+/**
+ * S22 (PRD §8, AC15): the user's stop control for one run — the idempotent
+ * cancel command. Every outcome is a typed 200 (`cancelled` with the
+ * teardown evidence + the preserved inventory, `already_cancelled` (a
+ * replayed cancel is a no-op, never an error), `already_settled` (the cancel
+ * lost the race against completion — deterministic), `actor_refused`,
+ * `not_found`); only a transport-level failure throws.
+ */
+export const RunCancelOutcome = z.discriminatedUnion("outcome", [
+  z.strictObject({
+    outcome: z.literal("cancelled"),
+    run_id: z.string(),
+    state: z.string(),
+    cancelled_child_run_ids: z.array(z.string()),
+    cancelled_approval_ids: z.array(z.string()),
+    cancelled_execution_ids: z.array(z.string()),
+    released_lease_count: z.number(),
+    reservation_release_requested: z.boolean(),
+    preserved: z.strictObject({
+      artifact_ids: z.array(z.string()),
+      journal_event_count: z.number(),
+    }),
+  }),
+  z.strictObject({ outcome: z.literal("already_cancelled"), run_id: z.string() }),
+  z.strictObject({
+    outcome: z.literal("already_settled"),
+    run_id: z.string(),
+    state: z.string(),
+  }),
+  z.strictObject({
+    outcome: z.literal("actor_refused"),
+    run_id: z.string(),
+    reason: z.string(),
+  }),
+  z.strictObject({ outcome: z.literal("not_found"), run_id: z.string() }),
+]);
+export type RunCancelOutcomeType = z.infer<typeof RunCancelOutcome>;
+
+export function cancelOperationRun(
+  workspaceId: string,
+  operationId: string,
+  runId: string,
+  cancelledBy: { type: "user" | "admin"; id: string },
+): Promise<RunCancelOutcomeType> {
+  return requestOperation(
+    `/api/runtime/v1/operations/${encodeURIComponent(operationId)}/runs/${encodeURIComponent(runId)}/cancel`,
+    (payload) => RunCancelOutcome.parse(payload),
+    {
+      method: "POST",
+      body: JSON.stringify({ workspace_id: workspaceId, cancelled_by: cancelledBy }),
+    },
+  );
+}
+
+/**
+ * S22 (AC3): the run's journal events — the TRUE attempt-count source. The
+ * task.retry_scheduled envelopes carry the runtime's own attempt numbers;
+ * the UI renders THIS number and never a hardcoded count. The payload is the
+ * journal verbatim (a full D26 envelope per lifecycle row, the bare record
+ * for runtime events); the client parses defensively (a journal row that
+ * fails its shape is skipped, never a crash).
+ */
+export const RunEventReadModel = z.object({
+  event_id: z.string(),
+  stream_id: z.string(),
+  type: z.string(),
+  sequence: z.number(),
+  occurred_at: z.string(),
+  payload: z.unknown(),
+});
+export type RunEventReadModelType = z.infer<typeof RunEventReadModel>;
+
+export async function listOperationRunEvents(
+  workspaceId: string,
+  operationId: string,
+  runId: string,
+): Promise<RunEventReadModelType[]> {
+  const response = await fetchRuntimeResponse(
+    `/api/runtime/v1/operations/${encodeURIComponent(operationId)}/runs/${encodeURIComponent(runId)}/events?workspace_id=${encodeURIComponent(workspaceId)}`,
+    {},
+  );
+  const payload: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw toOperationError(payload);
+  }
+  const events = (payload as { events?: unknown })?.events;
+  if (!Array.isArray(events)) {
+    throw toOperationError(null);
+  }
+  const parsed: RunEventReadModelType[] = [];
+  for (const event of events) {
+    const verdict = RunEventReadModel.safeParse(event);
+    if (verdict.success) parsed.push(verdict.data);
+  }
+  return parsed;
+}
+
+/** The highest journalled retry attempt of one run (0 when none — honest). */
+export function retryAttemptsFromEvents(events: RunEventReadModelType[]): number {
+  let max = 0;
+  for (const event of events) {
+    if (event.type !== "task.retry_scheduled") continue;
+    const attempt = (event.payload as { payload?: { attempt?: unknown } } | null)?.payload?.attempt;
+    if (typeof attempt === "number" && Number.isInteger(attempt) && attempt > max) {
+      max = attempt;
+    }
+  }
+  return max;
+}
+
 export function submitOperationRosterCommand(
   workspaceId: string,
   operationId: string,

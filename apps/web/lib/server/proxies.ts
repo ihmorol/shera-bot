@@ -28,6 +28,13 @@ const SESSION_ACTOR_BINDINGS: ReadonlyArray<{ pathPattern: RegExp; bodyField: st
   // activation, and the disable/enable switch are USER decisions (the
   // runtime refuses agent actors; the owner agent is a separate field the
   // form chooses).
+  // S22 (PRD §8, AC15): the run cancel command binds the deciding user
+  // server-side exactly like the approval decision — the stop control is a
+  // USER action; the browser never asserts the identity.
+  {
+    pathPattern: /^\/v1\/operations\/[a-zA-Z0-9_-]+\/runs\/[a-zA-Z0-9_-]+\/cancel$/,
+    bodyField: "cancelled_by",
+  },
   { pathPattern: /^\/v1\/tools\/create$/, bodyField: "actor" },
   { pathPattern: /^\/v1\/tools\/activate$/, bodyField: "actor" },
   { pathPattern: /^\/v1\/tools\/disable$/, bodyField: "actor" },

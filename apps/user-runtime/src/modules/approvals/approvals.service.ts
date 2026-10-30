@@ -831,6 +831,34 @@ export class ApprovalsService {
     };
   }
 
+  /**
+   * Cancel every PENDING approval request of one task (S22; AC9, D9) — the
+   * RUN-level cancellation path resolves approvals as CANCELLED (never
+   * rejected: the five choices are distinct vocabulary, and "reject" denies
+   * the ACTION, not the task) and creates NO grant (no grant path exists on
+   * this method by construction — D9: a prompt cannot create a grant, and
+   * neither can a cancellation). One transaction; idempotent (already-
+   * resolved requests are untouched). The run's own task.cancelled journal
+   * event carries the story; nothing extra is journalled per request.
+   */
+  cancelPendingForTask(workspaceId: string, taskId: string): string[] {
+    const now = this.now();
+    return this.deps.tx.transaction((exec) => {
+      const resolved: string[] = [];
+      for (const request of this.deps.approvals.listRequestsByTask(workspaceId, taskId, exec)) {
+        if (request.status !== "pending") continue;
+        const applied = this.deps.approvals.resolveRequest(
+          workspaceId,
+          request.approval_id,
+          { status: "cancelled", resolved_at: now, resolved_by_choice: "cancel-the-task" },
+          exec,
+        );
+        if (applied) resolved.push(request.approval_id);
+      }
+      return resolved;
+    });
+  }
+
   private cancelTask(ctx: DecisionContext): ApprovalDecisionResult {
     const { request, run, decidedBy, choice, now, commandId, stream, firstSequence, exec } = ctx;
 

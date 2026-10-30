@@ -19,6 +19,12 @@ export function isBrowserRuntimePath(method: string, path: string): boolean {
       /^\/v1\/operations\/[a-zA-Z0-9_-]+\/(?:roster\/commands|coordinator|runs|thread\/messages|rename)$/.test(
         path,
       ) ||
+      // S22 (PRD §8, AC15): the runs panel's stop control — the idempotent
+      // cancel command. The acting user is bound SERVER-SIDE by the proxy's
+      // session-actor binding (cancelled_by is rebuilt from the session, the
+      // S20 decision convention); the browser never asserts an identity, and
+      // the shape is exact (no other run-segment mutation opens).
+      /^\/v1\/operations\/[a-zA-Z0-9_-]+\/runs\/[a-zA-Z0-9_-]+\/cancel$/.test(path) ||
       // S15 chunk 3 (D30/AC23): the launch CONFIRM — the one mutation the
       // preview gate leads to. The envelope is the contracts
       // OperationLaunchCommand (idempotency_key + actor + issued_at); the
@@ -116,6 +122,11 @@ export function isBrowserRuntimePath(method: string, path: string): boolean {
       // thread. Run/event sub-reads stay private to the runtime surfaces.
       path === "/v1/operations" ||
       /^\/v1\/operations\/[a-zA-Z0-9_-]+(?:\/thread)?$/.test(path) ||
+      // S22 (AC3): one run's journal events — the TRUE attempt-count source
+      // the runs panel renders (the task.retry_scheduled envelopes' own
+      // numbers). Strictly a read; the journal is append-only, so there is
+      // no mutation to refuse.
+      /^\/v1\/operations\/[a-zA-Z0-9_-]+\/runs\/[a-zA-Z0-9_-]+\/events$/.test(path) ||
       // S20 chunk 5 (§S8, E3) approvals reads: the pending D9 cards, one
       // detail card (with its reminder slots + run projection), the ACTIVE
       // grants list, and the reminder mutes list. The detail capture EXCLUDES

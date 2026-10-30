@@ -49,9 +49,7 @@ function makeRequest(overrides: Partial<SandboxSpawnRequest> = {}): SandboxSpawn
 
 /** The delegated cgroup v2 subtree this user may create children under. */
 function probeCgroupBase(): string | null {
-  const candidates = [
-    "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service",
-  ];
+  const candidates = ["/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service"];
   for (const base of candidates) {
     if (!existsSync(base)) continue;
     const probe = join(base, "shera-exec-probe");

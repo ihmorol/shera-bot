@@ -40,6 +40,7 @@ import {
   ScheduleConfigSchema,
   TaskCompletionConfigSchema,
   WebhookConfigSchema,
+  type FileWatchConfig,
   type TriggerCreateInput,
   type TriggerEditInput,
   type TriggerFiringView,
@@ -71,6 +72,23 @@ export interface SchedulesServiceDeps {
   operations: Pick<OperationsRepository, "getOperation" | "findChat">;
   tx: SqliteTransactions;
   now?: (() => string) | undefined;
+}
+
+/**
+ * One typed parse: the schema's success payload, or the typed refusal (G2).
+ * An explicit function declaration — the never-returning narrowing TS
+ * honors at every call site.
+ */
+function parseOrRefuse<T>(schema: { safeParse(input: unknown): { success: boolean; data?: T } }, config: unknown): T {
+  const verdict = schema.safeParse(config);
+  if (!verdict.success || verdict.data === undefined) {
+    throw new SchedulesServiceError(
+      "TRIGGER_CONFIG_INVALID",
+      "validation",
+      "the trigger configuration does not match its kind's typed schema",
+    );
+  }
+  return verdict.data;
 }
 
 export class SchedulesService {
@@ -236,72 +254,62 @@ export class SchedulesService {
     kind: TriggerKindValue,
     config: unknown,
   ): Record<string, unknown> {
-    const refuse = (): never => {
-      throw new SchedulesServiceError(
-        "TRIGGER_CONFIG_INVALID",
-        "validation",
-        "the trigger configuration does not match its kind's typed schema",
-      );
-    };
-    switch (kind) {
-      case "schedule": {
-        const parsed = ScheduleConfigSchema.safeParse(config);
-        if (!parsed.success) refuse();
-        return parsed.data as Record<string, unknown>;
-      }
-      case "file_watch": {
-        const parsed = FileWatchConfigSchema.safeParse(config);
-        if (!parsed.success) refuse();
-        const value = parsed.data;
-        // D6 scope consistency: an agent-scope watcher watches ONE Agent's
-        // own folder — the URI's agent segment and the declared agent_id
-        // must agree (a workspace URI is refused on the agent scope and
-        // vice versa at the schema level).
-        if (value.scope === "agent") {
-          const agentId = value.agent_id ?? /^agent:\/\/([^/]+)\//.exec(value.path_uri)?.[1];
-          if (agentId === undefined) refuse();
-          if (!value.path_uri.startsWith(`agent://${agentId}/`)) refuse();
-          return { scope: value.scope, path_uri: value.path_uri, agent_id: agentId };
-        }
-        if (value.agent_id !== undefined) refuse();
-        return { scope: value.scope, path_uri: value.path_uri };
-      }
-      case "git_watch": {
-        const parsed = GitWatchConfigSchema.safeParse(config);
-        if (!parsed.success) refuse();
-        return parsed.data as Record<string, unknown>;
-      }
-      case "webhook": {
-        const parsed = WebhookConfigSchema.safeParse(config);
-        if (!parsed.success) refuse();
-        // G3: the plaintext secret exists ONLY in this call frame. The
-        // stored config carries the digest; nothing else ever sees it.
-        const stored: WebhookStoredConfig = { source: parsed.data.source };
-        if (parsed.data.secret !== undefined) {
-          stored.secret_digest = `sha256:${createHash("sha256")
-            .update(parsed.data.secret)
-            .digest("hex")}`;
-        }
-        return stored as Record<string, unknown>;
-      }
-      case "task_completion": {
-        const parsed = TaskCompletionConfigSchema.safeParse(config);
-        if (!parsed.success) refuse();
-        return parsed.data as Record<string, unknown>;
-      }
-      case "condition": {
-        const parsed = ConditionConfigSchema.safeParse(config);
-        if (!parsed.success) refuse();
-        return parsed.data as Record<string, unknown>;
-      }
-      case "external_event": {
-        const parsed = ExternalEventConfigSchema.safeParse(config);
-        if (!parsed.success) refuse();
-        return parsed.data as Record<string, unknown>;
-      }
-      default:
-        refuse();
+    if (kind === "schedule") {
+      return parseOrRefuse(ScheduleConfigSchema, config) as Record<string, unknown>;
     }
+    if (kind === "file_watch") {
+      const value = parseOrRefuse(FileWatchConfigSchema, config);
+      // D6 scope consistency: an agent-scope watcher watches ONE Agent's
+      // own folder — the URI's agent segment and the declared agent_id
+      // must agree (a workspace URI is refused on the agent scope and
+      // vice versa at the schema level).
+      if (value.scope === "agent") {
+        const agentId = value.agent_id ?? /^agent:\/\/([^/]+)\//.exec(value.path_uri)?.[1];
+        if (agentId === undefined || !value.path_uri.startsWith(`agent://${agentId}/`)) {
+          throw new SchedulesServiceError(
+            "TRIGGER_CONFIG_INVALID",
+            "validation",
+            "an agent-scope watcher must name its own agent folder",
+          );
+        }
+        return { scope: value.scope, path_uri: value.path_uri, agent_id: agentId };
+      }
+      if (value.agent_id !== undefined) {
+        throw new SchedulesServiceError(
+          "TRIGGER_CONFIG_INVALID",
+          "validation",
+          "a workspace-scope watcher does not take an agent_id",
+        );
+      }
+      return { scope: value.scope, path_uri: value.path_uri };
+    }
+    if (kind === "git_watch") {
+      return parseOrRefuse(GitWatchConfigSchema, config) as Record<string, unknown>;
+    }
+    if (kind === "webhook") {
+      const parsed = parseOrRefuse(WebhookConfigSchema, config);
+      // G3: the plaintext secret exists ONLY in this call frame. The
+      // stored config carries the digest; nothing else ever sees it.
+      const stored: WebhookStoredConfig = { source: parsed.source };
+      if (parsed.secret !== undefined) {
+        stored.secret_digest = `sha256:${createHash("sha256").update(parsed.secret).digest("hex")}`;
+      }
+      return stored as Record<string, unknown>;
+    }
+    if (kind === "task_completion") {
+      return parseOrRefuse(TaskCompletionConfigSchema, config) as Record<string, unknown>;
+    }
+    if (kind === "condition") {
+      return parseOrRefuse(ConditionConfigSchema, config) as Record<string, unknown>;
+    }
+    if (kind === "external_event") {
+      return parseOrRefuse(ExternalEventConfigSchema, config) as Record<string, unknown>;
+    }
+    throw new SchedulesServiceError(
+      "TRIGGER_CONFIG_INVALID",
+      "validation",
+      "unknown trigger kind",
+    );
   }
 
   private toView(workspaceId: string, row: TriggerRecordRow): TriggerView {

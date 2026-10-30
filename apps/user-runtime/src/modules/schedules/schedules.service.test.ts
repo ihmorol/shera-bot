@@ -38,7 +38,7 @@ function newService(now: () => string = () => "2026-10-31T12:00:00.000Z"): {
   const tx = new SqliteTransactions(conn.db);
   const triggers = new TriggersRepository(tx);
   const operations = new OperationsRepository(tx);
-  const service = new SchedulesService({ triggers, operations, tx, ...(now ? { now } : {}) });
+  const service = new SchedulesService({ triggers, operations, tx, now });
   return { service, tx };
 }
 

@@ -87,12 +87,13 @@ describe("S19 v15 migration (projects-and-git)", () => {
     // The S21 integration appended v17 (tool-inventory) and the S23
     // integration appended v18 (provider-catalog) after this migration; the
     // S19 entries themselves never move once merged.
-    expect(MIGRATIONS.at(-1)?.version).toBe(18);
-    expect(MIGRATIONS.at(-1)?.name).toBe("provider-catalog");
-    expect(MIGRATIONS.at(-2)?.name).toBe("tool-inventory");
-    expect(MIGRATIONS.at(-3)?.name).toBe("projects-archive-source");
+    expect(MIGRATIONS.at(-1)?.version).toBe(19);
+    expect(MIGRATIONS.at(-1)?.name).toBe("trigger-records");
+    expect(MIGRATIONS.at(-2)?.name).toBe("provider-catalog");
+    expect(MIGRATIONS.at(-3)?.name).toBe("tool-inventory");
+    expect(MIGRATIONS.at(-4)?.name).toBe("projects-archive-source");
     const applied = appliedMigrationVersions(conn.db);
-    expect(applied.at(-1)).toBe(18);
+    expect(applied.at(-1)).toBe(19);
   });
 
   it("v16 widens projects.source_kind to admit archives while keeping the strict enum", () => {

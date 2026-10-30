@@ -1213,6 +1213,106 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
       ) STRICT;
     `,
   },
+  /**
+   * v19 — declarative trigger records + the firing ledger (S28 chunk 1;
+   * PRD §8, §13, E5, D11, D23 rule 6, E12): the durable rows behind the
+   * runtime scheduler. The scheduler is RUNTIME-OWNED (D11 — the runtime owns
+   * its own clocks and queues; Redis/BullMQ remains rejected per E27), and
+   * the dedup discipline lives in SQLite: the firing ledger's primary key IS
+   * the idempotency key, so a duplicate webhook delivery or a replayed
+   * schedule occurrence can never claim a second firing (D23 rule 6 —
+   * idempotency keys are data, never message text).
+   *
+   * trigger_records: one declarative trigger per row, keyed (workspace_id,
+   * trigger_id) (E12). kind is the CLOSED seven-value vocabulary covering
+   * PRD §8's eight autonomous categories (shared-file and private-folder
+   * changes are both file_watch records whose config scope distinguishes
+   * them). config_json holds the per-kind typed configuration — validated by
+   * the schedules service against per-kind Zod schemas BEFORE a row exists;
+   * the schema guarantees object shape only (the same discipline as the
+   * provider catalog's headers_json). target_operation_id names the Operation
+   * the fired run lands in (the trigger's chat binding supplies the run's
+   * conversation linkage); it is validated by the service at create time, so
+   * no FOREIGN KEY is declared — the v4/v5/v6 discipline. catch_up_policy is
+   * E5's per-trigger decision data ('catch_up' replays missed occurrences
+   * once each through the ledger; 'skip' jumps to the next future
+   * occurrence); every applied decision is ALSO journalled on the trigger's
+   * stream, visible to the UI (AC). state is 'active' | 'paused' with
+   * pause_reason carrying exactly the D48 vocabulary value
+   * ('insufficient_credits') when — and only when — the reservation seam
+   * refused; the CHECK makes an active trigger with a pause reason
+   * unrepresentable. last_condition_state is the edge-trigger memory for
+   * condition triggers (false→true fires once per truth episode);
+   * last_fired_at / last_occurrence_at / next_occurrence_at are the truthful
+   * bookkeeping the UI renders against the scheduler (AC9).
+   *
+   * trigger_firings: the at-least-once LEDGER. PRIMARY KEY (workspace_id,
+   * trigger_id, idempotency_key) — the claim. outcome is the closed firing
+   * vocabulary: 'claimed' (inserted, run pending), 'fired' (run created and
+   * settled), 'deduplicated' (a duplicate delivery lost the race — the
+   * ledger row already existed), 'skipped_catchup' (an occurrence the skip
+   * policy declined), 'refused_provider' (the D17 run-start custody check
+   * refused before any run existed), 'paused_credits' (the S24 reservation
+   * seam refused — the D48 pause), 'failed' (the firing's own machinery
+   * failed; the occurrence is consumed either way — at-least-once, not
+   * unbounded-retry). run_id links the settled firing to its run row (the
+   * run-card "from schedule: …" join). The same idempotency key in two
+   * workspaces are independent rows (E12).
+   */
+  {
+    version: 19,
+    name: "trigger-records",
+    sql: `
+      CREATE TABLE IF NOT EXISTS trigger_records (
+        workspace_id        TEXT    NOT NULL,
+        trigger_id          TEXT    NOT NULL,
+        name                TEXT    NOT NULL CHECK (length(name) BETWEEN 1 AND 200),
+        kind                TEXT    NOT NULL CHECK (kind IN (
+          'schedule', 'file_watch', 'git_watch', 'webhook',
+          'task_completion', 'condition', 'external_event')),
+        target_operation_id TEXT    NOT NULL,
+        config_json         TEXT    NOT NULL CHECK (json_valid(config_json)),
+        catch_up_policy     TEXT    NOT NULL CHECK (catch_up_policy IN ('catch_up', 'skip')),
+        state               TEXT    NOT NULL CHECK (state IN ('active', 'paused')),
+        pause_reason        TEXT    CHECK (pause_reason IS NULL OR pause_reason = 'insufficient_credits'),
+        last_condition_state INTEGER CHECK (last_condition_state IN (0, 1)),
+        last_fired_at       TEXT,
+        last_occurrence_at  TEXT,
+        next_occurrence_at  TEXT,
+        created_by_type     TEXT    NOT NULL CHECK (created_by_type IN ('user', 'agent', 'runtime', 'admin', 'system')),
+        created_by_id       TEXT    NOT NULL,
+        created_at          TEXT    NOT NULL,
+        updated_at          TEXT    NOT NULL,
+        PRIMARY KEY (workspace_id, trigger_id),
+        CHECK (
+          (state = 'active' AND pause_reason IS NULL)
+          OR (state = 'paused')
+        )
+      ) STRICT;
+
+      CREATE INDEX IF NOT EXISTS trigger_records_by_kind_idx
+        ON trigger_records (workspace_id, kind, state);
+
+      CREATE TABLE IF NOT EXISTS trigger_firings (
+        workspace_id    TEXT NOT NULL,
+        trigger_id      TEXT NOT NULL,
+        idempotency_key TEXT NOT NULL,
+        run_id          TEXT,
+        outcome         TEXT NOT NULL CHECK (outcome IN (
+          'claimed', 'fired', 'deduplicated', 'skipped_catchup',
+          'refused_provider', 'paused_credits', 'failed')),
+        detail_json     TEXT CHECK (detail_json IS NULL OR json_valid(detail_json)),
+        fired_at        TEXT NOT NULL,
+        PRIMARY KEY (workspace_id, trigger_id, idempotency_key)
+      ) STRICT;
+
+      CREATE INDEX IF NOT EXISTS trigger_firings_by_run_idx
+        ON trigger_firings (workspace_id, run_id);
+
+      CREATE INDEX IF NOT EXISTS trigger_firings_recent_idx
+        ON trigger_firings (workspace_id, trigger_id, fired_at);
+    `,
+  },
 ];
 
 /**

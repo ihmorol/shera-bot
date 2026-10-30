@@ -32,5 +32,5 @@
  "Add Study Planner to this Operation",
  "Message the Operation",
  null,
- "Stop run run_capture_live"
+ "Stop run run_capture_retry"
 ]

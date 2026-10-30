@@ -200,8 +200,22 @@ export function OperationRunsPanel({
   cancelSafeError?: string | undefined;
   className?: string;
 }) {
-  // The inline confirmation is panel-local state: one run confirms at a time.
+  // The inline confirmation is panel-local state: one run confirms at a
+  // time. It CLOSES itself the moment the run leaves the confirmable set —
+  // a settled cancel (or any state change that answers the question) must
+  // never leave a stale "Stop this run?" dialog under its own answer.
   const [confirmingRunId, setConfirmingRunId] = useState<string | null>(null);
+  const confirmingRun =
+    confirmingRunId !== null
+      ? runs.find((candidate) => candidate.run_id === confirmingRunId)
+      : undefined;
+  const confirmVisible =
+    confirmingRun !== undefined &&
+    ACTIVE_RUN_STATES.has(confirmingRun.state) &&
+    confirmingRun.state !== "CANCELLING";
+  if (!confirmVisible && confirmingRunId !== null) {
+    setConfirmingRunId(null);
+  }
   const cancellingHere = confirmingRunId !== null && cancelPendingRunId === confirmingRunId;
   return (
     <section
@@ -253,7 +267,7 @@ export function OperationRunsPanel({
                 data-run-state={run.state}
                 className={cn(
                   "rounded-lg border border-line bg-surface-elevated px-3 py-2",
-                  confirming && "border-approval",
+                  confirmVisible && confirming && "border-approval",
                 )}
               >
                 <div className="flex items-start justify-between gap-2">
@@ -346,7 +360,7 @@ export function OperationRunsPanel({
                   </p>
                 ) : null}
                 {linkage ? <GitLinkageLine linkage={linkage} /> : null}
-                {confirming && onCancelRun !== undefined ? (
+                {confirming && confirmVisible && onCancelRun !== undefined ? (
                   <StopConfirmation
                     runId={run.run_id}
                     childCount={childCount}

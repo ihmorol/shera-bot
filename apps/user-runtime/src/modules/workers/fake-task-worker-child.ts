@@ -79,6 +79,13 @@ const slowTtftMs = numberArg("slow-ttft-ms", 0);
 const checkpointEvery = numberArg("checkpoint-every", 0);
 const allocateMb = numberArg("allocate-mb", 0);
 const forkChildren = numberArg("fork-children", 0);
+// S22 tree-cancellation probes: spawn ONE long-lived descendant (`sleep`) and
+// record its pid in a marker file; report this process's pid + process group
+// id in another (the detached-spawn proof: pgid === pid means the worker
+// LEADS its own group, so a negative-pid kill reaches the whole tree).
+const spawnDescendant = args["spawn-descendant"] === "true";
+const descendantMarkerFile = args["descendant-marker-file"] ?? "";
+const groupMarkerFile = args["group-marker-file"] ?? "";
 
 function emit(frame: WorkerChildFrame): void {
   process.stdout.write(encodeWorkerFrame(frame));
@@ -161,6 +168,31 @@ async function run(): Promise<void> {
   if (slowTtftMs > 0) await delay(slowTtftMs); // heartbeats keep flowing
   if (allocateMb > 0 && !hoardMemory(allocateMb)) process.exit(1); // kernel cap hit
   if (forkChildren > 0 && !(await spawnChildren(forkChildren))) process.exit(1);
+  if (spawnDescendant && descendantMarkerFile !== "") {
+    const { spawn } = await import("node:child_process");
+    const { writeFileSync } = await import("node:fs");
+    // A long-lived descendant that ignores nothing: plain `sleep`, same
+    // process group as this worker. Its pid lands in the marker file so the
+    // suite can probe it with kill(pid, 0) after the cancellation.
+    const descendant = spawn("sleep", ["600"], { stdio: "ignore" });
+    writeFileSync(descendantMarkerFile, String(descendant.pid ?? 0));
+  }
+  if (groupMarkerFile !== "") {
+    const { writeFileSync, readFileSync, existsSync } = await import("node:fs");
+    // Linux: /proc/self/stat field 5 is the process group id (there is no
+    // getpgid in Node). The detached-spawn proof reads pgid === pid.
+    let pgid = process.pid;
+    try {
+      if (existsSync("/proc/self/stat")) {
+        const stat = readFileSync("/proc/self/stat", "utf8");
+        const afterComm = stat.slice(stat.lastIndexOf(")") + 2);
+        pgid = Number(afterComm.split(" ")[2]);
+      }
+    } catch {
+      // fall back to the pid (leader assumption)
+    }
+    writeFileSync(groupMarkerFile, JSON.stringify({ pid: process.pid, pgid }));
+  }
   for (let step = 1; step <= steps; step++) {
     if (hung) return;
     if (hangAfterStep !== null && step > hangAfterStep) {

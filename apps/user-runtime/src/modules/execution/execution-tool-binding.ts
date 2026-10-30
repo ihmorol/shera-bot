@@ -68,6 +68,11 @@ const COMMAND_MAX_CHARS = 65_536;
 const OUTPUT_HEAD_CHARS = 4_096;
 /** The adapter's forwarded-output cap for one execution. */
 const MAX_FORWARDED_BYTES = 4 * 1024 * 1024;
+/**
+ * The artifact threshold (AC8): a stream over this size becomes an artifact
+ * instead of (only) a bounded head in the history row.
+ */
+const ARTIFACT_THRESHOLD_CHARS = 64 * 1024;
 
 export interface ExecutionToolDeps {
   /** The sandbox spawn seam (the real adapter; tests may inject). */
@@ -254,9 +259,18 @@ async function runSandboxed(
 
   let cancelled = ctx.signal.aborted;
 
-  const chunks: string[] = [];
+  // The capture accumulates the REDACTED stream (G3: one redaction boundary
+  // before every sink — the terminal rows, the artifact bytes, the result
+  // head all receive the same redacted text; the recorder's own pass still
+  // runs, defense in depth). `totalStreamChars` counts the WHOLE forwarded
+  // stream so the artifact threshold is a real size decision; the capture
+  // itself is capped (the runtime's memory stays bounded whatever the child
+  // emits).
+  const capturedChunks: string[] = [];
   let capturedChars = 0;
-  const CAPTURE_CAP_CHARS = 256 * 1024;
+  let totalStreamChars = 0;
+  const CAPTURE_CAP_CHARS = 4 * 1024 * 1024;
+  let streamTruncated = false;
 
   let handle: SandboxExecutionHandle;
   try {
@@ -276,12 +290,18 @@ async function runSandboxed(
       cgroupBaseDir: deps.cgroupBaseDir ?? null,
       id: ctx.execution.execution_id,
       onOutput: (stream, chunk) => {
-        recordOutput(stream, chunk);
+        // G3: redact BEFORE any sink. The recorder re-runs its own pass.
+        const redacted = redactSecrets(chunk);
+        recordOutput(stream, redacted);
+        totalStreamChars += redacted.length;
         if (capturedChars < CAPTURE_CAP_CHARS) {
-          const head = chunk.slice(0, CAPTURE_CAP_CHARS - capturedChars);
-          chunks.push(stream === "stdout" ? head : `[stderr] ${head}`);
+          const head = redacted.slice(0, CAPTURE_CAP_CHARS - capturedChars);
+          capturedChunks.push(stream === "stdout" ? head : `[stderr] ${head}`);
           capturedChars += head.length;
         }
+      },
+      onTruncated: () => {
+        streamTruncated = true;
       },
     });
   } catch (error) {
@@ -353,11 +373,45 @@ async function runSandboxed(
     };
   }
 
-  // G3: the result head passes the secret-redaction boundary BEFORE it is
-  // returned (the executor's redactAndBound re-covers it — defense in depth).
-  const rawHead = chunks.join("").slice(0, OUTPUT_HEAD_CHARS);
-  const head = redactSecrets(rawHead);
-  const text = `${exitLabel} duration_ms=${durationMs}\n${head}`.trimEnd();
+  // AC8: a stream over the artifact threshold becomes an ARTIFACT whose bytes
+  // are the REDACTED captured stream; the result text carries a bounded head
+  // plus the artifact pointer — the prompt/history payloads stay bounded
+  // whatever the child emitted. A capture truncated by the cap (or the
+  // adapter's forwarded-stream cap) says so; the artifact is never dressed up
+  // as complete (G4).
+  let artifactNote = "";
+  if (deps.artifacts !== null && (totalStreamChars > ARTIFACT_THRESHOLD_CHARS || streamTruncated)) {
+    try {
+      const truncatedNote =
+        streamTruncated || capturedChars >= CAPTURE_CAP_CHARS
+          ? "\n[output truncated at the capture cap]"
+          : "";
+      const capturedText = `${capturedChunks.join("")}${truncatedNote}`;
+      const ref = deps.artifacts.insertArtifact({
+        workspace_id: ctx.execution.workspace_id,
+        name: `execution-${ctx.execution.execution_id}-output`,
+        artifact_type: "execution_output",
+        mime_type: "text/plain; charset=utf-8",
+        content: Buffer.from(capturedText, "utf8"),
+        producer_agent_id: ctx.execution.agent_id,
+        producer_task_id: ctx.execution.task_id,
+      });
+      artifactNote = `\n[full output (${totalStreamChars} chars) captured as artifact ${ref.artifact_id.slice(0, 8)}…]`;
+    } catch (error) {
+      // The artifact sink failing never fails the execution — the bounded
+      // head still records the result honestly.
+      deps.logFault("execution_artifact_write_failed", {
+        execution_id: ctx.execution.execution_id,
+        name: error instanceof Error ? error.name : "Error",
+      });
+    }
+  }
+
+  // G3: the result head is the already-redacted capture (redaction happened
+  // at the stream boundary, before every sink); the executor's redactAndBound
+  // re-covers it — defense in depth.
+  const head = capturedChunks.join("").slice(0, OUTPUT_HEAD_CHARS);
+  const text = `${exitLabel} duration_ms=${durationMs}${artifactNote}\n${head}`.trimEnd();
   return { ok: true, text };
 }
 

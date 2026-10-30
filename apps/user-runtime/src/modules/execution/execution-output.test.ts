@@ -15,14 +15,7 @@
  *      result text carries a bounded head; the adapter's forwarded-stream cap
  *      bounds the runtime's memory.
  */
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-} from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -44,10 +37,7 @@ import { TerminalRecorder } from "../terminals/terminal-recorder.service.ts";
 import { canonicalArgsDigest, ToolExecutor } from "../tools/tool-executor.service.ts";
 import { ToolRegistry } from "../tools/tool-registry.ts";
 import type { TaskRun } from "@shera-bot/contracts";
-import {
-  makeCodeExecutionBinding,
-  type ExecutionToolDeps,
-} from "./execution-tool-binding.ts";
+import { makeCodeExecutionBinding, type ExecutionToolDeps } from "./execution-tool-binding.ts";
 
 const WS = "ws_default_01";
 const TASK = "task_001";
@@ -130,7 +120,11 @@ function buildRuntime(): CaptureRuntime {
       inventory_scope: "shared",
       input_schema: {
         type: "object",
-        properties: { code: { type: "string" }, language: { type: "string" }, workdir: { type: "string" } },
+        properties: {
+          code: { type: "string" },
+          language: { type: "string" },
+          workdir: { type: "string" },
+        },
         required: ["code", "language"],
       },
       output_schema: { type: "object" },
@@ -235,12 +229,16 @@ describe("execution output capture (S26 chunk 4)", () => {
     // Bounded prompt/history payload — the executor's 2048-byte summary budget.
     expect(settled.result_summary.length).toBeLessThanOrEqual(2100);
     // The artifact exists, carries the FULL redacted stream, and is referenced.
+    // (The pointer uses the artifact id's display prefix: the executor's
+    // high-entropy pass collapses full UUIDs as opaque tokens by design — the
+    // durable linkage is producer_task_id + the artifacts API.)
     const refs = rt.artifacts.listArtifactsByWorkspace(WS);
     expect(refs).toHaveLength(1);
     expect(refs[0]!.artifact_type).toBe("execution_output");
     expect(refs[0]!.producer_task_id).toBe(TASK);
     expect(refs[0]!.size).toBeGreaterThan(200 * 1024);
-    expect(settled.result_summary).toContain(refs[0]!.artifact_id);
+    expect(settled.result_summary).toContain("captured as artifact");
+    expect(settled.result_summary).toContain(refs[0]!.artifact_id.slice(0, 8));
     const full = rt.artifacts.getArtifact(WS, refs[0]!.artifact_id);
     expect(full).not.toBeNull();
     const text = Buffer.from(full!.content).toString("utf8");

@@ -294,7 +294,7 @@ export type WorkerReapedPayload = z.infer<typeof WorkerReapedPayload>;
 export const RunFailureDecisionPayload = z.strictObject({
   workspace_id: z.string().min(1),
   run_id: z.string().min(1),
-  decision: z.enum(["retry", "pause", "fail", "pause_for_review"]),
+  decision: z.enum(["retry", "pause", "fail", "pause_for_review", "cancelled"]),
   /** The typed failure code that was classified (bounded — G3). */
   failure_code: z.string().min(1).max(100),
   /** Why: retry_exhausted | ambiguous_external_effect | classified_transient | classified_permanent. */

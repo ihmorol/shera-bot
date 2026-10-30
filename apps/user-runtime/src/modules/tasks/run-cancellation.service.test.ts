@@ -81,6 +81,7 @@ interface CancelHarness {
   toolsRepo: ToolsRepository;
   leases: WriteLeasesRepository;
   approvals: ApprovalsService;
+  approvalsRepo: ApprovalsRepository;
   operationId: string;
   /** Worker stops asked through the supervisor port, in order. */
   workerStops: Array<{ workspace_id: string; run_id: string; reason: string }>;
@@ -186,6 +187,7 @@ function makeHarness(): CancelHarness {
     toolsRepo,
     leases,
     approvals,
+    approvalsRepo,
     operationId,
     workerStops,
     reservationReleases,
@@ -215,6 +217,12 @@ function createRun(harness: CancelHarness, state: string): string {
     harness.ops.applyRunState(WS, harness.operationId, runId, state);
   }
   return runId;
+}
+
+function activeLeasesFor(harness: CancelHarness, runId: string): unknown[] {
+  return harness.leases
+    .listActiveLeases(WS)
+    .filter((lease) => lease.task_id === runId);
 }
 
 function lifecycleTypes(harness: CancelHarness, runId: string): string[] {
@@ -256,19 +264,18 @@ describe("RunCancellationService — the recorded D8 two-step cancellation", () 
     const runId = createRun(harness, "RUNNING");
     // The run holds a write lease (S17: the runtime force-releases at the
     // terminal state through releaseLeasesForTask).
-    harness.leases.acquireLease({
-      workspace_id: WS,
-      path: "src/notes.md",
-      agent_id: AGENT,
-      holder_type: "agent",
-      task_id: runId,
-      ttl_ms: 60_000,
-    });
-    expect(harness.leases.listActiveForTask(runId)).toHaveLength(1);
+    harness.leases.acquireLease(
+      WS,
+      "workspace://src/notes.md",
+      runId,
+      { type: "agent", id: AGENT },
+      60_000,
+    );
+    expect(activeLeasesFor(harness, runId)).toHaveLength(1);
 
     const outcome = await harness.service.cancelRun({ workspaceId: WS, runId, actor: USER });
     expect(outcome.outcome).toBe("cancelled");
-    expect(harness.leases.listActiveForTask(runId)).toHaveLength(0);
+    expect(activeLeasesFor(harness, runId)).toHaveLength(0);
     // The S24 credit ledger is NOT built yet — the seam is the recorded call.
     expect(harness.reservationReleases).toEqual([{ workspace_id: WS, run_id: runId }]);
   });
@@ -339,15 +346,17 @@ describe("RunCancellationService — children and approvals (AC5, AC9)", () => {
   it("cancelling a run with a queued child prevents the child from starting (AC5)", async () => {
     const harness = makeHarness();
     const parentId = createRun(harness, "RUNNING");
-    const childId = createRun(harness, "QUEUED");
-    // The child is a delegated subrun of the parent (D34: parent_task_id).
+    // The child is a delegated subrun of the parent (D34: parent_task_id —
+    // created through the service's own parent link input).
+    const childId = `run_cancel_${harness.runSeq.n + 1}`;
+    harness.runSeq.n += 1;
+    harness.ops.createRun(WS, harness.operationId, {
+      run_id: childId,
+      parent_task_id: parentId,
+    });
+    // The child is QUEUED (waiting in the admission dequeue — the state the
+    // AC names): cancelling the parent must prevent it from EVER starting.
     harness.ops.applyRunState(WS, harness.operationId, childId, "QUEUED");
-    harness.operationsRepo.updateRunParent(
-      WS,
-      harness.operationId,
-      childId,
-      parentId,
-    );
 
     const outcome = await harness.service.cancelRun({ workspaceId: WS, runId: parentId, actor: USER });
     if (outcome.outcome !== "cancelled") return;
@@ -389,7 +398,7 @@ describe("RunCancellationService — children and approvals (AC5, AC9)", () => {
       },
       execute: () => {},
     });
-    const pending = harness.approvals.listPendingRequests(WS);
+    const pending = harness.approvalsRepo.listRequestsByStatus(WS, "pending");
     expect(pending).toHaveLength(1);
 
     const outcome = await harness.service.cancelRun({ workspaceId: WS, runId, actor: USER });
@@ -397,10 +406,11 @@ describe("RunCancellationService — children and approvals (AC5, AC9)", () => {
     expect(outcome.cancelled_approval_ids).toEqual([pending[0]!.approval_id]);
     // The request is CANCELLED (not rejected — D9: the choices are distinct)
     // and NO grant was created.
-    expect(harness.approvals.listPendingRequests(WS)).toHaveLength(0);
-    expect(harness.approvals.listActiveGrants(WS)).toHaveLength(0);
-    const detail = harness.approvals.getApprovalDetail(WS, pending[0]!.approval_id);
-    expect(detail.approval.status).toBe("cancelled");
+    expect(harness.approvalsRepo.listRequestsByStatus(WS, "pending")).toHaveLength(0);
+    expect(harness.approvalsRepo.listGrants(WS)).toHaveLength(0);
+    const resolved = harness.approvalsRepo.getRequest(WS, pending[0]!.approval_id);
+    expect(resolved?.status).toBe("cancelled");
+    expect(resolved?.resolved_by_choice).toBe("cancel-the-task");
   });
 });
 

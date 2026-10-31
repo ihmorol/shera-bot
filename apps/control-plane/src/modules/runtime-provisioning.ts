@@ -30,6 +30,7 @@ import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 
 import {
+  TIER_RESOURCE_LIMITS,
   type ProvisionRuntimeResult,
   type ResumeRuntimeResult,
   type ResourceTier,
@@ -37,6 +38,7 @@ import {
   type RuntimeBackendFailure,
   type StopRuntimeResult,
   type RuntimeStatus,
+  type TierResourceLimits,
 } from "@shera-bot/contracts";
 
 import type { ControlPlaneDb } from "../db/client.ts";
@@ -280,6 +282,45 @@ export class ProvisioningService {
     const status = await this.tryStatus(mapping, correlationId);
     if (!status) throw runtimeUnavailableError(correlationId);
     return status;
+  }
+
+  /**
+   * S32 (PRD §15 "view container status and resource usage"): the usage view
+   * reads the CONTROL-PLANE RECORD — the applied tier limits and the bounded
+   * health summary the S06 channel maintains. It never invents live metrics
+   * the backend does not report (G4): when the container is unreachable the
+   * recorded state is still the truthful answer.
+   */
+  async getUsageSummary(
+    accountId: string,
+    correlationId?: string,
+  ): Promise<{
+    tier: ResourceTier;
+    provisioning_status: string;
+    health: string;
+    resource_summary: { tier: ResourceTier } & TierResourceLimits;
+    last_health_check_at: string | null;
+  }> {
+    const mapping = await this.requireMapping(accountId, correlationId);
+    if (!mapping.runtimeHandle) throw runtimeNotProvisionedError(correlationId);
+    const rows = await this.deps.db
+      .select({
+        provisioningStatus: controlContainerMappings.provisioningStatus,
+        healthSummary: controlContainerMappings.healthSummary,
+        lastHealthCheckAt: controlContainerMappings.lastHealthCheckAt,
+      })
+      .from(controlContainerMappings)
+      .where(eq(controlContainerMappings.accountId, accountId));
+    const row = rows[0];
+    if (!row) throw runtimeNotProvisionedError(correlationId);
+    const summary = row.healthSummary as { provisioning_status?: string; health?: string };
+    return {
+      tier: mapping.tier,
+      provisioning_status: summary.provisioning_status ?? mapping.provisioningStatus,
+      health: summary.health ?? "unknown",
+      resource_summary: { tier: mapping.tier, ...TIER_RESOURCE_LIMITS[mapping.tier] },
+      last_health_check_at: row.lastHealthCheckAt ? row.lastHealthCheckAt.toISOString() : null,
+    };
   }
 
   /**

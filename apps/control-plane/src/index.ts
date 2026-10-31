@@ -227,7 +227,7 @@ export async function createControlPlaneApp(
   // S32: the authenticated admin surface (every route behind the token gate;
   // every action recorded — AC2/AC6). Mounted before the typed 404 so the
   // gate answers first on any /api/admin path.
-  app.use("/api/admin", createAdminRoutes({ db, tokens: adminTokens, securityEvents, logger }));
+  app.use("/api/admin", createAdminRoutes({ db, tokens: adminTokens, securityEvents, logger, provisioning }));
 
   // Typed 404 (S02 taxonomy).
   app.use((_req: Request, res: Response) => {

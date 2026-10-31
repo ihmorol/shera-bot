@@ -25,6 +25,7 @@ import {
 } from "../errors.ts";
 import type { ControlPlaneLogger } from "../logger.ts";
 import { AdminAccountsService } from "../modules/admin-accounts.ts";
+import type { ProvisioningService } from "../modules/runtime-provisioning.ts";
 import { requireAdminToken } from "./auth.ts";
 import type { AdminTokenService } from "../modules/admin-tokens.ts";
 import type { SecurityEventService } from "../modules/security-events.ts";
@@ -34,6 +35,7 @@ export interface AdminRouteDependencies {
   tokens: AdminTokenService;
   securityEvents: SecurityEventService;
   logger: ControlPlaneLogger;
+  provisioning: ProvisioningService;
 }
 
 /**
@@ -153,6 +155,60 @@ export function createAdminRoutes(deps: AdminRouteDependencies): Router {
       const result = await accounts.assignTier(id, body.tier);
       return { status: 200, body: result, target: id };
     }),
+  );
+
+  // --- Container lifecycle (the recorded S06 provisioning path, keyed by the
+  // admin-targeted account; D12/PRD §15). The provisioning service's typed
+  // errors (RuntimeOperationError) answer through adminHandler — a 404
+  // unknown account, a 409 unprovisioned runtime, never a raw 500.
+
+  const containerOperation =
+    (operation: (accountId: string) => Promise<unknown>) =>
+    async (args: { req: Request; res: Response; tokenId: string; correlationId: string }) => {
+      const id = await requireAccountId(deps.db, args.req.params.id);
+      const result = await operation(id);
+      return { status: 200, body: result, target: id };
+    };
+
+  router.post(
+    "/users/:id/container/provision",
+    adminHandler(
+      deps.securityEvents,
+      "container.provision",
+      containerOperation((id) => deps.provisioning.ensureProvisioned(id)),
+    ),
+  );
+  router.post(
+    "/users/:id/container/restart",
+    adminHandler(
+      deps.securityEvents,
+      "container.restart",
+      containerOperation((id) => deps.provisioning.restart(id)),
+    ),
+  );
+  router.post(
+    "/users/:id/container/stop",
+    adminHandler(
+      deps.securityEvents,
+      "container.stop",
+      containerOperation((id) => deps.provisioning.stop(id)),
+    ),
+  );
+  router.get(
+    "/users/:id/container/status",
+    adminHandler(
+      deps.securityEvents,
+      "container.status",
+      containerOperation((id) => deps.provisioning.getStatus(id)),
+    ),
+  );
+  router.get(
+    "/users/:id/container/usage",
+    adminHandler(
+      deps.securityEvents,
+      "container.usage",
+      containerOperation((id) => deps.provisioning.getUsageSummary(id)),
+    ),
   );
 
   return router;

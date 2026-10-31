@@ -31,7 +31,11 @@ export const RUNTIME_ERROR_CODES = [
 ] as const;
 
 /** S32 admin-surface error codes (also registered in contracts KNOWN_ERROR_CODES). */
-export const ADMIN_ERROR_CODES = ["ADMIN_UNAUTHENTICATED", "ADMIN_ACCOUNT_NOT_FOUND"] as const;
+export const ADMIN_ERROR_CODES = [
+  "ADMIN_UNAUTHENTICATED",
+  "ADMIN_ACCOUNT_NOT_FOUND",
+  "ADMIN_SNAPSHOT_NOT_FOUND",
+] as const;
 
 export type AuthErrorCode = (typeof AUTH_ERROR_CODES)[number];
 
@@ -269,6 +273,20 @@ export function adminAccountNotFoundError(correlationId?: string): RuntimeOperat
       code: "ADMIN_ACCOUNT_NOT_FOUND",
       category: "validation",
       safe_message: "The targeted account does not exist.",
+      retryable: false,
+      user_action: null,
+      correlation_id: correlationId,
+    }),
+  );
+}
+
+/** The admin restore named a snapshot the control plane never recorded (typed 404). */
+export function adminSnapshotNotFoundError(correlationId?: string): RuntimeOperationError {
+  return new RuntimeOperationError(
+    makeSheraError({
+      code: "ADMIN_SNAPSHOT_NOT_FOUND",
+      category: "validation",
+      safe_message: "The named snapshot does not exist for this account.",
       retryable: false,
       user_action: null,
       correlation_id: correlationId,

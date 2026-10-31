@@ -63,6 +63,7 @@ export const KNOWN_ERROR_CODES = [
   // S32 (admin API/CLI; D47, issue #33).
   "ADMIN_UNAUTHENTICATED",
   "ADMIN_ACCOUNT_NOT_FOUND",
+  "ADMIN_SNAPSHOT_NOT_FOUND",
 ] as const;
 
 export const ErrorCodeShape = z

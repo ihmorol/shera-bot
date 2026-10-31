@@ -25,6 +25,7 @@ import {
 } from "../errors.ts";
 import type { ControlPlaneLogger } from "../logger.ts";
 import { AdminAccountsService } from "../modules/admin-accounts.ts";
+import { AdminBackupsService } from "../modules/admin-backups.ts";
 import type { ProvisioningService } from "../modules/runtime-provisioning.ts";
 import { requireAdminToken } from "./auth.ts";
 import type { AdminTokenService } from "../modules/admin-tokens.ts";
@@ -43,6 +44,14 @@ export interface AdminRouteDependencies {
  * failure) with actor, action, target, and timestamp. Routes never hand-roll
  * their audit row — forgetting one is impossible by construction.
  */
+export interface AdminActionOutcome {
+  status: number;
+  body: unknown;
+  target: string;
+  /** Extra redacted audit fields for the admin_action event (AC6). */
+  details?: Record<string, unknown>;
+}
+
 export function adminHandler(
   securityEvents: SecurityEventService,
   action: string,
@@ -51,7 +60,7 @@ export function adminHandler(
     res: Response;
     tokenId: string;
     correlationId: string;
-  }) => Promise<{ status: number; body: unknown; target: string }>,
+  }) => Promise<AdminActionOutcome>,
 ) {
   return async (req: Request, res: Response): Promise<void> => {
     const tokenId: string | undefined = res.locals.adminToken?.tokenId;
@@ -66,6 +75,7 @@ export function adminHandler(
           action,
           target: outcome.target,
           status: outcome.status,
+          ...(outcome.details ?? {}),
         },
         correlationId,
         redactionClass: "restricted",
@@ -209,6 +219,50 @@ export function createAdminRoutes(deps: AdminRouteDependencies): Router {
       "container.usage",
       containerOperation((id) => deps.provisioning.getUsageSummary(id)),
     ),
+  );
+
+  // --- Backup trigger + restore request (E11; the mechanism is S33's, this
+  // slice wires the trigger and the command surface — every response is
+  // honest about the requested-not-completed status, G4).
+
+  const backups = new AdminBackupsService(deps.db);
+
+  router.post(
+    "/users/:id/backups",
+    adminHandler(deps.securityEvents, "backups.trigger", async (args) => {
+      const id = await requireAccountId(deps.db, args.req.params.id);
+      const result = await backups.triggerBackup(id);
+      return {
+        status: 200,
+        body: result,
+        target: id,
+        details: { backup_id: result.backup_id, snapshot_ref: result.snapshot_ref },
+      };
+    }),
+  );
+
+  router.get(
+    "/users/:id/backups",
+    adminHandler(deps.securityEvents, "backups.list", async (args) => {
+      const id = await requireAccountId(deps.db, args.req.params.id);
+      const result = await backups.listBackups(id);
+      return { status: 200, body: result, target: id };
+    }),
+  );
+
+  router.post(
+    "/users/:id/backups/:snapshotRef/restore",
+    adminHandler(deps.securityEvents, "backups.restore_requested", async (args) => {
+      const id = await requireAccountId(deps.db, args.req.params.id);
+      const snapshotRef = Id.parse(args.req.params.snapshotRef);
+      const result = await backups.requestRestore(id, snapshotRef);
+      return {
+        status: 200,
+        body: result,
+        target: `${id}/${result.snapshot_ref}`,
+        details: { account_id: id, snapshot_ref: result.snapshot_ref },
+      };
+    }),
   );
 
   return router;

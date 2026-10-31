@@ -13,14 +13,17 @@
  */
 import {
   RUNTIME_ADMIN_CANCEL_ALL_PATH,
+  RUNTIME_ADMIN_CREDITS_TOP_UP_PATH,
   RUNTIME_CREDENTIALS_COMMIT_PATH,
   RUNTIME_CREDENTIALS_PATH,
   RUNTIME_REGISTRATION_PATH,
   RuntimeAdminCancelAllResponse,
+  RuntimeAdminCreditTopUpResponse,
   RuntimeCredentialCommitResponse,
   RuntimeCredentialRotationResponse,
   RuntimeRegistrationResponse,
   type RuntimeAdminCancelAllRequest,
+  type RuntimeAdminCreditTopUpRequest,
   type RuntimeRegistrationRequest,
 } from "@shera-bot/contracts";
 
@@ -164,5 +167,23 @@ export class RuntimeChannelClient {
       RuntimeAdminCancelAllResponse,
       this.options,
     ) as Promise<RuntimeAdminCancelAllResponse>;
+  }
+
+  /** S32: apply a credit top-up (D48) — the runtime resumes the
+   * insufficient-credit pauses through the recorded resume path. */
+  async applyCreditTopUp(
+    endpoint: string,
+    bearer: string,
+    request: RuntimeAdminCreditTopUpRequest,
+  ): Promise<RuntimeAdminCreditTopUpResponse> {
+    return call(
+      endpoint,
+      RUNTIME_ADMIN_CREDITS_TOP_UP_PATH,
+      "POST",
+      bearer,
+      request,
+      RuntimeAdminCreditTopUpResponse,
+      this.options,
+    ) as Promise<RuntimeAdminCreditTopUpResponse>;
   }
 }

@@ -261,6 +261,38 @@ export const RuntimeAdminCancelAllResponse = z.strictObject({
 });
 export type RuntimeAdminCancelAllResponse = z.infer<typeof RuntimeAdminCancelAllResponse>;
 
+/**
+ * Credit top-up (D48): the admin grant that unblocks runs paused with
+ * `insufficient_credits`. The control plane records the grant durably; the
+ * runtime applies the resume through the recorded D8 `resume_task` row.
+ */
+export const RUNTIME_ADMIN_CREDITS_TOP_UP_PATH = "/internal/v1/admin/credits/top-up" as const;
+
+export const RuntimeAdminCreditTopUpRequest = z.strictObject({
+  workspace_id: WorkspaceId,
+  /** The control-plane grant record id (the audit join). */
+  topup_id: Id,
+  /** Positive integer accounting units (D48: internal prototype accounting). */
+  amount: z.number().int().positive(),
+  reason: z.string().min(1).max(500).optional(),
+  actor: z.strictObject({ type: z.literal("admin"), id: Id }),
+});
+export type RuntimeAdminCreditTopUpRequest = z.infer<typeof RuntimeAdminCreditTopUpRequest>;
+
+export const RUNTIME_ADMIN_TOPUP_SKIP_REASONS = [
+  "pause_reason_not_insufficient_credits",
+  "resume_refused",
+] as const;
+export const RuntimeAdminTopUpSkipReason = z.enum(RUNTIME_ADMIN_TOPUP_SKIP_REASONS);
+
+export const RuntimeAdminCreditTopUpResponse = z.strictObject({
+  workspace_id: WorkspaceId,
+  topup_id: Id,
+  resumed_run_ids: z.array(Id),
+  skipped: z.array(z.strictObject({ run_id: Id, reason: RuntimeAdminTopUpSkipReason })),
+});
+export type RuntimeAdminCreditTopUpResponse = z.infer<typeof RuntimeAdminCreditTopUpResponse>;
+
 // ---------------------------------------------------------------------------
 // Process-internal backend types (NOT wire schemas — never serialized to the
 // user boundary; never registered into OpenAPI).

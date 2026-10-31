@@ -238,6 +238,7 @@ export async function createControlPlaneApp(
       provisioning,
       runtimeTargetForAccount,
       channel: provisioningChannel,
+      registry,
     }),
   );
 

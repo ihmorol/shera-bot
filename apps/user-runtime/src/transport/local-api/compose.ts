@@ -474,6 +474,10 @@ export interface RuntimeHandle {
   providers: ProviderService;
   /** The shared transaction primitive (S26 composition tests seed grants here). */
   tx: SqliteTransactions;
+  /** The event journal (the runtime's durable record; S32 admin reads/tests). */
+  journal: EventJournalRepository;
+  /** The typed events service (S32 lifecycle fixtures drive recorded transitions). */
+  events: EventsService;
   /** Closes the gateway (and with it the HTTP server), then SQLite. */
   close(): Promise<void>;
 }
@@ -1313,6 +1317,15 @@ function wire(
   const adminCommands = buildRuntimeAdminCommandsHandle({
     listWorkspaceRuns: (workspaceId) => operationsRepository.listAllWorkspaceRuns(workspaceId),
     runCancellation,
+    tx,
+    journal,
+    events,
+    runControl: new OperationsRunSeam(operations),
+    findRunOperation: (workspaceId, runId) =>
+      operationsRepository.findRunOperation(workspaceId, runId),
+    findChat: (workspaceId, operationId) => operationsRepository.findChat(workspaceId, operationId),
+    ...(options.now ? { now: options.now } : {}),
+    logFault: (event, fields) => logFault(event, fields),
   });
 
   const replay = new ReplayService({
@@ -1619,6 +1632,8 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     operations: wired.operations,
     adminCommands: wired.adminCommands,
     replyStreamer,
+    journal: wired.journal,
+    events: wired.events,
     sessions: wired.sessions,
     workers: wired.workers,
     approvals: wired.approvals,

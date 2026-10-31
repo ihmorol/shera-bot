@@ -49,7 +49,9 @@ export type RowLifecycleCommand =
   | "fail_task"
   | "recovery_required"
   | "cancel_task"
-  | "cancel_complete";
+  | "cancel_complete"
+  /** S32 (D48): the admin top-up's unblocking resume (PAUSED → QUEUED). */
+  | "resume_task";
 
 /** The runtime audit record appended alongside the lifecycle envelope. */
 export interface RowLifecycleAudit {

@@ -26,11 +26,13 @@ import {
 import type { ControlPlaneLogger } from "../logger.ts";
 import { AdminAccountsService } from "../modules/admin-accounts.ts";
 import { AdminBackupsService } from "../modules/admin-backups.ts";
+import { AdminCreditsService } from "../modules/admin-credits.ts";
 import type { ProvisioningService } from "../modules/runtime-provisioning.ts";
 import { requireAdminToken } from "./auth.ts";
 import type { AdminTokenService } from "../modules/admin-tokens.ts";
 import type { SecurityEventService } from "../modules/security-events.ts";
 import type { RuntimeChannelClient } from "../runtime/channel-client.ts";
+import type { SecretRegistry } from "../redaction.ts";
 
 export interface AdminRouteDependencies {
   db: ControlPlaneDb;
@@ -42,6 +44,8 @@ export interface AdminRouteDependencies {
   runtimeTargetForAccount: (accountId: string) => Promise<{ endpoint: string; bearer: string }>;
   /** The typed internal-channel client (registration/rotation + S32 commands). */
   channel: RuntimeChannelClient;
+  /** The secret registry (top-up reasons are free text — scrubbed, G3). */
+  registry: SecretRegistry;
 }
 
 /**
@@ -266,6 +270,44 @@ export function createAdminRoutes(deps: AdminRouteDependencies): Router {
         body: result,
         target: `${id}/${result.snapshot_ref}`,
         details: { account_id: id, snapshot_ref: result.snapshot_ref },
+      };
+    }),
+  );
+
+  // --- Credit top-up (D48, AC9): the durable grant record + the runtime's
+  // recorded resume path. The strict body schema refuses zero/negative
+  // amounts and any smuggled key (the database CHECK re-guards positivity).
+
+  const TopUpBody = z.strictObject({
+    amount: z.number().int().positive(),
+    reason: z.string().min(1).max(500).optional(),
+  });
+
+  const credits = new AdminCreditsService({
+    db: deps.db,
+    channel: deps.channel,
+    registry: deps.registry,
+    runtimeTargetForAccount: deps.runtimeTargetForAccount,
+  });
+
+  router.post(
+    "/users/:id/credits/top-up",
+    jsonParser,
+    parseBody(TopUpBody),
+    adminHandler(deps.securityEvents, "credits.topup", async (args) => {
+      const id = await requireAccountId(deps.db, args.req.params.id);
+      const body = args.res.locals.body as { amount: number; reason?: string };
+      const result = await credits.topUp({
+        accountId: id,
+        amount: body.amount,
+        ...(body.reason !== undefined ? { reason: body.reason } : {}),
+        tokenId: args.tokenId,
+      });
+      return {
+        status: 200,
+        body: result,
+        target: id,
+        details: { account_id: id, amount: result.amount, topup_id: result.topup_id },
       };
     }),
   );

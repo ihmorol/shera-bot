@@ -20,6 +20,9 @@ import {
   runtimeWorkspaceMatches,
   RuntimeAdminCancelAllRequest,
   RuntimeAdminCancelAllResponse,
+  RuntimeAdminCreditTopUpRequest,
+  RuntimeAdminCreditTopUpResponse,
+  RUNTIME_ADMIN_CREDITS_TOP_UP_PATH,
   RuntimeCredentialCommitRequest,
   RuntimeCredentialCommitResponse,
   RuntimeCredentialRotationRequest,
@@ -315,6 +318,76 @@ export function createInternalApi(deps: InternalApiDeps): InternalApi {
               "INTERNAL_ERROR",
               "The cancel-all command could not be completed.",
             ),
+          );
+      });
+  });
+
+  /** Credit top-up apply (D48): resume the workspace's insufficient-credit
+   * pauses through the recorded resume_task transition. Same channel, same
+   * tenant check. */
+  app.post(RUNTIME_ADMIN_CREDITS_TOP_UP_PATH, requireChannelCredential, (req, res) => {
+    const parsed = RuntimeAdminCreditTopUpRequest.safeParse(req.body);
+    if (!parsed.success) {
+      res
+        .status(400)
+        .json(
+          internalChannelError(
+            "CONTRACT_VALIDATION_FAILED",
+            "The top-up payload is not a valid RuntimeAdminCreditTopUpRequest.",
+          ),
+        );
+      return;
+    }
+    if (deps.accountId !== undefined && parsed.data.workspace_id !== `ws_${deps.accountId}`) {
+      securityEvents.record({
+        event: "internal_admin_command_refused",
+        reason: "workspace_tenant_mismatch",
+        path: RUNTIME_ADMIN_CREDITS_TOP_UP_PATH,
+        occurred_at: new Date().toISOString(),
+      });
+      res
+        .status(403)
+        .json(
+          internalChannelError(
+            "RUNTIME_TENANT_MISMATCH",
+            "This workspace does not belong to this runtime.",
+          ),
+        );
+      return;
+    }
+    if (!deps.adminCommands) {
+      res
+        .status(503)
+        .json(
+          internalChannelError(
+            "INTERNAL_ERROR",
+            "The admin command surface is not wired in this composition.",
+          ),
+        );
+      return;
+    }
+    deps.adminCommands
+      .applyCreditTopUp({
+        workspaceId: parsed.data.workspace_id,
+        topupId: parsed.data.topup_id,
+        amount: parsed.data.amount,
+        ...(parsed.data.reason !== undefined ? { reason: parsed.data.reason } : {}),
+        actor: parsed.data.actor,
+      })
+      .then((result) => {
+        const response: RuntimeAdminCreditTopUpResponse = {
+          workspace_id: result.workspace_id,
+          topup_id: result.topup_id,
+          resumed_run_ids: result.resumed_run_ids,
+          skipped: result.skipped,
+        };
+        res.status(200).json(response);
+      })
+      .catch(() => {
+        res
+          .status(500)
+          .json(
+            internalChannelError("INTERNAL_ERROR", "The top-up command could not be completed."),
           );
       });
   });

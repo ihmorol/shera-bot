@@ -119,10 +119,11 @@ export async function createControlPlaneApp(
   // the local engine for the local single-host deployment (S35).
   const runtimeBackend =
     options.runtimeBackend ?? new LocalContainerBackend({ env: options.env ?? process.env });
+  const provisioningChannel = new RuntimeChannelClient();
   const provisioning = new ProvisioningService({
     db,
     backend: runtimeBackend,
-    channel: new RuntimeChannelClient(),
+    channel: provisioningChannel,
     securityEvents,
     registry,
     logger,
@@ -227,7 +228,18 @@ export async function createControlPlaneApp(
   // S32: the authenticated admin surface (every route behind the token gate;
   // every action recorded — AC2/AC6). Mounted before the typed 404 so the
   // gate answers first on any /api/admin path.
-  app.use("/api/admin", createAdminRoutes({ db, tokens: adminTokens, securityEvents, logger, provisioning }));
+  app.use(
+    "/api/admin",
+    createAdminRoutes({
+      db,
+      tokens: adminTokens,
+      securityEvents,
+      logger,
+      provisioning,
+      runtimeTargetForAccount,
+      channel: provisioningChannel,
+    }),
+  );
 
   // Typed 404 (S02 taxonomy).
   app.use((_req: Request, res: Response) => {

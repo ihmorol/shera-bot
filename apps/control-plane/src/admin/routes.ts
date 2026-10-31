@@ -30,6 +30,7 @@ import type { ProvisioningService } from "../modules/runtime-provisioning.ts";
 import { requireAdminToken } from "./auth.ts";
 import type { AdminTokenService } from "../modules/admin-tokens.ts";
 import type { SecurityEventService } from "../modules/security-events.ts";
+import type { RuntimeChannelClient } from "../runtime/channel-client.ts";
 
 export interface AdminRouteDependencies {
   db: ControlPlaneDb;
@@ -37,6 +38,10 @@ export interface AdminRouteDependencies {
   securityEvents: SecurityEventService;
   logger: ControlPlaneLogger;
   provisioning: ProvisioningService;
+  /** The server-internal channel target resolver (endpoint + bearer). */
+  runtimeTargetForAccount: (accountId: string) => Promise<{ endpoint: string; bearer: string }>;
+  /** The typed internal-channel client (registration/rotation + S32 commands). */
+  channel: RuntimeChannelClient;
 }
 
 /**
@@ -261,6 +266,31 @@ export function createAdminRoutes(deps: AdminRouteDependencies): Router {
         body: result,
         target: `${id}/${result.snapshot_ref}`,
         details: { account_id: id, snapshot_ref: result.snapshot_ref },
+      };
+    }),
+  );
+
+  // --- Emergency cancel-all (AC4): reach the runtime's S22 cancellation
+  // machinery over the recorded internal channel, scoped to THIS user. The
+  // runtime target resolves through the provisioning service's channel
+  // binding (a stopped/unreachable runtime is the typed unavailable error —
+  // there is no "pretend it cancelled" answer, G4).
+
+  router.post(
+    "/users/:id/emergency-cancel",
+    adminHandler(deps.securityEvents, "emergency.cancel_all", async (args) => {
+      const id = await requireAccountId(deps.db, args.req.params.id);
+      const target = await deps.runtimeTargetForAccount(id);
+      const result = await deps.channel.cancelAll(target.endpoint, target.bearer, {
+        workspace_id: `ws_${id}`,
+        actor: { type: "admin", id: `admin-token:${args.tokenId}` },
+      });
+      const cancelledCount = result.results.filter((row) => row.outcome === "cancelled").length;
+      return {
+        status: 200,
+        body: result,
+        target: id,
+        details: { account_id: id, cancelled_count: cancelledCount },
       };
     }),
   );

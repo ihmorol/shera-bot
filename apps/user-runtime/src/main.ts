@@ -364,7 +364,13 @@ export async function startRuntimeNode(config: RuntimeNodeConfig = {}): Promise<
     boundPort = typeof address === "object" && address ? address.port : port;
 
     if (management) {
-      managementServer = createManagementServer(management, runtime.app, dbPath, boundPort);
+      managementServer = createManagementServer(
+        management,
+        runtime.app,
+        dbPath,
+        boundPort,
+        runtime.adminCommands,
+      );
       const server = managementServer;
       await new Promise<void>((resolve, reject) => {
         server.once("error", reject);

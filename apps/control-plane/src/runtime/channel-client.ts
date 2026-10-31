@@ -12,12 +12,15 @@
  * message (G3).
  */
 import {
+  RUNTIME_ADMIN_CANCEL_ALL_PATH,
   RUNTIME_CREDENTIALS_COMMIT_PATH,
   RUNTIME_CREDENTIALS_PATH,
   RUNTIME_REGISTRATION_PATH,
+  RuntimeAdminCancelAllResponse,
   RuntimeCredentialCommitResponse,
   RuntimeCredentialRotationResponse,
   RuntimeRegistrationResponse,
+  type RuntimeAdminCancelAllRequest,
   type RuntimeRegistrationRequest,
 } from "@shera-bot/contracts";
 
@@ -139,5 +142,27 @@ export class RuntimeChannelClient {
       RuntimeCredentialCommitResponse,
       this.options,
     );
+  }
+
+  /**
+   * S32: the emergency cancel-all for one user's workspace (issue #33, AC4).
+   * The SAME authenticated channel; the runtime executes through its own S22
+   * cancellation machinery. A 403 (tenant mismatch) or 503 (not wired) rides
+   * back as ChannelRejected for the caller to type.
+   */
+  async cancelAll(
+    endpoint: string,
+    bearer: string,
+    request: RuntimeAdminCancelAllRequest,
+  ): Promise<RuntimeAdminCancelAllResponse> {
+    return call(
+      endpoint,
+      RUNTIME_ADMIN_CANCEL_ALL_PATH,
+      "POST",
+      bearer,
+      request,
+      RuntimeAdminCancelAllResponse,
+      this.options,
+    ) as Promise<RuntimeAdminCancelAllResponse>;
   }
 }

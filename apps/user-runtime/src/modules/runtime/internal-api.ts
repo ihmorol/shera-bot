@@ -18,17 +18,22 @@ import express, { type Express, type NextFunction, type Request, type Response }
 import {
   isBrowserRuntimePath,
   runtimeWorkspaceMatches,
+  RuntimeAdminCancelAllRequest,
+  RuntimeAdminCancelAllResponse,
   RuntimeCredentialCommitRequest,
   RuntimeCredentialCommitResponse,
   RuntimeCredentialRotationRequest,
   RuntimeCredentialRotationResponse,
   RuntimeRegistrationRequest,
   RuntimeRegistrationResponse,
+  RUNTIME_ADMIN_CANCEL_ALL_PATH,
   RUNTIME_CREDENTIALS_COMMIT_PATH,
   RUNTIME_CREDENTIALS_PATH,
   RUNTIME_REGISTRATION_PATH,
   type SheraError,
 } from "@shera-bot/contracts";
+
+import type { RuntimeAdminCommandsHandle } from "../admin/runtime-admin-commands.ts";
 
 import { ChannelCredentialStore } from "./channel-credentials.ts";
 import {
@@ -45,12 +50,21 @@ export { ChannelCredentialStore, InMemorySecurityEventRecorder };
 export type { RuntimeRegistration } from "./runtime-registration.ts";
 
 function internalChannelError(
-  code: "INTERNAL_CHANNEL_UNAUTHORIZED" | "CONTRACT_VALIDATION_FAILED" | "RUNTIME_TENANT_MISMATCH",
+  code:
+    | "INTERNAL_CHANNEL_UNAUTHORIZED"
+    | "CONTRACT_VALIDATION_FAILED"
+    | "RUNTIME_TENANT_MISMATCH"
+    | "INTERNAL_ERROR",
   safe_message: string,
 ): SheraError {
   return {
     code,
-    category: code === "CONTRACT_VALIDATION_FAILED" ? "validation" : "unauthorized",
+    category:
+      code === "CONTRACT_VALIDATION_FAILED"
+        ? "validation"
+        : code === "INTERNAL_ERROR"
+          ? "internal"
+          : "unauthorized",
     safe_message,
     retryable: false,
     user_action: null,
@@ -74,6 +88,8 @@ export interface InternalApiDeps {
   localApi?: Express;
   securityEvents?: InternalSecurityEventRecorder;
   registrations?: RuntimeRegistrationRegistry;
+  /** S32: the admin command seam (emergency cancel-all; chunk-6/7 legs). */
+  adminCommands?: RuntimeAdminCommandsHandle;
 }
 
 export interface InternalApi {
@@ -226,6 +242,81 @@ export function createInternalApi(deps: InternalApiDeps): InternalApi {
     credentials.commitTo(credentials.digestOf(presented));
     const response: RuntimeCredentialCommitResponse = { committed: true };
     res.status(200).json(response);
+  });
+
+  /**
+   * S32 admin commands (issue #33, D47): served over the SAME channel as
+   * registration/rotation — the per-container bearer — and tenant-checked
+   * against THIS runtime's account binding before any command executes. The
+   * admin actor id arrives from the control plane (the admin token it acted
+   * with); this surface never sees the admin token itself (G3).
+   */
+  app.post(RUNTIME_ADMIN_CANCEL_ALL_PATH, requireChannelCredential, (req, res) => {
+    const parsed = RuntimeAdminCancelAllRequest.safeParse(req.body);
+    if (!parsed.success) {
+      res
+        .status(400)
+        .json(
+          internalChannelError(
+            "CONTRACT_VALIDATION_FAILED",
+            "The cancel-all payload is not a valid RuntimeAdminCancelAllRequest.",
+          ),
+        );
+      return;
+    }
+    if (deps.accountId !== undefined && parsed.data.workspace_id !== `ws_${deps.accountId}`) {
+      securityEvents.record({
+        event: "internal_admin_command_refused",
+        reason: "workspace_tenant_mismatch",
+        path: RUNTIME_ADMIN_CANCEL_ALL_PATH,
+        occurred_at: new Date().toISOString(),
+      });
+      res
+        .status(403)
+        .json(
+          internalChannelError(
+            "RUNTIME_TENANT_MISMATCH",
+            "This workspace does not belong to this runtime.",
+          ),
+        );
+      return;
+    }
+    if (!deps.adminCommands) {
+      // The runtime composition always builds the handle; an absence is a
+      // composition error, never a silent drop (G5).
+      res
+        .status(503)
+        .json(
+          internalChannelError(
+            "INTERNAL_ERROR",
+            "The admin command surface is not wired in this composition.",
+          ),
+        );
+      return;
+    }
+    deps.adminCommands
+      .cancelAllRuns({ workspaceId: parsed.data.workspace_id, actor: parsed.data.actor })
+      .then((result) => {
+        const response: RuntimeAdminCancelAllResponse = {
+          workspace_id: result.workspace_id,
+          results: result.results.map((row) => ({
+            run_id: row.run_id,
+            // The outcome vocabulary is contract-checked at the boundary.
+            outcome: row.outcome as RuntimeAdminCancelAllResponse["results"][number]["outcome"],
+          })),
+        };
+        res.status(200).json(response);
+      })
+      .catch(() => {
+        res
+          .status(500)
+          .json(
+            internalChannelError(
+              "INTERNAL_ERROR",
+              "The cancel-all command could not be completed.",
+            ),
+          );
+      });
   });
 
   /** Health probe for the same authenticated channel (used by backend readiness). */

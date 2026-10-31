@@ -25,7 +25,7 @@
  */
 import { z } from "zod";
 
-import { Id, IsoDateTime, ResourceTier, Sha256Hex } from "./primitives.ts";
+import { Id, IsoDateTime, ResourceTier, Sha256Hex, WorkspaceId } from "./primitives.ts";
 
 /**
  * PRD §3.3 resource tiers as machine-applicable constants. These numbers are
@@ -227,6 +227,39 @@ export const RuntimeCredentialCommitResponse = z.strictObject({
   committed: z.literal(true),
 });
 export type RuntimeCredentialCommitResponse = z.infer<typeof RuntimeCredentialCommitResponse>;
+
+// ---------------------------------------------------------------------------
+// S32 admin commands over the internal channel (issue #33, D47; PRD §15).
+// The SAME authenticated per-container channel as registration/rotation —
+// no second control-plane→runtime path exists or is invented here. Every
+// admin command names its workspace (tenant-checked runtime-side) and the
+// admin actor the control plane attributes (the token id).
+// ---------------------------------------------------------------------------
+
+/** Emergency cancel-all: stop every non-terminal run of the targeted workspace. */
+export const RUNTIME_ADMIN_CANCEL_ALL_PATH = "/internal/v1/admin/cancel-all" as const;
+
+export const RuntimeAdminCancelAllRequest = z.strictObject({
+  workspace_id: WorkspaceId,
+  actor: z.strictObject({ type: z.literal("admin"), id: Id }),
+});
+export type RuntimeAdminCancelAllRequest = z.infer<typeof RuntimeAdminCancelAllRequest>;
+
+/** The per-run outcome vocabulary is the S22 RunCancellationService's. */
+export const RUNTIME_ADMIN_RUN_OUTCOMES = [
+  "cancelled",
+  "already_cancelled",
+  "already_settled",
+  "actor_refused",
+  "not_found",
+] as const;
+export const RuntimeAdminRunOutcome = z.enum(RUNTIME_ADMIN_RUN_OUTCOMES);
+
+export const RuntimeAdminCancelAllResponse = z.strictObject({
+  workspace_id: WorkspaceId,
+  results: z.array(z.strictObject({ run_id: Id, outcome: RuntimeAdminRunOutcome })),
+});
+export type RuntimeAdminCancelAllResponse = z.infer<typeof RuntimeAdminCancelAllResponse>;
 
 // ---------------------------------------------------------------------------
 // Process-internal backend types (NOT wire schemas — never serialized to the

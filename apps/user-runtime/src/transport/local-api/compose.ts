@@ -140,6 +140,18 @@ import {
 import { RetryCoordinator } from "../../modules/tasks/retry-coordinator.service.ts";
 import { RunCancellationService } from "../../modules/tasks/run-cancellation.service.ts";
 import { buildRunControlApiHandle, type RunControlApiHandle } from "./s22-run-control-api.ts";
+import { TriggersRepository } from "../../adapters/sqlite/triggers-repository.ts";
+import {
+  SchedulesService,
+} from "../../modules/schedules/schedules.service.ts";
+import {
+  SchedulerService,
+  type SchedulerWatcherSources,
+} from "../../modules/schedules/scheduler.service.ts";
+import {
+  SchedulerWakeManager,
+} from "../../modules/schedules/scheduler-wake-manager.ts";
+import { registerSchedulesRoutes, type SchedulesApiHandle } from "./s28-schedules-api.ts";
 import { createLocalApi } from "./app.ts";
 import {
   applyScriptedToolProposal,
@@ -446,6 +458,14 @@ export interface RuntimeHandle {
   runControl: RunControlApiHandle;
   /** S23: the provider registry seam — configuration, custody, resolution. */
   providers: ProviderService;
+  /**
+   * S28: the runtime-owned scheduler stack — the declarative trigger records
+   * (the HTTP surface relays into the service), the firing engine (tests and
+   * operators drive fireOccurrence/tick/reconcile directly), and the
+   * boot-time reconciliation + tick loop that close() drains.
+   */
+  schedules: SchedulesService;
+  scheduler: SchedulerService;
   /** Closes the gateway (and with it the HTTP server), then SQLite. */
   close(): Promise<void>;
 }
@@ -476,6 +496,9 @@ interface Wired {
   runCancellation: RunCancellationService;
   runControl: RunControlApiHandle;
   providers: ProviderService;
+  schedules: SchedulesService;
+  scheduler: SchedulerService;
+  wakeManager: SchedulerWakeManager;
   setPublisher(publisher: ConversationPublisher): void;
 }
 
@@ -1259,6 +1282,62 @@ function wire(
     journal,
   });
 
+  // S28: the runtime-owned scheduler stack (PRD §8, §13, E5, D11) — the
+  // declarative trigger records, the firing engine, and the watcher wake
+  // manager over the SAME repositories every other writer uses. The
+  // reservation port is the HONEST S24 seam (the credit ledger is slice
+  // S24 — the consult is recorded through the redacted fault log and the
+  // port allows; never a fake balance, G4). The D17 gate consults the
+  // composed provider gate ONLY under enforcement.
+  const triggersRepository = new TriggersRepository(tx);
+  const schedules = new SchedulesService({
+    triggers: triggersRepository,
+    operations: operationsRepository,
+    tx,
+    ...(options.now ? { now: options.now } : {}),
+  });
+  const schedulerWatcherSources: SchedulerWatcherSources = {
+    files: workspaceFiles,
+    artifacts: workspaceArtifacts,
+    projects: projectsRepository,
+    agentFilesRoot: join(dirname(options.dbPath), "agent-files"),
+    workspaceId: wireWorkspaceId,
+  };
+  const scheduler = new SchedulerService({
+    workspaceId: wireWorkspaceId,
+    triggers: triggersRepository,
+    operations: operationsRepository,
+    ops: operations,
+    journal,
+    events,
+    tx,
+    reservations: {
+      reserveForRun: (input) => {
+        logFault("credit_reservation_consulted", {
+          workspace_id: input.workspace_id,
+          trigger_id: input.trigger_id,
+          run_id: input.run_id,
+          estimate_credits: input.estimate_credits,
+          seam: "s24-credit-ledger-not-built",
+        });
+        return { ok: true, reservation_id: `res_${input.run_id}` };
+      },
+    },
+    ...(providerGate
+      ? { runGate: { checkRunStart: (workspaceId: string, providerId: string) => providerGate.checkRunStart(workspaceId, providerId) } }
+      : {}),
+    watcherSources: schedulerWatcherSources,
+    ...(options.now ? { now: options.now } : {}),
+    logFault: (event, fields) => logFault(event, fields),
+  });
+  const wakeManager = new SchedulerWakeManager({
+    triggers: triggersRepository,
+    workspaceId: wireWorkspaceId,
+    agentFilesRoot: schedulerWatcherSources.agentFilesRoot,
+    onWake: () => scheduler.tick(),
+    logFault: (event, fields) => logFault(event, fields),
+  });
+
   const replay = new ReplayService({
     journal,
     loadSnapshot: (workspaceId, streamId) => {
@@ -1322,6 +1401,13 @@ function wire(
     ...(browserHandle ? { browser: browserHandle } : {}),
     projects: projectsApi,
     runControl: runControlApi,
+    schedules: {
+      schedules,
+      scheduler,
+      triggers: triggersRepository,
+      workspaceId: wireWorkspaceId,
+      onTriggerMutation: () => wakeManager.sync(),
+    },
     ...(options.logUntypedFault ? { logUntypedFault: options.logUntypedFault } : {}),
   });
   return {
@@ -1350,6 +1436,9 @@ function wire(
     runCancellation,
     runControl: runControlApi,
     providers,
+    schedules,
+    scheduler,
+    wakeManager,
     setPublisher(next) {
       publisher = next;
     },
@@ -1456,6 +1545,11 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     // session and lands its reply durably. Contained twice over: the bridge
     // catches its own failures AND this wrapper would (B4).
     wired.sessionBridge?.handleCommittedEvent(event);
+    // S28: the task-completion cascade rides the same fanout — a terminal
+    // envelope fires the matching task_completion trigger exactly once (the
+    // ledger dedups the envelope+worker-frame double announcement). The
+    // handler contains its own faults.
+    wired.scheduler.handleCommittedEvent(event);
   }, logFault);
   wired.setPublisher(broadcast);
 
@@ -1470,6 +1564,21 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
   // proposal path every scripted typed event already flows through (no new
   // event path, no classification — G2/G4). Without the option both halves
   // are absent and the runs behave exactly as before S20.
+  // S28: the boot reconciliation (the recorded catch-up-versus-skip
+  // decisions, the claimed-firing re-drive) + the tick loop + the watcher
+  // sync. Fire-and-forget at boot (a reconciliation fault is contained —
+  // the same posture as the S16 worker reconciliation).
+  try {
+    wired.scheduler.reconcileBoot();
+  } catch (error) {
+    logFault("scheduler_reconcile_boot_failed", {
+      name: error instanceof Error ? error.name : "Error",
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+  wired.wakeManager.sync();
+  wired.scheduler.start();
+
   const scriptedToolProposal = options.scriptedToolProposal;
   // S20 review fix F6e: the scripted proposal is carried by the composed
   // FakeHarnessAdapter's script — a caller-supplied harnessAdapter replaces
@@ -1573,7 +1682,14 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     retryCoordinator: wired.retryCoordinator,
     runControl: wired.runControl,
     providers: wired.providers,
+    schedules: wired.schedules,
+    scheduler: wired.scheduler,
     close: async () => {
+      // S28: stop the scheduler's tick loop and the watcher wake manager
+      // BEFORE the transport goes down (a stopped runtime never fires a
+      // trigger; chokidar never outlives the gateway).
+      wired.scheduler.stop();
+      await wired.wakeManager.stop();
       // S22: drop every pending retry backoff timer before the transport
       // goes down (a stopped runtime never fires a scheduled retry).
       wired.retryCoordinator.dispose();

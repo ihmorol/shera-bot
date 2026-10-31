@@ -64,6 +64,7 @@ import {
 import { registerWorkspaceApiRoutes, type WorkspaceApiDeps } from "./s17-workspace-api.ts";
 import { registerProjectsRoutes, type ProjectsApiHandle } from "./s19-projects-api.ts";
 import { registerRunControlRoutes, type RunControlApiHandle } from "./s22-run-control-api.ts";
+import { registerSchedulesRoutes, type SchedulesApiHandle } from "./s28-schedules-api.ts";
 
 export const SUBMIT_CONVERSATION_COMMAND_PATH = "/v1/conversations/commands" as const;
 export const LIST_CONVERSATION_EVENTS_PATH = "/v1/conversations/:conversation_id/events" as const;
@@ -486,6 +487,12 @@ export interface LocalApiDeps {
    * attempt-count source). Present at every runtime composition.
    */
   runControl?: RunControlApiHandle;
+  /**
+   * S28: the schedules + webhook surface — the typed trigger CRUD (G2), the
+   * AC10 pause/resume controls, the firings ledger read, and the webhook
+   * receiver. Present at every runtime composition.
+   */
+  schedules?: SchedulesApiHandle;
   /**
    * S23: the provider registry seam — the masked catalog CRUD, credential
    * revoke/replace, enable/disable, the connection test, the AC11 override,
@@ -1263,6 +1270,9 @@ export function createLocalApi(deps: LocalApiDeps): Express {
   // journal read. Registered BEFORE the error handlers.
   if (deps.runControl) {
     registerRunControlRoutes(app, deps.runControl);
+    if (deps.schedules !== undefined) {
+      registerSchedulesRoutes(app, deps.schedules);
+    }
   }
 
   // Typed failures and unknown routes: the SheraError taxonomy, never an

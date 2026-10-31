@@ -28,7 +28,7 @@
  * workspace, and the internal API route verifies it against THIS runtime's
  * account binding before reaching the handle.
  */
-import type { OperationRun } from "@shera-bot/contracts";
+import { RuntimeAdminTaskFailureRecord, type OperationRun } from "@shera-bot/contracts";
 
 import type { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
 import type { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
@@ -69,6 +69,10 @@ export interface RuntimeAdminCommandsHandle {
     reason?: string | undefined;
     actor: { type: "admin"; id: string };
   }): Promise<RuntimeAdminTopUpResult>;
+  listTaskFailures(input: {
+    workspaceId: string;
+    limit: number;
+  }): Promise<{ workspace_id: string; failures: RuntimeAdminTaskFailureRecord[] }>;
 }
 
 export interface RuntimeAdminCommandsDeps {
@@ -166,8 +170,58 @@ export function buildRuntimeAdminCommandsHandle(
         skipped,
       };
     },
+
+    async listTaskFailures(input) {
+      const runs = deps.listWorkspaceRuns(input.workspaceId);
+      const failing = runs
+        .filter((run) => run.state === "FAILED" || run.state === "RECOVERY_REQUIRED")
+        .sort((left, right) => right.updated_at.localeCompare(left.updated_at))
+        .slice(0, input.limit);
+      const failures: RuntimeAdminTaskFailureRecord[] = [];
+      for (const run of failing) {
+        const events = deps.journal.readFrom(
+          input.workspaceId,
+          taskStreamId(run.run_id),
+          0,
+          10_000,
+        );
+        const failureEvents = events
+          .filter((row) => FAILURE_EVENT_TYPES.has(row.event_type))
+          .map((row) => {
+            let reason: string | null = null;
+            try {
+              const envelope = JSON.parse(row.payload) as { payload?: Record<string, unknown> };
+              const candidate = envelope.payload?.["reason"] ?? envelope.payload?.["failure_code"];
+              if (typeof candidate === "string") reason = candidate.slice(0, 300);
+            } catch {
+              // An unparseable payload is listed without a reason — never a
+              // fabricated one.
+            }
+            return { type: row.event_type, occurred_at: row.occurred_at, reason };
+          });
+        failures.push({
+          run_id: run.run_id,
+          // The filter above narrows the state; the explicit union keeps the
+          // record honest against the contract enum.
+          state: run.state as "FAILED" | "RECOVERY_REQUIRED",
+          occurred_at: run.updated_at,
+          events: failureEvents,
+        });
+      }
+      // Contract-checked at the boundary the same way every other response is.
+      const parsed = failures.map((record) => RuntimeAdminTaskFailureRecord.parse(record));
+      return { workspace_id: input.workspaceId, failures: parsed };
+    },
   };
 }
+
+/** The journal event types that ARE a failure narrative (PRD §15 view). */
+const FAILURE_EVENT_TYPES: ReadonlySet<string> = new Set([
+  "task.failed",
+  "task.recovery_required",
+  "run.failure_decided",
+  "worker.crashed",
+]);
 
 /** The latest `task.paused` reason on the run's lifecycle stream, or null. */
 function latestPauseReason(

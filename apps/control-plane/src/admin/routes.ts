@@ -312,6 +312,64 @@ export function createAdminRoutes(deps: AdminRouteDependencies): Router {
     }),
   );
 
+  // --- Failures view (PRD §15): container failures from the control plane's
+  // own security events; task failures from the runtime journal over the
+  // recorded channel. A read degrades truthfully when the runtime is
+  // unreachable (task_failures_status), never inventing records (G4).
+
+  const CONTAINER_FAILURE_EVENT_TYPES = [
+    "runtime_provision_failed",
+    "runtime_operation_failed",
+    "runtime_channel_auth_failed",
+  ] as const;
+
+  router.get(
+    "/users/:id/failures",
+    adminHandler(deps.securityEvents, "failures.view", async (args) => {
+      const id = await requireAccountId(deps.db, args.req.params.id);
+      const containerRows = await deps.securityEvents.listForAccount(
+        id,
+        CONTAINER_FAILURE_EVENT_TYPES,
+        50,
+      );
+      const container_failures = containerRows.map((row) => ({
+        event_type: row.eventType,
+        occurred_at: row.occurredAt.toISOString(),
+        details: row.details,
+      }));
+
+      let task_failures: Array<{
+        run_id: string;
+        state: string;
+        occurred_at: string;
+        events: Array<{ type: string; occurred_at: string; reason: string | null }>;
+      }> = [];
+      let task_failures_status = "ok";
+      try {
+        const target = await deps.runtimeTargetForAccount(id);
+        const read = await deps.channel.listTaskFailures(target.endpoint, target.bearer, {
+          workspace_id: `ws_${id}`,
+          limit: 50,
+        });
+        task_failures = read.failures;
+      } catch {
+        // The read degrades: the task journal lives in the (unreachable)
+        // container's SQLite. The status says so — no fabricated records.
+        task_failures_status = "runtime_unavailable";
+      }
+      return {
+        status: 200,
+        body: { container_failures, task_failures, task_failures_status },
+        target: id,
+        details: {
+          account_id: id,
+          container_failure_count: container_failures.length,
+          task_failure_count: task_failures.length,
+        },
+      };
+    }),
+  );
+
   // --- Emergency cancel-all (AC4): reach the runtime's S22 cancellation
   // machinery over the recorded internal channel, scoped to THIS user. The
   // runtime target resolves through the provisioning service's channel

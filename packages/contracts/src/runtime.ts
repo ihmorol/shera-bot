@@ -293,6 +293,39 @@ export const RuntimeAdminCreditTopUpResponse = z.strictObject({
 });
 export type RuntimeAdminCreditTopUpResponse = z.infer<typeof RuntimeAdminCreditTopUpResponse>;
 
+/**
+ * Task-failure read (PRD §15 "view recent ... task failures"): the runtime's
+ * FAILED / RECOVERY_REQUIRED runs with their failure journal events. The
+ * control plane merges this with its own container-failure security events.
+ */
+export const RUNTIME_ADMIN_TASK_FAILURES_PATH = "/internal/v1/admin/task-failures" as const;
+
+export const RuntimeAdminTaskFailuresRequest = z.strictObject({
+  workspace_id: WorkspaceId,
+  limit: z.number().int().min(1).max(200).default(50),
+});
+export type RuntimeAdminTaskFailuresRequest = z.infer<typeof RuntimeAdminTaskFailuresRequest>;
+
+export const RuntimeAdminTaskFailureRecord = z.strictObject({
+  run_id: Id,
+  state: z.enum(["FAILED", "RECOVERY_REQUIRED"]),
+  occurred_at: IsoDateTime,
+  events: z.array(
+    z.strictObject({
+      type: Id,
+      occurred_at: IsoDateTime,
+      reason: z.string().max(300).nullable(),
+    }),
+  ),
+});
+export type RuntimeAdminTaskFailureRecord = z.infer<typeof RuntimeAdminTaskFailureRecord>;
+
+export const RuntimeAdminTaskFailuresResponse = z.strictObject({
+  workspace_id: WorkspaceId,
+  failures: z.array(RuntimeAdminTaskFailureRecord),
+});
+export type RuntimeAdminTaskFailuresResponse = z.infer<typeof RuntimeAdminTaskFailuresResponse>;
+
 // ---------------------------------------------------------------------------
 // Process-internal backend types (NOT wire schemas — never serialized to the
 // user boundary; never registered into OpenAPI).

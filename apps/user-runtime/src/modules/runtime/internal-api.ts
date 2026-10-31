@@ -22,6 +22,9 @@ import {
   RuntimeAdminCancelAllResponse,
   RuntimeAdminCreditTopUpRequest,
   RuntimeAdminCreditTopUpResponse,
+  RuntimeAdminTaskFailuresRequest,
+  RuntimeAdminTaskFailuresResponse,
+  RUNTIME_ADMIN_TASK_FAILURES_PATH,
   RUNTIME_ADMIN_CREDITS_TOP_UP_PATH,
   RuntimeCredentialCommitRequest,
   RuntimeCredentialCommitResponse,
@@ -388,6 +391,70 @@ export function createInternalApi(deps: InternalApiDeps): InternalApi {
           .status(500)
           .json(
             internalChannelError("INTERNAL_ERROR", "The top-up command could not be completed."),
+          );
+      });
+  });
+
+  /** Task-failure read (PRD §15): the journal's FAILED/RECOVERY_REQUIRED
+   * runs. A read, so the channel credential still gates it. */
+  app.get(RUNTIME_ADMIN_TASK_FAILURES_PATH, requireChannelCredential, (req, res) => {
+    const query = RuntimeAdminTaskFailuresRequest.safeParse({
+      workspace_id: req.query.workspace_id,
+      ...(req.query.limit !== undefined ? { limit: Number(req.query.limit) } : {}),
+    });
+    if (!query.success) {
+      res
+        .status(400)
+        .json(
+          internalChannelError(
+            "CONTRACT_VALIDATION_FAILED",
+            "The task-failures request is not valid: a workspace_id is required.",
+          ),
+        );
+      return;
+    }
+    if (deps.accountId !== undefined && query.data.workspace_id !== `ws_${deps.accountId}`) {
+      securityEvents.record({
+        event: "internal_admin_command_refused",
+        reason: "workspace_tenant_mismatch",
+        path: RUNTIME_ADMIN_TASK_FAILURES_PATH,
+        occurred_at: new Date().toISOString(),
+      });
+      res
+        .status(403)
+        .json(
+          internalChannelError(
+            "RUNTIME_TENANT_MISMATCH",
+            "This workspace does not belong to this runtime.",
+          ),
+        );
+      return;
+    }
+    if (!deps.adminCommands) {
+      res
+        .status(503)
+        .json(
+          internalChannelError(
+            "INTERNAL_ERROR",
+            "The admin command surface is not wired in this composition.",
+          ),
+        );
+      return;
+    }
+    deps.adminCommands
+      .listTaskFailures({ workspaceId: query.data.workspace_id, limit: query.data.limit })
+      .then((result) => {
+        const response: RuntimeAdminTaskFailuresResponse = {
+          workspace_id: result.workspace_id,
+          failures: result.failures,
+        };
+        res.status(200).json(response);
+      })
+      .catch(() => {
+        res
+          .status(500)
+          .json(
+            internalChannelError("INTERNAL_ERROR", "The task-failure read could not be completed."),
           );
       });
   });

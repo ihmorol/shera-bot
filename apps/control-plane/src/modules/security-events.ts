@@ -6,7 +6,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
@@ -69,6 +69,44 @@ export class SecurityEventService {
         reason: error instanceof Error ? error.message : String(error),
       });
     }
+  }
+
+  /**
+   * S32 (PRD §15 failures view): the account's recent events of the given
+   * types, newest first, bounded. Read-only; the redaction guarantee is the
+   * write-time one (details were scrubbed before insert).
+   */
+  async listForAccount(
+    accountId: string,
+    eventTypes: readonly string[],
+    limit: number,
+  ): Promise<
+    Array<{
+      id: string;
+      eventType: string;
+      accountId: string | null;
+      details: Record<string, unknown>;
+      occurredAt: Date;
+    }>
+  > {
+    const rows = await this.db
+      .select()
+      .from(controlSecurityEvents)
+      .where(
+        and(
+          eq(controlSecurityEvents.accountId, accountId),
+          inArray(controlSecurityEvents.eventType, [...eventTypes]),
+        ),
+      )
+      .orderBy(desc(controlSecurityEvents.occurredAt))
+      .limit(limit);
+    return rows.map((row) => ({
+      id: row.id,
+      eventType: row.eventType,
+      accountId: row.accountId,
+      details: row.details,
+      occurredAt: row.occurredAt,
+    }));
   }
 
   async listByType(eventType: SecurityEventType): Promise<

@@ -263,13 +263,15 @@ export function adminUnauthenticatedError(correlationId?: string): SheraError {
 }
 
 /** The admin command targeted an account that does not exist (typed 404). */
-export function adminAccountNotFoundError(correlationId?: string): SheraError {
-  return makeSheraError({
-    code: "ADMIN_ACCOUNT_NOT_FOUND",
-    category: "validation",
-    safe_message: "The targeted account does not exist.",
-    retryable: false,
-    user_action: null,
-    correlation_id: correlationId,
-  });
+export function adminAccountNotFoundError(correlationId?: string): RuntimeOperationError {
+  return new RuntimeOperationError(
+    makeSheraError({
+      code: "ADMIN_ACCOUNT_NOT_FOUND",
+      category: "validation",
+      safe_message: "The targeted account does not exist.",
+      retryable: false,
+      user_action: null,
+      correlation_id: correlationId,
+    }),
+  );
 }

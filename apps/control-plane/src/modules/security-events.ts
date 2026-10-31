@@ -26,6 +26,12 @@ export const SECURITY_EVENT_TYPES = [
   "runtime_operation_failed",
   "runtime_channel_auth_failed",
   "runtime_channel_token_rotated",
+  // S32 (admin API/CLI; D47, PRD §15 "security-relevant actions are logged").
+  "admin_token_created",
+  "admin_token_rotated",
+  "admin_auth_rejected",
+  "admin_action",
+  "admin_action_failed",
 ] as const;
 
 export type SecurityEventType = (typeof SECURITY_EVENT_TYPES)[number];

@@ -60,6 +60,9 @@ export const KNOWN_ERROR_CODES = [
   "RUNTIME_UNAVAILABLE",
   "RUNTIME_TENANT_MISMATCH",
   "INTERNAL_CHANNEL_UNAUTHORIZED",
+  // S32 (admin API/CLI; D47, issue #33).
+  "ADMIN_UNAUTHENTICATED",
+  "ADMIN_ACCOUNT_NOT_FOUND",
 ] as const;
 
 export const ErrorCodeShape = z

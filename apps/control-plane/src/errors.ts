@@ -30,6 +30,9 @@ export const RUNTIME_ERROR_CODES = [
   "INTERNAL_CHANNEL_UNAUTHORIZED",
 ] as const;
 
+/** S32 admin-surface error codes (also registered in contracts KNOWN_ERROR_CODES). */
+export const ADMIN_ERROR_CODES = ["ADMIN_UNAUTHENTICATED", "ADMIN_ACCOUNT_NOT_FOUND"] as const;
+
 export type AuthErrorCode = (typeof AUTH_ERROR_CODES)[number];
 
 /** The exact S1 refusal copy (docs/UI_DESIGN.md S1). No retry affordance. */
@@ -37,7 +40,7 @@ export const SIGNUP_CAP_REFUSAL_MESSAGE =
   "Shera is in private testing and is at its five-account limit.";
 
 export interface TypedErrorInput {
-  code: AuthErrorCode | (typeof RUNTIME_ERROR_CODES)[number];
+  code: AuthErrorCode | (typeof RUNTIME_ERROR_CODES)[number] | (typeof ADMIN_ERROR_CODES)[number];
   category: SheraError["category"];
   safe_message: string;
   retryable: boolean;
@@ -239,4 +242,34 @@ export function runtimeTenantMismatchError(correlationId?: string): RuntimeOpera
       correlation_id: correlationId,
     }),
   );
+}
+
+// --- S32 admin surface -----------------------------------------------------
+
+/**
+ * The admin gate's typed 401 (AC2). The safe_message is identical for a
+ * missing and an unknown token: the response never reveals whether a token
+ * exists (no capability enumeration, G3).
+ */
+export function adminUnauthenticatedError(correlationId?: string): SheraError {
+  return makeSheraError({
+    code: "ADMIN_UNAUTHENTICATED",
+    category: "unauthorized",
+    safe_message: "A valid admin token is required.",
+    retryable: false,
+    user_action: "Present the owner's admin token.",
+    correlation_id: correlationId,
+  });
+}
+
+/** The admin command targeted an account that does not exist (typed 404). */
+export function adminAccountNotFoundError(correlationId?: string): SheraError {
+  return makeSheraError({
+    code: "ADMIN_ACCOUNT_NOT_FOUND",
+    category: "validation",
+    safe_message: "The targeted account does not exist.",
+    retryable: false,
+    user_action: null,
+    correlation_id: correlationId,
+  });
 }

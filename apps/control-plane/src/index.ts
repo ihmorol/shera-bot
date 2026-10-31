@@ -29,6 +29,7 @@ import {
 } from "./errors.ts";
 import { createControlPlaneLogger, type ControlPlaneLogger } from "./logger.ts";
 import { SecretRegistry } from "./redaction.ts";
+import { AdminTokenService } from "./modules/admin-tokens.ts";
 import { ProvisioningService } from "./modules/runtime-provisioning.ts";
 import { RuntimeChannelClient } from "./runtime/channel-client.ts";
 import { LocalContainerBackend } from "./runtime/local-container-backend.ts";
@@ -38,6 +39,7 @@ import { SignupCapService } from "./modules/signup-cap.ts";
 import { createSheraAuthAdapter } from "./auth/adapter.ts";
 import { buildAuthConfig } from "./auth/auth-config.ts";
 import { createRoutes } from "./routes.ts";
+import { createAdminRoutes } from "./admin/routes.ts";
 import type { RuntimeBackend } from "@shera-bot/contracts";
 
 export interface ControlPlaneOptions {
@@ -78,6 +80,7 @@ export interface ControlPlaneApp {
   registry: SecretRegistry;
   securityEvents: SecurityEventService;
   signupCap: SignupCapService;
+  adminTokens: AdminTokenService;
   provisioning: ProvisioningService;
   liveTransport: LiveRuntimeTransport;
   authConfigured: boolean;
@@ -105,6 +108,11 @@ export async function createControlPlaneApp(
 
   const securityEvents = new SecurityEventService(db, registry, logger);
   const signupCap = new SignupCapService(db, securityEvents, logger);
+
+  // S32 (D47, issue #33): the owner-held admin API token (hash-only storage,
+  // AC5) and the authenticated admin surface. Token lifecycle (create/rotate)
+  // is a LOCAL CLI operation; the HTTP surface only ever verifies digests.
+  const adminTokens = new AdminTokenService({ db, registry, securityEvents });
 
   // S06 runtime provisioning (D12): the typed backend seam. Tests and future
   // remote/cloud backends inject their implementation; the default speaks to
@@ -216,6 +224,11 @@ export async function createControlPlaneApp(
     }),
   );
 
+  // S32: the authenticated admin surface (every route behind the token gate;
+  // every action recorded — AC2/AC6). Mounted before the typed 404 so the
+  // gate answers first on any /api/admin path.
+  app.use("/api/admin", createAdminRoutes({ db, tokens: adminTokens, securityEvents, logger }));
+
   // Typed 404 (S02 taxonomy).
   app.use((_req: Request, res: Response) => {
     const error = routeNotFoundError();
@@ -233,6 +246,7 @@ export async function createControlPlaneApp(
     registry,
     securityEvents,
     signupCap,
+    adminTokens,
     provisioning,
     liveTransport,
     authConfigured,

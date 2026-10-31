@@ -109,7 +109,8 @@ export interface SchedulerPlanRunner {
     conversation_id: string;
     run_id: string;
     plan: TriggerPlan;
-  }): { ok: true; result_summary: string } | { ok: false; code: string };
+    provider?: { provider_id: string; model: string } | undefined;
+  }): Promise<{ ok: true; result_summary: string } | { ok: false; code: string } | { ok: "paused"; approval_id: string }>;
 }
 
 export interface SchedulerDeps {
@@ -214,11 +215,11 @@ export class SchedulerService {
    * the claim's winner. A duplicate answers the ledger (deduplicated) and
    * never touches a run.
    */
-  fireOccurrence(
+  async fireOccurrence(
     workspaceId: string,
     triggerId: string,
     occurrence: TriggerOccurrence,
-  ): FireOutcome {
+  ): Promise<FireOutcome> {
     const trigger = this.deps.triggers.getTrigger(workspaceId, triggerId);
     if (trigger === null) {
       return { outcome: "failed", code: "TRIGGER_NOT_FOUND" };
@@ -235,7 +236,7 @@ export class SchedulerService {
     if (claim === "duplicate") {
       return { outcome: "deduplicated" };
     }
-    return this.executeClaimedFiring(trigger, occurrence);
+    return await this.executeClaimedFiring(trigger, occurrence);
   }
 
   /**
@@ -244,7 +245,7 @@ export class SchedulerService {
    * and the run). Contained: a failure marks the firing 'failed' and never
    * throws past this boundary.
    */
-  executeClaimedFiring(trigger: TriggerRecordRow, occurrence: TriggerOccurrence): FireOutcome {
+  async executeClaimedFiring(trigger: TriggerRecordRow, occurrence: TriggerOccurrence): Promise<FireOutcome> {
     const { workspace_id: workspaceId, trigger_id: triggerId } = trigger;
 
     // Step 2: the reservation consult (D20/D48) — BEFORE anything runs.
@@ -359,8 +360,10 @@ export class SchedulerService {
       return { outcome: "failed", code: "RUN_CREATION_FAILED" };
     }
 
-    // Step 5: the autonomous D8 walk through the shared applier.
-    const walk = this.walkPlan(trigger, occurrence, runId, conversationId, config);
+    // Step 5: the autonomous D8 walk through the shared applier (the legs
+    // run between the transactions — the model call is async and lives
+    // OUTSIDE any SQLite unit, D10).
+    const walk = await this.walkPlan(trigger, runId, conversationId, config, provider);
     if (!walk.ok) {
       this.deps.triggers.updateFiring(workspaceId, triggerId, occurrence.idempotencyKey, {
         outcome: "failed",
@@ -415,7 +418,7 @@ export class SchedulerService {
    * run). Idempotent: the ledger's occurrence keys and the bookkeeping make
    * a second boot a no-op (AC4).
    */
-  reconcileBoot(): {
+  async reconcileBoot(): Promise<{
     decisions: Array<{
       trigger_id: string;
       policy: "catch_up" | "skip";
@@ -424,7 +427,7 @@ export class SchedulerService {
       caught_up_count: number;
     }>;
     redriven: number;
-  } {
+  }> {
     const now = this.now();
     const decisions: Array<{
       trigger_id: string;
@@ -453,7 +456,7 @@ export class SchedulerService {
       } catch {
         detail = {};
       }
-      const outcome = this.executeClaimedFiring(trigger, {
+      const outcome = await this.executeClaimedFiring(trigger, {
         idempotencyKey: firing.idempotency_key,
         dueAt: firing.fired_at,
         detail,
@@ -489,7 +492,7 @@ export class SchedulerService {
       let caughtUpCount = 0;
       if (policy === "catch_up") {
         for (const occurrenceAt of bounded) {
-          const outcome = this.fireOccurrence(this.deps.workspaceId, trigger.trigger_id, {
+          const outcome = await this.fireOccurrence(this.deps.workspaceId, trigger.trigger_id, {
             idempotencyKey: `schedule:${trigger.trigger_id}:${occurrenceAt.toISOString()}`,
             dueAt: occurrenceAt.toISOString(),
             detail: { due_at: occurrenceAt.toISOString(), catch_up: true },
@@ -562,7 +565,7 @@ export class SchedulerService {
    * the event-driven kinds (the watcher/condition/completion sources —
    * chunk 4 wires them through the same fireOccurrence pipeline).
    */
-  tick(): void {
+  async tick(): Promise<void> {
     const now = this.now();
     for (const trigger of this.deps.triggers.listTriggersByKind(this.deps.workspaceId, "schedule")) {
       if (trigger.state !== "active") continue;
@@ -575,7 +578,7 @@ export class SchedulerService {
       let occurrenceAt: string | null = due;
       let guard = 0;
       while (occurrenceAt !== null && Date.parse(occurrenceAt) <= Date.parse(now) && guard < 10) {
-        const outcome = this.fireOccurrence(this.deps.workspaceId, trigger.trigger_id, {
+        const outcome = await this.fireOccurrence(this.deps.workspaceId, trigger.trigger_id, {
           idempotencyKey: `schedule:${trigger.trigger_id}:${occurrenceAt}`,
           dueAt: occurrenceAt,
           detail: { due_at: occurrenceAt },
@@ -587,7 +590,7 @@ export class SchedulerService {
         guard += 1;
       }
     }
-    this.evaluateWatchers();
+    await this.evaluateWatchers();
   }
 
   // ── Internals ───────────────────────────────────────────────────────────────
@@ -599,7 +602,7 @@ export class SchedulerService {
    * is ADOPTED as the baseline without firing — a boot never replays
    * history (AC4).
    */
-  protected evaluateWatchers(): void {
+  protected async evaluateWatchers(): Promise<void> {
     const sources = this.deps.watcherSources;
     if (sources === undefined) return;
     const now = this.now();
@@ -615,7 +618,7 @@ export class SchedulerService {
           config.scope === "agent" && config.agent_id !== undefined
             ? agentFolderSignature(sources.agentFilesRoot, sources.workspaceId, config.agent_id)
             : workspaceSubtreeSignature(sources.files, sources.workspaceId, config.path_uri);
-        this.applySignatureTrigger(trigger, signature, now, {
+        await this.applySignatureTrigger(trigger, signature, now, {
           path_uri: config.path_uri,
           scope: config.scope,
         });
@@ -630,7 +633,7 @@ export class SchedulerService {
         // on 'absent' (the signature stays unsaved — a restored branch
         // fires once). Recorded in E37.
         if (signature !== "absent") {
-          this.applySignatureTrigger(trigger, signature, now, {
+          await this.applySignatureTrigger(trigger, signature, now, {
             project_id: config.project_id,
             branch: config.branch,
             commit_sha: signature,
@@ -650,7 +653,7 @@ export class SchedulerService {
         });
         // Edge-triggered: the false→true transition fires once per episode.
         if (isTrue && previous !== 1) {
-          this.fireOccurrence(sources.workspaceId, trigger.trigger_id, {
+          await this.fireOccurrence(sources.workspaceId, trigger.trigger_id, {
             idempotencyKey: `condition:${trigger.trigger_id}:edge:${now}`,
             dueAt: now,
             detail: { evaluated_at: now },
@@ -662,12 +665,12 @@ export class SchedulerService {
   }
 
   /** One signature comparison: adopt the first observation, fire on change. */
-  private applySignatureTrigger(
+  private async applySignatureTrigger(
     trigger: TriggerRecordRow,
     signature: string,
     now: string,
     detail: Record<string, unknown>,
-  ): void {
+  ): Promise<void> {
     if (trigger.last_signature === null) {
       // Baseline adoption: the watcher starts from the observed state.
       this.deps.triggers.updateTriggerFields(trigger.workspace_id, trigger.trigger_id, {
@@ -678,7 +681,7 @@ export class SchedulerService {
     }
     if (trigger.last_signature === signature) return;
     const changeType = signature === "absent" ? "deleted" : "modified";
-    const outcome = this.fireOccurrence(trigger.workspace_id, trigger.trigger_id, {
+    const outcome = await this.fireOccurrence(trigger.workspace_id, trigger.trigger_id, {
       idempotencyKey: `watch:${trigger.trigger_id}:${signature}`,
       dueAt: now,
       detail: { ...detail, change_type: changeType },
@@ -734,6 +737,10 @@ export class SchedulerService {
    * (the row applier's envelope AND the supervisor's worker frame).
    */
   handleCommittedEvent(event: EventEnvelope): void {
+    void this.runCompletionCascade(event).catch(() => {});
+  }
+
+  private async runCompletionCascade(event: EventEnvelope): Promise<void> {
     try {
       const runId: string | null =
         (event.payload as { task_id?: string; run_id?: string } | undefined)?.task_id ??
@@ -761,7 +768,7 @@ export class SchedulerService {
         if (trigger.target_operation_id !== operationId) continue;
         const config = JSON.parse(trigger.config_json) as { outcomes?: string[] };
         if (!(config.outcomes ?? ["succeeded"]).includes(outcome)) continue;
-        this.fireOccurrence(workspaceId, trigger.trigger_id, {
+        await this.fireOccurrence(workspaceId, trigger.trigger_id, {
           idempotencyKey: `task_completion:${trigger.trigger_id}:${runId}:${outcome}`,
           dueAt: this.now(),
           detail: {
@@ -783,13 +790,13 @@ export class SchedulerService {
     }
   }
 
-  private walkPlan(
+  private async walkPlan(
     trigger: TriggerRecordRow,
-    occurrence: TriggerOccurrence,
     runId: string,
     conversationId: string,
     config: Record<string, unknown>,
-  ): { ok: true } | { ok: false; code: string } {
+    provider: { provider_id: string; model: string } | undefined,
+  ): Promise<{ ok: true } | { ok: false; code: string }> {
     const deps = this.lifecycleDeps();
     const step = (command: Parameters<typeof applyRowLifecycleTransition>[1]["command"]): boolean => {
       const applied = applyRowLifecycleTransition(deps, {
@@ -809,13 +816,25 @@ export class SchedulerService {
         result_summary: "The autonomous plan walked with no plan runner composed (G4: nothing was executed).",
       }),
     };
-    const legs = runner.runPlan({
+    const legs = await runner.runPlan({
       workspace_id: trigger.workspace_id,
       operation_id: trigger.target_operation_id,
       conversation_id: conversationId,
       run_id: runId,
       plan,
+      ...(provider !== undefined ? { provider } : {}),
     });
+    if (legs.ok === "paused") {
+      // The D35 ladder holds for autonomous work: a gated tool pauses the
+      // run for the user's decision (the approval machinery owns the rest).
+      applyRowLifecycleTransition(deps, {
+        workspaceId: trigger.workspace_id,
+        runId,
+        command: "request_approval",
+        actor: { type: "runtime", id: "scheduler" },
+      });
+      return { ok: true };
+    }
     if (!legs.ok) {
       // A failing plan fails the run through the SAME applier (the typed
       // failure code is the run stream's reason — the occurrence is

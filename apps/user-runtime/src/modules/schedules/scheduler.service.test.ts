@@ -181,12 +181,12 @@ function createScheduleTrigger(
 }
 
 describe("the fire pipeline (at-least-once with the ledger claim)", () => {
-  it("fires one occurrence into exactly one run with the typed trigger event as the run's origin", () => {
+  it("fires one occurrence into exactly one run with the typed trigger event as the run's origin", async () => {
     const harness = makeHarness();
     const triggerId = createScheduleTrigger(harness);
     const dueAt = "2026-11-02T09:00:00.000Z";
 
-    const outcome = harness.scheduler.fireOccurrence(WS, triggerId, {
+    const outcome = await harness.scheduler.fireOccurrence(WS, triggerId, {
       idempotencyKey: `schedule:${triggerId}:${dueAt}`,
       dueAt,
       detail: { due_at: dueAt },
@@ -219,7 +219,7 @@ describe("the fire pipeline (at-least-once with the ledger claim)", () => {
     void firing;
   });
 
-  it("answers a duplicate occurrence with the ledger's deduplicated outcome and creates NO second run", () => {
+  it("answers a duplicate occurrence with the ledger's deduplicated outcome and creates NO second run", async () => {
     const harness = makeHarness();
     const triggerId = createScheduleTrigger(harness);
     const dueAt = "2026-11-02T09:00:00.000Z";
@@ -228,18 +228,18 @@ describe("the fire pipeline (at-least-once with the ledger claim)", () => {
       dueAt,
       detail: { due_at: dueAt },
     };
-    const first = harness.scheduler.fireOccurrence(WS, triggerId, occurrence);
+    const first = await harness.scheduler.fireOccurrence(WS, triggerId, occurrence);
     expect(first.outcome).toBe("fired");
-    const duplicate = harness.scheduler.fireOccurrence(WS, triggerId, occurrence);
+    const duplicate = await harness.scheduler.fireOccurrence(WS, triggerId, occurrence);
     expect(duplicate).toMatchObject({ outcome: "deduplicated" });
     expect(harness.ops.listRuns(WS, harness.operationId)).toHaveLength(1);
   });
 
-  it("pauses the trigger with the D48 reason when the reservation seam refuses (AC8)", () => {
+  it("pauses the trigger with the D48 reason when the reservation seam refuses (AC8)", async () => {
     const harness = makeHarness();
     harness.reservations.allow = false;
     const triggerId = createScheduleTrigger(harness);
-    const outcome = harness.scheduler.fireOccurrence(WS, triggerId, {
+    const outcome = await harness.scheduler.fireOccurrence(WS, triggerId, {
       idempotencyKey: "schedule:occ-paused",
       dueAt: "2026-11-02T09:00:00.000Z",
       detail: {},
@@ -256,11 +256,11 @@ describe("the fire pipeline (at-least-once with the ledger claim)", () => {
     expect(harness.reservations.calls).toBe(1);
   });
 
-  it("records the D17 provider refusal before any run exists (the configured proof run)", () => {
+  it("records the D17 provider refusal before any run exists (the configured proof run)", async () => {
     const harness = makeHarness();
     harness.gate.allow = false;
     const triggerId = createScheduleTrigger(harness);
-    const outcome = harness.scheduler.fireOccurrence(WS, triggerId, {
+    const outcome = await harness.scheduler.fireOccurrence(WS, triggerId, {
       idempotencyKey: "schedule:occ-refused",
       dueAt: "2026-11-02T09:00:00.000Z",
       detail: {},
@@ -274,16 +274,16 @@ describe("the fire pipeline (at-least-once with the ledger claim)", () => {
     expect(stream.map((row) => row.event_type)).toContain("provider.configuration_refused");
   });
 
-  it("resumes a credit-paused trigger after top-up and fires the next occurrence (AC8)", () => {
+  it("resumes a credit-paused trigger after top-up and fires the next occurrence (AC8)", async () => {
     const harness = makeHarness();
     const triggerId = createScheduleTrigger(harness);
     harness.reservations.allow = false;
     expect(
-      harness.scheduler.fireOccurrence(WS, triggerId, {
+      (await harness.scheduler.fireOccurrence(WS, triggerId, {
         idempotencyKey: "schedule:occ-1",
         dueAt: "2026-11-02T09:00:00.000Z",
         detail: {},
-      }).outcome,
+      })).outcome,
     ).toBe("paused_credits");
     // The top-up: the port allows again; the scheduler's resume evaluation
     // clears the pause and the next occurrence fires.
@@ -293,15 +293,15 @@ describe("the fire pipeline (at-least-once with the ledger claim)", () => {
     const stream = harness.journal.readFrom(WS, `trigger:${triggerId}`, 0, 100);
     expect(stream.map((row) => row.event_type)).toContain("trigger.credit_resumed");
     expect(
-      harness.scheduler.fireOccurrence(WS, triggerId, {
+      (await harness.scheduler.fireOccurrence(WS, triggerId, {
         idempotencyKey: "schedule:occ-2",
         dueAt: "2026-11-09T09:00:00.000Z",
         detail: {},
-      }).outcome,
+      })).outcome,
     ).toBe("fired");
   });
 
-  it("links a task-completion trigger's run to its parent run (AC6)", () => {
+  it("links a task-completion trigger's run to its parent run (AC6)", async () => {
     const harness = makeHarness();
     // The parent run: a plain completed run in the same operation.
     harness.ops.createRun(WS, harness.operationId, { run_id: "run_parent" });
@@ -317,7 +317,7 @@ describe("the fire pipeline (at-least-once with the ledger claim)", () => {
       catch_up_policy: "skip",
       actor: { type: "user", id: "emon" },
     });
-    const outcome = harness.scheduler.fireOccurrence(WS, created.trigger_id, {
+    const outcome = await harness.scheduler.fireOccurrence(WS, created.trigger_id, {
       idempotencyKey: `task_completion:${created.trigger_id}:run_parent:succeeded`,
       dueAt: "2026-10-31T12:00:00.000Z",
       detail: { parent_task_id: "run_parent", outcome: "succeeded", completed_at: "2026-10-31T12:00:00.000Z" },
@@ -330,7 +330,7 @@ describe("the fire pipeline (at-least-once with the ledger claim)", () => {
     expect(stream[0]?.event_type).toBe("trigger.task_completed");
   });
 
-  it("drives the plan runner between start and complete; a failing plan fails the run", () => {
+  it("drives the plan runner between start and complete; a failing plan fails the run", async () => {
     const harness = makeHarness();
     const walked: string[] = [];
     const failing = new SchedulerService({
@@ -347,14 +347,14 @@ describe("the fire pipeline (at-least-once with the ledger claim)", () => {
       now: () => "2026-10-31T12:00:00.000Z",
       logFault: () => {},
       planRunner: {
-        runPlan: (input) => {
+        runPlan: async (input) => {
           walked.push(`${input.run_id}:${input.plan.prompt}`);
           return { ok: false as const, code: "PROVIDER_CALL_FAILED" };
         },
-      },
+      } as SchedulerPlanRunner,
     });
     const triggerId = createScheduleTrigger(harness);
-    const outcome = failing.fireOccurrence(WS, triggerId, {
+const outcome = await failing.fireOccurrence(WS, triggerId, {
       idempotencyKey: "schedule:occ-plan-fail",
       dueAt: "2026-11-02T09:00:00.000Z",
       detail: {},

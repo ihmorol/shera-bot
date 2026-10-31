@@ -149,14 +149,14 @@ function createSchedule(
 }
 
 describe("catch-up versus skip (AC3, fake clock — the decision is RECORDED)", () => {
-  it("skips missed occurrences under the skip policy and records the decision", () => {
+  it("skips missed occurrences under the skip policy and records the decision", async () => {
     // T1: the trigger is created Monday 2026-11-02 just after 09:00 UTC.
     const harness = makeHarness("2026-11-02T09:05:00.000Z");
     const triggerId = createSchedule(harness, "skip");
     // Downtime: the runtime comes back two weeks later — TWO missed
     // Mondays (11-09, 11-16).
     harness.clock.value = "2026-11-16T12:00:00.000Z";
-    const report = harness.makeScheduler(() => harness.clock.value).reconcileBoot();
+    const report = await harness.makeScheduler(() => harness.clock.value).reconcileBoot();
     expect(report.decisions).toHaveLength(1);
     const decision = report.decisions[0];
     expect(decision).toMatchObject({
@@ -186,11 +186,11 @@ describe("catch-up versus skip (AC3, fake clock — the decision is RECORDED)", 
     expect(payload).toMatchObject({ decision: "skipped", missed_count: 2 });
   });
 
-  it("catches up missed occurrences under the catch_up policy — once each, recorded", () => {
+  it("catches up missed occurrences under the catch_up policy — once each, recorded", async () => {
     const harness = makeHarness("2026-11-02T09:05:00.000Z");
     const triggerId = createSchedule(harness, "catch_up");
     harness.clock.value = "2026-11-16T12:00:00.000Z";
-    const report = harness.makeScheduler(() => harness.clock.value).reconcileBoot();
+    const report = await harness.makeScheduler(() => harness.clock.value).reconcileBoot();
     const decision = report.decisions[0];
     expect(decision).toMatchObject({
       trigger_id: triggerId,
@@ -212,7 +212,7 @@ describe("catch-up versus skip (AC3, fake clock — the decision is RECORDED)", 
     expect(payload).toMatchObject({ decision: "caught_up", caught_up_count: 2 });
   });
 
-  it("bounds the catch-up replay and records the remainder as skipped", () => {
+  it("bounds the catch-up replay and records the remainder as skipped", async () => {
     const harness = makeHarness("2026-11-02T09:05:00.000Z");
     const triggerId = createSchedule(harness, "catch_up");
     // A minute-cron over ~2 days of downtime would hold thousands of
@@ -229,7 +229,7 @@ describe("catch-up versus skip (AC3, fake clock — the decision is RECORDED)", 
       actor: { type: "user", id: "emon" },
     });
     harness.clock.value = "2026-11-05T12:00:00.000Z";
-    const report = harness.makeScheduler(() => harness.clock.value).reconcileBoot();
+    const report = await harness.makeScheduler(() => harness.clock.value).reconcileBoot();
     const decision = report.decisions[0];
     expect(decision).toBeDefined();
     if (decision === undefined) throw new Error("decision missing");
@@ -241,34 +241,34 @@ describe("catch-up versus skip (AC3, fake clock — the decision is RECORDED)", 
 });
 
 describe("restart without double-firing (AC4)", () => {
-  it("re-fires nothing after a restart: the ledger and bookkeeping hold the truth", () => {
+  it("re-fires nothing after a restart: the ledger and bookkeeping hold the truth", async () => {
     const harness = makeHarness("2026-11-02T09:05:00.000Z");
     const triggerId = createSchedule(harness, "skip");
     const schedulerA = harness.makeScheduler(() => harness.clock.value);
     // Week 1 fires normally.
     harness.clock.value = "2026-11-09T09:00:00.000Z";
-    schedulerA.tick();
+    await schedulerA.tick();
     expect(harness.ops.listRuns(WS, harness.operationId)).toHaveLength(1);
 
     // RESTART: a fresh scheduler over the SAME database (the gateway
     // process died; SQLite survived).
     const schedulerB = harness.makeScheduler(() => harness.clock.value);
-    schedulerB.reconcileBoot();
+    await schedulerB.reconcileBoot();
     expect(harness.ops.listRuns(WS, harness.operationId)).toHaveLength(1); // no double-fire
     const viewA = harness.schedules.getTriggerView(WS, triggerId);
 
     // Week 2 fires exactly once from the restarted scheduler.
     harness.clock.value = "2026-11-16T09:00:00.000Z";
-    schedulerB.tick();
+    await schedulerB.tick();
     const runs = harness.ops.listRuns(WS, harness.operationId);
     expect(runs).toHaveLength(2);
     // And a SECOND boot at the same instant re-fires nothing.
-    harness.makeScheduler(() => harness.clock.value).reconcileBoot();
+    await harness.makeScheduler(() => harness.clock.value).reconcileBoot();
     expect(harness.ops.listRuns(WS, harness.operationId)).toHaveLength(2);
     void viewA;
   });
 
-  it("re-drives a claimed firing whose run never landed (crash between claim and run)", () => {
+  it("re-drives a claimed firing whose run never landed (crash between claim and run)", async () => {
     const harness = makeHarness("2026-11-02T09:05:00.000Z");
     const triggerId = createSchedule(harness, "skip");
     // Simulate the crash: the claim exists, no run.
@@ -283,12 +283,12 @@ describe("restart without double-firing (AC4)", () => {
       fired_at: "2026-11-09T09:00:00.000Z",
     });
     expect(harness.ops.listRuns(WS, harness.operationId)).toHaveLength(0);
-    const report = harness.makeScheduler(() => harness.clock.value).reconcileBoot();
+    const report = await harness.makeScheduler(() => harness.clock.value).reconcileBoot();
     expect(report.redriven).toBe(1);
     expect(harness.ops.listRuns(WS, harness.operationId)).toHaveLength(1);
     // Reconciling again is a no-op (the firing settled; the deterministic
     // run id means the re-drive could never fork a duplicate).
-    const report2 = harness.makeScheduler(() => harness.clock.value).reconcileBoot();
+    const report2 = await harness.makeScheduler(() => harness.clock.value).reconcileBoot();
     expect(report2.redriven).toBe(0);
     expect(harness.ops.listRuns(WS, harness.operationId)).toHaveLength(1);
   });

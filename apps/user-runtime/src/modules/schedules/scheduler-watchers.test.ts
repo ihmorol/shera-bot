@@ -175,7 +175,7 @@ const RUNTIME_ACTOR = { type: "runtime" as const, id: "scheduler" };
 const USER_ACTOR = { type: "user" as const, id: "emon" };
 
 describe("file watchers (AC5: once per real change, never per intermediate write)", () => {
-  it("fires once for a workspace file change and not again for the same content", () => {
+  it("fires once for a workspace file change and not again for the same content", async () => {
     const harness = makeHarness();
     const created = harness.schedules.createTrigger(WS, {
       kind: "file_watch",
@@ -189,7 +189,7 @@ describe("file watchers (AC5: once per real change, never per intermediate write
       catch_up_policy: "skip",
       actor: USER_ACTOR,
     });
-    harness.scheduler.tick();
+    await harness.scheduler.tick();
     expect(harness.ops.listRuns(WS, harness.operationId)).toHaveLength(0); // nothing yet
 
     harness.files.write(
@@ -199,14 +199,14 @@ describe("file watchers (AC5: once per real change, never per intermediate write
       Buffer.from("v1"),
       "text/markdown",
     );
-    harness.scheduler.tick();
+    await harness.scheduler.tick();
     let runs = harness.ops.listRuns(WS, harness.operationId);
     expect(runs).toHaveLength(1);
     const stream = harness.journal.readFrom(WS, `task:${runs[0]?.run_id}`, 0, 10);
     expect(stream[0]?.event_type).toBe("trigger.file_event");
 
     // A second tick over the SAME state fires nothing (the signature holds).
-    harness.scheduler.tick();
+    await harness.scheduler.tick();
     expect(harness.ops.listRuns(WS, harness.operationId)).toHaveLength(1);
 
     // A content change fires once more.
@@ -217,13 +217,13 @@ describe("file watchers (AC5: once per real change, never per intermediate write
       Buffer.from("v2"),
       "text/markdown",
     );
-    harness.scheduler.tick();
+    await harness.scheduler.tick();
     runs = harness.ops.listRuns(WS, harness.operationId);
     expect(runs).toHaveLength(2);
     void created;
   });
 
-  it("coalesces a rapid-change flood into ONE firing with the net signature", () => {
+  it("coalesces a rapid-change flood into ONE firing with the net signature", async () => {
     const harness = makeHarness();
     harness.schedules.createTrigger(WS, {
       kind: "file_watch",
@@ -239,7 +239,7 @@ describe("file watchers (AC5: once per real change, never per intermediate write
     });
     // The baseline: the watcher adopts the observed state at start (a boot
     // never replays history — AC4).
-    harness.scheduler.tick();
+    await harness.scheduler.tick();
     // The flood: twenty writes between two ticks — the tick observes only
     // the net signature, so exactly ONE run exists afterwards.
     for (let index = 0; index < 20; index += 1) {
@@ -251,11 +251,11 @@ describe("file watchers (AC5: once per real change, never per intermediate write
         "text/plain",
       );
     }
-    harness.scheduler.tick();
+    await harness.scheduler.tick();
     expect(harness.ops.listRuns(WS, harness.operationId)).toHaveLength(1);
   });
 
-  it("watches the agent's own private folder and restarts without double-firing (AC4)", () => {
+  it("watches the agent's own private folder and restarts without double-firing (AC4)", async () => {
     const harness = makeHarness();
     harness.schedules.createTrigger(WS, {
       kind: "file_watch",
@@ -270,11 +270,11 @@ describe("file watchers (AC5: once per real change, never per intermediate write
       catch_up_policy: "skip",
       actor: USER_ACTOR,
     });
-    harness.scheduler.tick(); // the baseline adoption
+    await harness.scheduler.tick(); // the baseline adoption
     const privateFile = join(agentFolderDir(harness.agentFilesRoot, WS, AGENT), "notes.md");
     mkdirSync(dirname(privateFile), { recursive: true });
     writeFileSync(privateFile, "private thought v1", "utf8");
-    harness.scheduler.tick();
+    await harness.scheduler.tick();
     expect(harness.ops.listRuns(WS, harness.operationId)).toHaveLength(1);
 
     // RESTART: a fresh scheduler over the same database observes the SAME
@@ -298,7 +298,7 @@ describe("file watchers (AC5: once per real change, never per intermediate write
         workspaceId: WS,
       },
     });
-    restarted.tick();
+    await restarted.tick();
     expect(harness.ops.listRuns(WS, harness.operationId)).toHaveLength(1);
   });
 });
@@ -346,23 +346,23 @@ describe("git watchers (the sha is the signature)", () => {
     // The FIRST tick after creation adopts the current sha as the baseline
     // without firing (the watcher starts from the observed state — a boot
     // never replays history).
-    harness.scheduler.tick();
+    await harness.scheduler.tick();
     expect(harness.ops.listRuns(WS, harness.operationId)).toHaveLength(0);
 
     // A new commit fires once.
     writeFileSync(join(repoDir, "chapter.md"), "draft v2", "utf8");
     await git.add("./*");
     await git.commit("second");
-    harness.scheduler.tick();
+    await harness.scheduler.tick();
     expect(harness.ops.listRuns(WS, harness.operationId)).toHaveLength(1);
     // No change, no firing.
-    harness.scheduler.tick();
+    await harness.scheduler.tick();
     expect(harness.ops.listRuns(WS, harness.operationId)).toHaveLength(1);
   });
 });
 
 describe("condition triggers (the typed-predicate evaluator, edge-triggered)", () => {
-  it("fires once on the false→true edge and not again while true", () => {
+  it("fires once on the false→true edge and not again while true", async () => {
     const harness = makeHarness();
     harness.schedules.createTrigger(WS, {
       kind: "condition",
@@ -375,7 +375,7 @@ describe("condition triggers (the typed-predicate evaluator, edge-triggered)", (
       catch_up_policy: "skip",
       actor: USER_ACTOR,
     });
-    harness.scheduler.tick();
+    await harness.scheduler.tick();
     expect(harness.ops.listRuns(WS, harness.operationId)).toHaveLength(0);
     harness.files.write(
       WS,
@@ -384,14 +384,14 @@ describe("condition triggers (the typed-predicate evaluator, edge-triggered)", (
       Buffer.from("go"),
       "text/plain",
     );
-    harness.scheduler.tick();
+    await harness.scheduler.tick();
     expect(harness.ops.listRuns(WS, harness.operationId)).toHaveLength(1);
     // Still true: no second firing (edge-triggered).
-    harness.scheduler.tick();
+    await harness.scheduler.tick();
     expect(harness.ops.listRuns(WS, harness.operationId)).toHaveLength(1);
   });
 
-  it("evaluates the artifact-count predicate against real artifacts", () => {
+  it("evaluates the artifact-count predicate against real artifacts", async () => {
     const harness = makeHarness();
     harness.schedules.createTrigger(WS, {
       kind: "condition",
@@ -413,7 +413,7 @@ describe("condition triggers (the typed-predicate evaluator, edge-triggered)", (
       producer_agent_id: null,
       producer_task_id: "run_x",
     });
-    harness.scheduler.tick();
+    await harness.scheduler.tick();
     expect(harness.ops.listRuns(WS, harness.operationId)).toHaveLength(0);
     harness.artifacts.insertArtifact({
       workspace_id: WS,
@@ -424,13 +424,13 @@ describe("condition triggers (the typed-predicate evaluator, edge-triggered)", (
       producer_agent_id: null,
       producer_task_id: "run_x",
     });
-    harness.scheduler.tick();
+    await harness.scheduler.tick();
     expect(harness.ops.listRuns(WS, harness.operationId)).toHaveLength(1);
   });
 });
 
 describe("the task-completion cascade (AC6 parent linkage)", () => {
-  it("fires a follow-up run with parent_task_id when a watched run settles", () => {
+  it("fires a follow-up run with parent_task_id when a watched run settles", async () => {
     const harness = makeHarness();
     harness.schedules.createTrigger(WS, {
       kind: "task_completion",
@@ -486,7 +486,7 @@ describe("the task-completion cascade (AC6 parent linkage)", () => {
     expect(stream[0]?.event_type).toBe("trigger.task_completed");
   });
 
-  it("does not fire when the outcome is outside the configured vocabulary", () => {
+  it("does not fire when the outcome is outside the configured vocabulary", async () => {
     const harness = makeHarness();
     harness.schedules.createTrigger(WS, {
       kind: "task_completion",

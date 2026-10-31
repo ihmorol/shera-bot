@@ -257,7 +257,7 @@ export function registerSchedulesRoutes(app: Express, deps: SchedulesApiHandle):
   });
 
   // POST /v1/webhooks/:trigger_id — the receiver (AC2).
-  app.post(WEBHOOK_RECEIVER_PATH, (req, res) => {
+  app.post(WEBHOOK_RECEIVER_PATH, async (req, res) => {
     const triggerId = req.params.trigger_id;
     const trigger: TriggerRecordRow | null = deps.triggers.getTrigger(deps.workspaceId, triggerId);
     if (trigger === null) {
@@ -303,7 +303,7 @@ export function registerSchedulesRoutes(app: Express, deps: SchedulesApiHandle):
       trigger.kind === "external_event" && typeof req.headers["x-shera-source"] === "string"
         ? String(req.headers["x-shera-source"]).slice(0, 128)
         : undefined;
-    const outcome = deps.scheduler.fireOccurrence(deps.workspaceId, triggerId, {
+    const outcome = await deps.scheduler.fireOccurrence(deps.workspaceId, triggerId, {
       idempotencyKey: `${trigger.kind}:${triggerId}:${deliveryKey}`,
       dueAt: new Date().toISOString(),
       detail: {

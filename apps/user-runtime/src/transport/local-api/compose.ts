@@ -151,6 +151,7 @@ import {
 import {
   SchedulerWakeManager,
 } from "../../modules/schedules/scheduler-wake-manager.ts";
+import { AutonomousPlanRunner } from "../../modules/schedules/autonomous-plan-runner.ts";
 import { registerSchedulesRoutes, type SchedulesApiHandle } from "./s28-schedules-api.ts";
 import { createLocalApi } from "./app.ts";
 import {
@@ -466,6 +467,12 @@ export interface RuntimeHandle {
    */
   schedules: SchedulesService;
   scheduler: SchedulerService;
+  /**
+   * S28: the demo note store the built-in note tools read/write — exposed
+   * so tests and capture harnesses can seed real state (the tools' storage
+   * is the composition's own map; never a fixture duplicate).
+   */
+  noteStore: Map<string, string>;
   /** Closes the gateway (and with it the HTTP server), then SQLite. */
   close(): Promise<void>;
 }
@@ -499,6 +506,7 @@ interface Wired {
   schedules: SchedulesService;
   scheduler: SchedulerService;
   wakeManager: SchedulerWakeManager;
+  noteStore: Map<string, string>;
   setPublisher(publisher: ConversationPublisher): void;
 }
 
@@ -1303,6 +1311,23 @@ function wire(
     agentFilesRoot: join(dirname(options.dbPath), "agent-files"),
     workspaceId: wireWorkspaceId,
   };
+  // S28: the autonomous plan runner — the fired run's REAL legs (the model
+  // call through the S23 provider stack, the tool use through the S21
+  // executor, the artifact through the S17 repository). Composed at every
+  // runtime: a trigger without a declared provider/tool/artifact simply
+  // walks with no legs (G4 — nothing fabricates work).
+  const autonomousPlanRunner = new AutonomousPlanRunner({
+    providers,
+    credentials: providerCredentials,
+    executor: toolExecutor,
+    artifacts: workspaceArtifacts,
+    journal,
+    events,
+    tx,
+    operations: operationsRepository,
+    ...(options.now ? { now: options.now } : {}),
+    logFault: (event, fields) => logFault(event, fields),
+  });
   const scheduler = new SchedulerService({
     workspaceId: wireWorkspaceId,
     triggers: triggersRepository,
@@ -1311,6 +1336,7 @@ function wire(
     journal,
     events,
     tx,
+    planRunner: autonomousPlanRunner,
     reservations: {
       reserveForRun: (input) => {
         logFault("credit_reservation_consulted", {
@@ -1439,6 +1465,7 @@ function wire(
     schedules,
     scheduler,
     wakeManager,
+    noteStore: noteBindings.notes,
     setPublisher(next) {
       publisher = next;
     },
@@ -1684,6 +1711,7 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     providers: wired.providers,
     schedules: wired.schedules,
     scheduler: wired.scheduler,
+    noteStore: wired.noteStore,
     close: async () => {
       // S28: stop the scheduler's tick loop and the watcher wake manager
       // BEFORE the transport goes down (a stopped runtime never fires a

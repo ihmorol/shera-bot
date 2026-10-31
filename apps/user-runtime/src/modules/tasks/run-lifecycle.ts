@@ -39,8 +39,16 @@ import type { TaskRunOperationsSeam } from "../workers/task-worker-supervisor.se
 import { buildTaskTransitionEvent, taskStreamId } from "./task-events.ts";
 import { TASK_TRANSITIONS, type TaskTransitionRow } from "./task-transitions.ts";
 
-/** The lifecycle commands this applier serves (closed set). */
+/** The lifecycle commands this applier serves (closed set). S28: the
+ * runtime scheduler's autonomous-task walk joins the failure and
+ * cancellation commands — the forward D8 walk (queue/start/complete) and
+ * the gated-plan pause ride the SAME applier and the SAME TASK_TRANSITIONS
+ * table as every S22 decision (never a second state machine). */
 export type RowLifecycleCommand =
+  | "queue_task"
+  | "start_task"
+  | "complete_task"
+  | "request_approval"
   | "schedule_retry"
   | "retry_attempt"
   | "retry_task"

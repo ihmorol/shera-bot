@@ -57,7 +57,7 @@ import {
   type RowLifecycleDeps,
 } from "../tasks/run-lifecycle.ts";
 import { taskStreamId } from "../tasks/task-events.ts";
-import { nextOccurrence } from "./schedule-clock.ts";
+import { CATCH_UP_MAX_OCCURRENCES, missedOccurrences, nextOccurrence } from "./schedule-clock.ts";
 import type { TriggerPlan } from "./schedules.types.ts";
 
 /** The S24 credit-seam port (the honest recorded seam — the ledger is slice
@@ -382,6 +382,127 @@ export class SchedulerService {
       }
     }
     return { resumed };
+  }
+
+  // ── Boot reconciliation (PRD §13, E5, AC3/AC4) ──────────────────────────────
+
+  /**
+   * The boot reconciliation: for every active schedule, decide
+   * catch-up-versus-skip for the occurrences the downtime window held and
+   * RECORD the decision on the trigger's stream; re-drive claimed firings
+   * whose run never landed (the crash between the ledger claim and the
+   * run). Idempotent: the ledger's occurrence keys and the bookkeeping make
+   * a second boot a no-op (AC4).
+   */
+  reconcileBoot(): {
+    decisions: Array<{
+      trigger_id: string;
+      policy: "catch_up" | "skip";
+      decision: "caught_up" | "skipped";
+      missed_count: number;
+      caught_up_count: number;
+    }>;
+    redriven: number;
+  } {
+    const now = this.now();
+    const decisions: Array<{
+      trigger_id: string;
+      policy: "catch_up" | "skip";
+      decision: "caught_up" | "skipped";
+      missed_count: number;
+      caught_up_count: number;
+    }> = [];
+    let redriven = 0;
+
+    // 1. The claimed-but-runless firings (at-least-once).
+    for (const firing of this.deps.triggers.claimedFiringsWithoutRun()) {
+      const trigger = this.deps.triggers.getTrigger(firing.workspace_id, firing.trigger_id);
+      if (trigger === null) {
+        this.deps.triggers.updateFiring(
+          firing.workspace_id,
+          firing.trigger_id,
+          firing.idempotency_key,
+          { outcome: "failed", detail_json: JSON.stringify({ code: "TRIGGER_NOT_FOUND" }) },
+        );
+        continue;
+      }
+      let detail: Record<string, unknown> = {};
+      try {
+        detail = firing.detail_json ? (JSON.parse(firing.detail_json) as Record<string, unknown>) : {};
+      } catch {
+        detail = {};
+      }
+      const outcome = this.executeClaimedFiring(trigger, {
+        idempotencyKey: firing.idempotency_key,
+        dueAt: firing.fired_at,
+        detail,
+      });
+      if (outcome.outcome === "fired" || outcome.outcome === "failed") {
+        redriven += 1;
+      }
+    }
+
+    // 2. The missed-occurrence decisions per active schedule.
+    for (const trigger of this.deps.triggers.listTriggersByKind(this.deps.workspaceId, "schedule")) {
+      if (trigger.state !== "active") continue;
+      const config = JSON.parse(trigger.config_json) as { cron: string };
+      const from = trigger.last_occurrence_at ?? trigger.created_at;
+      const missed = missedOccurrences(
+        config.cron,
+        new Date(from),
+        new Date(now),
+        CATCH_UP_MAX_OCCURRENCES + 1,
+      );
+      if (missed.length === 0) {
+        // Nothing missed; make sure the next occurrence is armed.
+        if (trigger.next_occurrence_at === null) {
+          this.deps.triggers.updateTriggerFields(this.deps.workspaceId, trigger.trigger_id, {
+            next_occurrence_at: nextOccurrence(config.cron, new Date(now))?.toISOString() ?? null,
+            updated_at: now,
+          });
+        }
+        continue;
+      }
+      const bounded = missed.slice(0, CATCH_UP_MAX_OCCURRENCES);
+      const policy = trigger.catch_up_policy;
+      let caughtUpCount = 0;
+      if (policy === "catch_up") {
+        for (const occurrenceAt of bounded) {
+          const outcome = this.fireOccurrence(this.deps.workspaceId, trigger.trigger_id, {
+            idempotencyKey: `schedule:${trigger.trigger_id}:${occurrenceAt.toISOString()}`,
+            dueAt: occurrenceAt.toISOString(),
+            detail: { due_at: occurrenceAt.toISOString(), catch_up: true },
+          });
+          if (outcome.outcome === "fired") caughtUpCount += 1;
+          if (outcome.outcome === "paused_credits" || outcome.outcome === "failed") break;
+        }
+      }
+      const decision: "caught_up" | "skipped" = policy === "catch_up" ? "caught_up" : "skipped";
+      const latestMissed = bounded[bounded.length - 1];
+      this.deps.triggers.updateTriggerFields(this.deps.workspaceId, trigger.trigger_id, {
+        last_occurrence_at: latestMissed.toISOString(),
+        next_occurrence_at: nextOccurrence(config.cron, new Date(now))?.toISOString() ?? null,
+        updated_at: now,
+      });
+      this.appendTriggerStreamEvent(this.deps.workspaceId, trigger.trigger_id, "trigger.catchup_decided", {
+        workspace_id: this.deps.workspaceId,
+        trigger_id: trigger.trigger_id,
+        policy,
+        decision,
+        missed_count: missed.length,
+        caught_up_count: caughtUpCount,
+        window_from: from,
+        window_to: now,
+      });
+      decisions.push({
+        trigger_id: trigger.trigger_id,
+        policy,
+        decision,
+        missed_count: missed.length,
+        caught_up_count: caughtUpCount,
+      });
+    }
+    return { decisions, redriven };
   }
 
   // ── The tick loop (the production convenience) ──────────────────────────────

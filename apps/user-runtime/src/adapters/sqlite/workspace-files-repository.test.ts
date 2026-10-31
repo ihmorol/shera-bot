@@ -138,7 +138,7 @@ function writeAsAgent(
   mimeType: string | null,
   taskId = "task-1",
 ): WorkspaceFileContent {
-  leases.acquireLease(workspaceId, uri, taskId, actor, LEASE_TTL);
+  leases.acquireLease(workspaceId, uri, taskId, actor as { type: "user" | "agent"; id: string }, LEASE_TTL);
   return repo.write(workspaceId, uri, actor, content, mimeType, { task_id: taskId });
 }
 

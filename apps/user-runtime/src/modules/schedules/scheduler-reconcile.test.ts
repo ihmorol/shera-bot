@@ -231,6 +231,8 @@ describe("catch-up versus skip (AC3, fake clock — the decision is RECORDED)", 
     harness.clock.value = "2026-11-05T12:00:00.000Z";
     const report = harness.makeScheduler(() => harness.clock.value).reconcileBoot();
     const decision = report.decisions[0];
+    expect(decision).toBeDefined();
+    if (decision === undefined) throw new Error("decision missing");
     expect(decision.policy).toBe("catch_up");
     expect(decision.caught_up_count).toBeLessThanOrEqual(50);
     expect(decision.missed_count).toBeGreaterThan(decision.caught_up_count);

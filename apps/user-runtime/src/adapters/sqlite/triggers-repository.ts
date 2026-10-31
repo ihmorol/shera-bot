@@ -95,6 +95,8 @@ export interface TriggerRecordRow {
   last_fired_at: string | null;
   last_occurrence_at: string | null;
   next_occurrence_at: string | null;
+  /** The watcher's observed change signature (the dedup authority). */
+  last_signature: string | null;
   created_by_type: string;
   created_by_id: string;
   created_at: string;
@@ -132,6 +134,7 @@ export interface TriggerFieldsPatch {
   last_fired_at?: string | null;
   last_occurrence_at?: string | null;
   last_condition_state?: number | null;
+  last_signature?: string | null;
   updated_at: string;
 }
 
@@ -315,7 +318,7 @@ export class TriggersRepository {
       `UPDATE trigger_records
        SET name = ?, config_json = ?, catch_up_policy = ?,
            next_occurrence_at = ?, last_fired_at = ?, last_occurrence_at = ?,
-           last_condition_state = ?, updated_at = ?
+           last_condition_state = ?, last_signature = ?, updated_at = ?
        WHERE workspace_id = ? AND trigger_id = ?`,
       [
         patch.name ?? row.name,
@@ -327,6 +330,7 @@ export class TriggersRepository {
         patch.last_condition_state !== undefined
           ? patch.last_condition_state
           : row.last_condition_state,
+        patch.last_signature !== undefined ? patch.last_signature : row.last_signature,
         patch.updated_at,
         workspaceId,
         triggerId,

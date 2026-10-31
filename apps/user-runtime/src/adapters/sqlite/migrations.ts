@@ -1279,6 +1279,7 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
         last_fired_at       TEXT,
         last_occurrence_at  TEXT,
         next_occurrence_at  TEXT,
+        last_signature      TEXT,
         created_by_type     TEXT    NOT NULL CHECK (created_by_type IN ('user', 'agent', 'runtime', 'admin', 'system')),
         created_by_id       TEXT    NOT NULL,
         created_at          TEXT    NOT NULL,

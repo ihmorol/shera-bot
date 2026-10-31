@@ -46,8 +46,11 @@ import { createHash, randomUUID } from "node:crypto";
 
 import type { TypedExecutionEvent } from "@shera-bot/contracts";
 
+import type { ArtifactsRepository } from "../../adapters/sqlite/artifacts-repository.ts";
 import type { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
 import type { OperationsRepository } from "../../adapters/sqlite/operations-repository.ts";
+import type { ProjectsRepository } from "../../adapters/sqlite/projects-repository.ts";
+import type { WorkspaceFilesRepository } from "../../adapters/sqlite/workspace-files-repository.ts";
 import type { TriggerRecordRow, TriggersRepository } from "../../adapters/sqlite/triggers-repository.ts";
 import type { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import type { EventsService } from "../events/events.service.ts";
@@ -59,6 +62,22 @@ import {
 import { taskStreamId } from "../tasks/task-events.ts";
 import { CATCH_UP_MAX_OCCURRENCES, missedOccurrences, nextOccurrence } from "./schedule-clock.ts";
 import type { TriggerPlan } from "./schedules.types.ts";
+import {
+  agentFolderSignature,
+  gitBranchSignature,
+  workspaceSubtreeSignature,
+} from "./watcher-signature.ts";
+import type { EventEnvelope } from "../events/events.types.ts";
+
+/** The read surfaces the watcher evaluation consumes (the SAME repositories
+ * every reader uses — never a second data path). */
+export interface SchedulerWatcherSources {
+  files: Pick<WorkspaceFilesRepository, "resolve" | "list">;
+  artifacts: Pick<ArtifactsRepository, "listArtifactsByWorkspace">;
+  projects: Pick<ProjectsRepository, "findProject">;
+  agentFilesRoot: string;
+  workspaceId: string;
+}
 
 /** The S24 credit-seam port (the honest recorded seam — the ledger is slice
  * S24; the composed default records the consult and allows, the way S22's
@@ -108,6 +127,8 @@ export interface SchedulerDeps {
   runGate?: SchedulerRunGate | undefined;
   /** The autonomous plan legs; absent = the honest no-op walk (G4). */
   planRunner?: SchedulerPlanRunner | undefined;
+  /** The watcher read surfaces; absent = the event-driven kinds idle (G4). */
+  watcherSources?: SchedulerWatcherSources | undefined;
   /** Injectable ISO clock; default wall clock. */
   now?: (() => string) | undefined;
   /**
@@ -479,6 +500,7 @@ export class SchedulerService {
       }
       const decision: "caught_up" | "skipped" = policy === "catch_up" ? "caught_up" : "skipped";
       const latestMissed = bounded[bounded.length - 1];
+      if (latestMissed === undefined) continue;
       this.deps.triggers.updateTriggerFields(this.deps.workspaceId, trigger.trigger_id, {
         last_occurrence_at: latestMissed.toISOString(),
         next_occurrence_at: nextOccurrence(config.cron, new Date(now))?.toISOString() ?? null,
@@ -570,9 +592,195 @@ export class SchedulerService {
 
   // ── Internals ───────────────────────────────────────────────────────────────
 
-  /** Chunk 6 wires the event-driven kinds (file/git/condition/completion). */
+  /**
+   * The event-driven kinds (file/git/condition), evaluated per tick against
+   * their signature sources. The signature IS the dedup authority: the same
+   * observed state never fires twice; a FIRST observation (null signature)
+   * is ADOPTED as the baseline without firing — a boot never replays
+   * history (AC4).
+   */
   protected evaluateWatchers(): void {
-    // Overridden by the composed watcher evaluation.
+    const sources = this.deps.watcherSources;
+    if (sources === undefined) return;
+    const now = this.now();
+    for (const trigger of this.deps.triggers.listTriggers(sources.workspaceId)) {
+      if (trigger.state !== "active") continue;
+      if (trigger.kind === "file_watch") {
+        const config = JSON.parse(trigger.config_json) as {
+          scope: "workspace" | "agent";
+          path_uri: string;
+          agent_id?: string;
+        };
+        const signature =
+          config.scope === "agent" && config.agent_id !== undefined
+            ? agentFolderSignature(sources.agentFilesRoot, sources.workspaceId, config.agent_id)
+            : workspaceSubtreeSignature(sources.files, sources.workspaceId, config.path_uri);
+        this.applySignatureTrigger(trigger, signature, now, {
+          path_uri: config.path_uri,
+          scope: config.scope,
+        });
+        continue;
+      }
+      if (trigger.kind === "git_watch") {
+        const config = JSON.parse(trigger.config_json) as { project_id: string; branch: string };
+        const project = sources.projects.findProject(sources.workspaceId, config.project_id);
+        const signature = project === null ? "absent" : gitBranchSignature(project, config.branch);
+        // A vanished branch/repo is configuration drift, not a work event:
+        // the typed GitEventPayload carries a commit sha, so nothing fires
+        // on 'absent' (the signature stays unsaved — a restored branch
+        // fires once). Recorded in E37.
+        if (signature !== "absent") {
+          this.applySignatureTrigger(trigger, signature, now, {
+            project_id: config.project_id,
+            branch: config.branch,
+            commit_sha: signature,
+          });
+        }
+        continue;
+      }
+      if (trigger.kind === "condition") {
+        const config = JSON.parse(trigger.config_json) as {
+          predicate: { kind: string; path_uri?: string; project_id?: string; branch?: string; count?: number };
+        };
+        const isTrue = this.evaluatePredicate(sources, config.predicate);
+        const previous = trigger.last_condition_state;
+        this.deps.triggers.updateTriggerFields(sources.workspaceId, trigger.trigger_id, {
+          last_condition_state: isTrue ? 1 : 0,
+          updated_at: now,
+        });
+        // Edge-triggered: the false→true transition fires once per episode.
+        if (isTrue && previous !== 1) {
+          this.fireOccurrence(sources.workspaceId, trigger.trigger_id, {
+            idempotencyKey: `condition:${trigger.trigger_id}:edge:${now}`,
+            dueAt: now,
+            detail: { evaluated_at: now },
+          });
+        }
+        continue;
+      }
+    }
+  }
+
+  /** One signature comparison: adopt the first observation, fire on change. */
+  private applySignatureTrigger(
+    trigger: TriggerRecordRow,
+    signature: string,
+    now: string,
+    detail: Record<string, unknown>,
+  ): void {
+    if (trigger.last_signature === null) {
+      // Baseline adoption: the watcher starts from the observed state.
+      this.deps.triggers.updateTriggerFields(trigger.workspace_id, trigger.trigger_id, {
+        last_signature: signature,
+        updated_at: now,
+      });
+      return;
+    }
+    if (trigger.last_signature === signature) return;
+    const changeType = signature === "absent" ? "deleted" : "modified";
+    const outcome = this.fireOccurrence(trigger.workspace_id, trigger.trigger_id, {
+      idempotencyKey: `watch:${trigger.trigger_id}:${signature}`,
+      dueAt: now,
+      detail: { ...detail, change_type: changeType },
+    });
+    // The signature advances on a SETTLED fire (fired or deduplicated — the
+    // deduplicated outcome means the ledger already owns this signature's
+    // firing) but NOT on a pause/failure: the change stays pending.
+    if (outcome.outcome === "fired" || outcome.outcome === "deduplicated") {
+      this.deps.triggers.updateTriggerFields(trigger.workspace_id, trigger.trigger_id, {
+        last_signature: signature,
+        updated_at: now,
+      });
+    }
+  }
+
+  /** The typed predicate evaluation (the agent-session-backed evaluator is
+   * the recorded seam; the prototype ships deterministic runtime
+   * predicates — E37). */
+  private evaluatePredicate(
+    sources: SchedulerWatcherSources,
+    predicate: { kind: string; path_uri?: string; project_id?: string; branch?: string; count?: number },
+  ): boolean {
+    try {
+      if (predicate.kind === "workspace_file_exists" && predicate.path_uri !== undefined) {
+        return (
+          sources.files.resolve(sources.workspaceId, predicate.path_uri, {
+            type: "runtime",
+            id: "scheduler",
+          }) !== null
+        );
+      }
+      if (predicate.kind === "git_branch_exists" && predicate.project_id !== undefined) {
+        const project = sources.projects.findProject(sources.workspaceId, predicate.project_id);
+        if (project === null || predicate.branch === undefined) return false;
+        return gitBranchSignature(project, predicate.branch) !== "absent";
+      }
+      if (predicate.kind === "artifact_count_at_least") {
+        const count = sources.artifacts.listArtifactsByWorkspace(sources.workspaceId).length;
+        return count >= (predicate.count ?? 0);
+      }
+      return false;
+    } catch {
+      return false; // An evaluator fault reads as false — never a phantom fire.
+    }
+  }
+
+  /**
+   * The task-completion cascade (AC6): the composition calls this on the
+   * post-commit fanout. A terminal envelope (task.succeeded/failed/
+   * cancelled) or a worker.completed frame whose run belongs to a watched
+   * operation fires the matching task_completion trigger ONCE — the ledger
+   * key (trigger, parent run, outcome) deduplicates the double announcement
+   * (the row applier's envelope AND the supervisor's worker frame).
+   */
+  handleCommittedEvent(event: EventEnvelope): void {
+    try {
+      const runId: string | null =
+        (event.payload as { task_id?: string; run_id?: string } | undefined)?.task_id ??
+        (event.payload as { run_id?: string } | undefined)?.run_id ??
+        (event.type === "task.succeeded" ||
+        event.type === "task.failed" ||
+        event.type === "task.cancelled"
+          ? (event as unknown as { task_id?: string }).task_id ?? null
+          : null);
+      if (runId === null) return;
+      const outcome: "succeeded" | "failed" | "cancelled" | null =
+        event.type === "task.succeeded" || event.type === "worker.completed"
+          ? "succeeded"
+          : event.type === "task.failed"
+            ? "failed"
+            : event.type === "task.cancelled"
+              ? "cancelled"
+              : null;
+      if (outcome === null) return;
+      const workspaceId = event.workspace_id;
+      const operationId = this.deps.operations.findRunOperation(workspaceId, runId);
+      if (operationId === null) return;
+      for (const trigger of this.deps.triggers.listTriggersByKind(workspaceId, "task_completion")) {
+        if (trigger.state !== "active") continue;
+        if (trigger.target_operation_id !== operationId) continue;
+        const config = JSON.parse(trigger.config_json) as { outcomes?: string[] };
+        if (!(config.outcomes ?? ["succeeded"]).includes(outcome)) continue;
+        this.fireOccurrence(workspaceId, trigger.trigger_id, {
+          idempotencyKey: `task_completion:${trigger.trigger_id}:${runId}:${outcome}`,
+          dueAt: this.now(),
+          detail: {
+            parent_task_id: runId,
+            outcome,
+            completed_at: this.now(),
+          },
+        });
+      }
+    } catch (error) {
+      // Contained: a cascade fault never breaks the committed event's own
+      // path (the B4 discipline the fanout already keeps).
+      this.faultLog("trigger_completion_cascade_failed", {
+        workspace_id: event.workspace_id,
+        event_type: event.type,
+        name: error instanceof Error ? error.name : "Error",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   private walkPlan(

@@ -200,7 +200,7 @@ export interface WorkspaceApiDeps {
 }
 
 /** The storage actor from a parsed query/body pair (the D4 subset). */
-function actorOf(type: "user" | "agent", id: string): WorkspaceStorageActor {
+function actorOf(type: "user" | "agent", id: string): { type: "user" | "agent"; id: string } {
   return { type, id };
 }
 

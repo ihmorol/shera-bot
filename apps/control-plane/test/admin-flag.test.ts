@@ -59,20 +59,23 @@ describe("no endpoint can set the administrator flag", () => {
   it.each([
     ["POST", "/api/admin"],
     ["PATCH", "/api/admin"],
-  ])("%s %s answers the admin gate's typed 401 — the flag is still unsettable (S32)", async (method, path) => {
-    const response = await fetch(`${origin}${path}`, {
-      method,
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ is_admin: true, isAdmin: true }),
-    });
-    // The gate refuses before any routing happens (typed 401, AC2's posture:
-    // unauthenticated requests get the typed 401 and are recorded) — and
-    // there is still no endpoint that sets the flag behind it.
-    expect(response.status).toBe(401);
-    const body = (await response.json()) as { code: string; internal_details: unknown };
-    expect(body.code).toBe("ADMIN_UNAUTHENTICATED");
-    expect(body.internal_details).toBeNull();
-  });
+  ])(
+    "%s %s answers the admin gate's typed 401 — the flag is still unsettable (S32)",
+    async (method, path) => {
+      const response = await fetch(`${origin}${path}`, {
+        method,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ is_admin: true, isAdmin: true }),
+      });
+      // The gate refuses before any routing happens (typed 401, AC2's posture:
+      // unauthenticated requests get the typed 401 and are recorded) — and
+      // there is still no endpoint that sets the flag behind it.
+      expect(response.status).toBe(401);
+      const body = (await response.json()) as { code: string; internal_details: unknown };
+      expect(body.code).toBe("ADMIN_UNAUTHENTICATED");
+      expect(body.internal_details).toBeNull();
+    },
+  );
 
   it.each([
     ["POST", "/api/accounts/promote"],

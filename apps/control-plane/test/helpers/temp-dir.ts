@@ -57,7 +57,5 @@ export async function removeTempDir(dir: string): Promise<void> {
       await new Promise((resolve) => setTimeout(resolve, 10 * 2 ** attempt));
     }
   }
-  console.warn(
-    `[temp-dir] could not delete ${dir}: a resource is still open after 10 retries.`,
-  );
+  console.warn(`[temp-dir] could not delete ${dir}: a resource is still open after 10 retries.`);
 }

@@ -101,7 +101,6 @@ afterAll(async () => {
 }, 180_000);
 
 declare global {
-  // eslint-disable-next-line no-var
   var __s32JarA: CookieJar | undefined;
 }
 

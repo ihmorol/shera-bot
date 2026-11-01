@@ -244,6 +244,38 @@ describe("admin credit top-up (AC9, D48)", () => {
     });
     expect(negative.status).toBe(400);
 
+    // The audit gap closure (review P1): schema-invalid bodies are still
+    // admin action attempts — each one produces the admin_action_failed
+    // event with the acting token and the attempted target (AC6).
+    const failures = await controlPlane.securityEvents.listByType("admin_action_failed");
+    const topupFailures = failures.filter(
+      (event) =>
+        event.details["action"] === "credits.topup" &&
+        event.details["target"] === A &&
+        (event.details["reason"] === "Error" || typeof event.details["reason"] === "string"),
+    );
+    expect(topupFailures.length).toBeGreaterThanOrEqual(2);
+    for (const event of topupFailures) {
+      expect(event.details["actor"]).toMatch(/^admin-token:/);
+    }
+
+    const malformed = await request(server.origin, `/api/admin/users/${A}/credits/top-up`, {
+      method: "POST",
+      headers: adminHeaders({ "content-type": "application/json" }),
+      body: '{"amount":',
+    });
+    // Malformed JSON is a 400-shaped client error WITH the audit event —
+    // never an unrecorded 500 from the app-level handler (review P1).
+    expect(malformed.status).toBe(400);
+    expect(JSON.parse(malformed.body).code).toBe("CONTRACT_VALIDATION_FAILED");
+    const malformedFailures = await controlPlane.securityEvents.listByType("admin_action_failed");
+    expect(
+      malformedFailures.some(
+        (event) =>
+          event.details["action"] === "credits.topup" && event.details["target"] === A,
+      ),
+    ).toBe(true);
+
     const unknown = await request(
       server.origin,
       "/api/admin/users/cccccccc-0000-4000-8000-000000000009/credits/top-up",

@@ -195,6 +195,16 @@ describe("admin user management (issue #33)", () => {
     });
     expect(invalid.status).toBe(400);
     expect(JSON.parse(invalid.body).code).toBe("CONTRACT_VALIDATION_FAILED");
+    // The audit gap closure (review P1): a schema-invalid body is still an
+    // admin action attempt — it must produce the admin_action_failed event
+    // with the acting token and the attempted target (AC6).
+    const failures = await fixture.controlPlane.securityEvents.listByType("admin_action_failed");
+    const tierFailure = failures.find(
+      (event) =>
+        event.details["action"] === "users.assign_tier" && event.details["target"] === accountB,
+    );
+    expect(tierFailure).toBeTruthy();
+    expect(tierFailure?.details["actor"]).toMatch(/^admin-token:/);
   });
 
   it("unknown target accounts get the typed 404", async () => {

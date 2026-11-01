@@ -101,13 +101,20 @@ export class SchedulerWakeManager {
     if (this.debounceTimer !== null) return;
     this.debounceTimer = setTimeout(() => {
       this.debounceTimer = null;
-      try {
-        this.deps.onWake();
-      } catch (error) {
+      // The composed callback is async (compose passes scheduler.tick()):
+      // a rejection escapes the synchronous try/catch, so the promise is
+      // resolved-then-caught here — both the sync throw and the async
+      // rejection land in the fault log, never an unhandledRejection.
+      const wakeFault = (error: unknown): void => {
         this.deps.logFault?.("agent_folder_wake_failed", {
           name: error instanceof Error ? error.name : "Error",
           message: error instanceof Error ? error.message : String(error),
         });
+      };
+      try {
+        void Promise.resolve(this.deps.onWake()).catch(wakeFault);
+      } catch (error) {
+        wakeFault(error);
       }
     }, this.deps.debounceMs ?? 200);
     this.debounceTimer.unref?.();

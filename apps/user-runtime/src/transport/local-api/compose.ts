@@ -1630,14 +1630,18 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
   // decisions, the claimed-firing re-drive) + the tick loop + the watcher
   // sync. Fire-and-forget at boot (a reconciliation fault is contained —
   // the same posture as the S16 worker reconciliation).
-  try {
-    wired.scheduler.reconcileBoot();
-  } catch (error) {
-    logFault("scheduler_reconcile_boot_failed", {
-      name: error instanceof Error ? error.name : "Error",
-      message: error instanceof Error ? error.message : String(error),
-    });
-  }
+  // reconcileBoot is ASYNC — the promise's rejection escapes a synchronous
+  // try/catch as an unhandledRejection. Mirror the S16 block's containment.
+  wired.scheduler
+    .reconcileBoot()
+    .catch((error: unknown) => {
+      logFault("scheduler_reconcile_boot_failed", {
+        name: error instanceof Error ? error.name : "Error",
+        message: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    })
+    .catch(() => {});
   wired.wakeManager.sync();
   wired.scheduler.start();
 

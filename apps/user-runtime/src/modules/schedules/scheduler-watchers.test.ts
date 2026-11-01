@@ -381,6 +381,36 @@ describe("condition triggers (the typed-predicate evaluator, edge-triggered)", (
     expect(harness.ops.listRuns(WS, harness.operationId)).toHaveLength(1);
   });
 
+  it("links a condition trigger's run to its declared parent_task_id (AC6)", async () => {
+    const harness = makeHarness();
+    // The parent run the condition is declared inside.
+    harness.ops.createRun(WS, harness.operationId, { run_id: "run_ctx" });
+    harness.ops.applyRunState(WS, harness.operationId, "run_ctx", "SUCCEEDED");
+    const created = harness.schedules.createTrigger(WS, {
+      kind: "condition",
+      name: "dataset ready in run context",
+      target_operation_id: harness.operationId,
+      config: {
+        predicate: { kind: "workspace_file_exists", path_uri: "workspace://ready.flag" },
+        provider: { provider_id: "prov_fake", model: "fake-model" },
+        parent_task_id: "run_ctx",
+      },
+      catch_up_policy: "skip",
+      actor: USER_ACTOR,
+    });
+    const outcome = await harness.scheduler.fireOccurrence(WS, created.trigger_id, {
+      idempotencyKey: `condition:${created.trigger_id}:edge-linked`,
+      dueAt: "2026-10-31T12:00:00.000Z",
+      detail: {},
+    });
+    expect(outcome).toMatchObject({ outcome: "fired" });
+    if (outcome.outcome !== "fired") return;
+    const run = harness.ops.getRun(WS, harness.operationId, outcome.runId);
+    expect(run.parent_task_id).toBe("run_ctx");
+    const stream = harness.journal.readFrom(WS, `task:${outcome.runId}`, 0, 100);
+    expect(stream[0]?.event_type).toBe("trigger.condition_met");
+  });
+
   it("evaluates the artifact-count predicate against real artifacts", async () => {
     const harness = makeHarness();
     harness.schedules.createTrigger(WS, {

@@ -554,14 +554,14 @@ export class SchedulerService {
         return () => clearInterval(timer);
       });
     this.tickTimer = () => {
-      try {
-        this.tick();
-      } catch (error) {
+      // tick is ASYNC — a synchronous try/catch cannot contain its rejection
+      // (an un-awaited floating promise dies as an unhandledRejection).
+      void this.tick().catch((error: unknown) => {
         this.faultLog("scheduler_tick_failed", {
           name: error instanceof Error ? error.name : "Error",
           message: error instanceof Error ? error.message : String(error),
         });
-      }
+      });
     };
     this.cancelTick = schedule(tickIntervalMs, this.tickTimer);
   }

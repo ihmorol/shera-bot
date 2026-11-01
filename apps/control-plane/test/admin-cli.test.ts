@@ -17,7 +17,7 @@
  * still pins every behavior it asserts against the real stack.
  */
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -27,6 +27,7 @@ import { createControlPlaneApp, type ControlPlaneApp } from "../src/index.ts";
 import { controlAccounts } from "../src/db/schema.ts";
 import { runCli, CLI_COMMAND_NAMES } from "../src/cli/shera-admin.ts";
 import { startTestCluster, type TestCluster } from "./helpers/pg-cluster.ts";
+import { removeTempDir } from "./helpers/temp-dir.ts";
 import { request, startHttpsApp, type TestServer } from "./helpers/test-server.ts";
 
 const A = "a1b2c3d4-0000-4000-8000-000000000001";
@@ -89,7 +90,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await server?.close();
   await controlPlane?.close();
-  if (dbDir) rmSync(dbDir, { recursive: true, force: true });
+  if (dbDir) await removeTempDir(dbDir);
   await cluster?.stop();
 }, 180_000);
 

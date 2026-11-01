@@ -11,7 +11,7 @@
  *   leg says so); it never invents records (G4).
  */
 import { createServer, type Server } from "node:http";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type { AddressInfo } from "node:net";
@@ -20,6 +20,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createControlPlaneApp, type ControlPlaneApp } from "../src/index.ts";
 import { controlAccounts } from "../src/db/schema.ts";
 import { startTestCluster, type TestCluster } from "./helpers/pg-cluster.ts";
+import { removeTempDir } from "./helpers/temp-dir.ts";
 import { request, startHttpsApp, type TestServer } from "./helpers/test-server.ts";
 import { FakeContainerBackend } from "@shera-bot/test-kit";
 import {
@@ -130,8 +131,10 @@ beforeAll(async () => {
 afterAll(async () => {
   await server?.close();
   await controlPlane?.close();
-  runtime?.close();
-  if (dbDir) rmSync(dbDir, { recursive: true, force: true });
+  // composeRuntime's close() is async — the SQLite release lands inside its
+  // promise; the temp dir cannot be deleted until it is awaited (E20 leg 1).
+  await runtime?.close();
+  if (dbDir) await removeTempDir(dbDir);
   for (const container of fakeServers) {
     await new Promise<void>((resolveClose) => container.close(() => resolveClose()));
   }

@@ -11,8 +11,6 @@
  * actually fires — and never fires twice.
  */
 import { createServer, type Server } from "node:http";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AddressInfo } from "node:net";
 
@@ -218,7 +216,10 @@ describe("AC12: one autonomous scheduled task completes with no user action", ()
     // configured with.
     const run = runtime.operations.getRun(WS, operationId, runId);
     expect(run.state).toBe("SUCCEEDED");
-    expect(run.provider_snapshot).toMatchObject({ provider_id: provider.id, model: "fixture-model" });
+    expect(run.provider_snapshot).toMatchObject({
+      provider_id: provider.id,
+      model: "fixture-model",
+    });
 
     // THE MODEL CALL: the fake endpoint received the request (the counter
     // is the proof — the leg is real, never fabricated).

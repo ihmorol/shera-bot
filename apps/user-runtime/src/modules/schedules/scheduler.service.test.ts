@@ -24,7 +24,11 @@ import { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import { EventsService } from "../events/events.service.ts";
 import { OperationsService } from "../operations/operations.service.ts";
 import { SchedulesService } from "./schedules.service.ts";
-import { SchedulerService, type ReservationPort, type SchedulerPlanRunner } from "./scheduler.service.ts";
+import {
+  SchedulerService,
+  type ReservationPort,
+  type SchedulerPlanRunner,
+} from "./scheduler.service.ts";
 
 const WS = "ws-scheduler";
 const AGENT = "agent_scheduler_test";
@@ -82,18 +86,21 @@ function makeHarness(now = "2026-10-31T12:00:00.000Z"): SchedulerHarness {
     tx,
     packCatalog: PACK_CATALOG,
   });
-  const operationId = ops
-    .createOperation(WS, {
-      definition_ref: null,
-      name: "Scheduled Operation",
-      roster_agent_ids: [AGENT],
-      coordinator_agent_id: AGENT,
-    })
-    .operation_id;
+  const operationId = ops.createOperation(WS, {
+    definition_ref: null,
+    name: "Scheduled Operation",
+    roster_agent_ids: [AGENT],
+    coordinator_agent_id: AGENT,
+  }).operation_id;
   if (operationId !== OP) {
     // The tests address the operation through the service-created id.
   }
-  const schedules = new SchedulesService({ triggers, operations: operationsRepo, tx, now: () => now });
+  const schedules = new SchedulesService({
+    triggers,
+    operations: operationsRepo,
+    tx,
+    now: () => now,
+  });
   const reservations = { calls: 0, allow: true };
   const gate = { calls: 0, allow: true, refusals: [] as string[] };
   const clock = { value: now };
@@ -205,7 +212,9 @@ describe("the fire pipeline (at-least-once with the ledger claim)", () => {
     // followed by the D8 walk envelopes.
     const stream = harness.journal.readFrom(WS, `task:${outcome.runId}`, 0, 100);
     expect(stream[0]?.event_type).toBe("trigger.scheduled");
-    const lifecycle = stream.map((row) => row.event_type).filter((type) => type.startsWith("task."));
+    const lifecycle = stream
+      .map((row) => row.event_type)
+      .filter((type) => type.startsWith("task."));
     expect(lifecycle).toEqual(["task.queued", "task.started", "task.succeeded"]);
 
     // The ledger settles: fired + run linkage + the trigger's bookkeeping.
@@ -265,7 +274,10 @@ describe("the fire pipeline (at-least-once with the ledger claim)", () => {
       dueAt: "2026-11-02T09:00:00.000Z",
       detail: {},
     });
-    expect(outcome).toMatchObject({ outcome: "refused_provider", code: "PROVIDER_CREDENTIAL_REVOKED" });
+    expect(outcome).toMatchObject({
+      outcome: "refused_provider",
+      code: "PROVIDER_CREDENTIAL_REVOKED",
+    });
     expect(harness.ops.listRuns(WS, harness.operationId)).toHaveLength(0);
     const view = harness.schedules.getTriggerView(WS, triggerId);
     expect(view?.state).toBe("active"); // a configuration state, not a pause
@@ -279,11 +291,13 @@ describe("the fire pipeline (at-least-once with the ledger claim)", () => {
     const triggerId = createScheduleTrigger(harness);
     harness.reservations.allow = false;
     expect(
-      (await harness.scheduler.fireOccurrence(WS, triggerId, {
-        idempotencyKey: "schedule:occ-1",
-        dueAt: "2026-11-02T09:00:00.000Z",
-        detail: {},
-      })).outcome,
+      (
+        await harness.scheduler.fireOccurrence(WS, triggerId, {
+          idempotencyKey: "schedule:occ-1",
+          dueAt: "2026-11-02T09:00:00.000Z",
+          detail: {},
+        })
+      ).outcome,
     ).toBe("paused_credits");
     // The top-up: the port allows again; the scheduler's resume evaluation
     // clears the pause and the next occurrence fires.
@@ -293,11 +307,13 @@ describe("the fire pipeline (at-least-once with the ledger claim)", () => {
     const stream = harness.journal.readFrom(WS, `trigger:${triggerId}`, 0, 100);
     expect(stream.map((row) => row.event_type)).toContain("trigger.credit_resumed");
     expect(
-      (await harness.scheduler.fireOccurrence(WS, triggerId, {
-        idempotencyKey: "schedule:occ-2",
-        dueAt: "2026-11-09T09:00:00.000Z",
-        detail: {},
-      })).outcome,
+      (
+        await harness.scheduler.fireOccurrence(WS, triggerId, {
+          idempotencyKey: "schedule:occ-2",
+          dueAt: "2026-11-09T09:00:00.000Z",
+          detail: {},
+        })
+      ).outcome,
     ).toBe("fired");
   });
 
@@ -320,7 +336,11 @@ describe("the fire pipeline (at-least-once with the ledger claim)", () => {
     const outcome = await harness.scheduler.fireOccurrence(WS, created.trigger_id, {
       idempotencyKey: `task_completion:${created.trigger_id}:run_parent:succeeded`,
       dueAt: "2026-10-31T12:00:00.000Z",
-      detail: { parent_task_id: "run_parent", outcome: "succeeded", completed_at: "2026-10-31T12:00:00.000Z" },
+      detail: {
+        parent_task_id: "run_parent",
+        outcome: "succeeded",
+        completed_at: "2026-10-31T12:00:00.000Z",
+      },
     });
     expect(outcome).toMatchObject({ outcome: "fired" });
     if (outcome.outcome !== "fired") return;
@@ -354,7 +374,7 @@ describe("the fire pipeline (at-least-once with the ledger claim)", () => {
       } as SchedulerPlanRunner,
     });
     const triggerId = createScheduleTrigger(harness);
-const outcome = await failing.fireOccurrence(WS, triggerId, {
+    const outcome = await failing.fireOccurrence(WS, triggerId, {
       idempotencyKey: "schedule:occ-plan-fail",
       dueAt: "2026-11-02T09:00:00.000Z",
       detail: {},

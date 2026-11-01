@@ -51,14 +51,14 @@ import type { EventJournalRepository } from "../../adapters/sqlite/event-journal
 import type { OperationsRepository } from "../../adapters/sqlite/operations-repository.ts";
 import type { ProjectsRepository } from "../../adapters/sqlite/projects-repository.ts";
 import type { WorkspaceFilesRepository } from "../../adapters/sqlite/workspace-files-repository.ts";
-import type { TriggerRecordRow, TriggersRepository } from "../../adapters/sqlite/triggers-repository.ts";
+import type {
+  TriggerRecordRow,
+  TriggersRepository,
+} from "../../adapters/sqlite/triggers-repository.ts";
 import type { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import type { EventsService } from "../events/events.service.ts";
 import type { OperationsService } from "../operations/operations.service.ts";
-import {
-  applyRowLifecycleTransition,
-  type RowLifecycleDeps,
-} from "../tasks/run-lifecycle.ts";
+import { applyRowLifecycleTransition, type RowLifecycleDeps } from "../tasks/run-lifecycle.ts";
 import { taskStreamId } from "../tasks/task-events.ts";
 import { CATCH_UP_MAX_OCCURRENCES, missedOccurrences, nextOccurrence } from "./schedule-clock.ts";
 import type { TriggerPlan } from "./schedules.types.ts";
@@ -110,7 +110,11 @@ export interface SchedulerPlanRunner {
     run_id: string;
     plan: TriggerPlan;
     provider?: { provider_id: string; model: string } | undefined;
-  }): Promise<{ ok: true; result_summary: string } | { ok: false; code: string } | { ok: "paused"; approval_id: string }>;
+  }): Promise<
+    | { ok: true; result_summary: string }
+    | { ok: false; code: string }
+    | { ok: "paused"; approval_id: string }
+  >;
 }
 
 export interface SchedulerDeps {
@@ -245,7 +249,10 @@ export class SchedulerService {
    * and the run). Contained: a failure marks the firing 'failed' and never
    * throws past this boundary.
    */
-  async executeClaimedFiring(trigger: TriggerRecordRow, occurrence: TriggerOccurrence): Promise<FireOutcome> {
+  async executeClaimedFiring(
+    trigger: TriggerRecordRow,
+    occurrence: TriggerOccurrence,
+  ): Promise<FireOutcome> {
     const { workspace_id: workspaceId, trigger_id: triggerId } = trigger;
 
     // Step 2: the reservation consult (D20/D48) — BEFORE anything runs.
@@ -302,8 +309,7 @@ export class SchedulerService {
     // G2 origin) + the run row, with the parent linkage for completion and
     // condition triggers (AC6).
     const operationId = trigger.target_operation_id;
-    const conversationId =
-      this.deps.operations.findChat(workspaceId, operationId) ?? operationId;
+    const conversationId = this.deps.operations.findChat(workspaceId, operationId) ?? operationId;
     const eventType = triggerEventForKind(trigger, occurrence);
     const triggerEventId = `evt_trigger_${trigger.kind}_${createHash("sha256")
       .update(occurrence.idempotencyKey)
@@ -312,11 +318,7 @@ export class SchedulerService {
     const parentTaskId = resolveParentTaskId(trigger, occurrence);
     try {
       this.deps.tx.transaction((exec) => {
-        const sequence = this.deps.journal.nextSequence(
-          taskStreamId(runId),
-          workspaceId,
-          exec,
-        );
+        const sequence = this.deps.journal.nextSequence(taskStreamId(runId), workspaceId, exec);
         const envelope: TypedExecutionEvent = {
           event_id: triggerEventId,
           stream_id: taskStreamId(runId),
@@ -450,9 +452,11 @@ export class SchedulerService {
         );
         continue;
       }
-      let detail: Record<string, unknown> = {};
+      let detail: Record<string, unknown>;
       try {
-        detail = firing.detail_json ? (JSON.parse(firing.detail_json) as Record<string, unknown>) : {};
+        detail = firing.detail_json
+          ? (JSON.parse(firing.detail_json) as Record<string, unknown>)
+          : {};
       } catch {
         detail = {};
       }
@@ -467,7 +471,10 @@ export class SchedulerService {
     }
 
     // 2. The missed-occurrence decisions per active schedule.
-    for (const trigger of this.deps.triggers.listTriggersByKind(this.deps.workspaceId, "schedule")) {
+    for (const trigger of this.deps.triggers.listTriggersByKind(
+      this.deps.workspaceId,
+      "schedule",
+    )) {
       if (trigger.state !== "active") continue;
       const config = JSON.parse(trigger.config_json) as { cron: string };
       const from = trigger.last_occurrence_at ?? trigger.created_at;
@@ -509,16 +516,21 @@ export class SchedulerService {
         next_occurrence_at: nextOccurrence(config.cron, new Date(now))?.toISOString() ?? null,
         updated_at: now,
       });
-      this.appendTriggerStreamEvent(this.deps.workspaceId, trigger.trigger_id, "trigger.catchup_decided", {
-        workspace_id: this.deps.workspaceId,
-        trigger_id: trigger.trigger_id,
-        policy,
-        decision,
-        missed_count: missed.length,
-        caught_up_count: caughtUpCount,
-        window_from: from,
-        window_to: now,
-      });
+      this.appendTriggerStreamEvent(
+        this.deps.workspaceId,
+        trigger.trigger_id,
+        "trigger.catchup_decided",
+        {
+          workspace_id: this.deps.workspaceId,
+          trigger_id: trigger.trigger_id,
+          policy,
+          decision,
+          missed_count: missed.length,
+          caught_up_count: caughtUpCount,
+          window_from: from,
+          window_to: now,
+        },
+      );
       decisions.push({
         trigger_id: trigger.trigger_id,
         policy,
@@ -567,7 +579,10 @@ export class SchedulerService {
    */
   async tick(): Promise<void> {
     const now = this.now();
-    for (const trigger of this.deps.triggers.listTriggersByKind(this.deps.workspaceId, "schedule")) {
+    for (const trigger of this.deps.triggers.listTriggersByKind(
+      this.deps.workspaceId,
+      "schedule",
+    )) {
       if (trigger.state !== "active") continue;
       const config = JSON.parse(trigger.config_json) as { cron: string };
       const due = trigger.next_occurrence_at;
@@ -586,7 +601,9 @@ export class SchedulerService {
         if (outcome.outcome === "paused_credits" || outcome.outcome === "failed") {
           break; // The pause/failure consumed this attempt; the tick re-evaluates.
         }
-        occurrenceAt = nextOccurrence(config.cron, new Date(Date.parse(occurrenceAt) + 1))?.toISOString() ?? null;
+        occurrenceAt =
+          nextOccurrence(config.cron, new Date(Date.parse(occurrenceAt) + 1))?.toISOString() ??
+          null;
         guard += 1;
       }
     }
@@ -643,7 +660,13 @@ export class SchedulerService {
       }
       if (trigger.kind === "condition") {
         const config = JSON.parse(trigger.config_json) as {
-          predicate: { kind: string; path_uri?: string; project_id?: string; branch?: string; count?: number };
+          predicate: {
+            kind: string;
+            path_uri?: string;
+            project_id?: string;
+            branch?: string;
+            count?: number;
+          };
         };
         const isTrue = this.evaluatePredicate(sources, config.predicate);
         const previous = trigger.last_condition_state;
@@ -702,7 +725,13 @@ export class SchedulerService {
    * predicates — E37). */
   private evaluatePredicate(
     sources: SchedulerWatcherSources,
-    predicate: { kind: string; path_uri?: string; project_id?: string; branch?: string; count?: number },
+    predicate: {
+      kind: string;
+      path_uri?: string;
+      project_id?: string;
+      branch?: string;
+      count?: number;
+    },
   ): boolean {
     try {
       if (predicate.kind === "workspace_file_exists" && predicate.path_uri !== undefined) {
@@ -748,7 +777,7 @@ export class SchedulerService {
         (event.type === "task.succeeded" ||
         event.type === "task.failed" ||
         event.type === "task.cancelled"
-          ? (event as unknown as { task_id?: string }).task_id ?? null
+          ? ((event as unknown as { task_id?: string }).task_id ?? null)
           : null);
       if (runId === null) return;
       const outcome: "succeeded" | "failed" | "cancelled" | null =
@@ -798,7 +827,9 @@ export class SchedulerService {
     provider: { provider_id: string; model: string } | undefined,
   ): Promise<{ ok: true } | { ok: false; code: string }> {
     const deps = this.lifecycleDeps();
-    const step = (command: Parameters<typeof applyRowLifecycleTransition>[1]["command"]): boolean => {
+    const step = (
+      command: Parameters<typeof applyRowLifecycleTransition>[1]["command"],
+    ): boolean => {
       const applied = applyRowLifecycleTransition(deps, {
         workspaceId: trigger.workspace_id,
         runId,
@@ -813,7 +844,8 @@ export class SchedulerService {
     const runner = this.deps.planRunner ?? {
       runPlan: () => ({
         ok: true as const,
-        result_summary: "The autonomous plan walked with no plan runner composed (G4: nothing was executed).",
+        result_summary:
+          "The autonomous plan walked with no plan runner composed (G4: nothing was executed).",
       }),
     };
     const legs = await runner.runPlan({
@@ -951,9 +983,7 @@ function triggerEventForKind(
           watcher_id: trigger.trigger_id,
           path_uri: String(config["path_uri"] ?? "workspace://unknown"),
           change_type: String(occurrence.detail["change_type"] ?? "modified") as
-            | "created"
-            | "modified"
-            | "deleted",
+            "created" | "modified" | "deleted",
         },
       };
     case "git_watch":
@@ -973,9 +1003,7 @@ function triggerEventForKind(
           trigger_id: trigger.trigger_id,
           parent_task_id: String(occurrence.detail["parent_task_id"] ?? "unknown"),
           outcome: String(occurrence.detail["outcome"] ?? "succeeded") as
-            | "succeeded"
-            | "failed"
-            | "cancelled",
+            "succeeded" | "failed" | "cancelled",
           completed_at: String(occurrence.detail["completed_at"] ?? occurrence.dueAt),
         },
       };

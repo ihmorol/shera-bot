@@ -46,7 +46,7 @@ export function workspaceSubtreeSignature(
   const parts: string[] = [];
   const walk = (dirUri: string, depth: number): void => {
     if (parts.length >= MAX_NODES || depth > 12) return;
-    let children: WorkspaceNode[] = [];
+    let children: WorkspaceNode[];
     try {
       children = files.list(workspaceId, dirUri, actor);
     } catch {
@@ -85,7 +85,7 @@ export function agentFolderSignature(
   const parts: string[] = [];
   const walk = (dir: string, depth: number): void => {
     if (parts.length >= MAX_NODES || depth > 12) return;
-    let entries: string[] = [];
+    let entries: string[];
     try {
       entries = readdirSync(dir).sort();
     } catch {
@@ -113,9 +113,6 @@ export function agentFolderSignature(
  * deterministic (the same binary S19's simple-git shells out to; one local,
  * bounded call — recorded in E37).
  */
-export function gitBranchSignature(
-  project: Pick<ProjectRow, "repo_path">,
-  branch: string,
-): string {
+export function gitBranchSignature(project: Pick<ProjectRow, "repo_path">, branch: string): string {
   return gitRevParseHead(project.repo_path, branch) ?? "absent";
 }

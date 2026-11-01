@@ -8,11 +8,7 @@ import { useOperationsList } from "@/lib/operation-data";
 
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/shell/states";
-import {
-  useTriggers,
-  useTriggerActions,
-  safeSchedulesMessage,
-} from "@/lib/schedules-data";
+import { useTriggers, useTriggerActions, safeSchedulesMessage } from "@/lib/schedules-data";
 import type { TriggerView } from "@/lib/schedules-api";
 import { routes } from "@/lib/routes";
 import { cn } from "@/lib/utils";
@@ -104,7 +100,8 @@ const FIRING_OUTCOME_LABELS: Record<string, string> = {
 };
 
 function StateChip({ trigger }: { trigger: TriggerView }) {
-  const creditPaused = trigger.state === "paused" && trigger.pause_reason === "insufficient_credits";
+  const creditPaused =
+    trigger.state === "paused" && trigger.pause_reason === "insufficient_credits";
   return (
     <span
       className={cn(
@@ -129,7 +126,13 @@ function StateChip({ trigger }: { trigger: TriggerView }) {
 }
 
 /** One recent firing rendered as a run card naming its trigger (AC10). */
-function RunCard({ trigger, firing }: { trigger: TriggerView; firing: TriggerView["recent_firings"][number] }) {
+function RunCard({
+  trigger,
+  firing,
+}: {
+  trigger: TriggerView;
+  firing: TriggerView["recent_firings"][number];
+}) {
   const outcomeLabel = FIRING_OUTCOME_LABELS[firing.outcome] ?? firing.outcome;
   const settled = firing.outcome === "fired" && firing.run_id !== null;
   return (
@@ -139,14 +142,17 @@ function RunCard({ trigger, firing }: { trigger: TriggerView; firing: TriggerVie
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-text">
-          from {KIND_LABELS[trigger.kind].toLowerCase()}: <span className="font-medium">{trigger.name}</span>
+          from {KIND_LABELS[trigger.kind].toLowerCase()}:{" "}
+          <span className="font-medium">{trigger.name}</span>
         </p>
         <span
           className={cn(
             "font-mono text-[11px] uppercase tracking-[0.14em]",
             firing.outcome === "fired"
               ? "text-live"
-              : firing.outcome === "failed" || firing.outcome === "refused_provider" || firing.outcome === "paused_credits"
+              : firing.outcome === "failed" ||
+                  firing.outcome === "refused_provider" ||
+                  firing.outcome === "paused_credits"
                 ? "text-approval"
                 : "text-muted",
           )}
@@ -184,11 +190,15 @@ function TriggerCard({
   onEdit: () => void;
   editSlot?: React.ReactNode;
 }) {
-  const creditPaused = trigger.state === "paused" && trigger.pause_reason === "insufficient_credits";
+  const creditPaused =
+    trigger.state === "paused" && trigger.pause_reason === "insufficient_credits";
   const description = describeConfig(trigger);
   const recentRuns = trigger.recent_firings.slice(0, 3);
   return (
-    <li className="rounded-2xl border border-line bg-surface px-4 py-4 sm:px-5" data-testid="schedule-trigger-card">
+    <li
+      className="rounded-2xl border border-line bg-surface px-4 py-4 sm:px-5"
+      data-testid="schedule-trigger-card"
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -226,7 +236,13 @@ function TriggerCard({
               Resume
             </Button>
           )}
-          <Button variant="ghost" size="sm" onClick={onEdit} disabled={busy} aria-expanded={editSlot !== undefined}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onEdit}
+            disabled={busy}
+            aria-expanded={editSlot !== undefined}
+          >
             <Pencil className="size-3.5" aria-hidden="true" />
             Edit
           </Button>
@@ -266,7 +282,9 @@ function TriggerCard({
 
       {recentRuns.length > 0 ? (
         <div className="mt-4">
-          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">Recent runs</p>
+          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">
+            Recent runs
+          </p>
           <ul className="mt-2 space-y-2">
             {recentRuns.map((firing) => (
               <RunCard key={firing.idempotency_key} trigger={trigger} firing={firing} />
@@ -360,7 +378,9 @@ function AddTriggerForm({
       });
       return;
     }
-    setParseError("This kind is created from its own surface — the schedule form covers schedules only.");
+    setParseError(
+      "This kind is created from its own surface — the schedule form covers schedules only.",
+    );
   };
 
   if (!open) {
@@ -450,7 +470,9 @@ function AddTriggerForm({
             <div className="space-y-1.5 sm:col-span-2">
               <label htmlFor={`${formId}-prompt`} className="block text-xs font-medium text-muted">
                 Task instruction
-                <span className="ms-1 font-normal">— what the run does, in one bounded paragraph</span>
+                <span className="ms-1 font-normal">
+                  — what the run does, in one bounded paragraph
+                </span>
               </label>
               <textarea
                 id={`${formId}-prompt`}
@@ -464,7 +486,10 @@ function AddTriggerForm({
               />
             </div>
             <div className="space-y-1.5">
-              <label htmlFor={`${formId}-artifact`} className="block text-xs font-medium text-muted">
+              <label
+                htmlFor={`${formId}-artifact`}
+                className="block text-xs font-medium text-muted"
+              >
                 Artifact name
                 <span className="ms-1 font-normal">— optional</span>
               </label>
@@ -523,7 +548,10 @@ function LoadingState() {
   return (
     <div className="space-y-3" role="status" aria-label="Loading schedules">
       {[0, 1].map((row) => (
-        <div key={row} className="h-24 animate-pulse rounded-2xl border border-line bg-surface-elevated" />
+        <div
+          key={row}
+          className="h-24 animate-pulse rounded-2xl border border-line bg-surface-elevated"
+        />
       ))}
     </div>
   );
@@ -535,7 +563,8 @@ function EmptyState({ onNew }: { onNew: () => void }) {
       <p className="text-sm font-medium text-text">No triggers yet</p>
       <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-muted">
         Schedules, file and Git watchers, webhooks, and condition triggers live here. A trigger runs
-        as a task in one of your Operations — created only from typed configuration, never from chat.
+        as a task in one of your Operations — created only from typed configuration, never from
+        chat.
       </p>
       <div className="mt-4 flex justify-center">
         <Button variant="outline" onClick={onNew}>
@@ -624,7 +653,9 @@ export function SchedulesSettingsView(props: SchedulesSettingsViewProps) {
               onPause={() => onPause(trigger.trigger_id)}
               onResume={() => onResume(trigger.trigger_id)}
               onEdit={() => {
-                setEditingId((current) => (current === trigger.trigger_id ? null : trigger.trigger_id));
+                setEditingId((current) =>
+                  current === trigger.trigger_id ? null : trigger.trigger_id,
+                );
                 setEditName(trigger.name);
                 const cron = scheduleCron(trigger.config);
                 setEditCron(cron ?? "");
@@ -686,7 +717,11 @@ export function SchedulesSettingsView(props: SchedulesSettingsViewProps) {
                       ) : null}
                     </div>
                     <div className="mt-3 flex gap-2">
-                      <Button type="submit" size="sm" disabled={busyTriggerId === trigger.trigger_id}>
+                      <Button
+                        type="submit"
+                        size="sm"
+                        disabled={busyTriggerId === trigger.trigger_id}
+                      >
                         Save changes
                       </Button>
                       <Button
@@ -750,7 +785,7 @@ function RuntimeSchedulesSettings({ workspaceId }: { workspaceId: string }) {
     : actions.resume.isPending
       ? (actions.resume.variables ?? null)
       : actions.edit.isPending
-        ? (actions.edit.variables as { triggerId: string } | undefined)?.triggerId ?? null
+        ? ((actions.edit.variables as { triggerId: string } | undefined)?.triggerId ?? null)
         : null;
   const operations =
     operationsList.state === "ready"
@@ -774,9 +809,7 @@ function RuntimeSchedulesSettings({ workspaceId }: { workspaceId: string }) {
           : undefined
       }
       busyTriggerId={busyTriggerId}
-      onCreate={(input) =>
-        actions.create.mutate({ workspace_id: workspaceId, ...input })
-      }
+      onCreate={(input) => actions.create.mutate({ workspace_id: workspaceId, ...input })}
       onPause={(triggerId) => actions.pause.mutate(triggerId)}
       onResume={(triggerId) => actions.resume.mutate(triggerId)}
       onEdit={(triggerId, body) => actions.edit.mutate({ triggerId, body })}

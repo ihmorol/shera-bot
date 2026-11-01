@@ -65,21 +65,18 @@ function makeHarness(): ForwardHarness {
   applyMigrations(conn.db);
   const tx = new SqliteTransactions(conn.db);
   const journal = new EventJournalRepository(tx);
-  const events = new EventsService(journal, tx);
   const operationsRepo = new OperationsRepository(tx);
   const ops = new OperationsService({
     operations: operationsRepo,
     tx,
     packCatalog: PACK_CATALOG,
   });
-  const operationId = ops
-    .createOperation(WS, {
-      definition_ref: null,
-      name: "Forward Operation",
-      roster_agent_ids: [AGENT],
-      coordinator_agent_id: AGENT,
-    })
-    .operation_id;
+  const operationId = ops.createOperation(WS, {
+    definition_ref: null,
+    name: "Forward Operation",
+    roster_agent_ids: [AGENT],
+    coordinator_agent_id: AGENT,
+  }).operation_id;
   const seamWrites: ForwardHarness["seamWrites"] = [];
   const harness: ForwardHarness = {
     dir,

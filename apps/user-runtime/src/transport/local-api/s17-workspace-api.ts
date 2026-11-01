@@ -46,7 +46,6 @@ import { WorkspaceId } from "@shera-bot/contracts";
 import type {
   WorkspaceFileContent,
   WorkspaceNode,
-  WorkspaceStorageActor,
 } from "../../adapters/sqlite/workspace-files-repository.ts";
 import type { WriteLease } from "../../adapters/sqlite/write-leases-repository.ts";
 import type {

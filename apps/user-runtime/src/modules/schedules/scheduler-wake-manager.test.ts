@@ -17,9 +17,7 @@ import { EventJournalRepository } from "../../adapters/sqlite/event-journal-repo
 import { OperationsRepository } from "../../adapters/sqlite/operations-repository.ts";
 import { applyMigrations } from "../../adapters/sqlite/migrations.ts";
 import { TriggersRepository } from "../../adapters/sqlite/triggers-repository.ts";
-import {
-  WorkspaceFilesRepository,
-} from "../../adapters/sqlite/workspace-files-repository.ts";
+import { WorkspaceFilesRepository } from "../../adapters/sqlite/workspace-files-repository.ts";
 import { WriteLeasesRepository } from "../../adapters/sqlite/write-leases-repository.ts";
 import { ArtifactsRepository } from "../../adapters/sqlite/artifacts-repository.ts";
 import { ProjectsRepository } from "../../adapters/sqlite/projects-repository.ts";
@@ -86,14 +84,12 @@ function makeHarness(): WakeHarness {
     tx,
     packCatalog: PACK_CATALOG,
   });
-  const operationId = ops
-    .createOperation(WS, {
-      definition_ref: null,
-      name: "Wake Operation",
-      roster_agent_ids: [AGENT],
-      coordinator_agent_id: AGENT,
-    })
-    .operation_id;
+  const operationId = ops.createOperation(WS, {
+    definition_ref: null,
+    name: "Wake Operation",
+    roster_agent_ids: [AGENT],
+    coordinator_agent_id: AGENT,
+  }).operation_id;
   const agentFilesRoot = join(dir, "agent-files");
   const ticks = { n: 0 };
   const scheduler = new SchedulerService({

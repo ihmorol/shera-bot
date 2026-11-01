@@ -26,7 +26,6 @@ import type { EventJournalRepository } from "../../adapters/sqlite/event-journal
 import type { OperationsRepository } from "../../adapters/sqlite/operations-repository.ts";
 import type { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import type { EventsService } from "../events/events.service.ts";
-import type { OperationsService } from "../operations/operations.service.ts";
 import type { ProviderRow } from "../../adapters/sqlite/providers-repository.ts";
 import type { ProviderCredentialsService } from "../providers/provider-credentials.ts";
 import { ProviderAdapters } from "../providers/provider-adapters.ts";
@@ -73,7 +72,9 @@ export type AutonomousPlanOutcome =
 /** One bounded line of provider text for the run's stream (G3). */
 function boundedSummary(text: string): string {
   const line = text.replaceAll(/\s+/g, " ").trim();
-  return line.length > RESULT_SUMMARY_MAX_CHARS ? `${line.slice(0, RESULT_SUMMARY_MAX_CHARS)}…` : line;
+  return line.length > RESULT_SUMMARY_MAX_CHARS
+    ? `${line.slice(0, RESULT_SUMMARY_MAX_CHARS)}…`
+    : line;
 }
 
 export class AutonomousPlanRunner {
@@ -195,7 +196,6 @@ export class AutonomousPlanRunner {
     }
 
     // Leg 2 — the tool use through the executor (the ONE execution path).
-    let toolSummary: string | null = null;
     if (plan.tool !== undefined) {
       const coordinator = this.coordinatorAgentId(workspaceId, input.operation_id);
       const args = plan.tool.args ?? {};
@@ -204,7 +204,11 @@ export class AutonomousPlanRunner {
         workspace_id: workspaceId,
         conversation_id: input.conversation_id,
         created_from: { trigger_event_type: "trigger.scheduled", trigger_event_id: `evt_${runId}` },
-        pack_snapshot: { pack_id: "pack_default", pack_version: "0.0.0", pack_hash: "0".repeat(64) },
+        pack_snapshot: {
+          pack_id: "pack_default",
+          pack_version: "0.0.0",
+          pack_hash: "0".repeat(64),
+        },
         roster: [],
         state: "RUNNING",
         version: 3,
@@ -230,8 +234,7 @@ export class AutonomousPlanRunner {
         side_effect_summary: "The scheduled task's typed tool step.",
       });
       if (outcome.outcome === "executed") {
-        toolSummary = boundedSummary(outcome.result_summary);
-        summaries.push(`tool ${plan.tool.tool_id}: ${toolSummary}`);
+        summaries.push(`tool ${plan.tool.tool_id}: ${boundedSummary(outcome.result_summary)}`);
       } else if (outcome.outcome === "paused_for_approval") {
         // The D35 ladder holds for autonomous work too: a gated tool pauses
         // the run for the user's decision (never auto-approves — G6).
@@ -282,4 +285,3 @@ export class AutonomousPlanRunner {
     return record?.coordinator_agent_id ?? "runtime-scheduler";
   }
 }
-

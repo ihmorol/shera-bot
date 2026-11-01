@@ -15,8 +15,7 @@
 import { CronExpressionParser } from "cron-parser";
 
 export type ScheduleValidation =
-  | { ok: true }
-  | { ok: false; code: "SCHEDULE_CRON_INVALID"; safe_message: string };
+  { ok: true } | { ok: false; code: "SCHEDULE_CRON_INVALID"; safe_message: string };
 
 /** The catch-up replay bound: at most this many missed occurrences are
  * re-fired by one catch-up decision (E37); the remainder is recorded as
@@ -62,12 +61,7 @@ export function nextOccurrence(expression: string, after: Date): Date | null {
  * Missed occurrences in the half-open (from, to] window, bounded at `limit`.
  * An invalid expression yields an empty list (the service never passes one).
  */
-export function missedOccurrences(
-  expression: string,
-  from: Date,
-  to: Date,
-  limit: number,
-): Date[] {
+export function missedOccurrences(expression: string, from: Date, to: Date, limit: number): Date[] {
   const occurrences: Date[] = [];
   if (to.getTime() <= from.getTime()) {
     return occurrences;

@@ -15,7 +15,10 @@
 import { watch, type FSWatcher } from "chokidar";
 
 import { agentFolderDir } from "../../adapters/fs/agent-folder-store.ts";
-import type { TriggerRecordRow, TriggersRepository } from "../../adapters/sqlite/triggers-repository.ts";
+import type {
+  TriggerRecordRow,
+  TriggersRepository,
+} from "../../adapters/sqlite/triggers-repository.ts";
 
 export interface SchedulerWakeManagerDeps {
   triggers: TriggersRepository;
@@ -40,7 +43,10 @@ export class SchedulerWakeManager {
   sync(): void {
     if (this.stopped) return;
     const active = new Map<string, TriggerRecordRow>();
-    for (const trigger of this.deps.triggers.listTriggersByKind(this.deps.workspaceId, "file_watch")) {
+    for (const trigger of this.deps.triggers.listTriggersByKind(
+      this.deps.workspaceId,
+      "file_watch",
+    )) {
       if (trigger.state !== "active") continue;
       const config = JSON.parse(trigger.config_json) as {
         scope?: string;
@@ -113,9 +119,7 @@ export class SchedulerWakeManager {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
     }
-    const closing = [...this.watchers.values()].map((watcher) =>
-      watcher.close().catch(() => {}),
-    );
+    const closing = [...this.watchers.values()].map((watcher) => watcher.close().catch(() => {}));
     this.watchers.clear();
     await Promise.all(closing);
   }

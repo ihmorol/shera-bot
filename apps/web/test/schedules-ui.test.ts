@@ -53,10 +53,7 @@ function trigger(overrides: Partial<TriggerView> = {}): TriggerView {
   };
 }
 
-function renderView(
-  triggers: TriggerView[],
-  props: Record<string, unknown> = {},
-): string {
+function renderView(triggers: TriggerView[], props: Record<string, unknown> = {}): string {
   return renderToStaticMarkup(
     createElement(SchedulesSettingsView, {
       operations: [{ operation_id: "op_s28", name: "Research Paper" }],

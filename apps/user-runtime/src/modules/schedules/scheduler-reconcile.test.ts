@@ -75,14 +75,12 @@ function makeHarness(now: string): CatchupHarness {
     tx,
     packCatalog: PACK_CATALOG,
   });
-  const operationId = ops
-    .createOperation(WS, {
-      definition_ref: null,
-      name: "Catch-up Operation",
-      roster_agent_ids: [AGENT],
-      coordinator_agent_id: AGENT,
-    })
-    .operation_id;
+  const operationId = ops.createOperation(WS, {
+    definition_ref: null,
+    name: "Catch-up Operation",
+    roster_agent_ids: [AGENT],
+    coordinator_agent_id: AGENT,
+  }).operation_id;
   const clock = { value: now };
   const reservations: ReservationPort = {
     reserveForRun: () => ({ ok: true, reservation_id: "res" }),
@@ -130,10 +128,7 @@ afterEach(() => {
   }
 });
 
-function createSchedule(
-  harness: CatchupHarness,
-  catchUpPolicy: "catch_up" | "skip",
-): string {
+function createSchedule(harness: CatchupHarness, catchUpPolicy: "catch_up" | "skip"): string {
   return harness.schedules.createTrigger(WS, {
     kind: "schedule",
     name: `weekly sweep (${catchUpPolicy})`,

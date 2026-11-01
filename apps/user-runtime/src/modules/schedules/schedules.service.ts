@@ -40,7 +40,6 @@ import {
   ScheduleConfigSchema,
   TaskCompletionConfigSchema,
   WebhookConfigSchema,
-  type FileWatchConfig,
   type TriggerCreateInput,
   type TriggerEditInput,
   type TriggerFiringView,
@@ -79,7 +78,10 @@ export interface SchedulesServiceDeps {
  * An explicit function declaration — the never-returning narrowing TS
  * honors at every call site.
  */
-function parseOrRefuse<T>(schema: { safeParse(input: unknown): { success: boolean; data?: T } }, config: unknown): T {
+function parseOrRefuse<T>(
+  schema: { safeParse(input: unknown): { success: boolean; data?: T } },
+  config: unknown,
+): T {
   const verdict = schema.safeParse(config);
   if (!verdict.success || verdict.data === undefined) {
     throw new SchedulesServiceError(
@@ -164,6 +166,8 @@ export class SchedulesService {
   /** The AC10 pause control: the user's explicit pause (no pause reason —
    * the reason vocabulary is reserved for the D48 credit pause). */
   pauseTrigger(workspaceId: string, triggerId: string, actor: { type: string; id: string }): void {
+    void actor; // The session-bound actor rides the seam contract (the HTTP
+    // surface validates + binds it); the state write itself records no actor.
     const row = this.requireTrigger(workspaceId, triggerId);
     if (row.state === "paused") {
       return; // Idempotent: pausing a paused trigger is the no-op.
@@ -179,12 +183,12 @@ export class SchedulesService {
    * occurrence from the injected clock (AC8's resume-after-top-up path and
    * the AC10 control share this write). */
   resumeTrigger(workspaceId: string, triggerId: string, actor: { type: string; id: string }): void {
+    void actor; // The session-bound actor rides the seam contract (see pause).
     const row = this.requireTrigger(workspaceId, triggerId);
     let nextOccurrenceAt = row.next_occurrence_at;
     if (row.kind === "schedule") {
       const config = JSON.parse(row.config_json) as { cron: string };
-      nextOccurrenceAt =
-        nextOccurrence(config.cron, new Date(this.now()))?.toISOString() ?? null;
+      nextOccurrenceAt = nextOccurrence(config.cron, new Date(this.now()))?.toISOString() ?? null;
     }
     this.deps.triggers.updateTriggerState(workspaceId, triggerId, {
       state: "active",
@@ -222,9 +226,7 @@ export class SchedulesService {
     this.deps.triggers.updateTriggerFields(workspaceId, triggerId, {
       ...(input.name !== undefined ? { name: input.name } : {}),
       ...(input.config !== undefined ? { config_json: JSON.stringify(storedConfig) } : {}),
-      ...(input.catch_up_policy !== undefined
-        ? { catch_up_policy: input.catch_up_policy }
-        : {}),
+      ...(input.catch_up_policy !== undefined ? { catch_up_policy: input.catch_up_policy } : {}),
       next_occurrence_at: nextOccurrenceAt,
       updated_at: this.now(),
     });
@@ -250,10 +252,7 @@ export class SchedulesService {
    * (a webhook's plaintext secret becomes its sha256 digest here — G3) and
    * refuses everything else with the typed validation refusal (G2).
    */
-  private validateAndStoreConfig(
-    kind: TriggerKindValue,
-    config: unknown,
-  ): Record<string, unknown> {
+  private validateAndStoreConfig(kind: TriggerKindValue, config: unknown): Record<string, unknown> {
     if (kind === "schedule") {
       return parseOrRefuse(ScheduleConfigSchema, config) as Record<string, unknown>;
     }
@@ -305,11 +304,7 @@ export class SchedulesService {
     if (kind === "external_event") {
       return parseOrRefuse(ExternalEventConfigSchema, config) as Record<string, unknown>;
     }
-    throw new SchedulesServiceError(
-      "TRIGGER_CONFIG_INVALID",
-      "validation",
-      "unknown trigger kind",
-    );
+    throw new SchedulesServiceError("TRIGGER_CONFIG_INVALID", "validation", "unknown trigger kind");
   }
 
   private toView(workspaceId: string, row: TriggerRecordRow): TriggerView {
@@ -337,7 +332,10 @@ export class SchedulesService {
       idempotency_key: firing.idempotency_key,
       run_id: firing.run_id,
       outcome: firing.outcome,
-      detail: firing.detail_json === null ? null : (JSON.parse(firing.detail_json) as Record<string, unknown>),
+      detail:
+        firing.detail_json === null
+          ? null
+          : (JSON.parse(firing.detail_json) as Record<string, unknown>),
       fired_at: firing.fired_at,
     };
   }

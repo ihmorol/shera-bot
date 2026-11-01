@@ -27,7 +27,10 @@ import { presenceRefetchInterval } from "@/lib/session-presence";
 
 const GENERIC_SCHEDULES_ERROR_MESSAGE = "The schedules could not be loaded.";
 
-export function safeSchedulesMessage(error: unknown, fallback = GENERIC_SCHEDULES_ERROR_MESSAGE): string {
+export function safeSchedulesMessage(
+  error: unknown,
+  fallback = GENERIC_SCHEDULES_ERROR_MESSAGE,
+): string {
   if (error instanceof RuntimeApiError) {
     return error.sheraError.safe_message;
   }

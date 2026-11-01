@@ -98,9 +98,11 @@ export type WebhookStoredConfig = z.infer<typeof WebhookStoredConfigSchema>;
 
 /** Task-completion config: which terminal outcomes fire the follow-up. */
 export const TaskCompletionConfigSchema = z.strictObject({
-  outcomes: z.array(z.enum(["succeeded", "failed", "cancelled"])).min(1).max(3).default([
-    "succeeded",
-  ]),
+  outcomes: z
+    .array(z.enum(["succeeded", "failed", "cancelled"]))
+    .min(1)
+    .max(3)
+    .default(["succeeded"]),
   provider: ProviderPairSchema.optional(),
 });
 export type TaskCompletionConfig = z.infer<typeof TaskCompletionConfigSchema>;

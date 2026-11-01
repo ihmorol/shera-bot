@@ -32,7 +32,6 @@ import {
 } from "../../adapters/sqlite/triggers-repository.ts";
 import { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import { WorkspaceFilesRepository } from "../../adapters/sqlite/workspace-files-repository.ts";
-import type { WorkspaceWriteLeaseGate } from "../../adapters/sqlite/workspace-files-repository.ts";
 import { WriteLeasesRepository } from "../../adapters/sqlite/write-leases-repository.ts";
 import { ArtifactsRepository } from "../../adapters/sqlite/artifacts-repository.ts";
 import { EventsService } from "../events/events.service.ts";
@@ -102,14 +101,12 @@ function makeHarness(now = "2026-10-31T12:00:00.000Z"): WatcherHarness {
     tx,
     packCatalog: PACK_CATALOG,
   });
-  const operationId = ops
-    .createOperation(WS, {
-      definition_ref: null,
-      name: "Watcher Operation",
-      roster_agent_ids: [AGENT],
-      coordinator_agent_id: AGENT,
-    })
-    .operation_id;
+  const operationId = ops.createOperation(WS, {
+    definition_ref: null,
+    name: "Watcher Operation",
+    roster_agent_ids: [AGENT],
+    coordinator_agent_id: AGENT,
+  }).operation_id;
   const agentFilesRoot = join(dir, "agent-files");
   const gitRoot = join(dir, "repos");
   mkdirSync(gitRoot, { recursive: true });
@@ -171,7 +168,6 @@ afterEach(() => {
   }
 });
 
-const RUNTIME_ACTOR = { type: "runtime" as const, id: "scheduler" };
 const USER_ACTOR = { type: "user" as const, id: "emon" };
 
 describe("file watchers (AC5: once per real change, never per intermediate write)", () => {
@@ -377,13 +373,7 @@ describe("condition triggers (the typed-predicate evaluator, edge-triggered)", (
     });
     await harness.scheduler.tick();
     expect(harness.ops.listRuns(WS, harness.operationId)).toHaveLength(0);
-    harness.files.write(
-      WS,
-      "workspace://ready.flag",
-      USER_ACTOR,
-      Buffer.from("go"),
-      "text/plain",
-    );
+    harness.files.write(WS, "workspace://ready.flag", USER_ACTOR, Buffer.from("go"), "text/plain");
     await harness.scheduler.tick();
     expect(harness.ops.listRuns(WS, harness.operationId)).toHaveLength(1);
     // Still true: no second firing (edge-triggered).

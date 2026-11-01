@@ -69,7 +69,11 @@ export class TriggerRecordError extends Error {
   readonly code: TriggersFailureCode;
   readonly category: "conflict" | "validation" | "state";
 
-  constructor(code: TriggersFailureCode, category: "conflict" | "validation" | "state", message: string) {
+  constructor(
+    code: TriggersFailureCode,
+    category: "conflict" | "validation" | "state",
+    message: string,
+  ) {
     super(`${code}: ${message}`);
     this.name = "TriggerRecordError";
     this.code = code;
@@ -179,7 +183,11 @@ function validateConfigJson(configJson: string): void {
   try {
     JSON.parse(configJson);
   } catch {
-    throw new TriggerRecordError("TRIGGER_CONFIG_INVALID", "validation", "config_json is not valid JSON");
+    throw new TriggerRecordError(
+      "TRIGGER_CONFIG_INVALID",
+      "validation",
+      "config_json is not valid JSON",
+    );
   }
 }
 
@@ -250,10 +258,10 @@ export class TriggersRepository {
   }
 
   getTrigger(workspaceId: string, triggerId: string): TriggerRecordRow | null {
-    return this.readOne(
-      `SELECT * FROM trigger_records WHERE workspace_id = ? AND trigger_id = ?`,
-      [workspaceId, triggerId],
-    );
+    return this.readOne(`SELECT * FROM trigger_records WHERE workspace_id = ? AND trigger_id = ?`, [
+      workspaceId,
+      triggerId,
+    ]);
   }
 
   listTriggers(workspaceId: string): TriggerRecordRow[] {

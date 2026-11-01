@@ -127,9 +127,9 @@ describe("trigger records repository (E12, D23 rule 6)", () => {
   it("refuses a kind outside the closed vocabulary at the storage layer", () => {
     const { tx } = newDb();
     const repository = new TriggersRepository(tx);
-    expect(() =>
-      repository.createTrigger(triggerInput({ kind: "prose" as never })),
-    ).toThrowError(TriggerRecordError);
+    expect(() => repository.createTrigger(triggerInput({ kind: "prose" as never }))).toThrowError(
+      TriggerRecordError,
+    );
   });
 
   it("refuses a duplicate trigger id with a typed error", () => {
@@ -283,8 +283,8 @@ describe("trigger firings ledger (the idempotency claim IS the primary key)", ()
     const { tx } = newDb();
     const repository = new TriggersRepository(tx);
     repository.createTrigger(triggerInput());
-    expect(() =>
-      repository.recordFiring(firingInput({ workspace_id: OTHER_WS })),
-    ).toThrowError(TriggerRecordError);
+    expect(() => repository.recordFiring(firingInput({ workspace_id: OTHER_WS }))).toThrowError(
+      TriggerRecordError,
+    );
   });
 });

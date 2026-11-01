@@ -20,7 +20,7 @@ import { applyMigrations } from "../../adapters/sqlite/migrations.ts";
 import { OperationsRepository } from "../../adapters/sqlite/operations-repository.ts";
 import { TriggersRepository } from "../../adapters/sqlite/triggers-repository.ts";
 import { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
-import { SchedulesService, SchedulesServiceError } from "./schedules.service.ts";
+import { SchedulesService } from "./schedules.service.ts";
 import { scheduleClock } from "./schedule-clock.ts";
 
 const tempDirs: string[] = [];
@@ -88,10 +88,7 @@ describe("schedule-clock (pure, UTC-deterministic)", () => {
   });
 
   it("computes the next occurrence strictly AFTER the reference instant (UTC)", () => {
-    const next = scheduleClock.nextOccurrence(
-      "0 9 * * 1",
-      new Date("2026-10-31T12:00:00.000Z"),
-    );
+    const next = scheduleClock.nextOccurrence("0 9 * * 1", new Date("2026-10-31T12:00:00.000Z"));
     expect(next?.toISOString()).toBe("2026-11-02T09:00:00.000Z");
   });
 
@@ -155,9 +152,7 @@ describe("schedules service (typed declarative records)", () => {
         catch_up_policy: "skip",
         actor: USER,
       }),
-    ).toThrowError(
-      expect.objectContaining({ code: "TRIGGER_TARGET_OPERATION_NOT_FOUND" }),
-    );
+    ).toThrowError(expect.objectContaining({ code: "TRIGGER_TARGET_OPERATION_NOT_FOUND" }));
   });
 
   it("refuses an invalid cron and a prose-only body with typed rejections (G2)", () => {
@@ -399,8 +394,8 @@ describe("schedules service (typed declarative records)", () => {
     expect(() => service.resumeTrigger(WS, "trg_missing", USER)).toThrowError(
       expect.objectContaining({ code: "TRIGGER_NOT_FOUND" }),
     );
-    expect(() =>
-      service.editTrigger(WS, "trg_missing", { name: "x", actor: USER }),
-    ).toThrowError(expect.objectContaining({ code: "TRIGGER_NOT_FOUND" }));
+    expect(() => service.editTrigger(WS, "trg_missing", { name: "x", actor: USER })).toThrowError(
+      expect.objectContaining({ code: "TRIGGER_NOT_FOUND" }),
+    );
   });
 });

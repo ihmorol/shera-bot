@@ -9,15 +9,17 @@
  * delivery body NEVER enters the journal, the ledger detail, or a log —
  * only the bounded derived summary the typed trigger payload carries.
  */
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { RuntimeHandle } from "./compose.ts";
 import { DEFAULT_WORKSPACE_ID, composeRuntime } from "./compose.ts";
-import { cleanupTempResources, makeTempDir, trackConnection } from "../../../test/helpers/temp-resources.ts";
+import {
+  cleanupTempResources,
+  makeTempDir,
+  trackConnection,
+} from "../../../test/helpers/temp-resources.ts";
 
 const here = import.meta.dirname;
 const PACKS_ROOT = join(here, "../../../../../agent-packs");
@@ -34,7 +36,9 @@ async function compose(): Promise<RunningRuntime> {
   const dbPath = join(makeTempDir("shera-s28-api-"), "runtime.db");
   const runtime = composeRuntime({ dbPath, packsRoot: PACKS_ROOT });
   trackConnection(runtime);
-  await new Promise<void>((resolveListen) => runtime.httpServer.listen(0, "127.0.0.1", resolveListen));
+  await new Promise<void>((resolveListen) =>
+    runtime.httpServer.listen(0, "127.0.0.1", resolveListen),
+  );
   const address = runtime.httpServer.address() as { port: number };
   return {
     runtime,

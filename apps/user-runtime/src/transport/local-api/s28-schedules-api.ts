@@ -29,7 +29,10 @@ import type {
   SchedulesServiceError,
 } from "../../modules/schedules/schedules.service.ts";
 import type { SchedulerService } from "../../modules/schedules/scheduler.service.ts";
-import type { TriggerRecordRow, TriggersRepository } from "../../adapters/sqlite/triggers-repository.ts";
+import type {
+  TriggerRecordRow,
+  TriggersRepository,
+} from "../../adapters/sqlite/triggers-repository.ts";
 
 export const LIST_SCHEDULES_PATH = "/v1/schedules" as const;
 export const CREATE_SCHEDULE_PATH = "/v1/schedules" as const;
@@ -51,7 +54,10 @@ export interface SchedulesApiHandle {
 
 const WorkspaceQuery = z.strictObject({ workspace_id: WorkspaceId });
 
-const ActorBody = z.strictObject({ type: z.string().min(1).max(32), id: z.string().min(1).max(256) });
+const ActorBody = z.strictObject({
+  type: z.string().min(1).max(32),
+  id: z.string().min(1).max(256),
+});
 
 const CreateTriggerBody = z.strictObject({
   workspace_id: WorkspaceId,
@@ -87,7 +93,8 @@ const TriggerMutationBody = z.strictObject({
 /** The delivery's bounded, content-free summary (G3 — the body itself never
  * leaves the request frame). */
 function deliverySummary(contentType: string | undefined, byteLength: number): string {
-  const type = typeof contentType === "string" ? contentType.split(";", 1)[0] ?? "unknown" : "unknown";
+  const type =
+    typeof contentType === "string" ? (contentType.split(";", 1)[0] ?? "unknown") : "unknown";
   return `${type} ${byteLength}b delivery`;
 }
 
@@ -114,7 +121,9 @@ function validationResponse(message: string): { status: number; body: Record<str
   return errorResponse(400, "CONTRACT_VALIDATION_FAILED", message);
 }
 
-function schedulesErrorResponse(error: unknown): { status: number; body: Record<string, unknown> } | null {
+function schedulesErrorResponse(
+  error: unknown,
+): { status: number; body: Record<string, unknown> } | null {
   const code = (error as { code?: string } | null)?.code;
   if (typeof code !== "string") return null;
   if (code === "TRIGGER_NOT_FOUND" || code === "TRIGGER_TARGET_OPERATION_NOT_FOUND") {
@@ -124,7 +133,11 @@ function schedulesErrorResponse(error: unknown): { status: number; body: Record<
     return errorResponse(409, code, "That trigger id already exists in this workspace.");
   }
   if (code === "SCHEDULE_CRON_INVALID" || code === "TRIGGER_CONFIG_INVALID") {
-    return errorResponse(400, code, "The trigger configuration is not valid. Check the fields and try again.");
+    return errorResponse(
+      400,
+      code,
+      "The trigger configuration is not valid. Check the fields and try again.",
+    );
   }
   return null;
 }
@@ -143,7 +156,9 @@ export function registerSchedulesRoutes(app: Express, deps: SchedulesApiHandle):
   app.get(LIST_SCHEDULES_PATH, (req, res) => {
     const query = WorkspaceQuery.safeParse(req.query);
     if (!query.success) {
-      const mapped = validationResponse("The schedules request is not valid: a workspace_id is required.");
+      const mapped = validationResponse(
+        "The schedules request is not valid: a workspace_id is required.",
+      );
       res.status(mapped.status).json(mapped.body);
       return;
     }
@@ -221,14 +236,19 @@ export function registerSchedulesRoutes(app: Express, deps: SchedulesApiHandle):
     app.post(path, (req, res) => {
       const parsed = TriggerMutationBody.safeParse(req.body);
       if (!parsed.success) {
-        const mapped = validationResponse("The trigger mutation is not valid: a workspace_id is required.");
+        const mapped = validationResponse(
+          "The trigger mutation is not valid: a workspace_id is required.",
+        );
         res.status(mapped.status).json(mapped.body);
         return;
       }
       try {
         deps.schedules[action](parsed.data.workspace_id, req.params.trigger_id, parsed.data.actor);
         afterMutation();
-        res.status(200).json({ trigger_id: req.params.trigger_id, state: action === "pauseTrigger" ? "paused" : "active" });
+        res.status(200).json({
+          trigger_id: req.params.trigger_id,
+          state: action === "pauseTrigger" ? "paused" : "active",
+        });
       } catch (error) {
         const mapped = schedulesErrorResponse(error);
         if (mapped) {
@@ -250,7 +270,11 @@ export function registerSchedulesRoutes(app: Express, deps: SchedulesApiHandle):
     }
     const view = deps.schedules.getTriggerView(query.data.workspace_id, req.params.trigger_id);
     if (view === null) {
-      const mapped = errorResponse(404, "TRIGGER_NOT_FOUND", "That trigger does not exist in this workspace.");
+      const mapped = errorResponse(
+        404,
+        "TRIGGER_NOT_FOUND",
+        "That trigger does not exist in this workspace.",
+      );
       res.status(mapped.status).json(mapped.body);
       return;
     }
@@ -267,7 +291,11 @@ export function registerSchedulesRoutes(app: Express, deps: SchedulesApiHandle):
       return;
     }
     if (trigger.kind !== "webhook" && trigger.kind !== "external_event") {
-      const mapped = errorResponse(409, "TRIGGER_KIND_MISMATCH", "This endpoint does not accept deliveries.");
+      const mapped = errorResponse(
+        409,
+        "TRIGGER_KIND_MISMATCH",
+        "This endpoint does not accept deliveries.",
+      );
       res.status(mapped.status).json(mapped.body);
       return;
     }
@@ -281,9 +309,14 @@ export function registerSchedulesRoutes(app: Express, deps: SchedulesApiHandle):
         .digest();
       const storedDigest = Buffer.from(config.secret_digest.slice("sha256:".length), "hex");
       const matches =
-        presentedDigest.length === storedDigest.length && timingSafeEqual(presentedDigest, storedDigest);
+        presentedDigest.length === storedDigest.length &&
+        timingSafeEqual(presentedDigest, storedDigest);
       if (!matches) {
-        const mapped = errorResponse(401, "WEBHOOK_SECRET_MISMATCH", "The delivery's secret did not match.");
+        const mapped = errorResponse(
+          401,
+          "WEBHOOK_SECRET_MISMATCH",
+          "The delivery's secret did not match.",
+        );
         res.status(mapped.status).json(mapped.body);
         return;
       }
@@ -297,7 +330,9 @@ export function registerSchedulesRoutes(app: Express, deps: SchedulesApiHandle):
     const bodyDigest = `sha256:${createHash("sha256").update(encodedBody).digest("hex")}`;
     const headerDelivery = req.headers["x-shera-delivery-id"];
     const deliveryKey =
-      typeof headerDelivery === "string" && headerDelivery.length >= 1 && headerDelivery.length <= 200
+      typeof headerDelivery === "string" &&
+      headerDelivery.length >= 1 &&
+      headerDelivery.length <= 200
         ? `delivery:${headerDelivery}`
         : `digest:${bodyDigest}`;
     const source =

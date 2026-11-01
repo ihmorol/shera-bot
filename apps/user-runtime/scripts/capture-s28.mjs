@@ -35,10 +35,7 @@ import { chromium } from "playwright";
 // reference browser globals (document/window) by design.
 /* global document */
 
-import {
-  composeRuntime,
-  DEFAULT_WORKSPACE_ID,
-} from "../src/transport/local-api/compose.ts";
+import { composeRuntime, DEFAULT_WORKSPACE_ID } from "../src/transport/local-api/compose.ts";
 import { openDatabase } from "../src/adapters/sqlite/connection.ts";
 import { TriggersRepository } from "../src/adapters/sqlite/triggers-repository.ts";
 import { SqliteTransactions } from "../src/adapters/sqlite/transactions.ts";
@@ -337,19 +334,34 @@ async function capture(name, path, viewport, opts = {}) {
 
 // The surface at 1440: the fired schedule with its run card, the paused
 // webhook, and the credit-paused nightly refresh.
-await capture("s28-schedules-1440.png", SCHEDULES_PATH, { width: 1440, height: 900 }, {
-  waitFor: '[data-testid="schedule-trigger-card"]',
-});
+await capture(
+  "s28-schedules-1440.png",
+  SCHEDULES_PATH,
+  { width: 1440, height: 900 },
+  {
+    waitFor: '[data-testid="schedule-trigger-card"]',
+  },
+);
 
 // 768 and 360 (full page — the cards stack).
-await capture("s28-schedules-768.png", SCHEDULES_PATH, { width: 768, height: 1024 }, {
-  fullPage: true,
-  waitFor: '[data-testid="schedule-trigger-card"]',
-});
-await capture("s28-schedules-360.png", SCHEDULES_PATH, { width: 360, height: 740 }, {
-  fullPage: true,
-  waitFor: '[data-testid="schedule-trigger-card"]',
-});
+await capture(
+  "s28-schedules-768.png",
+  SCHEDULES_PATH,
+  { width: 768, height: 1024 },
+  {
+    fullPage: true,
+    waitFor: '[data-testid="schedule-trigger-card"]',
+  },
+);
+await capture(
+  "s28-schedules-360.png",
+  SCHEDULES_PATH,
+  { width: 360, height: 740 },
+  {
+    fullPage: true,
+    waitFor: '[data-testid="schedule-trigger-card"]',
+  },
+);
 
 // The edit control open (the inline edit — never a modal).
 {
@@ -367,13 +379,22 @@ await capture("s28-schedules-360.png", SCHEDULES_PATH, { width: 360, height: 740
 }
 
 // The create form (the typed fields — G2 by construction).
-await capture("s28-schedules-create-1440.png", SCHEDULES_PATH, { width: 1440, height: 900 }, {
-  waitFor: '[data-testid="schedule-trigger-card"]',
-  before: async (page) => {
-    await page.getByRole("button", { name: "New trigger" }).first().click().catch(() => {});
-    await page.waitForTimeout(400);
+await capture(
+  "s28-schedules-create-1440.png",
+  SCHEDULES_PATH,
+  { width: 1440, height: 900 },
+  {
+    waitFor: '[data-testid="schedule-trigger-card"]',
+    before: async (page) => {
+      await page
+        .getByRole("button", { name: "New trigger" })
+        .first()
+        .click()
+        .catch(() => {});
+      await page.waitForTimeout(400);
+    },
   },
-});
+);
 
 // Keyboard-only: the tab trail from the page top through the controls.
 {
@@ -393,7 +414,7 @@ await capture("s28-schedules-create-1440.png", SCHEDULES_PATH, { width: 1440, he
         text: (element?.textContent ?? "").slice(0, 60),
         visibleFocus: element
           ? (() => {
-              const style = getComputedStyle(element);
+              const style = globalThis.getComputedStyle(element);
               return style.outlineStyle !== "none" || style.boxShadow !== "none";
             })()
           : false,

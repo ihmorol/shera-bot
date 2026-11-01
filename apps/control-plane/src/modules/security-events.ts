@@ -45,11 +45,19 @@ export interface SecurityEventInput {
 }
 
 export class SecurityEventService {
-  constructor(
-    private readonly db: NodePgDatabase,
-    private readonly registry: SecretRegistry,
-    private readonly logger: ControlPlaneLogger,
-  ) {}
+  // Explicit field declarations (not constructor parameter properties): the
+  // S32 CLI's bin entry loads this module through plain `node` type stripping,
+  // which does not support parameter-property syntax. Same shape as the
+  // sibling AdminTokenService. No behavior change.
+  private readonly db: NodePgDatabase;
+  private readonly registry: SecretRegistry;
+  private readonly logger: ControlPlaneLogger;
+
+  constructor(db: NodePgDatabase, registry: SecretRegistry, logger: ControlPlaneLogger) {
+    this.db = db;
+    this.registry = registry;
+    this.logger = logger;
+  }
 
   async record(input: SecurityEventInput): Promise<void> {
     try {

@@ -27,7 +27,6 @@ import { desc, eq, isNull } from "drizzle-orm";
 
 import type { ControlPlaneDb } from "../db/client.ts";
 import { controlAdminTokens } from "../db/schema.ts";
-import type { ControlPlaneLogger } from "../logger.ts";
 import type { SecretRegistry } from "../redaction.ts";
 import type { SecurityEventService } from "./security-events.ts";
 

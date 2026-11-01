@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 /**
  * shera-admin — the S32 admin CLI (issue #33; D47, PRD §15).
  *
@@ -18,6 +19,8 @@
  * CLI and the API share the audit trail (AC6) and the same tests. Exit codes:
  * 0 success, 1 API/local failure, 2 usage.
  */
+import { pathToFileURL } from "node:url";
+
 import { Command } from "commander";
 
 import { createDb } from "../db/client.ts";
@@ -455,4 +458,13 @@ export async function main(): Promise<void> {
     env: process.env,
   });
   process.exitCode = exit;
+}
+
+// Guarded self-invocation: running this file as the node entry point
+// (`node .../shera-admin.ts ...`, the bin field's target) executes main();
+// importing the module (vitest, other tooling) stays side-effect free.
+// argv[1] is the script path exactly as node received it, so pathToFileURL
+// resolves it against the same cwd node used for import.meta.url.
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  void main();
 }

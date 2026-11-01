@@ -117,8 +117,8 @@ describe("the schedules HTTP surface (typed declarative records)", () => {
       actor: USER,
     });
     expect(resumed.status).toBe(200);
-    const edited = await fetch(`${origin}/v1/schedules/${triggerId}`, {
-      method: "PATCH",
+    const edited = await fetch(`${origin}/v1/schedules/${triggerId}/edit`, {
+      method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         workspace_id: WS,

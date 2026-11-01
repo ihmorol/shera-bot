@@ -96,7 +96,17 @@ export function isBrowserRuntimePath(method: string, path: string): boolean {
       // the browser.
       path === "/v1/providers" ||
       /^\/v1\/providers\/[a-zA-Z0-9_-]+\/(?:credential|revoke|status|test)$/.test(path) ||
-      path === "/v1/providers/overrides"
+      path === "/v1/providers/overrides" ||
+      // S28 (PRD §8, E5, AC10, G2): the schedules & watchers surface — the
+      // typed create (the per-kind configuration is the runtime service's
+      // contract; a prose-only body dies there), the AC10 pause/resume, and
+      // the edit. The acting user is bound SERVER-SIDE from the session (the
+      // proxy's session-actor binding). The webhook receiver
+      // (/v1/webhooks/:trigger_id) is deliberately ABSENT — deliveries come
+      // from external senders to the runtime's loopback surface, never
+      // through the browser proxy.
+      path === "/v1/schedules" ||
+      /^\/v1\/schedules\/[a-zA-Z0-9_-]+\/(?:pause|resume|edit)$/.test(path)
     );
   }
   if (method === "PUT") {
@@ -190,7 +200,13 @@ export function isBrowserRuntimePath(method: string, path: string): boolean {
       // worktree allocation: those ride the Agent/runtime surfaces, never a
       // direct browser write.
       path === "/v1/projects" ||
-      /^\/v1\/projects\/[a-zA-Z0-9_-]+(?:\/worktrees|\/merge-requests)?$/.test(path))
+      /^\/v1\/projects\/[a-zA-Z0-9_-]+(?:\/worktrees|\/merge-requests)?$/.test(path) ||
+      // S28 (AC9/AC10): the schedules truthful list, one trigger's recent
+      // firings ledger (the run cards' data source), and the PATCH edit arm
+      // (the AC10 edit control). Every read is workspace-scoped (E12); the
+      // webhook receiver has no browser path at all.
+      path === "/v1/schedules" ||
+      /^\/v1\/schedules\/[a-zA-Z0-9_-]+\/firings$/.test(path))
   );
 }
 

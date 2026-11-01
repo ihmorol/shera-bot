@@ -33,7 +33,7 @@ import type { TriggerRecordRow, TriggersRepository } from "../../adapters/sqlite
 
 export const LIST_SCHEDULES_PATH = "/v1/schedules" as const;
 export const CREATE_SCHEDULE_PATH = "/v1/schedules" as const;
-export const SCHEDULE_TRIGGER_PATH = "/v1/schedules/:trigger_id" as const;
+export const SCHEDULE_EDIT_PATH = "/v1/schedules/:trigger_id/edit" as const;
 export const SCHEDULE_PAUSE_PATH = "/v1/schedules/:trigger_id/pause" as const;
 export const SCHEDULE_RESUME_PATH = "/v1/schedules/:trigger_id/resume" as const;
 export const SCHEDULE_FIRINGS_PATH = "/v1/schedules/:trigger_id/firings" as const;
@@ -182,8 +182,9 @@ export function registerSchedulesRoutes(app: Express, deps: SchedulesApiHandle):
     }
   });
 
-  // PATCH /v1/schedules/:trigger_id — the AC10 edit.
-  app.patch(SCHEDULE_TRIGGER_PATH, (req, res) => {
+  // POST .../edit — the AC10 edit (a POST route: the same method
+  // convention as the S13 rename; the browser proxy's method vocabulary).
+  app.post(SCHEDULE_EDIT_PATH, (req, res) => {
     const parsed = EditTriggerBody.safeParse(req.body);
     if (!parsed.success) {
       const mapped = validationResponse("The trigger edit is not valid.");

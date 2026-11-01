@@ -7,6 +7,7 @@ import { GitSettingsSurface } from "@/components/settings/git-settings";
 import { PermissionsSettingsSurface } from "@/components/settings/permissions-settings";
 import { ToolsSettingsSurface } from "@/components/settings/tools-settings";
 import { ProvidersSettingsSurface } from "@/components/settings/providers-settings";
+import { SchedulesSettingsSurface } from "@/components/settings/schedules-settings";
 import { WorkersSettingsSurface } from "@/components/settings/worker-admission-readout";
 import { SurfaceFrame } from "@/components/shell/surface-frame";
 import { findAgent } from "@/lib/navigation";
@@ -83,6 +84,19 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
     );
   }
 
+  // S28 (§S9 "Schedules & watchers", PRD §8/§13, E5): the autonomous
+  // trigger records — schedules, file/Git watchers, webhooks, task
+  // completions, conditions — with their truthful state, last firing, and
+  // next occurrence from the runtime scheduler, the pause/edit controls,
+  // and the run cards naming their trigger.
+  if (section?.length === 1 && section[0] === "schedules") {
+    return (
+      <SurfaceFrame title="Settings" meta="Schedules & watchers">
+        <SchedulesSettingsSurface />
+      </SurfaceFrame>
+    );
+  }
+
   // S20 (§S9, D9/D35): the grants review — every active grant with scope,
   // tool + version, expiry, creator, and revoke, plus the reminder mutes.
   if (section?.length === 1 && section[0] === "permissions") {
@@ -140,6 +154,15 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
               className="text-sm text-text underline underline-offset-4 hover:text-cool-highlight"
             >
               Git
+            </Link>
+            <span className="font-mono text-xs uppercase tracking-[0.16em] text-muted">open</span>
+          </li>
+          <li className="flex items-center justify-between rounded-xl border border-line bg-surface px-4 py-3">
+            <Link
+              href={routes.settings("schedules")}
+              className="text-sm text-text underline underline-offset-4 hover:text-cool-highlight"
+            >
+              Schedules &amp; watchers
             </Link>
             <span className="font-mono text-xs uppercase tracking-[0.16em] text-muted">open</span>
           </li>

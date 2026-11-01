@@ -1015,3 +1015,156 @@ describe("runtime proxy — S15 launch preview surfaces (allowlist additions)", 
     expect(calls).toHaveLength(0);
   });
 });
+
+describe("runtime proxy — S28 schedules surface (allowlist additions + actor bindings)", () => {
+  /** The stubbed fetch answer for a forwarded schedules call. */
+  function schedulesResponse(): Response {
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }
+
+  it("forwards the truthful trigger list and one trigger's firings ledger (AC9 reads)", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const { calls } = stubFetch(schedulesResponse);
+
+    const list = await proxyToLocalApi(
+      new Request("http://web.test/api/runtime/v1/schedules?workspace_id=ws_1"),
+      "/v1/schedules",
+    );
+    expect(list.status).toBe(200);
+    expect(calls.at(-1)?.input).toBe(
+      `${CONTROL_BASE}/api/runtime/local/v1/schedules?workspace_id=ws_1`,
+    );
+
+    const firings = await proxyToLocalApi(
+      new Request(
+        "http://web.test/api/runtime/v1/schedules/trg_9f1b2c3d/firings?workspace_id=ws_1",
+      ),
+      "/v1/schedules/trg_9f1b2c3d/firings",
+    );
+    expect(firings.status).toBe(200);
+    expect(calls.at(-1)?.input).toBe(
+      `${CONTROL_BASE}/api/runtime/local/v1/schedules/trg_9f1b2c3d/firings?workspace_id=ws_1`,
+    );
+  });
+
+  it("forwards the create and binds the creating actor to the authenticated session — a body-asserted actor never reaches the runtime", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const { calls } = stubFetch(schedulesResponse);
+
+    const request = new Request("http://web.test/api/runtime/v1/schedules", {
+      method: "POST",
+      body: JSON.stringify({
+        workspace_id: "ws_1",
+        kind: "schedule",
+        name: "Weekly digest",
+        target_operation_id: "operation_research_paper",
+        config: { cron: "0 9 * * 1" },
+        catch_up_policy: "skip",
+        // The attacker-chosen creator the proxy must overwrite.
+        actor: { type: "user", id: "body-asserted-subject" },
+      }),
+      headers: { "content-type": "application/json" },
+    });
+    const response = await proxyToLocalApi(request, "/v1/schedules");
+
+    expect(response.status).toBe(200);
+    const call = calls.at(-1)!;
+    expect(String(call.input)).toBe(`${CONTROL_BASE}/api/runtime/local/v1/schedules`);
+    // The creating actor arriving at the runtime IS the session identity
+    // (SESSION_BODY's google_sub) — the body value was overwritten (the S20
+    // convention: created_by is an audit field, never a client assertion).
+    expect(JSON.parse(String(call.init?.body))["actor"]).toEqual({
+      type: "user",
+      id: "google-account-1",
+    });
+  });
+
+  it("the create body without any actor still forwards — the session supplies it", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const { calls } = stubFetch(schedulesResponse);
+
+    // The browser client (lib/schedules-api.ts createTrigger) sends exactly
+    // this shape: no actor at all — the proxy's server-side binding is what
+    // satisfies the runtime's create contract.
+    const request = new Request("http://web.test/api/runtime/v1/schedules", {
+      method: "POST",
+      body: JSON.stringify({
+        workspace_id: "ws_1",
+        kind: "webhook",
+        name: "Intake hook",
+        target_operation_id: "operation_research_paper",
+        config: {},
+        catch_up_policy: "catch_up",
+      }),
+      headers: { "content-type": "application/json" },
+    });
+    const response = await proxyToLocalApi(request, "/v1/schedules");
+
+    expect(response.status).toBe(200);
+    expect(JSON.parse(String(calls.at(-1)!.init?.body))["actor"]).toEqual({
+      type: "user",
+      id: "google-account-1",
+    });
+  });
+
+  it("binds the pause/resume/edit actor to the authenticated session — the body-asserted placeholder never survives", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const { calls } = stubFetch(schedulesResponse);
+
+    for (const path of [
+      "/v1/schedules/trg_9f1b2c3d/pause",
+      "/v1/schedules/trg_9f1b2c3d/resume",
+      "/v1/schedules/trg_9f1b2c3d/edit",
+    ] as const) {
+      const request = new Request(`http://web.test/api/runtime${path}`, {
+        method: "POST",
+        body: JSON.stringify({
+          workspace_id: "ws_1",
+          // What the browser client asserts (TRIGGER_ACTOR) — overwritten,
+          // exactly like the S20 decided_by.
+          actor: { type: "user", id: "body-asserted-subject" },
+          ...(path.endsWith("/edit") ? { name: "Edited" } : {}),
+        }),
+        headers: { "content-type": "application/json" },
+      });
+      const response = await proxyToLocalApi(request, path);
+      expect(response.status, path).toBe(200);
+      const call = calls.at(-1)!;
+      expect(String(call.input), path).toBe(`${CONTROL_BASE}/api/runtime/local${path}`);
+      expect(JSON.parse(String(call.init?.body))["actor"], path).toEqual({
+        type: "user",
+        id: "google-account-1",
+      });
+    }
+  });
+
+  it("still refuses the webhook receiver — deliveries come from external senders to the runtime, never through the browser proxy", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    process.env["RUNTIME_LOCAL_API_URL"] = RUNTIME_BASE;
+    const calls: FetchCall[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({ input, init });
+        return Promise.resolve(new Response(null, { status: 500 }));
+      }),
+    );
+
+    const request = new Request("http://web.test/api/runtime/v1/webhooks/trg_9f1b2c3d", {
+      method: "POST",
+      body: JSON.stringify({ event: "external-delivery" }),
+      headers: { "content-type": "application/json" },
+    });
+    const response = await proxyToLocalApi(request, "/v1/webhooks/trg_9f1b2c3d");
+
+    expect(response.status).toBe(404);
+    expect(calls).toHaveLength(0);
+  });
+});

@@ -13,6 +13,7 @@
     "@auth/core": "0.41.3",
     "@auth/drizzle-adapter": "1.11.3",
     "@auth/express": "0.12.3",
+    "commander": "15.0.0",
     "dockerode": "5.0.1",
     "drizzle-orm": "0.45.2",
     "express": "5.2.1",
@@ -26,5 +27,8 @@
     "@types/node": "24.13.5",
     "@types/pg": "8.23.0",
     "drizzle-kit": "0.31.10"
+  },
+  "bin": {
+    "shera-admin": "./src/cli/shera-admin.ts"
   }
 }

@@ -251,6 +251,26 @@ export function runtimeTenantMismatchError(correlationId?: string): RuntimeOpera
 // --- S32 admin surface -----------------------------------------------------
 
 /**
+ * The admin body-parse failure (review P1): a schema-invalid body or
+ * malformed JSON thrown INSIDE the audited operation, so adminHandler
+ * records admin_action_failed AND answers 400 (the code-level override in
+ * the handler maps this code to 400; the category map's 404 is the user
+ * boundary's route-not-found semantics).
+ */
+export function adminInvalidBodyError(correlationId?: string): RuntimeOperationError {
+  return new RuntimeOperationError(
+    makeSheraError({
+      code: "CONTRACT_VALIDATION_FAILED",
+      category: "validation",
+      safe_message: "The request body is not valid.",
+      retryable: false,
+      user_action: "Send a valid JSON body for this admin command.",
+      correlation_id: correlationId,
+    }),
+  );
+}
+
+/**
  * The admin gate's typed 401 (AC2). The safe_message is identical for a
  * missing and an unknown token: the response never reveals whether a token
  * exists (no capability enumeration, G3).

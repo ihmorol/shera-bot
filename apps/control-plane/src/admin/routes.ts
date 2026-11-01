@@ -19,7 +19,7 @@ import type { ControlPlaneDb } from "../db/client.ts";
 import { controlAccounts } from "../db/schema.ts";
 import {
   adminAccountNotFoundError,
-  contractValidationError,
+  adminInvalidBodyError,
   RuntimeOperationError,
   statusForError,
 } from "../errors.ts";
@@ -97,15 +97,26 @@ export function adminHandler(
         details: {
           actor: `admin-token:${tokenId ?? "unknown"}`,
           action,
+          // The attempted target is knowable from the route itself, so a
+          // parse failure still names what was being targeted (AC6).
+          target: typeof req.params["id"] === "string" ? req.params["id"] : "unknown",
           reason: error instanceof Error ? error.name : "unknown_error",
         },
         correlationId,
         redactionClass: "restricted",
       });
       // Typed operation errors (RuntimeOperationError carries the SheraError
-      // taxonomy) answer with their mapped status — never a raw 500.
+      // taxonomy) answer with their mapped status — never a raw 500. The
+      // admin body-parse contract answers 400 for CONTRACT_VALIDATION_FAILED
+      // (the category map's 404 is the user boundary's route-not-found
+      // semantics; review P1 moved parsing inside this handler so the
+      // failure is audited AND 400-shaped).
       if (error instanceof RuntimeOperationError) {
-        res.status(statusForError(error.sheraError)).json(error.sheraError);
+        const status =
+          error.sheraError.code === "CONTRACT_VALIDATION_FAILED"
+            ? 400
+            : statusForError(error.sheraError);
+        res.status(status).json(error.sheraError);
         return;
       }
       throw error;
@@ -118,19 +129,37 @@ export function createAdminRoutes(deps: AdminRouteDependencies): Router {
   const requireToken = requireAdminToken({ tokens: deps.tokens });
   router.use(requireToken);
 
-  // Shared JSON body parser for admin command bodies (bounded, typed 400).
+  // Shared JSON body parsing happens INSIDE the audited operation (review
+  // P1): a schema-invalid body or malformed JSON is still an admin action
+  // attempt, so it must flow through adminHandler's failure recording (the
+  // middleware-chain shape skipped the audit entirely and let malformed JSON
+  // escape to the app-level handler as an unrecorded 500). Bounded (64kb);
+  // every parse failure is the typed CONTRACT_VALIDATION_FAILED error, which
+  // adminHandler answers 400.
   const jsonParser = express.json({ limit: "64kb" });
-  const parseBody =
-    <T extends z.ZodType>(schema: T) =>
-    (req: Request, res: Response, next: express.NextFunction): void => {
-      const parsed = schema.safeParse(req.body ?? {});
-      if (!parsed.success) {
-        res.status(400).json(contractValidationError("The request body is not valid."));
-        return;
-      }
-      res.locals.body = parsed.data;
-      next();
-    };
+
+  const parseAdminBody = async <T extends z.ZodType>(
+    schema: T,
+    args: { req: Request; res: Response; correlationId: string },
+  ): Promise<T["_output"]> => {
+    await new Promise<void>((resolve, reject) => {
+      jsonParser(args.req, args.res as Response, (err?: unknown) => {
+        if (err) {
+          // Malformed JSON, oversized bodies, bad encodings: ALL parser
+          // failures are the typed 400 (audited by adminHandler) — never an
+          // escape to the app-level handler (review P1).
+          reject(adminInvalidBodyError(args.correlationId));
+          return;
+        }
+        resolve();
+      });
+    });
+    const parsed = schema.safeParse(args.req.body ?? {});
+    if (!parsed.success) {
+      throw adminInvalidBodyError(args.correlationId);
+    }
+    return parsed.data;
+  };
 
   const accounts = new AdminAccountsService(deps.db);
 
@@ -166,11 +195,9 @@ export function createAdminRoutes(deps: AdminRouteDependencies): Router {
 
   router.put(
     "/users/:id/tier",
-    jsonParser,
-    parseBody(TierBody),
     adminHandler(deps.securityEvents, "users.assign_tier", async (args) => {
+      const body = await parseAdminBody(TierBody, args);
       const id = await requireAccountId(deps.db, args.req.params.id);
-      const body = args.res.locals.body as { tier: ResourceTier };
       const result = await accounts.assignTier(id, body.tier);
       return { status: 200, body: result, target: id };
     }),
@@ -292,11 +319,9 @@ export function createAdminRoutes(deps: AdminRouteDependencies): Router {
 
   router.post(
     "/users/:id/credits/top-up",
-    jsonParser,
-    parseBody(TopUpBody),
     adminHandler(deps.securityEvents, "credits.topup", async (args) => {
+      const body = await parseAdminBody(TopUpBody, args);
       const id = await requireAccountId(deps.db, args.req.params.id);
-      const body = args.res.locals.body as { amount: number; reason?: string };
       const result = await credits.topUp({
         accountId: id,
         amount: body.amount,

@@ -246,7 +246,13 @@ export class AdminTokenService {
    * atomically. */
   private async activeTokenInTx(
     tx: ControlPlaneTx,
-  ): Promise<{ id: string; tokenDigestHint: string; createdAt: Date; lastUsedAt: Date | null; revokedAt: Date | null } | null> {
+  ): Promise<{
+    id: string;
+    tokenDigestHint: string;
+    createdAt: Date;
+    lastUsedAt: Date | null;
+    revokedAt: Date | null;
+  } | null> {
     const rows = await tx
       .select({
         id: controlAdminTokens.id,

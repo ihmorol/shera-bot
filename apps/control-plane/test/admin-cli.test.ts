@@ -17,21 +17,39 @@
  * still pins every behavior it asserts against the real stack.
  */
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { createServer, type Server } from "node:http";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 
 import { createControlPlaneApp, type ControlPlaneApp } from "../src/index.ts";
-import { controlAccounts } from "../src/db/schema.ts";
+import { controlAccounts, controlCreditTopups } from "../src/db/schema.ts";
 import { runCli, CLI_COMMAND_NAMES } from "../src/cli/shera-admin.ts";
 import { startTestCluster, type TestCluster } from "./helpers/pg-cluster.ts";
 import { removeTempDir } from "./helpers/temp-dir.ts";
 import { request, startHttpsApp, type TestServer } from "./helpers/test-server.ts";
+import { FakeContainerBackend } from "@shera-bot/test-kit";
+import {
+  ChannelCredentialStore,
+  createInternalApi,
+  InMemorySecurityEventRecorder,
+} from "../../../apps/user-runtime/src/index.ts";
+import {
+  composeRuntime,
+  type RuntimeHandle,
+} from "../../../apps/user-runtime/src/transport/local-api/compose.ts";
+import { OperationsRunSeam } from "../../../apps/user-runtime/src/modules/workers/operations-run-seam.ts";
+import { applyRowLifecycleTransition } from "../../../apps/user-runtime/src/modules/tasks/run-lifecycle.ts";
 
 const A = "a1b2c3d4-0000-4000-8000-000000000001";
 const B = "b1b2c3d4-0000-4000-8000-000000000002";
+const WS_B = `ws_${B}`;
+const AGENT_ID = "agent_researcher";
+const PACKS_ROOT = resolve(import.meta.dirname, "../../../agent-packs");
 
 /** The CLI entry, exactly as the package.json `bin` field points at it. */
 const CLI_ENTRY = resolve(import.meta.dirname, "../src/cli/shera-admin.ts");
@@ -41,6 +59,13 @@ let controlPlane: ControlPlaneApp;
 let server: TestServer;
 let dbDir = "";
 let tokenFile = "";
+/** Account B's REAL composed runtime (behind the fake container backend). */
+let runtimeB: RuntimeHandle | undefined;
+let runtimeBDir = "";
+const fakeServers: Server[] = [];
+/** The D48 fixture runs inside B's runtime (created in beforeAll). */
+const CREDIT_PAUSED_RUN = "run_s32_cli_credit_paused";
+const RETRY_PAUSED_RUN = "run_s32_cli_retry_paused";
 /** The token currently in the env for operational commands. */
 let activeToken = "";
 
@@ -66,11 +91,85 @@ function adminHeaders(extra: Record<string, string> = {}): Record<string, string
   return { authorization: `Bearer ${activeToken}`, ...extra };
 }
 
+/**
+ * Create a run row in B's runtime and drive it into the requested pause
+ * through the REAL transition machinery (journal task.paused + row write).
+ * The pause COMMAND selects the recorded pause reason the D48 resume path
+ * inspects (`insufficient_credits` resumes; anything else is a typed skip).
+ * The transition table gates pause_retry_exhausted to RUNNING (retry
+ * exhaustion happens mid-attempt), so that fixture enters RUNNING first.
+ */
+function createPausedRun(
+  command: "pause_insufficient_credits" | "pause_retry_exhausted",
+  name: string,
+): string {
+  if (!runtimeB) throw new Error("runtime B not composed");
+  const operationId = runtimeB.operations.createOperation(WS_B, {
+    definition_ref: null,
+    name: `Op ${name}`,
+    roster_agent_ids: [AGENT_ID],
+    coordinator_agent_id: AGENT_ID,
+  }).operation_id;
+  const runId = `run_s32_${name}`;
+  runtimeB.operations.createRun(WS_B, operationId, { run_id: runId });
+  runtimeB.operations.applyRunState(WS_B, operationId, runId, "QUEUED");
+  if (command === "pause_retry_exhausted") {
+    runtimeB.operations.applyRunState(WS_B, operationId, runId, "RUNNING");
+  }
+  const applied = applyRowLifecycleTransition(
+    {
+      tx: runtimeB.tx,
+      journal: runtimeB.journal,
+      events: runtimeB.events,
+      operations: runtimeB.operations,
+      runControl: new OperationsRunSeam(runtimeB.operations),
+    },
+    {
+      workspaceId: WS_B,
+      runId,
+      command,
+      actor: { type: "runtime", id: "runtime-gateway" },
+    },
+  );
+  if (!applied.ok) throw new Error(`pause fixture failed: ${applied.reason}`);
+  return runId;
+}
+
 beforeAll(async () => {
   cluster = await startTestCluster("admin-cli");
+  // Account B runs a REAL composed runtime behind the fake container backend
+  // (the recorded S06 internal-channel shape, as in the sibling S32 suites):
+  // the credits top-up SUCCESS path and the provisioned container legs need a
+  // reachable runtime. Account A stays engine-less — its typed degradation is
+  // the honest host truth and stays pinned.
+  runtimeBDir = mkdtempSync(join(tmpdir(), "s32-cli-runtime-b-"));
+  runtimeB = composeRuntime({
+    dbPath: join(runtimeBDir, "runtime.db"),
+    workspaceId: WS_B,
+    packsRoot: PACKS_ROOT,
+  });
+  const credentials = new ChannelCredentialStore();
+  const api = createInternalApi({
+    credentials,
+    accountId: B,
+    localApi: runtimeB.app,
+    adminCommands: runtimeB.adminCommands,
+    securityEvents: new InMemorySecurityEventRecorder(),
+  });
+  const containerServer = createServer(api.app);
+  await new Promise<void>((resolveListen) => containerServer.listen(0, "127.0.0.1", resolveListen));
+  fakeServers.push(containerServer);
+  const origin = `http://127.0.0.1:${(containerServer.address() as AddressInfo).port}`;
+
   controlPlane = await createControlPlaneApp({
     databaseUrl: cluster.connectionString,
     env: {},
+    runtimeBackend: new FakeContainerBackend({
+      // B only: A's provisioning must keep answering the typed
+      // RUNTIME_PROVISION_FAILED (no engine on this host for A).
+      endpointFor: (accountId) => (accountId === B ? origin : null),
+      deliverCredential: (_accountId, digest) => credentials.admitDigest(digest),
+    }),
   });
   for (const accountId of [A, B]) {
     await controlPlane.db
@@ -82,17 +181,29 @@ beforeAll(async () => {
       })
       .returning();
   }
+  await controlPlane.provisioning.ensureProvisioned(B);
+  // The D48 fixture: one run the top-up may resume, one it must SKIP with the
+  // typed reason (paused for a different reason).
+  createPausedRun("pause_insufficient_credits", "cli_credit_paused");
+  createPausedRun("pause_retry_exhausted", "cli_retry_paused");
   server = await startHttpsApp(controlPlane.app);
   dbDir = mkdtempSync(join(tmpdir(), "s32-cli-"));
   tokenFile = join(dbDir, "token.txt");
-}, 180_000);
+}, 240_000);
 
 afterAll(async () => {
   await server?.close();
   await controlPlane?.close();
+  // composeRuntime's close() is async — the SQLite release lands inside its
+  // promise; the temp dir cannot be deleted until it is awaited (E20 leg 1).
+  await runtimeB?.close();
   if (dbDir) await removeTempDir(dbDir);
+  if (runtimeBDir) await removeTempDir(runtimeBDir);
+  for (const container of fakeServers) {
+    await new Promise<void>((resolveClose) => container.close(() => resolveClose()));
+  }
   await cluster?.stop();
-}, 180_000);
+}, 240_000);
 
 describe("admin CLI (issue #33, AC1)", () => {
   it("documents every capability in --help (the documented-syntax leg)", async () => {
@@ -201,7 +312,10 @@ describe("admin CLI (issue #33, AC1)", () => {
 
   it("drives the container, backup, and failures command surface (typed errors surface honestly)", async () => {
     // No container engine on this host: provisioning answers the typed
-    // resource failure — the CLI surfaces it and exits non-zero.
+    // failure — the CLI surfaces it and exits non-zero. (With a backend now
+    // wired for B, A's provisioning fails as the backend's unreachable
+    // endpoint: the typed RUNTIME_UNAVAILABLE. No engine at all would answer
+    // RUNTIME_PROVISION_FAILED — both honest, both typed.)
     outLines.length = 0;
     errLines.length = 0;
     let exit = await runCli({
@@ -210,7 +324,7 @@ describe("admin CLI (issue #33, AC1)", () => {
       env: env(),
     });
     expect(exit).toBe(1);
-    expect(errLines.join("\n")).toContain("RUNTIME_PROVISION_FAILED");
+    expect(errLines.join("\n")).toContain("RUNTIME_UNAVAILABLE");
 
     // The backup trigger is engine-free: it records the S33 seam.
     outLines.length = 0;
@@ -251,6 +365,151 @@ describe("admin CLI (issue #33, AC1)", () => {
     });
     expect(exit).toBe(2);
     expect(errLines.join("\n")).toContain("--amount must be a positive integer");
+  });
+
+  it("token show exposes only the non-secret identity of the active token", async () => {
+    outLines.length = 0;
+    errLines.length = 0;
+    const exit = await runCli({ argv: ["token", "show"], io: io(), env: env() });
+    expect(exit).toBe(0);
+    const shown = JSON.parse(outLines.join("\n")) as {
+      token_digest_hint: string;
+      created_at: string;
+      last_used_at: string | null;
+      revoked_at: string | null;
+    };
+    // The hint is the first 12 hex chars of the SHA-256 digest — computable
+    // from the token in hand, and never the token itself.
+    const expectedHint = createHash("sha256").update(activeToken).digest("hex").slice(0, 12);
+    expect(shown.token_digest_hint).toBe(expectedHint);
+    expect(shown.created_at).toBeTruthy();
+    expect(JSON.stringify(shown)).not.toContain(activeToken);
+    expect(errLines.join("\n")).not.toContain(activeToken);
+  });
+
+  it("drives the container legs: typed degradation on an engine-less account, real truth on a provisioned one", async () => {
+    // Account A has no runtime on this host: every container command answers
+    // the typed not-provisioned error — never an invented status (G4).
+    for (const args of [
+      ["container", "restart", A],
+      ["container", "stop", A],
+      ["container", "status", A],
+      ["container", "usage", A],
+    ]) {
+      outLines.length = 0;
+      errLines.length = 0;
+      const exit = await runCli({ argv: args, io: io(), env: env() });
+      expect(exit).toBe(1);
+      expect(errLines.join("\n")).toContain("RUNTIME_NOT_PROVISIONED");
+      expect(errLines.join("\n")).not.toContain(activeToken);
+    }
+
+    // Account B runs the REAL composed runtime: the recorded truth flows.
+    outLines.length = 0;
+    errLines.length = 0;
+    let exit = await runCli({ argv: ["container", "status", B], io: io(), env: env() });
+    expect(exit).toBe(0);
+    const status = JSON.parse(outLines.join("\n")) as {
+      provisioning_status: string;
+      health: string;
+      tier: string;
+    };
+    expect(status.provisioning_status).toBe("running");
+    expect(status.health).toBe("healthy");
+    // The MAPPING's tier is the provision-time tier (balanced); the account
+    // row's tier applies at next provisioning — the record is the truth here.
+    expect(status.tier).toBe("balanced");
+
+    outLines.length = 0;
+    exit = await runCli({ argv: ["container", "usage", B], io: io(), env: env() });
+    expect(exit).toBe(0);
+    const usage = JSON.parse(outLines.join("\n")) as {
+      tier: string;
+      resource_summary: { tier: string; memory_mb?: number };
+      last_health_check_at: string | null;
+    };
+    expect(usage.resource_summary.tier).toBe("balanced");
+
+    outLines.length = 0;
+    exit = await runCli({ argv: ["container", "stop", B], io: io(), env: env() });
+    expect(exit).toBe(0);
+    const stopped = JSON.parse(outLines.join("\n")) as { provisioning_status: string };
+    expect(stopped.provisioning_status).toBe("stopped");
+
+    // Status after the stop reads the RECORDED truth (the stop synced it).
+    outLines.length = 0;
+    exit = await runCli({ argv: ["container", "status", B], io: io(), env: env() });
+    expect(exit).toBe(0);
+    const stoppedStatus = JSON.parse(outLines.join("\n")) as { provisioning_status: string };
+    expect(stoppedStatus.provisioning_status).toBe("stopped");
+
+    outLines.length = 0;
+    exit = await runCli({ argv: ["container", "restart", B], io: io(), env: env() });
+    expect(exit).toBe(0);
+    const restarted = JSON.parse(outLines.join("\n")) as { provisioning_status: string };
+    expect(restarted.provisioning_status).toBe("running");
+  });
+
+  it("backups list returns the recorded backups for an account", async () => {
+    outLines.length = 0;
+    errLines.length = 0;
+    let exit = await runCli({ argv: ["backups", "trigger", B], io: io(), env: env() });
+    expect(exit).toBe(0);
+    const triggered = JSON.parse(outLines.join("\n")) as { snapshot_ref: string };
+    expect(triggered.snapshot_ref).toMatch(/^snapshot_/);
+
+    outLines.length = 0;
+    exit = await runCli({ argv: ["backups", "list", B], io: io(), env: env() });
+    expect(exit).toBe(0);
+    const listed = JSON.parse(outLines.join("\n")) as {
+      backups: Array<{ snapshot_ref: string; status?: string }>;
+    };
+    expect(listed.backups.map((backup) => backup.snapshot_ref)).toContain(triggered.snapshot_ref);
+    expect(errLines.join("\n")).not.toContain(activeToken);
+  });
+
+  it("credits top-up through the CLI: the durable grant plus the honest resume/skip outcome (AC9)", async () => {
+    outLines.length = 0;
+    errLines.length = 0;
+    const exit = await runCli({
+      argv: ["credits", "top-up", B, "--amount", "250", "--reason", "CLI grant pin"],
+      io: io(),
+      env: env(),
+    });
+    expect(exit).toBe(0);
+    const outcome = JSON.parse(outLines.join("\n")) as {
+      topup_id: string;
+      amount: number;
+      resumed_run_ids: string[];
+      skipped: Array<{ run_id: string; reason: string }>;
+    };
+    expect(outcome.amount).toBe(250);
+    expect(outcome.topup_id).toBeTruthy();
+    // The insufficient-credit-paused run RESUMED (PAUSED -> QUEUED, D8 path).
+    expect(outcome.resumed_run_ids).toContain(CREDIT_PAUSED_RUN);
+    // The run paused for a DIFFERENT reason is a typed skip, not a fake resume.
+    expect(outcome.skipped).toContainEqual({
+      run_id: RETRY_PAUSED_RUN,
+      reason: "pause_reason_not_insufficient_credits",
+    });
+
+    // The grant is the durable central record (the S24 ledger seam consults
+    // it until that slice lands — pinned in E38).
+    const grants = await controlPlane.db
+      .select()
+      .from(controlCreditTopups)
+      .where(eq(controlCreditTopups.accountId, B));
+    expect(grants.some((grant) => grant.id === outcome.topup_id && grant.amount === 250)).toBe(
+      true,
+    );
+
+    // The resumed run's own state is the runtime's truth.
+    const operationId = runtimeB?.operations.findRunOperation(WS_B, CREDIT_PAUSED_RUN) ?? null;
+    expect(operationId).not.toBeNull();
+    expect(runtimeB?.operations.getRun(WS_B, operationId as string, CREDIT_PAUSED_RUN).state).toBe(
+      "QUEUED",
+    );
+    expect(errLines.join("\n")).not.toContain(activeToken);
   });
 
   it("never prints the token outside the single create/rotate display (G3 redaction leg)", async () => {

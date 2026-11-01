@@ -16,7 +16,6 @@
  * implementation (an ordering slip against the red-first rule); the suite
  * still pins every behavior it asserts against the real stack.
  */
-import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import { mkdtempSync, writeFileSync } from "node:fs";
@@ -29,6 +28,7 @@ import { eq } from "drizzle-orm";
 import { createControlPlaneApp, type ControlPlaneApp } from "../src/index.ts";
 import { controlAccounts, controlCreditTopups } from "../src/db/schema.ts";
 import { runCli, CLI_COMMAND_NAMES } from "../src/cli/shera-admin.ts";
+import { runCliBin } from "./helpers/cli-bin.ts";
 import { startTestCluster, type TestCluster } from "./helpers/pg-cluster.ts";
 import { removeTempDir } from "./helpers/temp-dir.ts";
 import { request, startHttpsApp, type TestServer } from "./helpers/test-server.ts";
@@ -50,9 +50,6 @@ const B = "b1b2c3d4-0000-4000-8000-000000000002";
 const WS_B = `ws_${B}`;
 const AGENT_ID = "agent_researcher";
 const PACKS_ROOT = resolve(import.meta.dirname, "../../../agent-packs");
-
-/** The CLI entry, exactly as the package.json `bin` field points at it. */
-const CLI_ENTRY = resolve(import.meta.dirname, "../src/cli/shera-admin.ts");
 
 let cluster: TestCluster;
 let controlPlane: ControlPlaneApp;
@@ -535,13 +532,9 @@ describe("admin CLI (issue #33, AC1)", () => {
     // type stripping; the bin field points here). The process must run to
     // completion, print its help, and exit 0 — importing the module without
     // invoking main() would print nothing and prove nothing.
-    const result = spawnSync(process.execPath, [CLI_ENTRY, "--help"], {
-      encoding: "utf8",
-      timeout: 60_000,
-      windowsHide: true,
-    });
+    const result = runCliBin(["--help"]);
     expect(result.status).toBe(0);
-    const output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
+    const output = `${result.stdout}\n${result.stderr}`;
     expect(output).toContain("Usage:");
     // Spot-check the documented groups surface in the child's help.
     expect(output).toContain("token");

@@ -43,9 +43,13 @@
  *      scrubbed to [REDACTED] at the proposal boundary — before any record or
  *      journal event is written (G3).
  */
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+import {
+  cleanupTempResources,
+  makeTempDir,
+  trackConnection,
+} from "../../../test/helpers/temp-resources.ts";
 
 import { afterAll, describe, expect, it } from "vitest";
 
@@ -71,8 +75,6 @@ const WS = "ws_default_01";
 const NOW = "2026-10-28T12:00:00.000Z";
 const HASH = "a".repeat(64);
 
-const tempDirs: string[] = [];
-
 /**
  * Open one approval runtime. `reuseDir` re-opens the SAME database file — the
  * restart-durability test consumes a grant, closes the connection, and checks
@@ -87,11 +89,8 @@ function newRuntime(reuseDir?: string): {
   service: ApprovalsService;
   setNow: (iso: string) => void;
 } {
-  const dir = reuseDir ?? mkdtempSync(join(tmpdir(), "shera-runtime-approvals-"));
-  if (reuseDir === undefined) {
-    tempDirs.push(dir);
-  }
-  const runtime = openDatabase(join(dir, "runtime.db"));
+  const dir = reuseDir ?? makeTempDir("shera-runtime-approvals-");
+  const runtime = trackConnection(openDatabase(join(dir, "runtime.db")));
   applyMigrations(runtime.db);
   const tx = new SqliteTransactions(runtime.db);
   const journal = new EventJournalRepository(tx);
@@ -120,10 +119,13 @@ function newRuntime(reuseDir?: string): {
   };
 }
 
-afterAll(() => {
-  for (const dir of tempDirs) {
-    rmSync(dir, { recursive: true, force: true });
-  }
+afterAll(async () => {
+  // The E20 pattern (test/helpers/temp-resources.ts): close every tracked
+  // connection first, then delete with a bounded backoff — Windows can hold
+  // the SQLite file lock a few milliseconds after the handle closes, and a
+  // single unretried rmSync turned this suite red at teardown even with all
+  // assertions passing (observed on the S32 fresh-archive gate).
+  await cleanupTempResources();
 });
 
 function makeRun(overrides: Partial<TaskRun> = {}): TaskRun {

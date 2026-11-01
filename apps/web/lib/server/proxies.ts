@@ -46,6 +46,12 @@ const SESSION_ACTOR_BINDINGS: ReadonlyArray<{ pathPattern: RegExp; bodyField: st
   { pathPattern: /^\/v1\/schedules\/[a-zA-Z0-9_-]+\/pause$/, bodyField: "actor" },
   { pathPattern: /^\/v1\/schedules\/[a-zA-Z0-9_-]+\/resume$/, bodyField: "actor" },
   { pathPattern: /^\/v1\/schedules\/[a-zA-Z0-9_-]+\/edit$/, bodyField: "actor" },
+  // S28 create (G2, the S23/S20 convention): the trigger's created_by audit
+  // field is the session identity, never a client assertion — creation of an
+  // autonomous trigger is a USER decision. The browser client (lib/
+  // schedules-api.ts) deliberately sends NO actor; the runtime's create
+  // contract requires one and the binding is what satisfies it.
+  { pathPattern: /^\/v1\/schedules$/, bodyField: "actor" },
 ];
 
 /** The 401 failure shape for a request whose session carries no usable identity. */

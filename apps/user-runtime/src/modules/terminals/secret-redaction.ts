@@ -56,9 +56,19 @@ const CONNECTION_STRING_USERINFO = /\b([a-z][a-z0-9+.-]*:\/\/)([^\s:@/'"&#]+):([
  * terminal output is a cookie-value leak channel (AC4). Quoted and bare
  * values both collapse. The separator never spans lines, so a key at a line
  * end cannot swallow unrelated output on the next line.
+ *
+ * S26 performance note: the key span match is anchored to a TOKEN START (the
+ * negative lookbehind — the preceding character is not a key-charset
+ * character). Without it the unbounded greedy span backtracks at every
+ * position of a long non-secret token run and the sweep is quadratic in the
+ * chunk size (8.7 s on one 64 KiB chunk of `y`); with it the engine only
+ * attempts token starts and the sweep is linear. Semantics are unchanged: a
+ * full-token match (the anchored start) dominates every mid-token start the
+ * unanchored span could find — the same spans collapse, pinned by the same
+ * tests.
  */
 const SECRET_KEY_ASSIGNMENT =
-  /(["'A-Za-z0-9_.-]*(?:password|passwd|pwd|secret|token|api_?key|access_?key|private_?key|credential|cookie)["'A-Za-z0-9_.-]*)([ \t]*[:=][ \t]*|[ \t]+)("[^"\n]*"|'[^'\n]*'|[^\s,&"']+)/gi;
+  /(?<!["'A-Za-z0-9_.-])(["'A-Za-z0-9_.-]*(?:password|passwd|pwd|secret|token|api_?key|access_?key|private_?key|credential|cookie)["'A-Za-z0-9_.-]*)([ \t]*[:=][ \t]*|[ \t]+)("[^"\n]*"|'[^'\n]*'|[^\s,&"']+)/gi;
 
 /**
  * Redact every secret-shaped value in one chunk of output. Order matters:

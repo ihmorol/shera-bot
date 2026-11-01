@@ -34,7 +34,14 @@ import type { ResourceLimits } from "@shera-bot/contracts";
 
 /** Failure codes a binding (or its authority check) can raise. */
 export type ToolBindingFailureCode =
-  "EXECUTION_AUTHORITY_MISSING" | "TOOL_EXECUTION_TIMEOUT" | "TOOL_BINDING_FAILED";
+  | "EXECUTION_AUTHORITY_MISSING"
+  | "TOOL_EXECUTION_TIMEOUT"
+  | "TOOL_BINDING_FAILED"
+  /** S26 sandbox policy refusals and limit deaths (executor passthrough). */
+  | "SANDBOX_PATH_ESCAPE"
+  | "SANDBOX_LAUNCH_FAILED"
+  | "SANDBOX_LIMIT_EXCEEDED"
+  | "TOOL_EXECUTION_CANCELLED";
 
 export class ToolBindingError extends Error {
   readonly code: ToolBindingFailureCode;
@@ -91,6 +98,22 @@ export interface ToolExecutionContext {
    * the process-backed family (S26) wires it to process-tree escalation.
    */
   signal: AbortSignal;
+  /**
+   * The execution's runtime identity (S26): workspace/task/agent/capability
+   * plus the approval linkage, so process-backed bindings can record terminal
+   * output and artifacts against the right scope. The executor fills it; the
+   * in-process family ignores it.
+   */
+  readonly execution: {
+    execution_id: string;
+    workspace_id: string;
+    task_id: string;
+    conversation_id: string;
+    agent_id: string;
+    capability: string;
+    approval_id: string | null;
+    grant_id: string | null;
+  };
 }
 
 /** The pure, pre-execution preview a gated tool shows (D35 — zero side effects). */
@@ -107,11 +130,22 @@ export type ToolBindingResult =
  * One tool family's implementation. preview() is PURE (no side effects, safe
  * to run pre-approval); execute() performs the effect and MUST call
  * assertExecutionAuthority before anything else.
+ *
+ * The process-backed family (S26) implements the OPTIONAL `executeAsync`
+ * seam instead: it spawns the child through the adapters/process sandbox
+ * adapter and resolves when the process exits. Its sync `execute` is a typed
+ * REFUSAL — a process-backed effect can only be dispatched through the
+ * executor's async dispatch (which mints the authority and owns the cancel
+ * seam), never run inside a caller's transaction.
  */
 export interface ToolBinding {
   readonly name: string;
   preview(args: Record<string, unknown>): ToolPreview | null;
   execute(args: Record<string, unknown>, ctx: ToolExecutionContext): ToolBindingResult;
+  executeAsync?(
+    args: Record<string, unknown>,
+    ctx: ToolExecutionContext,
+  ): Promise<ToolBindingResult>;
 }
 
 /**

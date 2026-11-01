@@ -221,6 +221,18 @@ describe("risk-class ladder as data (S21 chunk 2)", () => {
 });
 
 describe("no-bypass execution authority (S21 chunk 2, AC1)", () => {
+  /** The execution identity the executor fills on every real ctx (S26). */
+  const testExecutionIdentity = {
+    execution_id: "exe_test",
+    workspace_id: WS,
+    task_id: TASK,
+    conversation_id: CONV,
+    agent_id: AGENT,
+    capability: "notes.read",
+    approval_id: null,
+    grant_id: null,
+  };
+
   it("refuses a binding invoked without the executor-minted authority", () => {
     const rt = buildRuntime();
     const bindings = makeNoteBindings();
@@ -239,6 +251,7 @@ describe("no-bypass execution authority (S21 chunk 2, AC1)", () => {
             max_disk_mb: 64,
           },
           signal: new AbortController().signal,
+          execution: testExecutionIdentity,
         },
       ),
     ).toThrow(/EXECUTION_AUTHORITY/);
@@ -262,6 +275,7 @@ describe("no-bypass execution authority (S21 chunk 2, AC1)", () => {
           max_disk_mb: 64,
         },
         signal: new AbortController().signal,
+        execution: testExecutionIdentity,
       },
     );
     expect(result.ok).toBe(true);

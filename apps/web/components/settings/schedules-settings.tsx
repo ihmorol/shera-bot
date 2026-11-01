@@ -36,6 +36,13 @@ const KIND_LABELS: Record<TriggerView["kind"], string> = {
   external_event: "External event",
 };
 
+/** The missed-occurrence policy in the product's own words (the raw enum
+ * never renders — the card's meta line is prose, not configuration). */
+const CATCH_UP_LABELS: Record<TriggerView["catch_up_policy"], string> = {
+  catch_up: "missed runs are caught up",
+  skip: "missed runs are skipped",
+};
+
 /** The cron expression's display form (data, never recomputed — AC9). */
 function scheduleCron(config: Record<string, unknown>): string | null {
   const cron = config["cron"];
@@ -209,7 +216,7 @@ function TriggerCard({
             <StateChip trigger={trigger} />
           </div>
           <p className="mt-1.5 text-xs text-muted">
-            {description ?? KIND_LABELS[trigger.kind]} · catch-up: {trigger.catch_up_policy}
+            {description ?? KIND_LABELS[trigger.kind]} · {CATCH_UP_LABELS[trigger.catch_up_policy]}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">

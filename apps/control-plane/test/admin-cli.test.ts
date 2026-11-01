@@ -16,9 +16,10 @@
  * implementation (an ordering slip against the red-first rule); the suite
  * still pins every behavior it asserts against the real stack.
  */
+import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 
@@ -30,6 +31,9 @@ import { request, startHttpsApp, type TestServer } from "./helpers/test-server.t
 
 const A = "a1b2c3d4-0000-4000-8000-000000000001";
 const B = "b1b2c3d4-0000-4000-8000-000000000002";
+
+/** The CLI entry, exactly as the package.json `bin` field points at it. */
+const CLI_ENTRY = resolve(import.meta.dirname, "../src/cli/shera-admin.ts");
 
 let cluster: TestCluster;
 let controlPlane: ControlPlaneApp;
@@ -264,5 +268,25 @@ describe("admin CLI (issue #33, AC1)", () => {
     expect(everything).not.toContain("shera_admin_wrongwrongwrong");
     expect(everything).not.toContain(presentedToken);
     expect(errLines.join("\n")).toContain("ADMIN_UNAUTHENTICATED");
+  });
+
+  it("is callable as a real child process (the AC1 bin-executable leg)", () => {
+    // The documented invocation is plain `node` against the TS entry (Node 24
+    // type stripping; the bin field points here). The process must run to
+    // completion, print its help, and exit 0 — importing the module without
+    // invoking main() would print nothing and prove nothing.
+    const result = spawnSync(process.execPath, [CLI_ENTRY, "--help"], {
+      encoding: "utf8",
+      timeout: 60_000,
+      windowsHide: true,
+    });
+    expect(result.status).toBe(0);
+    const output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
+    expect(output).toContain("Usage:");
+    // Spot-check the documented groups surface in the child's help.
+    expect(output).toContain("token");
+    expect(output).toContain("users");
+    expect(output).toContain("container");
+    expect(output).toContain("credits");
   });
 });

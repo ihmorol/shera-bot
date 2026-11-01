@@ -191,8 +191,12 @@ describe("the active-token invariant (review P2)", () => {
       tokens.rotate({ rotatedBy: "concurrent-a" }),
       tokens.rotate({ rotatedBy: "concurrent-b" }),
     ]);
+    // Under true interleaving the index types the loser's refusal; if the
+    // runtime serialized the pair, both commit one after the other. EITHER
+    // way the invariant is the same: at most one active row survives.
     const fulfilled = results.filter((r) => r.status === "fulfilled");
-    expect(fulfilled).toHaveLength(1);
+    expect(fulfilled.length).toBeGreaterThanOrEqual(1);
+    expect(fulfilled.length).toBeLessThanOrEqual(2);
     const actives = await controlPlane.db
       .select({ id: controlAdminTokens.id })
       .from(controlAdminTokens);

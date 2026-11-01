@@ -244,9 +244,7 @@ export class AdminTokenService {
   /** The transactional twin of activeToken() — used inside create()'s
    * revoke-then-insert transaction so the read and the writes commit
    * atomically. */
-  private async activeTokenInTx(
-    tx: ControlPlaneTx,
-  ): Promise<{
+  private async activeTokenInTx(tx: ControlPlaneTx): Promise<{
     id: string;
     tokenDigestHint: string;
     createdAt: Date;

@@ -34,7 +34,15 @@ export interface AdminBackupView {
 }
 
 export class AdminBackupsService {
-  constructor(private readonly db: ControlPlaneDb) {}
+  // Explicit field declarations (not constructor parameter properties): the
+  // documented start path (`node src/main.ts`) loads this module through
+  // plain node's strip-only TS mode, which rejects parameter-property
+  // syntax (review P0). No behavior change.
+  private readonly db: ControlPlaneDb;
+
+  constructor(db: ControlPlaneDb) {
+    this.db = db;
+  }
 
   /** Record the backup trigger (S33's mechanism executes it). */
   async triggerBackup(accountId: string): Promise<{

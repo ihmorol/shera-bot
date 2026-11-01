@@ -40,7 +40,16 @@ export interface AdminUserView {
 }
 
 export class AdminAccountsService {
-  constructor(private readonly db: ControlPlaneDb) {}
+  // Explicit field declarations (not constructor parameter properties): the
+  // documented start path (`node src/main.ts`) loads this module through
+  // plain node's strip-only TS mode, which rejects parameter-property
+  // syntax (review P0; the same constraint 64b4586 fixed for
+  // security-events.ts). No behavior change.
+  private readonly db: ControlPlaneDb;
+
+  constructor(db: ControlPlaneDb) {
+    this.db = db;
+  }
 
   /** The account directory. Bounded by the five-account cap; a hard limit
    * keeps the honest bound even if the cap is ever widened. */

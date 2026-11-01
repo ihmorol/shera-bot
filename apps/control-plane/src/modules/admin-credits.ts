@@ -45,7 +45,15 @@ export interface AdminCreditTopUpDeps {
 }
 
 export class AdminCreditsService {
-  constructor(private readonly deps: AdminCreditTopUpDeps) {}
+  // Explicit field declarations (not constructor parameter properties): the
+  // documented start path (`node src/main.ts`) loads this module through
+  // plain node's strip-only TS mode, which rejects parameter-property
+  // syntax (review P0). No behavior change.
+  private readonly deps: AdminCreditTopUpDeps;
+
+  constructor(deps: AdminCreditTopUpDeps) {
+    this.deps = deps;
+  }
 
   async topUp(args: {
     accountId: string;

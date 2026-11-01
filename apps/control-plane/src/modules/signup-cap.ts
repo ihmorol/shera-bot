@@ -46,11 +46,23 @@ export interface SignupCapRefusal {
 }
 
 export class SignupCapService {
+  // Explicit field declarations (not constructor parameter properties): the
+  // documented start path (`node src/main.ts`) loads this module through
+  // plain node's strip-only TS mode, which rejects parameter-property
+  // syntax (review P0). No behavior change.
+  private readonly db: NodePgDatabase;
+  private readonly securityEvents: SecurityEventService;
+  private readonly logger: ControlPlaneLogger;
+
   constructor(
-    private readonly db: NodePgDatabase,
-    private readonly securityEvents: SecurityEventService,
-    private readonly logger: ControlPlaneLogger,
-  ) {}
+    db: NodePgDatabase,
+    securityEvents: SecurityEventService,
+    logger: ControlPlaneLogger,
+  ) {
+    this.db = db;
+    this.securityEvents = securityEvents;
+    this.logger = logger;
+  }
 
   /** Current registered-account count (every account consumes a slot). */
   async countAccounts(): Promise<number> {

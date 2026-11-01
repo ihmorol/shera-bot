@@ -50,6 +50,8 @@ const B = "b1b2c3d4-0000-4000-8000-000000000002";
 const WS_B = `ws_${B}`;
 const AGENT_ID = "agent_researcher";
 const PACKS_ROOT = resolve(import.meta.dirname, "../../../agent-packs");
+/** The newline separator for joined assertion output (escape-free declaration). */
+const NEWLINE = String.fromCharCode(10);
 
 let cluster: TestCluster;
 let controlPlane: ControlPlaneApp;
@@ -525,6 +527,37 @@ describe("admin CLI (issue #33, AC1)", () => {
     expect(everything).not.toContain("shera_admin_wrongwrongwrong");
     expect(everything).not.toContain(presentedToken);
     expect(errLines.join("\n")).toContain("ADMIN_UNAUTHENTICATED");
+  });
+
+  it("refuses plaintext http origins off loopback and keeps missing DATABASE_URL a local failure (review P3)", async () => {
+    // A bearer token shipped over cleartext http to a non-loopback host is a
+    // credential disclosure — the CLI refuses it before any request (the
+    // production control plane is https with a CA-trusted cert; loopback
+    // http stays allowed for local development).
+    outLines.length = 0;
+    errLines.length = 0;
+    const refused = await runCli({
+      argv: ["users", "list"],
+      io: io(),
+      env: { ...env(), SHERA_CONTROL_PLANE_URL: "http://admin.invalid" },
+    });
+    expect(refused).toBe(2);
+    const refusedErr = errLines.join(NEWLINE);
+    expect(refusedErr).toContain("https");
+    expect(refusedErr).not.toContain(activeToken);
+
+    // A missing DATABASE_URL is a LOCAL AUTHORITY failure (the token
+    // lifecycle is a local DB operation), not a command-line-shape error:
+    // exit 1, per the documented exit-code table.
+    outLines.length = 0;
+    errLines.length = 0;
+    const noDb = await runCli({
+      argv: ["token", "create"],
+      io: io(),
+      env: { SHERA_ADMIN_TOKEN: activeToken, SHERA_CONTROL_PLANE_URL: server.origin },
+    });
+    expect(noDb).toBe(1);
+    expect(errLines.join(NEWLINE)).toContain("DATABASE_URL");
   });
 
   it("is callable as a real child process (the AC1 bin-executable leg)", () => {

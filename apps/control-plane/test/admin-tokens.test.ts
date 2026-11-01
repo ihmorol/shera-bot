@@ -158,3 +158,64 @@ describe("admin API gate (AC2, control-plane leg)", () => {
     expect(events.length).toBeGreaterThanOrEqual(3);
   });
 });
+
+describe("the active-token invariant (review P2)", () => {
+  it("two active admin tokens are unrepresentable (the partial unique index)", async () => {
+    await tokens.create({ createdBy: "test" });
+    // The direct-insert probe: a second ACTIVE row must be refused by the
+    // schema itself, not by application discipline.
+    let smuggled: { id: string } | undefined;
+    try {
+      const inserted = await controlPlane.db
+        .insert(controlAdminTokens)
+        .values({
+          tokenSha256: "f".repeat(64),
+          tokenDigestHint: "ffffffffffff",
+          createdBy: "test",
+        })
+        .returning({ id: controlAdminTokens.id });
+      smuggled = inserted[0];
+    } catch {
+      // The invariant held at the schema level.
+    }
+    expect(smuggled).toBeUndefined();
+    if (smuggled) {
+      // Red-run hygiene: leave the table with at most one active row.
+      await controlPlane.db.delete(controlAdminTokens).where(eq(controlAdminTokens.id, smuggled.id));
+    }
+  });
+
+  it("concurrent rotates leave exactly one active token (one wins, one typed-refused)", async () => {
+    const results = await Promise.allSettled([
+      tokens.rotate({ rotatedBy: "concurrent-a" }),
+      tokens.rotate({ rotatedBy: "concurrent-b" }),
+    ]);
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    expect(fulfilled).toHaveLength(1);
+    const actives = await controlPlane.db
+      .select({ id: controlAdminTokens.id })
+      .from(controlAdminTokens);
+    const activeRows = [];
+    for (const row of actives) {
+      const full = await controlPlane.db
+        .select()
+        .from(controlAdminTokens)
+        .where(eq(controlAdminTokens.id, row.id));
+      if (full[0] && full[0].revokedAt === null) activeRows.push(full[0]);
+    }
+    expect(activeRows).toHaveLength(1);
+  });
+
+  it("an unauthenticated flood of unknown tokens cannot evict the real secret from the registry", async () => {
+    const created = await tokens.create({ createdBy: "test" });
+    for (let i = 0; i < 600; i += 1) {
+      await tokens.verify(`shera_admin_junk_${i}_${"x".repeat(43)}`);
+    }
+    // The owner's real token must STILL scrub: attacker-controlled verify()
+    // values must never take up the shared registry's bounded slots (review
+    // P2 — after 512 junk registrations the FIFO would evict the real
+    // secrets and a later log could render them verbatim).
+    const scrubbed = controlPlane.registry.scrubString(created.token);
+    expect(scrubbed).not.toContain(created.token);
+  });
+});

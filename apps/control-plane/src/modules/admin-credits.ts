@@ -87,11 +87,16 @@ export class AdminCreditsService {
     if (!grant) throw new Error("top-up insert returned no row");
 
     // 3) The runtime applies the resume through the recorded D8 path.
+    // The operator's reason rides ONLY the durable central grant record
+    // (scrubbed at write); it never crosses the internal channel — the
+    // runtime discards it (its own audit reason is
+    // resumed_by_admin_topup:<id>), so shipping it would spread operator
+    // text to a surface that never consumes it (review P2, G3 surface
+    // minimization).
     const applied = await this.deps.channel.applyCreditTopUp(target.endpoint, target.bearer, {
       workspace_id: `ws_${args.accountId}`,
       topup_id: grant.id,
       amount: args.amount,
-      ...(args.reason !== undefined ? { reason: args.reason } : {}),
       actor: { type: "admin", id: `admin-token:${args.tokenId}` },
     });
     return {

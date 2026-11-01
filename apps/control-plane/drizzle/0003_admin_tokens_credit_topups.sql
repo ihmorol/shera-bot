@@ -22,3 +22,5 @@ CREATE TABLE "control_credit_topups" (
 ALTER TABLE "control_credit_topups" ADD CONSTRAINT "control_credit_topups_account_id_control_accounts_id_fk" FOREIGN KEY ("account_id") REFERENCES "public"."control_accounts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "control_admin_tokens_revoked_idx" ON "control_admin_tokens" USING btree ("revoked_at");--> statement-breakpoint
 CREATE INDEX "control_credit_topups_account_idx" ON "control_credit_topups" USING btree ("account_id");
+--> statement-breakpoint
+CREATE UNIQUE INDEX "control_admin_tokens_one_active" ON "control_admin_tokens" ((1)) WHERE "control_admin_tokens"."revoked_at" IS NULL;

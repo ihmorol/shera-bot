@@ -438,7 +438,7 @@ async function withLocalTokenService(
   const { db, pool } = createDb(databaseUrl);
   try {
     const securityEvents = new SecurityEventService(db, registry, logger);
-    const tokens = new AdminTokenService({ db, registry, securityEvents });
+    const tokens = new AdminTokenService({ db, registry, securityEvents, logger });
     return await fn(tokens);
   } catch (error) {
     args.io.err(

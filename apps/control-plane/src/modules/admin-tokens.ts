@@ -21,12 +21,13 @@
  * control-plane host, with database authority). The token never crosses HTTP
  * except as the Bearer credential of the requests it authorizes.
  */
-import { randomBytes, randomUUID, createHash, timingSafeEqual } from "node:crypto";
+import { randomBytes, createHash, timingSafeEqual } from "node:crypto";
 
 import { desc, eq, isNull } from "drizzle-orm";
 
 import type { ControlPlaneDb } from "../db/client.ts";
 import { controlAdminTokens } from "../db/schema.ts";
+import type { ControlPlaneLogger } from "../logger.ts";
 import type { SecretRegistry } from "../redaction.ts";
 import type { SecurityEventService } from "./security-events.ts";
 
@@ -35,6 +36,9 @@ import type { SecurityEventService } from "./security-events.ts";
 const TOKEN_PREFIX = "shera_admin_";
 const TOKEN_BYTES = 32;
 const DIGEST_HINT_LENGTH = 12;
+
+/** The transaction handle drizzle hands the `db.transaction` callback. */
+type ControlPlaneTx = Parameters<Parameters<ControlPlaneDb["transaction"]>[0]>[0];
 
 export interface AdminTokenCreated {
   /** The raw token — displayed exactly once, never persisted (G3). */
@@ -51,6 +55,8 @@ export interface AdminTokenServiceDeps {
   db: ControlPlaneDb;
   registry: SecretRegistry;
   securityEvents: SecurityEventService;
+  /** Observable, redacted logging for contained failures (G5). */
+  logger: ControlPlaneLogger;
 }
 
 export class AdminTokenService {
@@ -63,31 +69,40 @@ export class AdminTokenService {
   /**
    * Create the active token, revoking any previous one (the lost-token
    * recovery is a rotation by effect). Returns the raw token exactly once.
+   *
+   * The revoke-then-insert runs in ONE transaction and the schema itself
+   * makes two actives unrepresentable (the partial unique index on
+   * `revoked_at IS NULL`, review P2): concurrent creates/rotates serialize
+   * — exactly one commits, the loser is typed-refused by the index instead
+   * of ever coexisting.
    */
   async create(args: { createdBy: string; correlationId?: string }): Promise<AdminTokenCreated> {
     const raw = this.generateToken();
     const digest = sha256Hex(raw);
     // G3: the raw value is scrubbed from every log and event if it ever
-    // reaches one.
+    // reaches one. This is a value WE generated — registration is ours to do.
     this.deps.registry.register(raw, "admin-api-token");
 
-    const previous = await this.activeToken();
-    const inserted = await this.deps.db
-      .insert(controlAdminTokens)
-      .values({
-        tokenSha256: digest,
-        tokenDigestHint: digest.slice(0, DIGEST_HINT_LENGTH),
-        createdBy: args.createdBy,
-      })
-      .returning();
-    const row = inserted[0];
-    if (!row) throw new Error("admin token insert returned no row");
-    if (previous) {
-      await this.deps.db
-        .update(controlAdminTokens)
-        .set({ revokedAt: new Date() })
-        .where(eq(controlAdminTokens.id, previous.id));
-    }
+    const { row, previous } = await this.deps.db.transaction(async (tx) => {
+      const previous = await this.activeTokenInTx(tx);
+      if (previous) {
+        await tx
+          .update(controlAdminTokens)
+          .set({ revokedAt: new Date() })
+          .where(eq(controlAdminTokens.id, previous.id));
+      }
+      const inserted = await tx
+        .insert(controlAdminTokens)
+        .values({
+          tokenSha256: digest,
+          tokenDigestHint: digest.slice(0, DIGEST_HINT_LENGTH),
+          createdBy: args.createdBy,
+        })
+        .returning();
+      const row = inserted[0];
+      if (!row) throw new Error("admin token insert returned no row");
+      return { row, previous };
+    });
 
     await this.deps.securityEvents.record({
       eventType: "admin_token_created",
@@ -150,23 +165,34 @@ export class AdminTokenService {
       await this.recordRejection("missing_token");
       return { ok: false, reason: "missing_token" };
     }
-    // G3: even a failed attempt's presented value is registered so it can
-    // never surface in a later log or event.
-    this.deps.registry.register(presented, "admin-api-token");
     const presentedDigest = sha256Hex(presented);
     const expected = await this.activeTokenDigest();
     if (!expected || !digestsEqual(presentedDigest, expected.tokenSha256)) {
+      // NOT registered (review P2): the presented value here is
+      // attacker-controlled, and the shared registry is a bounded 512-slot
+      // FIFO — registering every attempt would let an unauthenticated flood
+      // evict the REAL registered secrets so a later log could render them
+      // verbatim. Rejections never echo the presented value (the rejection
+      // event records the reason only), so there is nothing to scrub.
       await this.recordRejection("unknown_token");
       return { ok: false, reason: "unknown_token" };
     }
+    // The presented value hash-matches the active token: a REAL secret —
+    // now and only now it joins the registry (G3).
+    this.deps.registry.register(presented, "admin-api-token");
     // Best-effort usage stamp (an audit nicety; failure is contained).
     try {
       await this.deps.db
         .update(controlAdminTokens)
         .set({ lastUsedAt: new Date() })
         .where(eq(controlAdminTokens.id, expected.id));
-    } catch {
-      // The verification answer never depends on the stamp.
+    } catch (error) {
+      // The verification answer never depends on the stamp, but the failure
+      // is observable (G5), not silently dropped.
+      this.deps.logger.error("admin_token_last_used_write_failed", {
+        token_id: expected.id,
+        reason: error instanceof Error ? error.message : String(error),
+      });
     }
     return { ok: true, tokenId: expected.id };
   }
@@ -215,6 +241,30 @@ export class AdminTokenService {
     return rows[0] ?? null;
   }
 
+  /** The transactional twin of activeToken() — used inside create()'s
+   * revoke-then-insert transaction so the read and the writes commit
+   * atomically. */
+  private async activeTokenInTx(
+    tx: ControlPlaneTx,
+  ): Promise<{ id: string; tokenDigestHint: string; createdAt: Date; lastUsedAt: Date | null; revokedAt: Date | null } | null> {
+    const rows = await tx
+      .select({
+        id: controlAdminTokens.id,
+        tokenDigestHint: controlAdminTokens.tokenDigestHint,
+        createdAt: controlAdminTokens.createdAt,
+        lastUsedAt: controlAdminTokens.lastUsedAt,
+        revokedAt: controlAdminTokens.revokedAt,
+      })
+      .from(controlAdminTokens)
+      .where(isNull(controlAdminTokens.revokedAt))
+      .orderBy(desc(controlAdminTokens.createdAt))
+      .limit(2);
+    if (rows.length > 1) {
+      throw new Error("multiple active admin tokens exist; resolve the token table before use");
+    }
+    return rows[0] ?? null;
+  }
+
   private async recordRejection(reason: "missing_token" | "unknown_token"): Promise<void> {
     await this.deps.securityEvents.record({
       eventType: "admin_auth_rejected",
@@ -237,9 +287,4 @@ function sha256Hex(value: string): string {
 function digestsEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   return timingSafeEqual(Buffer.from(a, "utf8"), Buffer.from(b, "utf8"));
-}
-
-/** Correlation id helper shared by the admin routes (one definition). */
-export function newAdminCorrelationId(): string {
-  return randomUUID();
 }

@@ -374,7 +374,6 @@ export function createInternalApi(deps: InternalApiDeps): InternalApi {
         workspaceId: parsed.data.workspace_id,
         topupId: parsed.data.topup_id,
         amount: parsed.data.amount,
-        ...(parsed.data.reason !== undefined ? { reason: parsed.data.reason } : {}),
         actor: parsed.data.actor,
       })
       .then((result) => {

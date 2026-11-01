@@ -36,6 +36,7 @@ beforeAll(async () => {
     db: controlPlane.db,
     registry: controlPlane.registry,
     securityEvents: controlPlane.securityEvents,
+    logger: controlPlane.logger,
   });
   server = await startHttpsApp(controlPlane.app);
 }, 180_000);

@@ -274,7 +274,6 @@ export const RuntimeAdminCreditTopUpRequest = z.strictObject({
   topup_id: Id,
   /** Positive integer accounting units (D48: internal prototype accounting). */
   amount: z.number().int().positive(),
-  reason: z.string().min(1).max(500).optional(),
   actor: z.strictObject({ type: z.literal("admin"), id: Id }),
 });
 export type RuntimeAdminCreditTopUpRequest = z.infer<typeof RuntimeAdminCreditTopUpRequest>;

@@ -112,7 +112,7 @@ export async function createControlPlaneApp(
   // S32 (D47, issue #33): the owner-held admin API token (hash-only storage,
   // AC5) and the authenticated admin surface. Token lifecycle (create/rotate)
   // is a LOCAL CLI operation; the HTTP surface only ever verifies digests.
-  const adminTokens = new AdminTokenService({ db, registry, securityEvents });
+  const adminTokens = new AdminTokenService({ db, registry, securityEvents, logger });
 
   // S06 runtime provisioning (D12): the typed backend seam. Tests and future
   // remote/cloud backends inject their implementation; the default speaks to

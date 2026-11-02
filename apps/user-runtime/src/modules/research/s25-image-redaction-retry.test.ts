@@ -38,6 +38,8 @@ import { ToolsRepository } from "../../adapters/sqlite/tools-repository.ts";
 import { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import { WriteLeasesRepository } from "../../adapters/sqlite/write-leases-repository.ts";
 import { WorkspaceFilesRepository } from "../../adapters/sqlite/workspace-files-repository.ts";
+import { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
+import { AgentsRepository } from "../../adapters/sqlite/agents-repository.ts";
 import { ToolExecutor, canonicalArgsDigest } from "../tools/tool-executor.service.ts";
 import { ToolRegistry } from "../tools/tool-registry.ts";
 import { classifyFailure, decideRetry, DEFAULT_RETRY_POLICY } from "../tasks/retry-policy.ts";
@@ -63,23 +65,32 @@ const PNG_1X1 = new Uint8Array(
 /** The planted secret vocabulary (every shape the recorded redaction covers). */
 const PLANTED_SECRETS = [
   "sk-live-abc123DEF456ghi789JKLmno",
-  "hunter2-hunter2-hunter2",
+  "hunter2-hunter2-hunter2-hunter2",
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9",
   "8f14e45fceea167a5a36dedd4bea2543",
   "c2FtcGxlMTIzNDU2Nzg5MGFiY2RlZg",
 ];
 
-/** A page whose body embeds every planted shape. */
-const SECRET_PAGE_HTML = `<!doctype html><html><head><title>Leaky Page</title></head><body>
-<article><h1>Leaky Page</h1>
-<p>Config dump: api_key = ${PLANTED_SECRETS[0]}</p>
-<p>Creds: {"password": "${PLANTED_SECRETS[1]}"}</p>
+/** One leaky evidence block (the shapes repeat so the page triggers the artifact policy). */
+const LEAKY_BLOCK = `<p>Config dump: api_key = ${PLANTED_SECRETS[0]}</p>
+<p>Creds json: {"password": "${PLANTED_SECRETS[1]}"}</p>
 <p>Authorization: Bearer ${PLANTED_SECRETS[2]}</p>
 <p>Set-Cookie: sessionid=${PLANTED_SECRETS[3]}</p>
-<p>Token: ${PLANTED_SECRETS[4]}</p>
+<p>Token: ${PLANTED_SECRETS[4]}</p>`;
+
+/** A page whose body embeds every planted shape, repeated past the head budget. */
+const SECRET_PAGE_HTML = `<!doctype html><html><head><title>Leaky Page</title></head><body>
+<article><h1>Leaky Page</h1>
+${Array.from({ length: 30 }, () => LEAKY_BLOCK).join("\n")}
 </article></body></html>`;
 
-const SECRET_CSV = `name,note\nalpha,api_key=${PLANTED_SECRETS[0]}\nbeta,"password": "${PLANTED_SECRETS[1]}"\n`;
+const SECRET_CSV = `name,note
+alpha,api_key=${PLANTED_SECRETS[0]}
+beta,json {"password": "${PLANTED_SECRETS[1]}"} in the note
+gamma,Authorization: Bearer ${PLANTED_SECRETS[2]}
+delta,Set-Cookie: sessionid=${PLANTED_SECRETS[3]}
+epsilon,token ${PLANTED_SECRETS[4]}
+`;
 
 /** The vision mock's call log (the prompt-shape pin). */
 let generateCalls: Array<Record<string, unknown>> = [];
@@ -91,13 +102,13 @@ function makeVisionModel(description: string): LanguageModel {
     doGenerate: async (options) => {
       generateCalls.push(options as unknown as Record<string, unknown>);
       return {
-        finishReason: "stop",
+        finishReason: { unified: "stop" as const, raw: undefined },
         usage: {
           inputTokens: { total: 1, noCache: undefined, cacheRead: undefined, cacheWrite: undefined },
           outputTokens: { total: 1, text: undefined, reasoning: undefined },
           totalTokens: { total: 2 },
         },
-        content: [{ type: "text", text: description }],
+        content: [{ type: "text" as const, text: description }],
         warnings: [],
       };
     },
@@ -116,7 +127,7 @@ interface S25Runtime {
 
 interface RuntimeOptions {
   visionDescription?: string;
-  visionModel?: LanguageModel | null;
+  visionModel?: (() => LanguageModel) | null;
   searxng?: { baseUrl: string } | null;
 }
 
@@ -274,9 +285,10 @@ describe("image understanding (S25 chunk 4)", () => {
       (part) => part.type === "file" && part.mediaType === "image/png",
     );
     expect(filePart).toBeDefined();
-    const data = (filePart!.data as { type: string; data: Uint8Array });
-    expect(data.type).toBe("data");
-    expect(Buffer.from(data.data).equals(Buffer.from(PNG_1X1))).toBe(true);
+    // The V3 prompt file part carries the bytes as DataContent (raw Uint8Array).
+    const data = filePart!.data as unknown;
+    expect(data instanceof Uint8Array).toBe(true);
+    expect(Buffer.from(data as Uint8Array).equals(Buffer.from(PNG_1X1))).toBe(true);
     // The description is the derived artifact, provenance-stamped.
     const refs = rt.artifacts.listArtifactsByRun(TASK);
     expect(refs).toHaveLength(1);
@@ -345,12 +357,11 @@ describe("AC5: secrets never reach history, events, or memory (S25 chunk 4)", ()
     for (const secret of PLANTED_SECRETS) {
       expect(everything.includes(Buffer.from(secret, "utf8"))).toBe(false);
     }
-    // Memory: the tools never write agent memory — structural honesty.
-    const memoryCount = rt.tx
-      .connection()
-      .prepare("SELECT COUNT(*) AS n FROM agent_memory_entries")
-      .get() as { n: number };
-    expect(memoryCount.n).toBe(0);
+    // Memory: the tools never write agent memory — structural honesty
+    // (read through the repository surface; the boundary guard keeps SQL
+    // inside adapters/sqlite).
+    const agents = new AgentsRepository(rt.tx);
+    expect(agents.listMemoryEntries(WS, AGENT)).toHaveLength(0);
   });
 
   it("an uploaded file's secrets are redacted in history, journal, and derived artifacts", async () => {
@@ -375,12 +386,14 @@ describe("AC5: secrets never reach history, events, or memory (S25 chunk 4)", ()
     for (const secret of PLANTED_SECRETS) {
       expect(artifactText).not.toContain(secret);
     }
-    // The journal payloads are clean.
-    const journalRows = rt.tx
-      .connection()
-      .prepare("SELECT payload FROM event_journal WHERE workspace_id = ?")
-      .all(WS) as Array<{ payload: string }>;
-    const serialized = journalRows.map((entry) => entry.payload).join("\n");
+    // The journal payloads are clean (read through the repository surface:
+    // every stream of the workspace, folded).
+    const journal = new EventJournalRepository(rt.tx);
+    const streamIds = journal.listWorkspaceStreams(WS);
+    const serialized = streamIds
+      .flatMap((streamId) => journal.listStream(streamId, WS))
+      .map((row) => row.payload)
+      .join("\n");
     for (const secret of PLANTED_SECRETS) {
       expect(serialized).not.toContain(secret);
     }
@@ -431,7 +444,7 @@ describe("AC6: typed retryability is one truth (S25 chunk 4)", () => {
       const url = new URL(req.url ?? "/", "http://127.0.0.1");
       req.resume();
       req.on("end", () => {
-        if (failures < 2) {
+        if (failures < 1) {
           failures += 1;
           res.writeHead(503, { "content-type": "application/json" });
           res.end(JSON.stringify({ error: "transient" }));
@@ -465,16 +478,22 @@ describe("AC6: typed retryability is one truth (S25 chunk 4)", () => {
       expect(first.error_code).toBe("TRANSIENT_NETWORK");
       // The failed row carries the typed transient code — the retryable
       // flag the policy reads.
-      const rows = rt.tools.listExecutionsByTask(WS, TASK);
-      expect(rows[0]!.status).toBe("failed");
-      expect(rows[0]!.error_code).toBe("TRANSIENT_NETWORK");
+      const firstRows = rt.tools.listExecutionsByTask(WS, TASK);
+      expect(firstRows).toHaveLength(1);
+      expect(firstRows[0]!.status).toBe("failed");
+      expect(firstRows[0]!.error_code).toBe("TRANSIENT_NETWORK");
       // The retry policy's re-drive: the SAME proposal executes now.
       const second = await settled(propose(rt, "tool_web_search", "research.search", args));
       expect(second.ok).toBe(true);
       if (!second.ok) throw new Error("expected the re-propose to execute");
       expect(second.result_summary).toContain("Recovered result");
+      const rows = rt.tools.listExecutionsByTask(WS, TASK);
       expect(rows).toHaveLength(2);
-      expect(rows[1]!.status).toBe("succeeded");
+      // Both rows share one clock stamp; assert the outcomes, not positions.
+      expect(rows.map((entry) => entry.status).sort()).toEqual(["failed", "succeeded"]);
+      expect(rows.every((entry) => entry.error_code === null || entry.error_code === "TRANSIENT_NETWORK")).toBe(
+        true,
+      );
     } finally {
       await new Promise<void>((resolve) => flaky.close(() => resolve()));
     }

@@ -212,6 +212,13 @@ export interface ComposeLocalApiOptions {
    */
   researchTools?: {
     searxngBaseUrl?: string | null;
+    /**
+     * The vision-model resolver for image understanding (chunk 4): absent
+     * or null, the image tool does not exist (G4). The REAL runtime wires
+     * it from the SHERA_VISION_* environment configuration; default CI
+     * drives deterministic mock models (G7).
+     */
+    visionModel?: (() => import("ai").LanguageModel) | null;
   };
   /** Path of the container-local SQLite database file. */
   dbPath: string;
@@ -1271,6 +1278,9 @@ function wire(
         : null,
     artifacts: workspaceArtifacts,
     files: workspaceFiles,
+    ...(options.researchTools?.visionModel !== undefined
+      ? { visionModel: options.researchTools.visionModel }
+      : { visionModel: null }),
   });
   const approvalsApi = buildApprovalsApiHandle({
     approvals,

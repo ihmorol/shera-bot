@@ -27,6 +27,8 @@
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+
 import type { SessionHarnessConfig } from "./adapters/process/session-process-spawn.ts";
 import type { TaskWorkerHarnessConfig } from "./modules/workers/worker-process-spawn.ts";
 import {
@@ -335,10 +337,21 @@ export async function startRuntimeNode(config: RuntimeNodeConfig = {}): Promise<
     },
     // S25 (issue #26): the research and data tools. The SearXNG base URL is
     // configuration (SHERA_SEARXNG_URL) — without it the search tool does
-    // not exist (G4); page fetch, document parse, spreadsheet analysis, and
-    // image understanding read public pages and the workspace file store.
+    // not exist (G4); page fetch, document parse, and spreadsheet analysis
+    // read public pages and the workspace file store. Image understanding
+    // exists only where the SHERA_VISION_* configuration names an
+    // OpenAI-compatible vision endpoint (G4; the values are never logged).
     researchTools: {
       searxngBaseUrl: process.env.SHERA_SEARXNG_URL ?? null,
+      visionModel:
+        process.env.SHERA_VISION_BASE_URL && process.env.SHERA_VISION_MODEL
+          ? () =>
+              createOpenAICompatible({
+                name: "shera-vision",
+                baseURL: process.env.SHERA_VISION_BASE_URL!,
+                apiKey: process.env.SHERA_VISION_API_KEY ?? "",
+              }).chatModel(process.env.SHERA_VISION_MODEL!)
+          : null,
     },
     // S23 (D17/G4): the REAL runtime enforces provider custody — a turn or
     // run without a usable provider is refused with the typed configuration

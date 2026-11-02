@@ -185,7 +185,7 @@ function buildRuntime(clockNowMs: () => number = () => 1_000): FetchRuntime {
   const tools = new ToolsRepository(conn.db);
   const artifacts = new ArtifactsRepository(tx);
   const registry = new ToolRegistry();
-  registerResearchTools(registry, WS, { searxng: null, artifacts, files: null });
+  registerResearchTools(registry, WS, { searxng: null, artifacts, files: null, visionModel: null });
   const executor = new ToolExecutor({
     registry,
     tools,

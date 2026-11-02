@@ -21,6 +21,7 @@
 import type { ToolRegistry } from "../../modules/tools/tool-registry.ts";
 import {
   makeDocumentParseBinding,
+  makeImageUnderstandBinding,
   makePageFetchBinding,
   makeSpreadsheetAnalyzeBinding,
   makeWebSearchBinding,
@@ -50,6 +51,9 @@ const DOC_PARSE_MAX_RESPONSE_BYTES = 65_536;
 
 /** The spreadsheet tool's response budget (the summary + pointer). */
 const SHEET_ANALYZE_MAX_RESPONSE_BYTES = 65_536;
+
+/** The image tool's response budget (the description head + pointer). */
+const IMAGE_UNDERSTAND_MAX_RESPONSE_BYTES = 65_536;
 
 /**
  * Register the S25 research built-ins for one workspace. Chunk 1 ships the
@@ -201,6 +205,45 @@ export function registerResearchTools(
       enabled: true,
       max_response_bytes: SHEET_ANALYZE_MAX_RESPONSE_BYTES,
       bindingName: "research-spreadsheet-analyze",
+    });
+  }
+
+  // The image-understanding tool exists only where a vision model is
+  // configured (G4). Its E13 recovery class is deliberately OMITTED: a
+  // provider call's retry semantics are the genuinely ambiguous case
+  // (the call may have consumed quota) — the needs_human default applies.
+  if (deps.visionModel !== null) {
+    registry.registerBinding("research-image-understand", makeImageUnderstandBinding(deps));
+    registry.registerBuiltinTool({
+      definition: {
+        tool_id: "tool_image_understand",
+        workspace_id: workspaceId,
+        version: "1.0.0",
+        name: "Image understanding",
+        purpose:
+          "Describe an uploaded image from the shared workspace through the configured vision model (one honest request, no silent retries); the description becomes a derived artifact with provenance. Read-only: runs automatically without approval.",
+        owner: { kind: "platform" } as const,
+        inventory_scope: "shared" as const,
+        input_schema: {
+          type: "object",
+          properties: {
+            path: { type: "string", minLength: 1, maxLength: 4096 },
+            prompt: { type: "string" },
+          },
+          required: ["path"],
+        },
+        output_schema: { type: "object" },
+        capabilities: ["research.describe.image"],
+        risk_class: "READ_ONLY" as const,
+        timeout_ms: 60_000,
+        resource_limits: RESEARCH_TOOL_RESOURCE_LIMITS,
+        redaction_policy: "standard" as const,
+        approval_policy: "auto_read_only" as const,
+        created_at: new Date().toISOString(),
+      },
+      enabled: true,
+      max_response_bytes: IMAGE_UNDERSTAND_MAX_RESPONSE_BYTES,
+      bindingName: "research-image-understand",
     });
   }
 }

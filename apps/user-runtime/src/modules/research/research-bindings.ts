@@ -37,8 +37,14 @@ import { searxngSearch, type SearxngSearchOutcome } from "./searxng-search.ts";
 import { assertFetchableUrl, fetchReadablePage, PAGE_MAX_BODY_BYTES } from "./page-fetch.ts";
 import { parseDocumentBytes } from "./document-parse.ts";
 import { analyzeSpreadsheetBytes } from "./spreadsheet-analysis.ts";
+import {
+  DEFAULT_IMAGE_PROMPT,
+  describeImageBytes,
+  imageMediaType,
+} from "./image-understand.ts";
 import { ResearchToolError } from "./research-errors.ts";
-import { redactSecrets } from "../terminals/secret-redaction.ts";
+import { redactArtifactText } from "../tools/tool-redaction.ts";
+import type { LanguageModel } from "ai";
 
 /** The composition's research-tool dependencies (all configuration, G4). */
 export interface ResearchToolDeps {
@@ -61,6 +67,12 @@ export interface ResearchToolDeps {
    * (no store) means those tools do not exist (G4).
    */
   files: Pick<WorkspaceFilesRepository, "read"> | null;
+  /**
+   * The configured vision-model resolver (chunk 4): the AI SDK LanguageModel
+   * image understanding describes through. `null` (nothing configured)
+   * means the image tool does not exist (G4).
+   */
+  visionModel: (() => LanguageModel) | null;
 }
 
 /** Query length budget (characters). */
@@ -212,7 +224,7 @@ export function makePageFetchBinding(deps: ResearchToolDeps): ToolBinding {
         (page.chars > RESEARCH_RESULT_HEAD_CHARS - 512 || page.truncated)
       ) {
         try {
-          const redacted = redactSecrets(page.markdown);
+          const redacted = redactArtifactText(page.markdown);
           const ref = deps.artifacts.insertArtifact({
             workspace_id: ctx.execution.workspace_id,
             name: `page-fetch-${ctx.execution.execution_id}`,
@@ -308,7 +320,7 @@ function insertResearchArtifact(
     mime_type: input.mimeType,
     // G3: the artifact bytes are REDACTED before the sink — one redaction
     // boundary before every sink (the S26 posture).
-    content: Buffer.from(redactSecrets(input.text), "utf8"),
+    content: Buffer.from(redactArtifactText(input.text), "utf8"),
     producer_agent_id: ctx.execution.agent_id,
     producer_task_id: ctx.execution.task_id,
   });
@@ -418,4 +430,76 @@ export function makeSpreadsheetAnalyzeBinding(deps: ResearchToolDeps): ToolBindi
 /** One bounded number for the stats line (integers plain, else 2 decimals). */
 function formatNumber(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
+}
+
+/**
+ * The image-understanding binding (tool_image_understand). Arguments: `path`
+ * (required — a workspace:// URI in the shared scope), optional `prompt`.
+ * The bytes ride the AI SDK vision seam as a file part (ONE honest request,
+ * maxRetries: 0); the description becomes the derived artifact with
+ * provenance and the bounded result text. Registered only where a vision
+ * model is configured (G4); its E13 recovery class stays OMITTED — the
+ * needs_human default — because a provider call's retry semantics are the
+ * genuinely ambiguous case (the call may have consumed quota).
+ */
+export function makeImageUnderstandBinding(deps: ResearchToolDeps): ToolBinding {
+  const resolveVisionModel = deps.visionModel;
+  if (resolveVisionModel === null) {
+    throw new Error(
+      "RESEARCH_CONFIG_MISSING: the image-understanding binding requires a configured vision model",
+    );
+  }
+  return {
+    name: "research-image-understand",
+    preview() {
+      return null; // read-only: no preview ceremony (G6/D35)
+    },
+    execute: () => refuseSyncExecute(),
+    async executeAsync(args, ctx) {
+      assertExecutionAuthority(ctx.authority);
+      const path = typeof args.path === "string" ? args.path.trim() : "";
+      if (path === "" || path.length > 4096) {
+        throw new ResearchToolError(
+          "RESEARCH_INPUT_INVALID",
+          "the path must be a workspace:// URI of at most 4096 characters",
+        );
+      }
+      const prompt =
+        typeof args.prompt === "string" && args.prompt.trim() !== ""
+          ? args.prompt
+          : DEFAULT_IMAGE_PROMPT;
+      const bytes = readWorkspaceFileBytes(deps, ctx, path);
+      const mediaType = imageMediaType(path);
+      const timeoutMs = assertDeadlineLeft(ctx);
+      const { description } = await describeImageBytes({
+        model: resolveVisionModel(),
+        bytes,
+        mediaType,
+        prompt,
+        timeoutMs,
+        signal: ctx.signal,
+      });
+      if (ctx.nowMs() > ctx.deadline) {
+        return {
+          ok: false,
+          errorCode: "TOOL_EXECUTION_TIMEOUT",
+          message: "the image description exceeded its deadline",
+        };
+      }
+      const artifactId = insertResearchArtifact(deps, ctx, {
+        name: `image-description-${ctx.execution.execution_id}`,
+        artifactType: "research_image_description",
+        mimeType: "text/plain; charset=utf-8",
+        text: description,
+      });
+      const header = `Described ${path} (${mediaType}, ${bytes.byteLength} bytes)`;
+      const artifactNote =
+        artifactId !== null
+          ? `\n[full description (${description.length} chars) captured as artifact ${artifactId.slice(0, 8)}…]`
+          : "";
+      const headBudget = Math.max(0, RESEARCH_RESULT_HEAD_CHARS - header.length - artifactNote.length);
+      const head = description.slice(0, headBudget);
+      return { ok: true, text: `${header}${artifactNote}\n${head}`.trimEnd() };
+    },
+  };
 }

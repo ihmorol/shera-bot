@@ -112,6 +112,7 @@ function buildRuntime(withFiles: boolean = true): DocsRuntime {
     searxng: null,
     artifacts,
     files: withFiles ? files : null,
+    visionModel: null,
   });
   const executor = new ToolExecutor({
     registry,

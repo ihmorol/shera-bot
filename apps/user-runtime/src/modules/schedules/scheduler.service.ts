@@ -60,6 +60,7 @@ import type { EventsService } from "../events/events.service.ts";
 import type { OperationsService } from "../operations/operations.service.ts";
 import { applyRowLifecycleTransition, type RowLifecycleDeps } from "../tasks/run-lifecycle.ts";
 import { taskStreamId } from "../tasks/task-events.ts";
+import { pauseRunForInsufficientCredits } from "../credits/run-credit-pause.ts";
 import { CATCH_UP_MAX_OCCURRENCES, missedOccurrences, nextOccurrence } from "./schedule-clock.ts";
 import type { TriggerPlan } from "./schedules.types.ts";
 import {
@@ -101,7 +102,10 @@ export interface SchedulerRunGate {
 
 /** The autonomous plan runner (the run's typed legs between start and
  * complete). The composition wires the real runner (model call + tool use +
- * artifact — chunk 5); tests and bare compositions get the honest no-op. */
+ * artifact — chunk 5); tests and bare compositions get the honest no-op.
+ * S24 grows the outcome union by the two credit legs: the D48 refusal
+ * (`paused_credits` — the WALK writes the pause) and the ambiguous provider
+ * outcome (`recovery_required` — the E13 class). */
 export interface SchedulerPlanRunner {
   runPlan(input: {
     workspace_id: string;
@@ -115,6 +119,8 @@ export interface SchedulerPlanRunner {
     | { ok: true; result_summary: string }
     | { ok: false; code: string }
     | { ok: "paused"; approval_id: string }
+    | { ok: "paused_credits"; requested_units: number; available_units: number }
+    | { ok: "recovery_required"; code: string }
   >;
 }
 
@@ -161,9 +167,12 @@ export interface TriggerOccurrence {
 export type FireOutcome =
   | { outcome: "fired"; runId: string }
   | { outcome: "deduplicated" }
-  | { outcome: "paused_credits" }
+  | { outcome: "paused_credits"; runId: string | null }
   | { outcome: "refused_provider"; code: string }
-  | { outcome: "failed"; code: string };
+  /** S24/E13: the run landed and entered the recovery class (an ambiguous
+   * provider outcome — the reservation stands; a human decides). */
+  | { outcome: "recovery_required"; runId: string; code: string }
+  | { outcome: "failed"; code: string; runId: string | null };
 
 export interface TriggerFiring {
   workspace_id: string;
@@ -176,6 +185,20 @@ export interface TriggerFiring {
 }
 
 const DEFAULT_TICK_MS = 1_000;
+
+/** The walk's outcome (S24): the D8 result plus the two credit legs — a D48
+ * credit pause (the run pauses instead of proceeding) and the E13 recovery
+ * class (the run entered recovery). */
+type WalkResult =
+  | { ok: true }
+  | { ok: false; kind: "failed"; code: string }
+  | {
+      ok: false;
+      kind: "paused_credits";
+      requested_units: number;
+      available_units: number;
+    }
+  | { ok: false; kind: "recovery_required"; code: string };
 
 export class SchedulerService {
   private tickTimer: (() => void) | null = null;
@@ -227,7 +250,7 @@ export class SchedulerService {
   ): Promise<FireOutcome> {
     const trigger = this.deps.triggers.getTrigger(workspaceId, triggerId);
     if (trigger === null) {
-      return { outcome: "failed", code: "TRIGGER_NOT_FOUND" };
+      return { outcome: "failed", code: "TRIGGER_NOT_FOUND", runId: null };
     }
     const claim = this.deps.triggers.recordFiring({
       workspace_id: workspaceId,
@@ -278,7 +301,7 @@ export class SchedulerService {
         trigger_id: triggerId,
         reason: "insufficient_credits",
       });
-      return { outcome: "paused_credits" };
+      return { outcome: "paused_credits", runId: null };
     }
 
     // Step 3: the D17 provider-gate consult (before the run exists). The
@@ -368,7 +391,7 @@ export class SchedulerService {
         name: error instanceof Error ? error.name : "Error",
         message: error instanceof Error ? error.message : String(error),
       });
-      return { outcome: "failed", code: "RUN_CREATION_FAILED" };
+      return { outcome: "failed", code: "RUN_CREATION_FAILED", runId: null };
     }
 
     // Step 5: the autonomous D8 walk through the shared applier (the legs
@@ -382,13 +405,51 @@ export class SchedulerService {
       event_id: triggerEventId,
     });
     if (!walk.ok) {
+      if (walk.kind === "paused_credits") {
+        // The D48 run-level pause (S24): the run exists, its reservation was
+        // refused — the trigger pauses with the recorded reason and the
+        // firing ledger keeps the run linkage. The resume-after-top-up path
+        // re-arms the trigger; the run resumes through the recorded S32
+        // resume_task row.
+        this.deps.triggers.updateFiring(workspaceId, triggerId, occurrence.idempotencyKey, {
+          outcome: "paused_credits",
+          run_id: runId,
+          detail_json: JSON.stringify({
+            requested_units: walk.requested_units,
+            available_units: walk.available_units,
+          }),
+        });
+        this.deps.triggers.updateTriggerState(workspaceId, triggerId, {
+          state: "paused",
+          pause_reason: "insufficient_credits",
+          updated_at: this.now(),
+        });
+        this.appendTriggerStreamEvent(workspaceId, triggerId, "trigger.credit_paused", {
+          workspace_id: workspaceId,
+          trigger_id: triggerId,
+          reason: "insufficient_credits",
+        });
+        return { outcome: "paused_credits", runId };
+      }
+      if (walk.kind === "recovery_required") {
+        // The E13 class: the run landed and entered RECOVERY_REQUIRED (a
+        // human decides). The occurrence is consumed (at-least-once, never a
+        // blind retry); the firing records the run linkage and the code.
+        this.deps.triggers.updateFiring(workspaceId, triggerId, occurrence.idempotencyKey, {
+          outcome: "fired",
+          run_id: runId,
+          detail_json: JSON.stringify({ code: walk.code, recovery: true }),
+        });
+        this.updateBookkeepingAfterFiring(trigger, occurrence);
+        return { outcome: "recovery_required", runId, code: walk.code };
+      }
       this.deps.triggers.updateFiring(workspaceId, triggerId, occurrence.idempotencyKey, {
         outcome: "failed",
         run_id: runId,
         detail_json: JSON.stringify({ code: walk.code }),
       });
       this.updateBookkeepingAfterFiring(trigger, occurrence);
-      return { outcome: "failed", code: walk.code };
+      return { outcome: "failed", code: walk.code, runId };
     }
 
     // Step 6: settle the ledger + the trigger's truthful bookkeeping (AC9).
@@ -872,7 +933,7 @@ export class SchedulerService {
     config: Record<string, unknown>,
     provider: { provider_id: string; model: string } | undefined,
     triggerEvent: { event_type: TaskTriggerEventType; event_id: string },
-  ): Promise<{ ok: true } | { ok: false; code: string }> {
+  ): Promise<WalkResult> {
     const deps = this.lifecycleDeps();
     const step = (
       command: Parameters<typeof applyRowLifecycleTransition>[1]["command"],
@@ -885,8 +946,8 @@ export class SchedulerService {
       });
       return applied.ok;
     };
-    if (!step("queue_task")) return { ok: false, code: "WALK_QUEUED_REJECTED" };
-    if (!step("start_task")) return { ok: false, code: "WALK_STARTED_REJECTED" };
+    if (!step("queue_task")) return { ok: false, kind: "failed", code: "WALK_QUEUED_REJECTED" };
+    if (!step("start_task")) return { ok: false, kind: "failed", code: "WALK_STARTED_REJECTED" };
     const plan = (config["plan"] as TriggerPlan | undefined) ?? { prompt: "" };
     const runner = this.deps.planRunner ?? {
       runPlan: () => ({
@@ -915,6 +976,37 @@ export class SchedulerService {
       });
       return { ok: true };
     }
+    if (legs.ok === "paused_credits") {
+      // S24/D48: the reservation was refused — the runtime writes the pause
+      // through the SHARED applier and the recorded pause writer (never a
+      // second state machine, never a QUEUED placement).
+      const paused = pauseRunForInsufficientCredits(deps, {
+        workspaceId: trigger.workspace_id,
+        runId,
+        requestedUnits: legs.requested_units,
+        availableUnits: legs.available_units,
+      });
+      if (!paused.ok) return { ok: false, kind: "failed", code: "CREDIT_PAUSE_REJECTED" };
+      return {
+        ok: false,
+        kind: "paused_credits",
+        requested_units: legs.requested_units,
+        available_units: legs.available_units,
+      };
+    }
+    if (legs.ok === "recovery_required") {
+      // S24/E13: the ambiguous outcome — the run enters the recovery class
+      // through the SAME applier (the E13 `recovery_required` row), no
+      // retry, no release (the hold stands; the ambiguity record is
+      // already on the run's stream).
+      applyRowLifecycleTransition(deps, {
+        workspaceId: trigger.workspace_id,
+        runId,
+        command: "recovery_required",
+        actor: { type: "runtime", id: "scheduler" },
+      });
+      return { ok: false, kind: "recovery_required", code: legs.code };
+    }
     if (!legs.ok) {
       // A failing plan fails the run through the SAME applier (the typed
       // failure code is the run stream's reason — the occurrence is
@@ -925,9 +1017,9 @@ export class SchedulerService {
         command: "fail_task",
         actor: { type: "runtime", id: "scheduler" },
       });
-      return { ok: false, code: legs.code };
+      return { ok: false, kind: "failed", code: legs.code };
     }
-    if (!step("complete_task")) return { ok: false, code: "WALK_COMPLETE_REJECTED" };
+    if (!step("complete_task")) return { ok: false, kind: "failed", code: "WALK_COMPLETE_REJECTED" };
     return { ok: true };
   }
 

@@ -28,6 +28,9 @@ import type { AddressInfo } from "node:net";
 
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 
+import type { TaskRun } from "@shera-bot/contracts";
+
+import { canonicalArgsDigest } from "../tools/tool-executor.service.ts";
 import type { RuntimeHandle } from "../../transport/local-api/compose.ts";
 import { DEFAULT_WORKSPACE_ID, composeRuntime } from "../../transport/local-api/compose.ts";
 import { CreditLedgerRepository } from "../../adapters/sqlite/credit-ledger-repository.ts";
@@ -97,6 +100,9 @@ const openConnections: SqliteConnection[] = [];
 interface CreditRuntime {
   runtime: RuntimeHandle;
   ledgerRepo: CreditLedgerRepository;
+  /** THIS composition's database (each test composes its own — never index
+   * the shared openConnections list, which accumulates across tests). */
+  conn: SqliteConnection;
   close(): Promise<void>;
 }
 
@@ -118,6 +124,7 @@ async function composeCredit(modelCallTimeoutMs?: number): Promise<CreditRuntime
   return {
     runtime,
     ledgerRepo: new CreditLedgerRepository(new SqliteTransactions(conn.db)),
+    conn,
     close: () => runtime.close(),
   };
 }
@@ -300,7 +307,7 @@ describe("the model call's credit legs (S24)", () => {
     expect(payload.provider_id).toBe(provider.id);
   });
 
-  it("AC7: an exhausted account pauses only the model call — the tool leg runs with zero credits", async () => {
+  it("AC7: an exhausted account pauses only the model call — the capability path is untouched", async () => {
     const credit = await composeCredit();
     openRuntimes.push(credit);
     const { runtime, ledgerRepo } = credit;
@@ -328,43 +335,68 @@ describe("the model call's credit legs (S24)", () => {
       origin: "platform",
     });
 
-    // (a) The TOOL-ONLY plan: no model leg, so NO credit consult anywhere —
-    // the run completes and the tool executes (no capability change, D20).
+    // (a) The CAPABILITY path with zero credits: the S21 executor — the ONE
+    // execution path every tool/file/external action goes through — executes
+    // a read exactly as it would on a funded account. Credits never gate it
+    // (D20: no capability change), and the ledger moved nothing.
     runtime.noteStore.set("datasets/literature.md", "Seed papers: A, B, C.");
-    const toolOnly = await createScheduledRun(runtime, platformProvider.id, "fixture-model", {
-      tool: {
+    const toolRun: TaskRun = {
+      task_id: "run_exhausted_tool",
+      workspace_id: WS,
+      conversation_id: "conv_exhausted_tool",
+      created_from: {
+        trigger_event_type: "trigger.scheduled",
+        trigger_event_id: "evt_trigger_scheduled_test",
+      },
+      pack_snapshot: { pack_id: "pack_student", pack_version: "1.0.0", pack_hash: "0".repeat(64) },
+      roster: [],
+      state: "RUNNING",
+      version: 3,
+      retry_count: 0,
+      created_at: "2026-11-02T09:00:00.000Z",
+      updated_at: "2026-11-02T09:00:00.000Z",
+    };
+    const toolOutcome = runtime.tools.executeProposal({
+      proposal: {
+        workspace_id: WS,
+        task_id: toolRun.task_id,
+        conversation_id: toolRun.conversation_id,
         tool_id: "tool_note_read",
         tool_version: "1.0.0",
         capability: "file.read",
-        args: { path: "datasets/literature.md" },
+        args_digest: canonicalArgsDigest({ path: "datasets/literature.md" }),
+        proposal_summary: "Exhausted-account tool read (the capability probe).",
       },
+      run: toolRun,
+      agent_id: "agent_general_assistant",
+      rawArgs: { path: "datasets/literature.md" },
+      resource_scope: `task:${toolRun.task_id}`,
+      side_effect_summary: "The exhausted-account capability probe's read.",
     });
-    const toolOutcome = await fire(runtime, toolOnly.triggerId);
-    expect(toolOutcome.outcome).toBe("fired");
-    const toolRun = runtime.operations.getRun(WS, toolOnly.operationId, toolOutcome.runId!);
-    expect(toolRun.state).toBe("SUCCEEDED");
-    const conn = openConnections[0]!;
-    const tools = new ToolsRepository(new SqliteTransactions(conn.db));
-    const history = tools.listExecutionsByTask(WS, toolOutcome.runId!);
+    expect(toolOutcome.outcome).toBe("executed");
+    const history = new ToolsRepository(credit.conn.db).listExecutionsByTask(
+      WS,
+      toolRun.task_id,
+    );
     expect(history.find((row) => row.tool_id === "tool_note_read")?.status).toBe("succeeded");
+    expect(ledgerRepo.listTransactions(WS)).toHaveLength(0);
+    expect(ledgerRepo.listUsageForTask(WS, toolRun.task_id)).toHaveLength(0);
 
-    // (b) The MODEL plan: the reservation is refused — the D48 pause.
+    // (b) The MODEL call on the SAME exhausted account: the reservation is
+    // refused — the D48 pause (the ONLY thing credits stop).
     const modelPlan = await createScheduledRun(
       runtime,
       platformProvider.id,
       "fixture-model",
       { prompt: "Compile the sweep." },
     );
+    completions = 0;
     const modelOutcome = await fire(runtime, modelPlan.triggerId);
     expect(modelOutcome.outcome).toBe("paused_credits");
     const modelRun = runtime.operations.getRun(WS, modelPlan.operationId, modelOutcome.runId!);
     expect(modelRun.state).toBe("PAUSED");
     expect(modelRun.state).not.toBe("QUEUED");
-
-    // The capability surface is unchanged: the same account that paused the
-    // model call executed the tool. The ledger moved nothing for the tool.
-    const toolUsage = ledgerRepo.listUsageForTask(WS, toolOutcome.runId!);
-    expect(toolUsage).toHaveLength(0);
+    expect(completions).toBe(0); // the model call never happened
   });
 
   it("a clean provider failure (the request never landed) releases the reservation", async () => {
@@ -402,7 +434,9 @@ describe("the model call's credit legs (S24)", () => {
     );
     const outcome = await fire(runtime, triggerId);
     expect(outcome.outcome).toBe("failed");
-    const run = runtime.operations.getRun(WS, operationId, outcome.runId!);
+    const runId = outcome.runId!;
+    expect(runId).toBeTruthy();
+    const run = runtime.operations.getRun(WS, operationId, runId);
     expect(run.state).toBe("FAILED");
 
     // The hold was released (D20: provider failures release), nothing

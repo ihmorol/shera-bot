@@ -268,6 +268,17 @@ export class CreditLedgerService {
           now,
           exec,
         );
+      } else {
+        // A zero-estimate consult (the recorded S28 pre-flight shape) holds
+        // NOTHING — the row records the consult and closes immediately (a
+        // pure status flip: no release row, no movement — there is no units
+        // movement to record). It never lingers as an active hold.
+        this.deps.repository.markReservationReleased(
+          input.workspace_id,
+          reservation.reservation_id,
+          now,
+          exec,
+        );
       }
       return {
         ok: true as const,
@@ -324,6 +335,20 @@ export class CreditLedgerService {
    * zero movement IS the record; platform calls carry their charge). */
   recordUsage(input: Omit<CreditUsageInsert, "created_at">): void {
     this.deps.repository.insertUsageRecord({ ...input, created_at: this.now() });
+  }
+
+  /**
+   * The run's single active hold, if any — the model leg reuses it on a
+   * recovery re-entry (an ambiguous outcome kept the hold; a resumed run
+   * never takes a second reservation for the same call).
+   */
+  activeReservationFor(
+    workspaceId: string,
+    taskId: string,
+  ): { reservation_id: string; estimated_units: number } | null {
+    const active = this.deps.repository.listActiveReservationsForTask(workspaceId, taskId);
+    const first = active[0];
+    return first ? { reservation_id: first.reservation_id, estimated_units: first.estimated_units } : null;
   }
 
   /**
@@ -450,32 +475,34 @@ export class CreditLedgerService {
       if (reservation.status !== "reserved") {
         return { ok: false as const, code: "RESERVATION_NOT_ACTIVE" };
       }
-      this.deps.repository.insertRelease(
-        {
-          workspace_id: input.workspace_id,
-          release_id: this.newId("rel"),
-          reservation_id: reservation.reservation_id,
-          task_id: reservation.task_id,
-          released_units: reservation.estimated_units,
-          reason: input.reason,
-          released_at: now,
-        },
-        exec,
-      );
-      this.deps.repository.insertTransaction(
-        {
-          workspace_id: input.workspace_id,
-          transaction_id: this.newId("ctx"),
-          entry_type: "reservation_release",
-          amount_units: reservation.estimated_units,
-          task_id: reservation.task_id,
-          reservation_id: reservation.reservation_id,
-          related_id: null,
-          corrects_transaction_id: null,
-          created_at: now,
-        },
-        exec,
-      );
+      if (reservation.estimated_units > 0) {
+        this.deps.repository.insertRelease(
+          {
+            workspace_id: input.workspace_id,
+            release_id: this.newId("rel"),
+            reservation_id: reservation.reservation_id,
+            task_id: reservation.task_id,
+            released_units: reservation.estimated_units,
+            reason: input.reason,
+            released_at: now,
+          },
+          exec,
+        );
+        this.deps.repository.insertTransaction(
+          {
+            workspace_id: input.workspace_id,
+            transaction_id: this.newId("ctx"),
+            entry_type: "reservation_release",
+            amount_units: reservation.estimated_units,
+            task_id: reservation.task_id,
+            reservation_id: reservation.reservation_id,
+            related_id: null,
+            corrects_transaction_id: null,
+            created_at: now,
+          },
+          exec,
+        );
+      }
       this.deps.repository.markReservationReleased(
         input.workspace_id,
         reservation.reservation_id,

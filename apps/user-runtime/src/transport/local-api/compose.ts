@@ -247,6 +247,12 @@ export interface ComposeLocalApiOptions {
    * enforcement exists to prevent).
    */
   providerEnforcement?: boolean;
+  /**
+   * S24: the model call's hard abort window for the autonomous plan runner
+   * (tests shrink it to exercise the ambiguous-outcome class; production
+   * keeps the recorded 15s default).
+   */
+  modelCallTimeoutMs?: number;
 }
 
 export interface LocalApiHandle {
@@ -265,6 +271,9 @@ export interface LocalApiHandle {
   approvals: ApprovalsService;
   /** S23: the provider registry seam — configuration, custody, resolution. */
   providers: ProviderService;
+  /** S24: the credit ledger seam — the ONE account-level balance and its
+   * reserve→settle→release machinery (the tests consult it directly). */
+  credits: CreditLedgerService;
   /**
    * S18 chunk 2: the shared browser profile service seam when configured;
    * undefined otherwise (G4 — no browser process ever spawns without it).
@@ -482,6 +491,9 @@ export interface RuntimeHandle {
   adminCommands: RuntimeAdminCommandsHandle;
   /** S23: the provider registry seam — configuration, custody, resolution. */
   providers: ProviderService;
+  /** S24: the credit ledger seam — the ONE account-level balance and its
+   * reserve→settle→release machinery (the tests consult it directly). */
+  credits: CreditLedgerService;
   /**
    * S28: the runtime-owned scheduler stack — the declarative trigger records
    * (the HTTP surface relays into the service), the firing engine (tests and
@@ -533,6 +545,7 @@ interface Wired {
   runControl: RunControlApiHandle;
   adminCommands: RuntimeAdminCommandsHandle;
   providers: ProviderService;
+  credits: CreditLedgerService;
   schedules: SchedulesService;
   scheduler: SchedulerService;
   wakeManager: SchedulerWakeManager;
@@ -1388,6 +1401,12 @@ function wire(
     events,
     tx,
     operations: operationsRepository,
+    // S24: the credit legs of the model call (reserve → settle → release
+    // for platform providers; usage with zero movement for custom ones).
+    credits: creditLedger,
+    ...(options.modelCallTimeoutMs !== undefined
+      ? { modelCallTimeoutMs: options.modelCallTimeoutMs }
+      : {}),
     ...(options.now ? { now: options.now } : {}),
     logFault: (event, fields) => logFault(event, fields),
   });
@@ -1561,6 +1580,7 @@ function wire(
     runControl: runControlApi,
     adminCommands,
     providers,
+    credits: creditLedger,
     schedules,
     scheduler,
     wakeManager,
@@ -1580,6 +1600,7 @@ export function composeLocalApi(options: ComposeLocalApiOptions): LocalApiHandle
     toolRegistry: wired.toolRegistry,
     toolsApi: wired.toolsApi,
     providers: wired.providers,
+    credits: wired.credits,
     browser: wired.browser,
     close: () => wired.conn.close(),
   };
@@ -1815,6 +1836,7 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     retryCoordinator: wired.retryCoordinator,
     runControl: wired.runControl,
     providers: wired.providers,
+    credits: wired.credits,
     schedules: wired.schedules,
     scheduler: wired.scheduler,
     noteStore: wired.noteStore,

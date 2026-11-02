@@ -238,14 +238,17 @@ describe("settlement mathematics (S24 AC3)", () => {
     const harness = makeHarness();
     harness.ledger.ensureAccount(WS);
     harness.ledger.grant({ workspace_id: WS, amount_units: 50, related_id: null });
-    // The recorded S28 pre-flight consult holds 0; the model leg holds the
-    // bounded estimate. Both belong to the run; cancellation closes both.
+    // The recorded S28 pre-flight consult holds 0 — the row records the
+    // consult and closes itself immediately (there is nothing to hold); the
+    // model leg's bounded estimate is the run's active hold. Cancellation
+    // closes every active hold (here: the bounded one).
     const preflight = harness.ledger.reserveForRun({
       workspace_id: WS,
       task_id: "run_cancel",
       estimate_units: 0,
     });
     if (!preflight.ok) throw new Error("consult refused");
+    expect(harness.repo.findReservation(WS, preflight.reservation_id)?.status).toBe("released");
     const bounded = harness.ledger.reserveForRun({
       workspace_id: WS,
       task_id: "run_cancel",
@@ -253,7 +256,7 @@ describe("settlement mathematics (S24 AC3)", () => {
     });
     if (!bounded.ok) throw new Error("reservation refused");
     const released = harness.ledger.releaseForRun(WS, "run_cancel", "task_cancelled");
-    expect(released).toEqual({ released_count: 2, released_units: 30 });
+    expect(released).toEqual({ released_count: 1, released_units: 30 });
     const state = harness.ledger.accountState(WS);
     expect(state).toMatchObject({ reserved_units: 0, available_units: 50 });
     // Idempotent: a second release finds nothing held.
@@ -483,14 +486,15 @@ describe("settlement property (S24 AC3, seeded random distributions)", () => {
     for (let step = 0; step < 200; step += 1) {
       const choice = next(10);
       if (choice < 3 || activeReservations.length === 0) {
-        // Reserve for a fresh run (sometimes the zero consult).
+        // Reserve for a fresh run (sometimes the zero consult — which holds
+        // nothing and closes itself, so it never joins the active set).
         const estimate = next(2) === 0 ? 0 : 1 + next(30);
         const reserved = harness.ledger.reserveForRun({
           workspace_id: WS,
           task_id: `run_prop_${(taskCounter += 1)}`,
           estimate_units: estimate,
         });
-        if (reserved.ok) activeReservations.push(reserved.reservation_id);
+        if (reserved.ok && estimate > 0) activeReservations.push(reserved.reservation_id);
       } else if (choice < 8) {
         // Settle a random active reservation: actual spans under- and
         // over-estimate (0 .. 2x the hold).

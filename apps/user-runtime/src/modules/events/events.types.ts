@@ -355,6 +355,25 @@ export const RunCreditPausedPayload = z.strictObject({
 });
 export type RunCreditPausedPayload = z.infer<typeof RunCreditPausedPayload>;
 
+/**
+ * The ambiguous provider outcome (S24; D20, E13): journaled on the RUN's
+ * stream when a platform-provider call ends with the provider's processing
+ * state UNKNOWN (a timeout after send) — the reservation is NOT released
+ * and the call is NOT retried blindly; the run enters the E13 recovery
+ * class and this record is the visible decision the recovery review reads.
+ */
+export const RunCreditOutcomeAmbiguousPayload = z.strictObject({
+  workspace_id: z.string().min(1),
+  run_id: z.string().min(1),
+  reason: z.literal("ambiguous_provider_outcome"),
+  /** The provider REFERENCE — never credential material, never a response
+   * body (G3). */
+  provider_id: z.string().min(1),
+  /** The reservation that stands (not released, not settled). */
+  reservation_id: z.string().min(1),
+});
+export type RunCreditOutcomeAmbiguousPayload = z.infer<typeof RunCreditOutcomeAmbiguousPayload>;
+
 export const TriggerCreditResumedPayload = z.strictObject({
   workspace_id: z.string().min(1),
   trigger_id: z.string().min(1),
@@ -470,6 +489,10 @@ export const EVENT_TYPES = {
   "worker.reaped": { schema_version: 1, payload: WorkerReapedPayload },
   "run.failure_decided": { schema_version: 1, payload: RunFailureDecisionPayload },
   "run.credit_paused": { schema_version: 1, payload: RunCreditPausedPayload },
+  "run.credit_outcome_ambiguous": {
+    schema_version: 1,
+    payload: RunCreditOutcomeAmbiguousPayload,
+  },
   "trigger.credit_paused": { schema_version: 1, payload: TriggerCreditPausedPayload },
   "trigger.credit_resumed": { schema_version: 1, payload: TriggerCreditResumedPayload },
   "trigger.catchup_decided": { schema_version: 1, payload: TriggerCatchupDecidedPayload },

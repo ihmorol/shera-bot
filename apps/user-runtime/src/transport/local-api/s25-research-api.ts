@@ -19,7 +19,11 @@
  * truthfully without it.
  */
 import type { ToolRegistry } from "../../modules/tools/tool-registry.ts";
-import { makeWebSearchBinding, type ResearchToolDeps } from "../../modules/research/research-bindings.ts";
+import {
+  makePageFetchBinding,
+  makeWebSearchBinding,
+  type ResearchToolDeps,
+} from "../../modules/research/research-bindings.ts";
 
 /**
  * The research tools' resource envelope (record data). The family is
@@ -35,6 +39,9 @@ export const RESEARCH_TOOL_RESOURCE_LIMITS = {
 
 /** The search tool's response budget (the executor enforces it per tool). */
 const SEARCH_MAX_RESPONSE_BYTES = 65_536;
+
+/** The page-fetch tool's response budget (the result head + pointer). */
+const PAGE_FETCH_MAX_RESPONSE_BYTES = 65_536;
 
 /**
  * Register the S25 research built-ins for one workspace. Chunk 1 ships the
@@ -80,4 +87,42 @@ export function registerResearchTools(
       bindingName: "research-web-search",
     });
   }
+
+  // The page-fetch tool needs no endpoint configuration (any http(s) page
+  // the container can reach): it registers unconditionally. Readability +
+  // turndown extract the readable content; large content becomes an
+  // artifact with provenance (D15, D23 rule 8).
+  registry.registerBinding("research-page-fetch", makePageFetchBinding(deps));
+  registry.registerBuiltinTool({
+    definition: {
+      tool_id: "tool_page_fetch",
+      workspace_id: workspaceId,
+      version: "1.0.0",
+      name: "Page fetch",
+      purpose:
+        "Fetch a public web page and extract its readable content as markdown. Large content becomes an artifact with provenance instead of entering a prompt. Read-only: runs automatically without approval.",
+      owner: { kind: "platform" } as const,
+      inventory_scope: "shared" as const,
+      input_schema: {
+        type: "object",
+        properties: { url: { type: "string", minLength: 1, maxLength: 2048 } },
+        required: ["url"],
+      },
+      output_schema: { type: "object" },
+      capabilities: ["research.fetch"],
+      risk_class: "READ_ONLY" as const,
+      timeout_ms: 45_000,
+      resource_limits: RESEARCH_TOOL_RESOURCE_LIMITS,
+      redaction_policy: "standard" as const,
+      approval_policy: "auto_read_only" as const,
+      // E13 recovery class DECLARED: re-reading a page is safe (a GET has
+      // no external effect), so transient failures may re-run — the
+      // counterpart of the search tool's omitted-class default pin (AC7).
+      recovery: "idempotent_retry" as const,
+      created_at: new Date().toISOString(),
+    },
+    enabled: true,
+    max_response_bytes: PAGE_FETCH_MAX_RESPONSE_BYTES,
+    bindingName: "research-page-fetch",
+  });
 }

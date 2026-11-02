@@ -10,11 +10,13 @@
  *
  * The client is bounded by construction (AC3): the request carries an abort
  * deadline, the response body is read incrementally under a hard byte cap —
- * an oversized response is a typed refusal, never a memory spike — and the
+ * an oversized response is a typed refusal (the search JSON cannot be
+ * truncated at a semantic boundary), never a memory spike — and the
  * documented response shape is validated before any result is returned.
  */
 import { ToolBindingError } from "../tools/tool-binding.ts";
 import { ResearchToolError } from "./research-errors.ts";
+import { drainResponse, mapFetchFailure, readBodyWithCap } from "./research-http.ts";
 
 /** The documented SearXNG JSON result item (the fields the tool consumes). */
 export interface SearxngResultItem {
@@ -64,50 +66,6 @@ function searchUrl(baseUrl: string, input: SearxngSearchInput): string {
     params.set("language", input.language);
   }
   return `${base}/search?${params.toString()}`;
-}
-
-/** Read the response body under a hard byte cap (AC3: bounded by policy). */
-async function readBodyWithCap(
-  response: Response,
-  maxBodyBytes: number,
-): Promise<string> {
-  const declaredLength = response.headers.get("content-length");
-  if (declaredLength !== null && Number(declaredLength) > maxBodyBytes) {
-    throw new ToolBindingError(
-      "TOOL_RESPONSE_TOO_LARGE",
-      `TOOL_RESPONSE_TOO_LARGE: the search response declares ${declaredLength} bytes, over the ${maxBodyBytes}-byte cap`,
-    );
-  }
-  const reader = response.body?.getReader();
-  if (!reader) {
-    throw new ResearchToolError(
-      "TRANSIENT_NETWORK",
-      "the search response carried no readable body",
-    );
-  }
-  const decoder = new TextDecoder();
-  let text = "";
-  let bytes = 0;
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) {
-        break;
-      }
-      bytes += value.byteLength;
-      if (bytes > maxBodyBytes) {
-        await reader.cancel();
-        throw new ToolBindingError(
-          "TOOL_RESPONSE_TOO_LARGE",
-          `TOOL_RESPONSE_TOO_LARGE: the search response exceeded the ${maxBodyBytes}-byte cap at ${bytes} bytes`,
-        );
-      }
-      text += decoder.decode(value, { stream: true });
-    }
-  } finally {
-    reader.releaseLock();
-  }
-  return `${text}${decoder.decode()}`;
 }
 
 /** Map an HTTP status to the typed research failure (retryability is data). */
@@ -189,6 +147,7 @@ export async function searxngSearch(
   const timeoutSignal = AbortSignal.timeout(input.timeoutMs);
   const signal =
     deps.signal !== undefined ? AbortSignal.any([timeoutSignal, deps.signal]) : timeoutSignal;
+  const cancelSignal: AbortSignal | null = deps.signal ?? null;
   let response: Response;
   try {
     response = await deps.fetchImpl(url, {
@@ -198,26 +157,25 @@ export async function searxngSearch(
       signal,
     });
   } catch (error) {
-    if (deps.signal?.aborted) {
-      throw new ToolBindingError(
-        "TOOL_EXECUTION_CANCELLED",
-        "TOOL_EXECUTION_CANCELLED: the search was cancelled before it completed",
-      );
-    }
-    throw new ResearchToolError(
-      "TRANSIENT_NETWORK",
-      `the search endpoint could not be reached: ${error instanceof Error ? error.message : String(error)}`,
-    );
+    throw mapFetchFailure(error, {
+      cancelSignal,
+      timeoutSignal,
+      what: "the search request",
+    });
   }
   if (!response.ok) {
     // Drain (bounded) so the socket is released, then refuse typed.
-    try {
-      await response.arrayBuffer();
-    } catch {
-      // the body is irrelevant to the refusal
-    }
+    await drainResponse(response);
     throw statusError(response.status);
   }
-  const body = await readBodyWithCap(response, input.maxBodyBytes);
-  return parseSearxngResponse(body, input.query);
+  const download = await readBodyWithCap(response, input.maxBodyBytes);
+  if (download.truncated) {
+    // The search JSON cannot be truncated at a semantic boundary — the cap
+    // policy for search is the typed refusal, never a partial parse.
+    throw new ToolBindingError(
+      "TOOL_RESPONSE_TOO_LARGE",
+      `TOOL_RESPONSE_TOO_LARGE: the search response exceeded the ${input.maxBodyBytes}-byte cap`,
+    );
+  }
+  return parseSearxngResponse(download.text, input.query);
 }

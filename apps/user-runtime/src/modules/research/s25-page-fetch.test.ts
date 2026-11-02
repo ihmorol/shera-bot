@@ -50,12 +50,14 @@ const tempDirs: string[] = [];
 
 /** The canned article the fixture serves for the extraction leg. */
 const ARTICLE_HTML = `<!doctype html><html><head><title>Attention Paper Review</title></head>
-<body><article><h1>Attention Paper Review</h1>
+<body>
+<nav>menu noise</nav>
+<article><h1>Attention Paper Review</h1>
 <p>The dominant sequence transduction models are based on complex recurrent or
 convolutional neural networks. We propose the Transformer, which dispenses with
 recurrence entirely.</p>
-<nav>menu noise</nav>
-</article></body></html>`;
+</article>
+</body></html>`;
 
 /** Build a big HTML page whose text is `paragraphs` repeated blocks. */
 function bigHtml(blocks: number): string {
@@ -294,7 +296,18 @@ describe("page fetch executes read-only through the executor (S25 chunk 2)", () 
   });
 
   it("fails typed TOOL_EXECUTION_TIMEOUT when the fetch exceeds the tool's deadline", async () => {
-    const rt = buildRuntime();
+    // The stateful clock: the executor's first read mints the deadline
+    // (1000 + 45_000); the binding's remaining-time read lands 100 ms
+    // before it — so the fixture's slow stream hits a REAL deadline abort,
+    // fast.
+    let firstRead = true;
+    const rt = buildRuntime(() => {
+      if (firstRead) {
+        firstRead = false;
+        return 1_000;
+      }
+      return 45_900;
+    });
     const dispatched = fetchProposal(rt, { url: `${fixtureOrigin}/slow` });
     if (dispatched.outcome !== "dispatched") throw new Error("expected dispatched");
     const outcome = await dispatched.completion;
@@ -343,7 +356,17 @@ describe("the D27 network separation (S25 chunk 2)", () => {
       spawn: (request) => {
         requests.push({ networkDisabled: request.networkDisabled });
         return {
-          waitForExit: async () => ({ code: 0, signal: null, cancelled: false, limitDeath: null, spawnError: null, verifiedLimits: null }),
+          pid: -1,
+          waitForExit: async () => ({
+            code: 0,
+            signal: null,
+            timedOut: false,
+            cancelled: false,
+            limitDeath: null,
+            verifiedLimits: null,
+            cgroupApplied: null,
+            spawnError: null,
+          }),
           cancel: () => {},
         };
       },
@@ -376,6 +399,9 @@ describe("the D27 network separation (S25 chunk 2)", () => {
         grant_id: null,
       },
     };
+    if (binding.executeAsync === undefined) {
+      throw new Error("expected the async dispatch seam");
+    }
     const result = await binding.executeAsync({ language: "shell", code: "true" }, ctx);
     expect(result.ok).toBe(true);
     expect(requests).toHaveLength(1);

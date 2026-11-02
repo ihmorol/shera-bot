@@ -28,7 +28,9 @@ import {
   type ToolExecutionContext,
 } from "../tools/tool-binding.ts";
 import { searxngSearch, type SearxngSearchOutcome } from "./searxng-search.ts";
+import { assertFetchableUrl, fetchReadablePage, PAGE_MAX_BODY_BYTES } from "./page-fetch.ts";
 import { ResearchToolError } from "./research-errors.ts";
+import { redactSecrets } from "../terminals/secret-redaction.ts";
 
 /** The composition's research-tool dependencies (all configuration, G4). */
 export interface ResearchToolDeps {
@@ -135,6 +137,95 @@ export function makeWebSearchBinding(deps: ResearchToolDeps): ToolBinding {
         };
       }
       const text = searchResultText(outcome).slice(0, RESEARCH_RESULT_HEAD_CHARS);
+      return { ok: true, text };
+    },
+  };
+}
+
+/**
+ * The page-fetch binding (tool_page_fetch). Arguments: `url` (required,
+ * http/https). The page is fetched with the tool's own deadline and byte
+ * cap; readability + turndown extract the readable content as markdown;
+ * content that does not fit the bounded result head — or a download the
+ * cap truncated — becomes an artifact with provenance (D15, D23 rule 8),
+ * its bytes REDACTED before the sink (G3), and the result carries the
+ * pointer, never the payload.
+ */
+export function makePageFetchBinding(deps: ResearchToolDeps): ToolBinding {
+  const fetchImpl = deps.fetchImpl ?? globalThis.fetch;
+  return {
+    name: "research-page-fetch",
+    preview() {
+      return null; // read-only: no preview ceremony (G6/D35)
+    },
+    execute: () => refuseSyncExecute(),
+    async executeAsync(args, ctx) {
+      assertExecutionAuthority(ctx.authority);
+      const url = typeof args.url === "string" ? args.url.trim() : "";
+      if (url === "" || url.length > 2048) {
+        throw new ResearchToolError(
+          "RESEARCH_INPUT_INVALID",
+          "the url must be a non-empty http(s) URL of at most 2048 characters",
+        );
+      }
+      // The scheme guard runs BEFORE any fetch leaves the process.
+      assertFetchableUrl(url);
+      const timeoutMs = assertDeadlineLeft(ctx);
+      const page = await fetchReadablePage({
+        fetchImpl,
+        url,
+        timeoutMs,
+        maxBodyBytes: PAGE_MAX_BODY_BYTES,
+        signal: ctx.signal,
+      });
+      if (ctx.nowMs() > ctx.deadline) {
+        return {
+          ok: false,
+          errorCode: "TOOL_EXECUTION_TIMEOUT",
+          message: "the fetch exceeded its deadline",
+        };
+      }
+
+      // G3: the artifact bytes are REDACTED before the sink — one redaction
+      // boundary before every sink (the S26 posture); the executor's own
+      // pass still covers the result head (defense in depth).
+      const truncationMarker = page.truncated
+        ? `\n[content truncated at the ${Math.round(PAGE_MAX_BODY_BYTES / 1024)} KiB fetch cap]`
+        : "";
+      let artifactNote = "";
+      if (
+        deps.artifacts !== null &&
+        (page.chars > RESEARCH_RESULT_HEAD_CHARS - 512 || page.truncated)
+      ) {
+        try {
+          const redacted = redactSecrets(page.markdown);
+          const ref = deps.artifacts.insertArtifact({
+            workspace_id: ctx.execution.workspace_id,
+            name: `page-fetch-${ctx.execution.execution_id}`,
+            artifact_type: "research_page_content",
+            mime_type: "text/markdown; charset=utf-8",
+            content: Buffer.from(redacted, "utf8"),
+            producer_agent_id: ctx.execution.agent_id,
+            producer_task_id: ctx.execution.task_id,
+          });
+          artifactNote = `\n[full content (${page.chars} chars) captured as artifact ${ref.artifact_id.slice(0, 8)}…]`;
+        } catch {
+          // The artifact sink failing never fails the read — the bounded
+          // head still records the result honestly (the S26 posture).
+          artifactNote = "\n[artifact capture unavailable]";
+        }
+      }
+
+      const header = `Read ${page.url}${page.title !== null ? ` — "${page.title}"` : ""} (${page.chars} chars extracted)`;
+      const headBudget = Math.max(
+        0,
+        RESEARCH_RESULT_HEAD_CHARS - header.length - truncationMarker.length - artifactNote.length,
+      );
+      const head = page.markdown.slice(0, headBudget);
+      // The pointer LEADS (the executor bounds the recorded result summary:
+      // the artifact reference must survive the bound — the content head
+      // follows it, never the other way around).
+      const text = `${header}${artifactNote}${truncationMarker}\n${head}`.trimEnd();
       return { ok: true, text };
     },
   };

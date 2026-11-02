@@ -47,6 +47,8 @@ import { CommandReceiptsRepository } from "../../adapters/sqlite/command-receipt
 import { ConversationsRepository } from "../../adapters/sqlite/conversations-repository.ts";
 import { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
 import { OperationsRepository } from "../../adapters/sqlite/operations-repository.ts";
+import { CreditLedgerRepository } from "../../adapters/sqlite/credit-ledger-repository.ts";
+import { CreditLedgerService } from "../../modules/credits/credit-ledger.service.ts";
 import { TaskWorkersRepository } from "../../adapters/sqlite/task-workers-repository.ts";
 import { TerminalEventsRepository } from "../../adapters/sqlite/terminal-events-repository.ts";
 import { WorkspaceFilesRepository } from "../../adapters/sqlite/workspace-files-repository.ts";
@@ -843,6 +845,18 @@ function wire(
   // refused typed and nothing Operation-shaped can be created.
   const operationsRepository = new OperationsRepository(tx);
 
+  // S24: the internal credit ledger (PRD §9, D20, D21, D48, issue #25). The
+  // ONE account-level balance per workspace over the v20 STRICT tables; the
+  // recorded reservation seam below consults it for real now (reserve a
+  // bounded estimate before a platform-provider call — a refusal is the
+  // typed `insufficient_credits` the D48 pause writes from).
+  const creditLedgerRepository = new CreditLedgerRepository(tx);
+  const creditLedger = new CreditLedgerService({
+    repository: creditLedgerRepository,
+    tx,
+    ...(options.now ? { now: options.now } : {}),
+  });
+
   // S23: the provider registry stack (PRD §9, D17, D20, D22, E9). The vault
   // key lives beside the database (the container-local volume is the D22
   // trust boundary); the credentials repository owns the ONLY secret-shaped
@@ -1383,16 +1397,29 @@ function wire(
     events,
     tx,
     planRunner: autonomousPlanRunner,
+    // S24: the recorded reservation seam, now backed by the REAL ledger
+    // (the S28 consult's zero-estimate shape is preserved — a zero hold
+    // records the consult; the bounded reservation happens at the model
+    // leg where the request shape is known).
     reservations: {
       reserveForRun: (input) => {
-        logFault("credit_reservation_consulted", {
+        const outcome = creditLedger.reserveForRun({
           workspace_id: input.workspace_id,
+          task_id: input.run_id,
           trigger_id: input.trigger_id,
-          run_id: input.run_id,
-          estimate_credits: input.estimate_credits,
-          seam: "s24-credit-ledger-not-built",
+          estimate_units: input.estimate_credits,
         });
-        return { ok: true, reservation_id: `res_${input.run_id}` };
+        if (!outcome.ok) {
+          logFault("credit_reservation_refused", {
+            workspace_id: input.workspace_id,
+            trigger_id: input.trigger_id,
+            run_id: input.run_id,
+            estimate_credits: input.estimate_credits,
+            available_units: outcome.available_units,
+          });
+          return outcome;
+        }
+        return outcome;
       },
     },
     ...(providerGate

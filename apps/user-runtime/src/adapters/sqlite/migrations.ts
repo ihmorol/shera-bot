@@ -1314,6 +1314,165 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
         ON trigger_firings (workspace_id, trigger_id, fired_at);
     `,
   },
+  /**
+   * v20 — the internal credit ledger (S24, issue #25; D20, D21, D48, E12,
+   * G3): the seven D20 ledger tables behind the recorded reservation seam
+   * (S28's fire pipeline consults it before anything runs; S22's
+   * cancellation releases; S32's admin top-up grants). Credits are
+   * PROTOTYPE ACCOUNTING — never billing, and never an authorization for
+   * tools, filesystem writes, deployment, or external actions (D20).
+   *
+   * credit_account: THE single account-level balance (D21) — one row per
+   * workspace (PRIMARY KEY workspace_id; a workspace IS the tenant root,
+   * the v3 discipline). The balance is held as three non-negative counters
+   * (granted, charged, reserved); the AVAILABLE balance is DERIVED
+   * (granted − charged − reserved) and never stored, so it can never
+   * disagree with the movement rows it summarizes. An under-estimate
+   * settlement (actual usage exceeded the hold) may drive the derived
+   * available negative — the honest overdraw the next reservation refusal
+   * reads; the counters themselves stay non-negative, so no CHECK can be
+   * violated by truthful accounting.
+   *
+   * credit_transaction: the APPEND-ONLY movement ledger (AC9) — grants,
+   * reservation holds, settlement charges, reservation releases, and
+   * adjustments. No UPDATE or DELETE path exists anywhere in the ledger
+   * repository; a correction is a NEW 'adjustment' row whose
+   * corrects_transaction_id names the row it corrects (the original row is
+   * never edited). related_id carries the cross-reference (the control
+   * plane's topup id for a grant); task_id/reservation_id carry the run
+   * linkage the UI drill-down joins on.
+   *
+   * usage_record: local usage + latency per model call (D20) — recorded for
+   * BOTH provider origins; custom-provider rows carry charged_units 0 (they
+   * never consume Shera credits). Token counts and latency are nullable on
+   * purpose: a provider that reports no usage metering is recorded as
+   * unknown, never fabricated (G4).
+   *
+   * cost_estimate: the bounded estimate a reservation was built from — the
+   * derivation note (basis) keeps the estimate auditable against the
+   * settlement that closed it.
+   *
+   * reservation: one hold per row — status 'reserved' → 'settled' |
+   * 'released' (the closed vocabulary the S02 contract names); estimated
+   * units never change in place (a changed estimate is a new reservation).
+   *
+   * settlement / release: the terminal records — actual usage charged
+   * against a reservation, and the unused remainder (or a provider
+   * failure / task cancellation) given back. The release reason vocabulary
+   * is the S02 contract's closed set.
+   *
+   * No FOREIGN KEY is declared anywhere (the v4/v5/v6 discipline): the
+   * writers validate the referenced rows in the same transaction. Every
+   * table is workspace-scoped at the storage layer (E12).
+   */
+  {
+    version: 20,
+    name: "credit-ledger",
+    sql: `
+      CREATE TABLE IF NOT EXISTS credit_account (
+        workspace_id   TEXT    NOT NULL,
+        granted_units  INTEGER NOT NULL CHECK (granted_units  >= 0),
+        charged_units  INTEGER NOT NULL CHECK (charged_units  >= 0),
+        reserved_units INTEGER NOT NULL CHECK (reserved_units >= 0),
+        created_at     TEXT    NOT NULL,
+        updated_at     TEXT    NOT NULL,
+        PRIMARY KEY (workspace_id)
+      ) STRICT;
+
+      CREATE TABLE IF NOT EXISTS credit_transaction (
+        workspace_id            TEXT    NOT NULL,
+        transaction_id          TEXT    NOT NULL,
+        entry_type              TEXT    NOT NULL CHECK (entry_type IN (
+          'grant', 'reservation_hold', 'settlement_charge',
+          'reservation_release', 'adjustment')),
+        amount_units            INTEGER NOT NULL CHECK (amount_units >= 0),
+        task_id                 TEXT,
+        reservation_id          TEXT,
+        related_id              TEXT,
+        corrects_transaction_id TEXT,
+        created_at              TEXT    NOT NULL,
+        PRIMARY KEY (workspace_id, transaction_id)
+      ) STRICT;
+
+      CREATE INDEX IF NOT EXISTS credit_transactions_by_time_idx
+        ON credit_transaction (workspace_id, created_at);
+
+      CREATE INDEX IF NOT EXISTS credit_transactions_by_task_idx
+        ON credit_transaction (workspace_id, task_id, created_at);
+
+      CREATE TABLE IF NOT EXISTS usage_record (
+        workspace_id    TEXT    NOT NULL,
+        usage_id        TEXT    NOT NULL,
+        task_id         TEXT    NOT NULL,
+        provider_id     TEXT    NOT NULL,
+        model           TEXT    NOT NULL,
+        provider_origin TEXT    NOT NULL CHECK (provider_origin IN ('platform', 'user')),
+        input_tokens    INTEGER CHECK (input_tokens IS NULL OR input_tokens >= 0),
+        output_tokens   INTEGER CHECK (output_tokens IS NULL OR output_tokens >= 0),
+        latency_ms      INTEGER CHECK (latency_ms IS NULL OR latency_ms >= 0),
+        charged_units   INTEGER NOT NULL CHECK (charged_units >= 0),
+        created_at      TEXT    NOT NULL,
+        PRIMARY KEY (workspace_id, usage_id)
+      ) STRICT;
+
+      CREATE INDEX IF NOT EXISTS usage_records_by_task_idx
+        ON usage_record (workspace_id, task_id, created_at);
+
+      CREATE TABLE IF NOT EXISTS cost_estimate (
+        workspace_id    TEXT    NOT NULL,
+        estimate_id     TEXT    NOT NULL,
+        task_id         TEXT    NOT NULL,
+        provider_id     TEXT    NOT NULL,
+        model           TEXT    NOT NULL,
+        estimated_units INTEGER NOT NULL CHECK (estimated_units >= 0),
+        basis           TEXT    NOT NULL,
+        created_at      TEXT    NOT NULL,
+        PRIMARY KEY (workspace_id, estimate_id)
+      ) STRICT;
+
+      CREATE TABLE IF NOT EXISTS reservation (
+        workspace_id    TEXT    NOT NULL,
+        reservation_id  TEXT    NOT NULL,
+        task_id         TEXT    NOT NULL,
+        trigger_id      TEXT,
+        estimate_id     TEXT,
+        estimated_units INTEGER NOT NULL CHECK (estimated_units >= 0),
+        status          TEXT    NOT NULL CHECK (status IN ('reserved', 'settled', 'released')),
+        created_at      TEXT    NOT NULL,
+        settled_at      TEXT,
+        released_at     TEXT,
+        PRIMARY KEY (workspace_id, reservation_id)
+      ) STRICT;
+
+      CREATE INDEX IF NOT EXISTS reservations_by_task_idx
+        ON reservation (workspace_id, task_id, status);
+
+      CREATE INDEX IF NOT EXISTS reservations_active_idx
+        ON reservation (workspace_id, status) WHERE status = 'reserved';
+
+      CREATE TABLE IF NOT EXISTS settlement (
+        workspace_id   TEXT    NOT NULL,
+        settlement_id  TEXT    NOT NULL,
+        reservation_id TEXT    NOT NULL,
+        task_id        TEXT    NOT NULL,
+        actual_units   INTEGER NOT NULL CHECK (actual_units >= 0),
+        settled_at     TEXT    NOT NULL,
+        PRIMARY KEY (workspace_id, settlement_id)
+      ) STRICT;
+
+      CREATE TABLE IF NOT EXISTS release (
+        workspace_id   TEXT    NOT NULL,
+        release_id     TEXT    NOT NULL,
+        reservation_id TEXT    NOT NULL,
+        task_id        TEXT    NOT NULL,
+        released_units INTEGER NOT NULL CHECK (released_units >= 0),
+        reason         TEXT    NOT NULL CHECK (reason IN (
+          'provider_failure', 'task_cancelled', 'unused_estimate')),
+        released_at    TEXT    NOT NULL,
+        PRIMARY KEY (workspace_id, release_id)
+      ) STRICT;
+    `,
+  },
 ];
 
 /**

@@ -77,7 +77,7 @@ function makeHarness(): PauseHarness {
   const events = new EventsService(journal, tx);
   const operationsRepo = new OperationsRepository(tx);
   const ledgerRepo = new CreditLedgerRepository(tx);
-  const ledger = new CreditLedgerService({ repository: ledgerRepo });
+  const ledger = new CreditLedgerService({ repository: ledgerRepo, tx });
   const ops = new OperationsService({
     operations: operationsRepo,
     tx,
@@ -174,7 +174,12 @@ describe("D48 run-level credit pause (S24 AC1)", () => {
       task_id: runId,
       estimate_units: 25,
     });
-    expect(reservation).toEqual({ ok: false, code: "insufficient_credits" });
+    expect(reservation).toEqual({
+      ok: false,
+      code: "insufficient_credits",
+      available_units: 0,
+      requested_units: 25,
+    });
 
     // The runtime writes the D48 pause itself (never an agent, never a
     // silent stall): pause_insufficient_credits through the shared applier.
@@ -206,20 +211,26 @@ describe("D48 run-level credit pause (S24 AC1)", () => {
 
     const audit = events.find((row) => row.event_type === "run.failure_decided");
     expect(audit).toBeDefined();
+    // The journal row stores the BARE payload for non-contract-envelope
+    // events (the task.* rows carry the full D26 envelope — hence the
+    // nested read above; this one is flat).
     const auditPayload = JSON.parse(audit!.payload) as {
-      payload?: { failure_code?: string; decision?: string };
+      failure_code?: string;
+      decision?: string;
     };
-    expect(auditPayload.payload?.failure_code).toBe("insufficient_credits");
-    expect(auditPayload.payload?.decision).toBe("pause");
+    expect(auditPayload.failure_code).toBe("insufficient_credits");
+    expect(auditPayload.decision).toBe("pause");
 
     const creditRecord = events.find((row) => row.event_type === "run.credit_paused");
     expect(creditRecord).toBeDefined();
     const creditPayload = JSON.parse(creditRecord!.payload) as {
-      payload?: { reason?: string; requested_units?: number; available_units?: number };
+      reason?: string;
+      requested_units?: number;
+      available_units?: number;
     };
-    expect(creditPayload.payload?.reason).toBe("insufficient_credits");
-    expect(creditPayload.payload?.requested_units).toBe(25);
-    expect(creditPayload.payload?.available_units).toBe(0);
+    expect(creditPayload.reason).toBe("insufficient_credits");
+    expect(creditPayload.requested_units).toBe(25);
+    expect(creditPayload.available_units).toBe(0);
   });
 
   it("never uses the E1 capacity queue for a credit pause — no wait_for_resource placement", () => {

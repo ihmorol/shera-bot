@@ -271,8 +271,7 @@ describe("admin credit top-up (AC9, D48)", () => {
     const malformedFailures = await controlPlane.securityEvents.listByType("admin_action_failed");
     expect(
       malformedFailures.some(
-        (event) =>
-          event.details["action"] === "credits.topup" && event.details["target"] === A,
+        (event) => event.details["action"] === "credits.topup" && event.details["target"] === A,
       ),
     ).toBe(true);
 

@@ -182,7 +182,9 @@ describe("the active-token invariant (review P2)", () => {
     expect(smuggled).toBeUndefined();
     if (smuggled) {
       // Red-run hygiene: leave the table with at most one active row.
-      await controlPlane.db.delete(controlAdminTokens).where(eq(controlAdminTokens.id, smuggled.id));
+      await controlPlane.db
+        .delete(controlAdminTokens)
+        .where(eq(controlAdminTokens.id, smuggled.id));
     }
   });
 

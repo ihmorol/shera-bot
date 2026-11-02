@@ -54,6 +54,15 @@ const FAILURE_CLASSIFICATION: Readonly<Record<string, FailureKind>> = {
   TOOL_DISABLED: "permanent",
   TOOL_BINDING_FAILED: "permanent",
   WORKER_PROTOCOL_VIOLATION: "permanent",
+  // S25 research/data family: the typed failure codes' retryability is the
+  // same data the binding errors carry (research-errors.ts) — the two tables
+  // are pinned to agree, so the run-level policy and the tool-level flag are
+  // one truth.
+  RESEARCH_INPUT_INVALID: "permanent",
+  RESEARCH_RESPONSE_INVALID: "permanent",
+  RESEARCH_SOURCE_NOT_FOUND: "permanent",
+  RESEARCH_SOURCE_UNREADABLE: "permanent",
+  RESEARCH_PROVIDER_UNAVAILABLE: "permanent",
   // Ambiguous: an external effect MAY have happened; replaying blindly could
   // duplicate it (E13/D20). The run pauses for review with the reason.
   EXTERNAL_EFFECT_UNCONFIRMED: "ambiguous",

@@ -41,7 +41,15 @@ export type ToolBindingFailureCode =
   | "SANDBOX_PATH_ESCAPE"
   | "SANDBOX_LAUNCH_FAILED"
   | "SANDBOX_LIMIT_EXCEEDED"
-  | "TOOL_EXECUTION_CANCELLED";
+  | "TOOL_EXECUTION_CANCELLED"
+  /** S25 research/data failures (typed retryability: research-errors.ts). */
+  | "TRANSIENT_NETWORK"
+  | "TOOL_RESPONSE_TOO_LARGE"
+  | "RESEARCH_INPUT_INVALID"
+  | "RESEARCH_RESPONSE_INVALID"
+  | "RESEARCH_SOURCE_NOT_FOUND"
+  | "RESEARCH_SOURCE_UNREADABLE"
+  | "RESEARCH_PROVIDER_UNAVAILABLE";
 
 export class ToolBindingError extends Error {
   readonly code: ToolBindingFailureCode;

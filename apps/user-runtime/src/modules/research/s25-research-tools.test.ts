@@ -236,7 +236,16 @@ describe("research tool inventory declarations (S25 chunk 1, AC7)", () => {
 describe("read-only research tools execute automatically (S25 chunk 1, AC8)", () => {
   it("executes a search through the executor with NO approval row and NO grant", async () => {
     const rt = buildRuntime();
-    const outcome = searchProposal(rt);
+    // Network I/O never runs inside the caller's transaction: the READ_ONLY
+    // ladder still gates nothing, but the binding dispatches through the
+    // executor's async seam (the proposal answers `dispatched`; the
+    // completion settles the row).
+    const dispatched = searchProposal(rt);
+    expect(dispatched.outcome).toBe("dispatched");
+    if (dispatched.outcome !== "dispatched") {
+      throw new Error("expected dispatched");
+    }
+    const outcome = await dispatched.completion;
     expect(outcome.outcome).toBe("executed");
     if (outcome.outcome !== "executed") {
       throw new Error("expected executed");
@@ -266,7 +275,11 @@ describe("read-only research tools execute automatically (S25 chunk 1, AC8)", ()
 
   it("keeps the search results in the tool's declared order with engines named", async () => {
     const rt = buildRuntime();
-    const outcome = searchProposal(rt);
+    const dispatched = searchProposal(rt);
+    if (dispatched.outcome !== "dispatched") {
+      throw new Error("expected dispatched");
+    }
+    const outcome = await dispatched.completion;
     if (outcome.outcome !== "executed") {
       throw new Error("expected executed");
     }

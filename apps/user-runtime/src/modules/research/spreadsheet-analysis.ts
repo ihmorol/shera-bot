@@ -57,7 +57,11 @@ export function analyzeSpreadsheetBytes(
   sheetName?: string | null,
 ): SheetAnalysis {
   const extension = extensionOf(path);
-  if (!SUPPORTED_SPREADSHEET_EXTENSIONS.includes(extension as (typeof SUPPORTED_SPREADSHEET_EXTENSIONS)[number])) {
+  if (
+    !SUPPORTED_SPREADSHEET_EXTENSIONS.includes(
+      extension as (typeof SUPPORTED_SPREADSHEET_EXTENSIONS)[number],
+    )
+  ) {
     throw new ResearchToolError(
       "RESEARCH_SOURCE_UNREADABLE",
       `unsupported tabular format ${extension === "" ? "(no extension)" : extension} — supported: ${SUPPORTED_SPREADSHEET_EXTENSIONS.join(", ")}`,
@@ -74,10 +78,7 @@ export function analyzeSpreadsheetBytes(
   }
   const sheetNames = workbook.SheetNames;
   if (sheetNames.length === 0) {
-    throw new ResearchToolError(
-      "RESEARCH_SOURCE_UNREADABLE",
-      "the workbook contains no sheets",
-    );
+    throw new ResearchToolError("RESEARCH_SOURCE_UNREADABLE", "the workbook contains no sheets");
   }
   const requested = sheetName ?? sheetNames[0];
   if (requested === undefined || !sheetNames.includes(requested)) {
@@ -95,10 +96,7 @@ export function analyzeSpreadsheetBytes(
   }
   const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: true, defval: null });
   if (rows.length === 0) {
-    throw new ResearchToolError(
-      "RESEARCH_SOURCE_UNREADABLE",
-      "the sheet has no rows",
-    );
+    throw new ResearchToolError("RESEARCH_SOURCE_UNREADABLE", "the sheet has no rows");
   }
   const headerRow = rows[0] ?? [];
   const headers = headerRow.map((cell, index) =>

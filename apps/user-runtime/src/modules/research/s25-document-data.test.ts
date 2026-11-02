@@ -171,7 +171,8 @@ function proposal(
 async function executed(
   outcome: ReturnType<ToolExecutor["executeProposal"]>,
 ): Promise<{ ok: true; result_summary: string } | { ok: false; error_code: string }> {
-  if (outcome.outcome !== "dispatched") throw new Error(`expected dispatched, got ${outcome.outcome}`);
+  if (outcome.outcome !== "dispatched")
+    throw new Error(`expected dispatched, got ${outcome.outcome}`);
   const settled = await outcome.completion;
   if (settled.outcome === "executed") {
     return { ok: true, result_summary: settled.result_summary };
@@ -336,11 +337,7 @@ describe("spreadsheet analysis (S25 chunk 3)", () => {
 
   it("refuses a non-tabular file typed", async () => {
     const rt = buildRuntime();
-    seedFile(
-      rt,
-      "workspace://data/report.pdf",
-      minimalPdf("not a spreadsheet"),
-    );
+    seedFile(rt, "workspace://data/report.pdf", minimalPdf("not a spreadsheet"));
     const outcome = await executed(
       proposal(rt, "tool_spreadsheet_analyze", "research.analyze.spreadsheet", {
         path: "workspace://data/report.pdf",

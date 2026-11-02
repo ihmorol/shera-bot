@@ -46,7 +46,6 @@ const WS = "ws_default_01";
 const TASK = "task_s25_01";
 const CONV = "conv_s25_01";
 const AGENT = "agent_researcher";
-const USER = "user_owner";
 const NOW = "2026-11-02T12:00:00.000Z";
 const HASH = "a".repeat(64);
 
@@ -230,7 +229,12 @@ describe("research tool inventory declarations (S25 chunk 1, AC7)", () => {
     const dir = mkdtempSync(join(tmpdir(), "shera-s25-research-"));
     tempDirs.push(dir);
     const registry = new ToolRegistry();
-    registerResearchTools(registry, WS, { searxng: null, artifacts: null, files: null, visionModel: null });
+    registerResearchTools(registry, WS, {
+      searxng: null,
+      artifacts: null,
+      files: null,
+      visionModel: null,
+    });
     expect(registry.resolve(WS, "tool_web_search", "1.0.0")).toBeNull();
   });
 });

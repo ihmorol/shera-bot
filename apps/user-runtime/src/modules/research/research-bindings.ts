@@ -37,11 +37,7 @@ import { searxngSearch, type SearxngSearchOutcome } from "./searxng-search.ts";
 import { assertFetchableUrl, fetchReadablePage, PAGE_MAX_BODY_BYTES } from "./page-fetch.ts";
 import { parseDocumentBytes } from "./document-parse.ts";
 import { analyzeSpreadsheetBytes } from "./spreadsheet-analysis.ts";
-import {
-  DEFAULT_IMAGE_PROMPT,
-  describeImageBytes,
-  imageMediaType,
-} from "./image-understand.ts";
+import { DEFAULT_IMAGE_PROMPT, describeImageBytes, imageMediaType } from "./image-understand.ts";
 import { ResearchToolError } from "./research-errors.ts";
 import { redactArtifactText } from "../tools/tool-redaction.ts";
 import type { LanguageModel } from "ai";
@@ -117,7 +113,10 @@ export function searchResultText(outcome: SearxngSearchOutcome): string {
 function assertDeadlineLeft(ctx: ToolExecutionContext): number {
   const remaining = ctx.deadline - ctx.nowMs();
   if (remaining <= 0) {
-    throw new ResearchToolError("TRANSIENT_NETWORK", "the tool's deadline passed before the request started");
+    throw new ResearchToolError(
+      "TRANSIENT_NETWORK",
+      "the tool's deadline passed before the request started",
+    );
   }
   return remaining;
 }
@@ -149,7 +148,8 @@ export function makeWebSearchBinding(deps: ResearchToolDeps): ToolBinding {
           `the query must be 1..${QUERY_MAX_CHARS} characters`,
         );
       }
-      const language = typeof args.language === "string" && args.language !== "" ? args.language : null;
+      const language =
+        typeof args.language === "string" && args.language !== "" ? args.language : null;
       const timeoutMs = assertDeadlineLeft(ctx);
       const outcome = await searxngSearch(
         { baseUrl: searxng.baseUrl, fetchImpl, signal: ctx.signal },
@@ -364,7 +364,10 @@ export function makeDocumentParseBinding(deps: ResearchToolDeps): ToolBinding {
         artifactId !== null
           ? `\n[full text (${text.length} chars) captured as artifact ${artifactId.slice(0, 17)}…]`
           : "";
-      const headBudget = Math.max(0, RESEARCH_RESULT_HEAD_CHARS - header.length - artifactNote.length);
+      const headBudget = Math.max(
+        0,
+        RESEARCH_RESULT_HEAD_CHARS - header.length - artifactNote.length,
+      );
       const head = text.slice(0, headBudget);
       return { ok: true, text: `${header}${artifactNote}\n${head}`.trimEnd() };
     },
@@ -497,7 +500,10 @@ export function makeImageUnderstandBinding(deps: ResearchToolDeps): ToolBinding 
         artifactId !== null
           ? `\n[full description (${description.length} chars) captured as artifact ${artifactId.slice(0, 17)}…]`
           : "";
-      const headBudget = Math.max(0, RESEARCH_RESULT_HEAD_CHARS - header.length - artifactNote.length);
+      const headBudget = Math.max(
+        0,
+        RESEARCH_RESULT_HEAD_CHARS - header.length - artifactNote.length,
+      );
       const head = description.slice(0, headBudget);
       return { ok: true, text: `${header}${artifactNote}\n${head}`.trimEnd() };
     },

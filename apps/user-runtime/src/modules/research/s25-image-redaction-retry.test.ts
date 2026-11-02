@@ -104,7 +104,12 @@ function makeVisionModel(description: string): LanguageModel {
       return {
         finishReason: { unified: "stop" as const, raw: undefined },
         usage: {
-          inputTokens: { total: 1, noCache: undefined, cacheRead: undefined, cacheWrite: undefined },
+          inputTokens: {
+            total: 1,
+            noCache: undefined,
+            cacheRead: undefined,
+            cacheWrite: undefined,
+          },
           outputTokens: { total: 1, text: undefined, reasoning: undefined },
           totalTokens: { total: 2 },
         },
@@ -207,7 +212,8 @@ function propose(
 async function settled(
   outcome: ReturnType<ToolExecutor["executeProposal"]>,
 ): Promise<{ ok: true; result_summary: string } | { ok: false; error_code: string }> {
-  if (outcome.outcome !== "dispatched") throw new Error(`expected dispatched, got ${outcome.outcome}`);
+  if (outcome.outcome !== "dispatched")
+    throw new Error(`expected dispatched, got ${outcome.outcome}`);
   const result = await outcome.completion;
   if (result.outcome === "executed") {
     return { ok: true, result_summary: result.result_summary };
@@ -345,7 +351,9 @@ describe("AC5: secrets never reach history, events, or memory (S25 chunk 4)", ()
     }
     // The derived artifact bytes are redacted too.
     const ref = rt.artifacts.listArtifactsByRun(TASK)[0]!;
-    const artifactText = Buffer.from(rt.artifacts.getArtifact(WS, ref.artifact_id)!.content).toString("utf8");
+    const artifactText = Buffer.from(
+      rt.artifacts.getArtifact(WS, ref.artifact_id)!.content,
+    ).toString("utf8");
     for (const secret of PLANTED_SECRETS) {
       expect(artifactText).not.toContain(secret);
     }
@@ -382,7 +390,9 @@ describe("AC5: secrets never reach history, events, or memory (S25 chunk 4)", ()
     // The derived CSV artifact is redacted (the user's uploaded ROW keeps
     // the user's own bytes by design — the derived surfaces do not).
     const ref = rt.artifacts.listArtifactsByRun(TASK)[0]!;
-    const artifactText = Buffer.from(rt.artifacts.getArtifact(WS, ref.artifact_id)!.content).toString("utf8");
+    const artifactText = Buffer.from(
+      rt.artifacts.getArtifact(WS, ref.artifact_id)!.content,
+    ).toString("utf8");
     for (const secret of PLANTED_SECRETS) {
       expect(artifactText).not.toContain(secret);
     }
@@ -410,18 +420,49 @@ describe("AC6: typed retryability is one truth (S25 chunk 4)", () => {
 
   it("a transient failure retries per the bounded policy; a permanent one fails immediately", () => {
     // TRANSIENT_NETWORK: attempt 1..3 retry with the bounded backoff…
-    expect(decideRetry({ failureCode: "TRANSIENT_NETWORK", attemptsSoFar: 0, policy: DEFAULT_RETRY_POLICY })).toEqual({
-      action: "retry", attempt: 1, delayMs: 1_000,
+    expect(
+      decideRetry({
+        failureCode: "TRANSIENT_NETWORK",
+        attemptsSoFar: 0,
+        policy: DEFAULT_RETRY_POLICY,
+      }),
+    ).toEqual({
+      action: "retry",
+      attempt: 1,
+      delayMs: 1_000,
     });
-    expect(decideRetry({ failureCode: "TRANSIENT_NETWORK", attemptsSoFar: 1, policy: DEFAULT_RETRY_POLICY })).toEqual({
-      action: "retry", attempt: 2, delayMs: 2_000,
+    expect(
+      decideRetry({
+        failureCode: "TRANSIENT_NETWORK",
+        attemptsSoFar: 1,
+        policy: DEFAULT_RETRY_POLICY,
+      }),
+    ).toEqual({
+      action: "retry",
+      attempt: 2,
+      delayMs: 2_000,
     });
-    expect(decideRetry({ failureCode: "TRANSIENT_NETWORK", attemptsSoFar: 2, policy: DEFAULT_RETRY_POLICY })).toEqual({
-      action: "retry", attempt: 3, delayMs: 4_000,
+    expect(
+      decideRetry({
+        failureCode: "TRANSIENT_NETWORK",
+        attemptsSoFar: 2,
+        policy: DEFAULT_RETRY_POLICY,
+      }),
+    ).toEqual({
+      action: "retry",
+      attempt: 3,
+      delayMs: 4_000,
     });
     // …and exhaust into the recorded pause.
-    expect(decideRetry({ failureCode: "TRANSIENT_NETWORK", attemptsSoFar: 3, policy: DEFAULT_RETRY_POLICY })).toEqual({
-      action: "pause", reason: "retry_exhausted",
+    expect(
+      decideRetry({
+        failureCode: "TRANSIENT_NETWORK",
+        attemptsSoFar: 3,
+        policy: DEFAULT_RETRY_POLICY,
+      }),
+    ).toEqual({
+      action: "pause",
+      reason: "retry_exhausted",
     });
     // Permanent codes fail immediately at every attempt count.
     for (const code of [
@@ -432,8 +473,11 @@ describe("AC6: typed retryability is one truth (S25 chunk 4)", () => {
       "RESEARCH_PROVIDER_UNAVAILABLE",
       "TOOL_RESPONSE_TOO_LARGE",
     ]) {
-      expect(decideRetry({ failureCode: code, attemptsSoFar: 0, policy: DEFAULT_RETRY_POLICY })).toEqual({
-        action: "fail", code,
+      expect(
+        decideRetry({ failureCode: code, attemptsSoFar: 0, policy: DEFAULT_RETRY_POLICY }),
+      ).toEqual({
+        action: "fail",
+        code,
       });
     }
   });
@@ -491,9 +535,11 @@ describe("AC6: typed retryability is one truth (S25 chunk 4)", () => {
       expect(rows).toHaveLength(2);
       // Both rows share one clock stamp; assert the outcomes, not positions.
       expect(rows.map((entry) => entry.status).sort()).toEqual(["failed", "succeeded"]);
-      expect(rows.every((entry) => entry.error_code === null || entry.error_code === "TRANSIENT_NETWORK")).toBe(
-        true,
-      );
+      expect(
+        rows.every(
+          (entry) => entry.error_code === null || entry.error_code === "TRANSIENT_NETWORK",
+        ),
+      ).toBe(true);
     } finally {
       await new Promise<void>((resolve) => flaky.close(() => resolve()));
     }

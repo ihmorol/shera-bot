@@ -37,7 +37,10 @@ import { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import { ToolExecutor, canonicalArgsDigest } from "../tools/tool-executor.service.ts";
 import { ToolRegistry } from "../tools/tool-registry.ts";
 import { makeExecutionAuthority, type ToolExecutionContext } from "../tools/tool-binding.ts";
-import { makeCodeExecutionBinding, type ExecutionToolDeps } from "../execution/execution-tool-binding.ts";
+import {
+  makeCodeExecutionBinding,
+  type ExecutionToolDeps,
+} from "../execution/execution-tool-binding.ts";
 import { registerResearchTools } from "../../transport/local-api/s25-research-api.ts";
 
 const WS = "ws_default_01";
@@ -72,7 +75,11 @@ function bigHtml(blocks: number): string {
 
 interface FixtureRoute {
   match: (url: URL) => boolean;
-  handle: (req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse, url: URL) => void;
+  handle: (
+    req: import("node:http").IncomingMessage,
+    res: import("node:http").ServerResponse,
+    url: URL,
+  ) => void;
 }
 
 let fixture: Server;

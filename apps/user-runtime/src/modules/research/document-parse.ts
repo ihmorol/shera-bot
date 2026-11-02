@@ -30,10 +30,7 @@ function extensionOf(path: string): string {
  * text/markdown as themselves. The extension decides the parser; a format
  * outside the declared set refuses typed.
  */
-export async function parseDocumentBytes(
-  path: string,
-  bytes: Uint8Array,
-): Promise<ParsedDocument> {
+export async function parseDocumentBytes(path: string, bytes: Uint8Array): Promise<ParsedDocument> {
   const extension = extensionOf(path);
   if (extension === ".pdf") {
     try {

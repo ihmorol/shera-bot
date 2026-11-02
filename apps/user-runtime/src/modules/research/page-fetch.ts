@@ -150,7 +150,9 @@ export async function fetchReadablePage(deps: {
   // HTML/XML: readability over the linkedom DOM, turndown to markdown.
   const { document } = parseHTML(body);
   let title: string | null =
-    typeof document.title === "string" && document.title.trim() !== "" ? document.title.trim() : null;
+    typeof document.title === "string" && document.title.trim() !== ""
+      ? document.title.trim()
+      : null;
   let markdown: string | null = null;
   try {
     const article = new Readability(document).parse();

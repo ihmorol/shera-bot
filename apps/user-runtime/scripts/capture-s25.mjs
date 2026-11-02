@@ -34,7 +34,7 @@ import { MockLanguageModelV3 } from "ai/test";
 import { composeRuntime, DEFAULT_WORKSPACE_ID } from "../src/transport/local-api/compose.ts";
 import { canonicalArgsDigest } from "../src/modules/tools/tool-executor.service.ts";
 
-/* global document, window */
+/* global document */
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..", "..", "..");
@@ -173,7 +173,7 @@ const post = async (path, body) => {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
-  const payload = await response.json().catch(() => ({}) );
+  const payload = await response.json().catch(() => ({}));
   console.log("POST", path, "->", response.status);
   if (response.status >= 400) {
     throw new Error(`POST ${path} -> ${response.status}: ${JSON.stringify(payload)}`);
@@ -246,7 +246,10 @@ await post("/v1/workspace/files/upload", {
   workspace_id: WS,
   path: "workspace://data/cities.csv",
   actor: USER_ACTOR,
-  content_base64: Buffer.from("city,population\nLisbon,545245\nPorto,231800\nBraga,193324\n", "utf8").toString("base64"),
+  content_base64: Buffer.from(
+    "city,population\nLisbon,545245\nPorto,231800\nBraga,193324\n",
+    "utf8",
+  ).toString("base64"),
   mime_type: "text/csv",
 });
 await post("/v1/workspace/files/upload", {
@@ -292,30 +295,70 @@ async function runTool(toolId, toolVersion, capability, rawArgs, summary) {
     throw new Error(`${toolId}: expected dispatched, got ${dispatched.outcome}`);
   }
   const settled = await dispatched.completion;
-  console.log(toolId, "->", settled.outcome, settled.outcome === "executed" ? "" : settled.error_code ?? "");
+  console.log(
+    toolId,
+    "->",
+    settled.outcome,
+    settled.outcome === "executed" ? "" : (settled.error_code ?? ""),
+  );
   return settled;
 }
 
-await runTool("tool_web_search", "1.0.0", "research.search", { query: "transformer architecture literature" }, "Search the web for transformer architecture literature.");
-await runTool("tool_page_fetch", "1.0.0", "research.fetch", { url: `${fixtureOrigin}/article` }, "Read the attention paper review page.");
-await runTool("tool_document_parse", "1.0.0", "research.parse.document", { path: "workspace://papers/attention.pdf" }, "Parse the uploaded attention paper PDF.");
-await runTool("tool_spreadsheet_analyze", "1.0.0", "research.analyze.spreadsheet", { path: "workspace://data/cities.csv" }, "Analyse the uploaded city populations CSV.");
-await runTool("tool_image_understand", "1.0.0", "research.describe.image", { path: "workspace://images/diagram.png" }, "Describe the uploaded architecture diagram.");
+await runTool(
+  "tool_web_search",
+  "1.0.0",
+  "research.search",
+  { query: "transformer architecture literature" },
+  "Search the web for transformer architecture literature.",
+);
+await runTool(
+  "tool_page_fetch",
+  "1.0.0",
+  "research.fetch",
+  { url: `${fixtureOrigin}/article` },
+  "Read the attention paper review page.",
+);
+await runTool(
+  "tool_document_parse",
+  "1.0.0",
+  "research.parse.document",
+  { path: "workspace://papers/attention.pdf" },
+  "Parse the uploaded attention paper PDF.",
+);
+await runTool(
+  "tool_spreadsheet_analyze",
+  "1.0.0",
+  "research.analyze.spreadsheet",
+  { path: "workspace://data/cities.csv" },
+  "Analyse the uploaded city populations CSV.",
+);
+await runTool(
+  "tool_image_understand",
+  "1.0.0",
+  "research.describe.image",
+  { path: "workspace://images/diagram.png" },
+  "Describe the uploaded architecture diagram.",
+);
 // One honest failure row (the taste pass sees the typed error rendering):
-await runTool("tool_page_fetch", "1.0.0", "research.fetch", { url: "file:///etc/passwd" }, "Try to read a non-web path.");
+await runTool(
+  "tool_page_fetch",
+  "1.0.0",
+  "research.fetch",
+  { url: "file:///etc/passwd" },
+  "Try to read a non-web path.",
+);
 
 const history = await fetch(origin + `/v1/tools/history?workspace_id=${WS}`).then((r) => r.json());
-console.log(
-  "history rows:",
-  history.history.map((h) => `${h.tool_id}:${h.status}`).join(", "),
-);
+console.log("history rows:", history.history.map((h) => `${h.tool_id}:${h.status}`).join(", "));
 
 // ---------------------------------------------------------------------------
 // AC2 evidence: one REAL manual run per tool, recorded with its transcript.
 // ---------------------------------------------------------------------------
 
 const inventory = await fetch(origin + `/v1/tools?workspace_id=${WS}`).then((r) => r.json());
-const artifacts = await fetch(origin + `/v1/workspace/artifacts?workspace_id=${WS}`).then((r) => r.json());
+const artifacts = await fetch(origin + `/v1/workspace/artifacts?workspace_id=${WS}`).then((r) =>
+  r.json(),
+);
 const manualRuns = history.history
   .filter((row) => row.task_id === TASK)
   .map((row) => ({
@@ -338,7 +381,9 @@ writeFileSync(
       recorded_at: NOW,
       posture:
         "Each run is a REAL manual execution through the real runtime composition and the ONE execution path (executor.executeProposal), seeded through the real HTTP surface. The SearXNG endpoint and the vision model are the local deterministic fixtures the slice records (the real-container and live-provider integrations are the NOT-VERIFIED owner items).",
-      inventory: inventory.tools.map((t) => `${t.tool_id} v${t.version} ${t.state} ${t.risk_class} recovery=${t.recovery}`),
+      inventory: inventory.tools.map(
+        (t) => `${t.tool_id} v${t.version} ${t.state} ${t.risk_class} recovery=${t.recovery}`,
+      ),
       artifact_count: (artifacts.artifacts ?? []).length,
       runs: manualRuns,
     },
@@ -355,22 +400,21 @@ const markdown = [
   "",
   `Tool inventory: ${inventory.tools.map((t) => `${t.tool_id} (${t.state}, ${t.risk_class}, recovery ${t.recovery})`).join("; ")}`,
   "",
-  ...manualRuns.map(
-    (row) =>
-      [
-        `## ${row.tool_id}`,
-        "",
-        `- capability: \`${row.capability}\``,
-        `- status: **${row.status}**${row.error_code ? ` (error_code: \`${row.error_code}\`)` : ""}`,
-        `- risk class: ${row.risk_class}; recovery: ${row.recovery}; approval row: ${row.approval_id ?? "none (read-only auto-run)"}`,
-        `- arguments (redacted summary): \`${row.args_summary}\``,
-        `- result (redacted, bounded transcript):`,
-        "",
-        "```",
-        row.result_summary ?? "(no result)",
-        "```",
-        "",
-      ].join("\n"),
+  ...manualRuns.map((row) =>
+    [
+      `## ${row.tool_id}`,
+      "",
+      `- capability: \`${row.capability}\``,
+      `- status: **${row.status}**${row.error_code ? ` (error_code: \`${row.error_code}\`)` : ""}`,
+      `- risk class: ${row.risk_class}; recovery: ${row.recovery}; approval row: ${row.approval_id ?? "none (read-only auto-run)"}`,
+      `- arguments (redacted summary): \`${row.args_summary}\``,
+      `- result (redacted, bounded transcript):`,
+      "",
+      "```",
+      row.result_summary ?? "(no result)",
+      "```",
+      "",
+    ].join("\n"),
   ),
 ].join("\n");
 writeFileSync(join(CAPTURE_OUT, "manual-runs.md"), markdown);
@@ -516,9 +560,24 @@ async function capture(name, path, viewport, opts = {}) {
 }
 
 const TOOLS_PATH = "/app/settings/tools";
-await capture("tools-1440.png", TOOLS_PATH, { width: 1440, height: 900 }, { waitFor: "[data-tool-id]" });
-await capture("tools-768.png", TOOLS_PATH, { width: 768, height: 1024 }, { waitFor: "[data-tool-id]" });
-await capture("tools-360.png", TOOLS_PATH, { width: 360, height: 740 }, { fullPage: true, waitFor: "[data-tool-id]" });
+await capture(
+  "tools-1440.png",
+  TOOLS_PATH,
+  { width: 1440, height: 900 },
+  { waitFor: "[data-tool-id]" },
+);
+await capture(
+  "tools-768.png",
+  TOOLS_PATH,
+  { width: 768, height: 1024 },
+  { waitFor: "[data-tool-id]" },
+);
+await capture(
+  "tools-360.png",
+  TOOLS_PATH,
+  { width: 360, height: 740 },
+  { fullPage: true, waitFor: "[data-tool-id]" },
+);
 await capture(
   "tools-reduced-motion-1440.png",
   TOOLS_PATH,
@@ -553,9 +612,24 @@ await capture(
 
 // The workspace panel's Tool history tab (full-page route, deep-linked).
 const HISTORY_PATH = `/app/chat/${launch.chat_conversation_id}/workspace/full?tab=tools`;
-await capture("tool-history-1440.png", HISTORY_PATH, { width: 1440, height: 900 }, { waitFor: "[data-execution-id]" });
-await capture("tool-history-768.png", HISTORY_PATH, { width: 768, height: 1024 }, { waitFor: "[data-execution-id]" });
-await capture("tool-history-360.png", HISTORY_PATH, { width: 360, height: 740 }, { fullPage: true, waitFor: "[data-execution-id]" });
+await capture(
+  "tool-history-1440.png",
+  HISTORY_PATH,
+  { width: 1440, height: 900 },
+  { waitFor: "[data-execution-id]" },
+);
+await capture(
+  "tool-history-768.png",
+  HISTORY_PATH,
+  { width: 768, height: 1024 },
+  { waitFor: "[data-execution-id]" },
+);
+await capture(
+  "tool-history-360.png",
+  HISTORY_PATH,
+  { width: 360, height: 740 },
+  { fullPage: true, waitFor: "[data-execution-id]" },
+);
 await capture(
   "tool-history-reduced-motion-1440.png",
   HISTORY_PATH,

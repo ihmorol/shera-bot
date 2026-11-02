@@ -32,10 +32,7 @@ export async function readBodyWithCap(
   }
   const reader = response.body?.getReader();
   if (!reader) {
-    throw new ResearchToolError(
-      "TRANSIENT_NETWORK",
-      "the response carried no readable body",
-    );
+    throw new ResearchToolError("TRANSIENT_NETWORK", "the response carried no readable body");
   }
   const decoder = new TextDecoder();
   let text = "";

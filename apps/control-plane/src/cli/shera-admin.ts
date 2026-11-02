@@ -30,11 +30,19 @@ import { AdminTokenService } from "../modules/admin-tokens.ts";
 import { SecurityEventService } from "../modules/security-events.ts";
 import {
   createAdminApiClient,
+  httpsRefusal,
   resolveToken,
   usageError,
   type AdminApiClient,
 } from "./api-client.ts";
-import { CLI_EXIT_API_ERROR, CLI_EXIT_OK, CLI_EXIT_USAGE, type CliEnv, type CliIo } from "./io.ts";
+import {
+  CLI_EXIT_API_ERROR,
+  CLI_EXIT_OK,
+  CLI_EXIT_USAGE,
+  processIo,
+  type CliEnv,
+  type CliIo,
+} from "./io.ts";
 
 export interface RunCliArgs {
   argv: string[];
@@ -113,6 +121,11 @@ export async function runCli(args: RunCliArgs): Promise<number> {
       const url = options.url ?? globals.url ?? args.env.SHERA_CONTROL_PLANE_URL;
       if (!url) {
         usageError(args.io, "no control plane URL. Pass --url or set SHERA_CONTROL_PLANE_URL.");
+        return CLI_EXIT_USAGE;
+      }
+      const originRefusal = httpsRefusal(url);
+      if (originRefusal !== null) {
+        usageError(args.io, originRefusal);
         return CLI_EXIT_USAGE;
       }
       const token = resolveToken({
@@ -430,8 +443,13 @@ async function withLocalTokenService(
 ): Promise<number> {
   const databaseUrl = args.env.DATABASE_URL;
   if (!databaseUrl) {
-    args.io.err("error: DATABASE_URL is required for token lifecycle commands.");
-    return CLI_EXIT_USAGE;
+    // A local-authority failure (the token lifecycle is a local DB
+    // operation), not a command-line-shape error: exit 1 (review P3).
+    args.io.err(
+      "error: DATABASE_URL is required for token lifecycle commands " +
+        "(they operate the control plane's own PostgreSQL; the local authority is absent).",
+    );
+    return CLI_EXIT_API_ERROR;
   }
   const registry = new SecretRegistry();
   const logger = createControlPlaneLogger({ registry });
@@ -452,11 +470,7 @@ async function withLocalTokenService(
 
 /** The bin entry (package.json bin): process adapter only. */
 export async function main(): Promise<void> {
-  const exit = await runCli({
-    argv: process.argv.slice(2),
-    io: { out: (line) => console.log(line), err: (line) => console.error(line) },
-    env: process.env,
-  });
+  const exit = await runCli({ argv: process.argv.slice(2), io: processIo, env: process.env });
   process.exitCode = exit;
 }
 

@@ -107,4 +107,29 @@ export function usageError(io: CliIo, message: string): { ok: false; exit: numbe
   return { ok: false, exit: CLI_EXIT_USAGE };
 }
 
-export const API_ERROR_EXIT = CLI_EXIT_API_ERROR;
+/**
+ * The plaintext-origin guard (review P3): the admin token is a bearer
+ * credential — shipping it over cleartext http to a non-loopback host is a
+ * credential disclosure. Returns the refusal message for a non-https
+ * origin, or null when the origin is acceptable (https, or loopback http
+ * for local development).
+ */
+export function httpsRefusal(baseUrl: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(baseUrl);
+  } catch {
+    return `the control plane origin is not a valid URL: ${baseUrl}`;
+  }
+  if (parsed.protocol === "https:") return null;
+  const host = parsed.hostname;
+  const loopback =
+    host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host === "::1";
+  if (loopback) return null;
+  return (
+    `refusing plaintext http for a non-loopback control plane (${host}): ` +
+    "the admin token would cross the network in cleartext. Use https " +
+    "(the production control plane presents a CA-trusted certificate) or " +
+    "http on loopback for local development."
+  );
+}

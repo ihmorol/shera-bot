@@ -248,3 +248,27 @@ describe("task state machine: typed rejections (never thrown)", () => {
     }
   });
 });
+
+describe("the transition reason vocabulary is typed codes, never free text (review P3)", () => {
+  // The S32 failures view surfaces journal `reason` values to the operator,
+  // and its G3 posture rests on WRITE-TIME discipline: the reasons are the
+  // transition table's own typed vocabulary, not operator or user text.
+  // This contract pin makes that invariant explicit — a future row that
+  // wants to carry free text must either stay code-shaped or add a
+  // read-time redaction pass to the failures view.
+  const CODE_SHAPE = /^[a-z0-9_:-]{1,64}$/;
+
+  it("every transition row's reason is a bounded code-shaped token", () => {
+    for (const row of TASK_TRANSITIONS) {
+      expect(
+        CODE_SHAPE.test(row.reason),
+        `transition ${String(row.from)} -> ${String(row.to)} (${row.command}) ` +
+          `carries a non-code reason: ${row.reason}`,
+      ).toBe(true);
+    }
+  });
+
+  it("the vocabulary is non-empty (the pin cannot rot on an empty table)", () => {
+    expect(TASK_TRANSITIONS.length).toBeGreaterThanOrEqual(5);
+  });
+});

@@ -60,6 +60,7 @@ function internalChannelError(
     | "INTERNAL_CHANNEL_UNAUTHORIZED"
     | "CONTRACT_VALIDATION_FAILED"
     | "RUNTIME_TENANT_MISMATCH"
+    | "INTERNAL_CHANNEL_NOT_BOUND"
     | "INTERNAL_ERROR",
   safe_message: string,
 ): SheraError {
@@ -68,7 +69,7 @@ function internalChannelError(
     category:
       code === "CONTRACT_VALIDATION_FAILED"
         ? "validation"
-        : code === "INTERNAL_ERROR"
+        : code === "INTERNAL_ERROR" || code === "INTERNAL_CHANNEL_NOT_BOUND"
           ? "internal"
           : "unauthorized",
     safe_message,
@@ -270,7 +271,20 @@ export function createInternalApi(deps: InternalApiDeps): InternalApi {
         );
       return;
     }
-    if (deps.accountId !== undefined && parsed.data.workspace_id !== `ws_${deps.accountId}`) {
+    if (deps.accountId === undefined) {
+      // Fail CLOSED (review P3): an unbound composition must not skip the
+      // tenant check — the admin commands are refused, typed.
+      res
+        .status(503)
+        .json(
+          internalChannelError(
+            "INTERNAL_CHANNEL_NOT_BOUND",
+            "This runtime's channel composition does not bind an account; the admin command is refused.",
+          ),
+        );
+      return;
+    }
+    if (parsed.data.workspace_id !== `ws_${deps.accountId}`) {
       securityEvents.record({
         event: "internal_admin_command_refused",
         reason: "workspace_tenant_mismatch",
@@ -341,7 +355,20 @@ export function createInternalApi(deps: InternalApiDeps): InternalApi {
         );
       return;
     }
-    if (deps.accountId !== undefined && parsed.data.workspace_id !== `ws_${deps.accountId}`) {
+    if (deps.accountId === undefined) {
+      // Fail CLOSED (review P3): an unbound composition must not skip the
+      // tenant check — the admin commands are refused, typed.
+      res
+        .status(503)
+        .json(
+          internalChannelError(
+            "INTERNAL_CHANNEL_NOT_BOUND",
+            "This runtime's channel composition does not bind an account; the admin command is refused.",
+          ),
+        );
+      return;
+    }
+    if (parsed.data.workspace_id !== `ws_${deps.accountId}`) {
       securityEvents.record({
         event: "internal_admin_command_refused",
         reason: "workspace_tenant_mismatch",
@@ -412,7 +439,20 @@ export function createInternalApi(deps: InternalApiDeps): InternalApi {
         );
       return;
     }
-    if (deps.accountId !== undefined && query.data.workspace_id !== `ws_${deps.accountId}`) {
+    if (deps.accountId === undefined) {
+      // Fail CLOSED (review P3): an unbound composition must not skip the
+      // tenant check — the admin command is refused, typed.
+      res
+        .status(503)
+        .json(
+          internalChannelError(
+            "INTERNAL_CHANNEL_NOT_BOUND",
+            "This runtime's channel composition does not bind an account; the admin command is refused.",
+          ),
+        );
+      return;
+    }
+    if (query.data.workspace_id !== `ws_${deps.accountId}`) {
       securityEvents.record({
         event: "internal_admin_command_refused",
         reason: "workspace_tenant_mismatch",

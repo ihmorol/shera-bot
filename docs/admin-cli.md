@@ -51,6 +51,15 @@ in `ps` and shell history (G3). The token is read from the environment or
 from a file, used in the `Authorization: Bearer` header, and never printed,
 logged, or echoed in errors.
 
+**Plaintext origins are refused off loopback.** The bearer token must not
+cross the network in cleartext: a `--url`/`SHERA_CONTROL_PLANE_URL` whose
+scheme is `http:` is refused (exit 2) unless the host is loopback
+(`localhost`, `127.0.0.1`, `::1`) for local development. The production
+control plane presents a **CA-trusted TLS certificate** — point `--url` at
+its `https://` origin; a self-signed deployment needs the operator's trust
+store configured (Node's `NODE_EXTRA_CA_CERTS`) rather than a plaintext
+downgrade.
+
 The admin token is **DB-managed** (AC7): the control plane's PostgreSQL owns
 the `is_admin` flag and the token table. There is **no route anywhere in the
 API that writes `is_admin`** — operator bootstrap happens locally on the
@@ -62,8 +71,8 @@ command below.
 | Code | Meaning |
 |---|---|
 | `0` | Success |
-| `1` | Typed API/local failure — the control plane's typed error (`code` + `safe_message`) is printed to stderr |
-| `2` | Usage error — the command line itself is wrong (unknown command, missing argument, invalid `--amount`, missing URL/token) |
+| `1` | Typed API/local failure — the control plane's typed error (`code` + `safe_message`) is printed to stderr; **local-authority failures are also 1** (a missing `DATABASE_URL` for the token commands — the local DB authority is absent, the command line itself is fine) |
+| `2` | Usage error — the command line itself is wrong (unknown command, missing argument, invalid `--amount`, missing URL/token, a refused plaintext origin) |
 
 ## Token lifecycle (`token` — local, exactly-once display)
 

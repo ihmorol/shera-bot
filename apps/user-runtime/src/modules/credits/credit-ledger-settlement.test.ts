@@ -385,9 +385,7 @@ describe("the append-only ledger (S24 AC9)", () => {
     const harness = makeHarness();
     harness.ledger.ensureAccount(WS);
     harness.ledger.grant({ workspace_id: WS, amount_units: 100, related_id: null });
-    const grant = harness.repo
-      .listTransactions(WS)
-      .find((row) => row.entry_type === "grant");
+    const grant = harness.repo.listTransactions(WS).find((row) => row.entry_type === "grant");
     expect(grant).toBeDefined();
     // Grant corrections (clawbacks) are supported: the granted counter moves.
     expect(

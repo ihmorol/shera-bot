@@ -115,16 +115,12 @@ export type RunCostDrillDown = z.infer<typeof RunCostDrillDownSchema>;
 
 export async function fetchCreditsSummary(workspaceId: string): Promise<CreditsSummary> {
   const query = new URLSearchParams({ workspace_id: workspaceId });
-  return requestRuntime(
-    `/api/runtime/v1/credits?${query.toString()}`,
-    (payload) => CreditsSummarySchema.parse(payload),
+  return requestRuntime(`/api/runtime/v1/credits?${query.toString()}`, (payload) =>
+    CreditsSummarySchema.parse(payload),
   );
 }
 
-export async function fetchRunCost(
-  workspaceId: string,
-  runId: string,
-): Promise<RunCostDrillDown> {
+export async function fetchRunCost(workspaceId: string, runId: string): Promise<RunCostDrillDown> {
   const query = new URLSearchParams({ workspace_id: workspaceId });
   return requestRuntime(
     `/api/runtime/v1/credits/runs/${encodeURIComponent(Id.parse(runId))}?${query.toString()}`,

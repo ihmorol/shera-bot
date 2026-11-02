@@ -197,7 +197,10 @@ const exhaustedSummary: CreditsSummary = {
 function SettingsHarness() {
   const [selected, setSelected] = useState<string | null>("run_9f2c1e_sweep");
   return (
-    <main className="min-h-screen bg-canvas px-6 py-8 text-text" style={{ fontFamily: "system-ui, sans-serif" }}>
+    <main
+      className="min-h-screen bg-canvas px-6 py-8 text-text"
+      style={{ fontFamily: "system-ui, sans-serif" }}
+    >
       <div className="mx-auto max-w-xl py-8">
         <CreditsSettingsView
           summary={summary}
@@ -217,7 +220,10 @@ function SettingsHarness() {
 
 function ExhaustedHarness() {
   return (
-    <main className="min-h-screen bg-canvas px-6 py-8 text-text" style={{ fontFamily: "system-ui, sans-serif" }}>
+    <main
+      className="min-h-screen bg-canvas px-6 py-8 text-text"
+      style={{ fontFamily: "system-ui, sans-serif" }}
+    >
       <div className="mx-auto max-w-xl py-8">
         <CreditsSettingsView
           summary={exhaustedSummary}
@@ -244,7 +250,9 @@ function App() {
         <SettingsHarness />
       </div>
       <div data-view="pill-row" className="bg-canvas px-6 py-8">
-        <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.16em] text-muted">sidebar footer</p>
+        <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.16em] text-muted">
+          sidebar footer
+        </p>
         <div className="flex w-64 flex-col gap-3 rounded-xl border border-line bg-surface p-4">
           <CreditsPillView account={summary.account!} />
           <CreditsPillView account={exhaustedSummary.account!} />

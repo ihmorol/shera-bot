@@ -57,7 +57,8 @@ export interface PlanCreditLedger {
     estimate_units: number;
     provider_id: string;
     model: string;
-  }): { ok: true; reservation_id: string }
+  }):
+    | { ok: true; reservation_id: string }
     | { ok: false; code: "insufficient_credits"; available_units: number; requested_units: number };
   /** The run's single active hold (a recovery re-entry reuses it — an
    * ambiguous outcome kept the hold; a resumed run never takes a second

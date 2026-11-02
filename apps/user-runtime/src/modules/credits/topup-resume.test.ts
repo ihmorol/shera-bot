@@ -8,7 +8,7 @@
  *   QUEUED placement.
  * - The admin top-up (the S32 command over the recorded internal channel)
  *   applies the GRANT to the runtime ledger (the central topup id is the
-   * related reference) and resumes every insufficient-credit-paused run
+ * related reference) and resumes every insufficient-credit-paused run
  *   through the recorded D8 `resume_task` row — and the resumed run
  *   COMPLETES: the re-drive re-walks it from QUEUED with the funded
  *   account (reserve → call → settle).
@@ -56,7 +56,11 @@ const server: Server = createServer((req, res) => {
         created: 0,
         model: "fixture-model",
         choices: [
-          { index: 0, message: { role: "assistant", content: FIXTURE_COMPLETION }, finish_reason: "stop" },
+          {
+            index: 0,
+            message: { role: "assistant", content: FIXTURE_COMPLETION },
+            finish_reason: "stop",
+          },
         ],
         usage: { prompt_tokens: 5000, completion_tokens: 2000, total_tokens: 7000 },
       }),

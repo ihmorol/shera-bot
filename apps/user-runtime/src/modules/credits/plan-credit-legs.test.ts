@@ -21,8 +21,6 @@
  * proof is the request counter and the ledger rows, never a mock assertion.
  */
 import { createServer, type Server } from "node:http";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AddressInfo } from "node:net";
 
@@ -65,7 +63,11 @@ const completionServer: Server = createServer((req, res) => {
         created: 0,
         model: "fixture-model",
         choices: [
-          { index: 0, message: { role: "assistant", content: FIXTURE_COMPLETION }, finish_reason: "stop" },
+          {
+            index: 0,
+            message: { role: "assistant", content: FIXTURE_COMPLETION },
+            finish_reason: "stop",
+          },
         ],
         usage: { prompt_tokens: 5000, completion_tokens: 2000, total_tokens: 7000 },
       }),
@@ -374,22 +376,16 @@ describe("the model call's credit legs (S24)", () => {
       side_effect_summary: "The exhausted-account capability probe's read.",
     });
     expect(toolOutcome.outcome).toBe("executed");
-    const history = new ToolsRepository(credit.conn.db).listExecutionsByTask(
-      WS,
-      toolRun.task_id,
-    );
+    const history = new ToolsRepository(credit.conn.db).listExecutionsByTask(WS, toolRun.task_id);
     expect(history.find((row) => row.tool_id === "tool_note_read")?.status).toBe("succeeded");
     expect(ledgerRepo.listTransactions(WS)).toHaveLength(0);
     expect(ledgerRepo.listUsageForTask(WS, toolRun.task_id)).toHaveLength(0);
 
     // (b) The MODEL call on the SAME exhausted account: the reservation is
     // refused — the D48 pause (the ONLY thing credits stop).
-    const modelPlan = await createScheduledRun(
-      runtime,
-      platformProvider.id,
-      "fixture-model",
-      { prompt: "Compile the sweep." },
-    );
+    const modelPlan = await createScheduledRun(runtime, platformProvider.id, "fixture-model", {
+      prompt: "Compile the sweep.",
+    });
     completions = 0;
     const modelOutcome = await fire(runtime, modelPlan.triggerId);
     expect(modelOutcome.outcome).toBe("paused_credits");

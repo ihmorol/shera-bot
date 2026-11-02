@@ -171,9 +171,9 @@ function renderedMovementRows(html: string): Array<{ label: string; amount: numb
 describe("S24 — the truthful credits readout (AC8, D21)", () => {
   it("renders the ledger's own numbers — remaining, reserved, used this month", () => {
     const html = renderCredits();
-    expect(html).toContain("data-testid=\"credits-remaining\"");
-    expect(html).toContain("data-testid=\"credits-reserved\"");
-    expect(html).toContain("data-testid=\"credits-used-this-month\"");
+    expect(html).toContain('data-testid="credits-remaining"');
+    expect(html).toContain('data-testid="credits-reserved"');
+    expect(html).toContain('data-testid="credits-used-this-month"');
     // The VALUES from the ledger record (en-GB grouping), never recomputed.
     expect(html).toContain("150");
     expect(html).toContain("25");
@@ -301,7 +301,7 @@ describe("S24 — the truthful credits readout (AC8, D21)", () => {
       }),
       pausedTriggerCount: 1,
     });
-    expect(html).toContain("data-testid=\"credits-exhausted-card\"");
+    expect(html).toContain('data-testid="credits-exhausted-card"');
     expect(html).toContain("Out of Shera credits");
     expect(html).toContain("administrator");
     expect(html).toContain("tops the account up");
@@ -317,8 +317,8 @@ describe("S24 — the truthful credits readout (AC8, D21)", () => {
     const html = renderCredits({ summary: null, surfaceState: "ready" });
     expect(html).toContain("No credit account exists in this workspace yet");
     // The not-provisioned state fabricates nothing — no balance, no card.
-    expect(html).not.toContain("data-testid=\"credits-exhausted-card\"");
-    expect(html).not.toContain("data-testid=\"credits-remaining\"");
+    expect(html).not.toContain('data-testid="credits-exhausted-card"');
+    expect(html).not.toContain('data-testid="credits-remaining"');
   });
 });
 
@@ -327,7 +327,7 @@ describe("S24 — the sidebar credits pill (D21)", () => {
     const html = renderToStaticMarkup(
       createElement(CreditsPillView, { account: summary().account! }),
     );
-    expect(html).toContain("data-testid=\"credits-pill\"");
+    expect(html).toContain('data-testid="credits-pill"');
     expect(html).toContain("150");
     expect(html).toContain("credits left");
     // The reserved reveal exists AND is keyboard-reachable (group-focus-within
@@ -355,9 +355,11 @@ describe("S24 — the sidebar credits pill (D21)", () => {
       }),
     );
     expect(html).toContain("border-approval");
-    expect(html).toContain("No Shera credits remaining. An administrator top-up resumes paused runs.");
+    expect(html).toContain(
+      "No Shera credits remaining. An administrator top-up resumes paused runs.",
+    );
     // The exhausted pill still links to the credits surface (the what-next).
-    expect(html).toContain("href=\"/app/settings/credits\"");
+    expect(html).toContain('href="/app/settings/credits"');
   });
 
   it("a funded quiet account shows the plain remaining number", () => {

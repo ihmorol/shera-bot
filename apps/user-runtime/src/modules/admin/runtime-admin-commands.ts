@@ -95,17 +95,13 @@ export interface RuntimeAdminCommandsDeps {
    * the central topup id). Applied BEFORE any resume, so the re-drive's
    * reservation consults a funded account.
    */
-  applyGrant?:
-    | ((workspaceId: string, topupId: string, amount: number) => void)
-    | undefined;
+  applyGrant?: ((workspaceId: string, topupId: string, amount: number) => void) | undefined;
   /**
    * S24 (AC2): the re-drive for one resumed run — the composed scheduler's
    * resumeRunAfterTopUp (the run walks its plan legs from QUEUED with the
    * funded account). Awaited per resumed run.
    */
-  resumeRun?:
-    | ((workspaceId: string, runId: string) => Promise<void>)
-    | undefined;
+  resumeRun?: ((workspaceId: string, runId: string) => Promise<void>) | undefined;
   /**
    * S24: the workspace-level seam fired after the per-run walk — the
    * composed scheduler's resumeAfterTopUp (credit-paused TRIGGERS re-arm).

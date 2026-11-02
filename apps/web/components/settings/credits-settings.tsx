@@ -99,16 +99,15 @@ function ExhaustedPauseCard({ pausedTriggerCount }: { pausedTriggerCount: number
         <div className="min-w-0">
           <p className="text-sm text-text">Out of Shera credits</p>
           <p className="mt-1 text-sm text-muted">
-            Model calls pause with “insufficient credits” until an administrator
-            tops the account up. Paused runs resume automatically after the
-            top-up — or you can cancel them from their Operation chat.
+            Model calls pause with “insufficient credits” until an administrator tops the account
+            up. Paused runs resume automatically after the top-up — or you can cancel them from
+            their Operation chat.
             {pausedTriggerCount > 0
               ? ` ${pausedTriggerCount} scheduled trigger${pausedTriggerCount === 1 ? " is" : "s are"} paused for credits right now.`
               : ""}
           </p>
           <p className="mt-2 text-xs text-muted">
-            Credits never affect tools, files, or approvals — only model calls
-            consume them.
+            Credits never affect tools, files, or approvals — only model calls consume them.
           </p>
         </div>
       </div>
@@ -136,7 +135,9 @@ function RunRow({
         className={cn(
           "flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left text-sm transition-colors",
           "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky",
-          selected ? "border-line-accent bg-surface-elevated" : "border-transparent hover:bg-surface-elevated",
+          selected
+            ? "border-line-accent bg-surface-elevated"
+            : "border-transparent hover:bg-surface-elevated",
         )}
       >
         <span className="min-w-0 flex-1 truncate font-mono text-xs text-text">{run.task_id}</span>
@@ -166,7 +167,10 @@ function RunRow({
  * construction (AC8), and the copy says so. */
 function RunDrillDown({ drillDown }: { drillDown: RunCostDrillDown }) {
   return (
-    <div data-testid="credits-run-detail" className="rounded-xl border border-line bg-surface-elevated px-4 py-3">
+    <div
+      data-testid="credits-run-detail"
+      className="rounded-xl border border-line bg-surface-elevated px-4 py-3"
+    >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <p className="font-mono text-xs text-text">{drillDown.task_id}</p>
         <p className="text-xs text-muted">
@@ -178,7 +182,10 @@ function RunDrillDown({ drillDown }: { drillDown: RunCostDrillDown }) {
       </div>
       <ul className="mt-3 space-y-1.5">
         {drillDown.movements.map((movement) => (
-          <li key={movement.transaction_id} className="flex items-baseline justify-between gap-3 text-xs">
+          <li
+            key={movement.transaction_id}
+            className="flex items-baseline justify-between gap-3 text-xs"
+          >
             <span className="min-w-0 truncate text-muted">
               {MOVEMENT_LABELS[movement.entry_type] ?? movement.entry_type}
             </span>
@@ -191,7 +198,10 @@ function RunDrillDown({ drillDown }: { drillDown: RunCostDrillDown }) {
       {drillDown.usage.length > 0 ? (
         <div className="mt-3 border-t border-line pt-3">
           {drillDown.usage.map((usage) => (
-            <div key={usage.usage_id} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 text-xs">
+            <div
+              key={usage.usage_id}
+              className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 text-xs"
+            >
               <span className="text-muted">
                 {usage.provider_origin === "user"
                   ? `${usage.provider_id} (custom — no Shera credits)`
@@ -210,7 +220,10 @@ function RunDrillDown({ drillDown }: { drillDown: RunCostDrillDown }) {
       {drillDown.releases.length > 0 ? (
         <div className="mt-3 border-t border-line pt-3">
           {drillDown.releases.map((release) => (
-            <div key={release.release_id} className="flex items-baseline justify-between gap-3 text-xs">
+            <div
+              key={release.release_id}
+              className="flex items-baseline justify-between gap-3 text-xs"
+            >
               <span className="text-muted">
                 Released because {RELEASE_LABELS[release.reason] ?? release.reason}
               </span>
@@ -252,14 +265,19 @@ export function CreditsSettingsView({
     return <LoadingState />;
   }
   if (surfaceState === "error") {
-    return <ErrorState safeMessage={safeErrorMessage ?? "The credit ledger could not be loaded."} onRetry={onRetry} />;
+    return (
+      <ErrorState
+        safeMessage={safeErrorMessage ?? "The credit ledger could not be loaded."}
+        onRetry={onRetry}
+      />
+    );
   }
   if (summary === null || summary.account === null) {
     return (
       <div className="space-y-4">
         <p className="text-sm text-muted">
-          No credit account exists in this workspace yet. It is provisioned
-          when an administrator grants the first credits.
+          No credit account exists in this workspace yet. It is provisioned when an administrator
+          grants the first credits.
         </p>
       </div>
     );
@@ -277,9 +295,9 @@ export function CreditsSettingsView({
       <div>
         <h2 className="text-base text-text">Shera credits</h2>
         <p className="mt-1 max-w-prose text-sm text-muted">
-          The account-level balance. Requests reserve a bounded estimate before
-          a model call, settle against the actual usage, and release what they
-          did not use — the numbers below are the ledger's own.
+          The account-level balance. Requests reserve a bounded estimate before a model call, settle
+          against the actual usage, and release what they did not use — the numbers below are the
+          ledger's own.
         </p>
         <div className="mt-5 flex flex-wrap gap-x-10 gap-y-4">
           <HeadlineNumber
@@ -310,14 +328,13 @@ export function CreditsSettingsView({
       <div>
         <h2 className="text-base text-text">Per-run cost</h2>
         <p className="mt-1 max-w-prose text-sm text-muted">
-          Select a run to see its reservation, settlement, and release rows.
-          Every run's rows sum exactly to its charged number — and to the
-          ledger.
+          Select a run to see its reservation, settlement, and release rows. Every run's rows sum
+          exactly to its charged number — and to the ledger.
         </p>
         {summary.recent_runs.length === 0 ? (
           <p className="mt-4 text-sm text-muted">
-            No model call has consumed credits yet — the ledger has nothing to
-            show, and nothing is estimated.
+            No model call has consumed credits yet — the ledger has nothing to show, and nothing is
+            estimated.
           </p>
         ) : (
           <div className="mt-4 space-y-2">
@@ -333,8 +350,8 @@ export function CreditsSettingsView({
             </ul>
             {drillDownState === "loading" ? (
               <p className="flex items-center gap-2 px-1 text-xs text-muted">
-                <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> Loading the
-                run's ledger rows…
+                <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> Loading the run's
+                ledger rows…
               </p>
             ) : null}
             {drillDownState === "error" ? (
@@ -342,7 +359,9 @@ export function CreditsSettingsView({
                 This run&apos;s ledger rows could not be loaded.
               </p>
             ) : null}
-            {drillDownState === "ready" && drillDown !== null ? <RunDrillDown drillDown={drillDown} /> : null}
+            {drillDownState === "ready" && drillDown !== null ? (
+              <RunDrillDown drillDown={drillDown} />
+            ) : null}
           </div>
         )}
       </div>
@@ -352,13 +371,11 @@ export function CreditsSettingsView({
       <div>
         <h2 className="text-base text-text">Custom-provider usage</h2>
         <p className="mt-1 max-w-prose text-sm text-muted">
-          Requests through your own providers never consume Shera credits —
-          they are measured locally instead.
+          Requests through your own providers never consume Shera credits — they are measured
+          locally instead.
         </p>
         {summary.custom_provider_usage.calls === 0 ? (
-          <p className="mt-3 text-sm text-muted">
-            No custom-provider calls this month.
-          </p>
+          <p className="mt-3 text-sm text-muted">No custom-provider calls this month.</p>
         ) : (
           <div className="mt-3 space-y-1 text-sm">
             <p className="text-text">
@@ -434,7 +451,8 @@ function RuntimeCreditsSettings({
   const pausedTriggerCount =
     schedules.state === "ready"
       ? schedules.triggers.filter(
-          (trigger) => trigger.state === "paused" && trigger.pause_reason === "insufficient_credits",
+          (trigger) =>
+            trigger.state === "paused" && trigger.pause_reason === "insufficient_credits",
         ).length
       : 0;
   if (catalog.state === "loading") {

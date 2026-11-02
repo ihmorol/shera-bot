@@ -1130,7 +1130,8 @@ export class SchedulerService {
       });
       return { ok: false, kind: "failed", code: legs.code };
     }
-    if (!step("complete_task")) return { ok: false, kind: "failed", code: "WALK_COMPLETE_REJECTED" };
+    if (!step("complete_task"))
+      return { ok: false, kind: "failed", code: "WALK_COMPLETE_REJECTED" };
     return { ok: true };
   }
 

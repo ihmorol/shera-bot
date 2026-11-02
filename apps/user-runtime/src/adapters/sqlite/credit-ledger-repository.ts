@@ -20,11 +20,7 @@ import type { SqliteExec, SqliteTransactions } from "./transactions.ts";
 
 /** The append-only movement vocabulary (the migration's CHECK set). */
 export type CreditEntryType =
-  | "grant"
-  | "reservation_hold"
-  | "settlement_charge"
-  | "reservation_release"
-  | "adjustment";
+  "grant" | "reservation_hold" | "settlement_charge" | "reservation_release" | "adjustment";
 
 /** The reservation lifecycle (the S02 contract's closed set). */
 export type CreditReservationStatus = "reserved" | "settled" | "released";
@@ -221,13 +217,7 @@ export class CreditLedgerRepository {
              updated_at = ?
          WHERE workspace_id = ?`,
       )
-      .run(
-        delta.granted ?? 0,
-        delta.charged ?? 0,
-        delta.reserved ?? 0,
-        updatedAt,
-        workspaceId,
-      );
+      .run(delta.granted ?? 0, delta.charged ?? 0, delta.reserved ?? 0, updatedAt, workspaceId);
   }
 
   // ── credit_transaction (append-only, AC9) ──────────────────────────────────
@@ -276,9 +266,7 @@ export class CreditLedgerRepository {
     exec?: SqliteExec,
   ): CreditTransactionRow | null {
     const row = (exec ?? this.tx.connection())
-      .prepare(
-        "SELECT * FROM credit_transaction WHERE workspace_id = ? AND transaction_id = ?",
-      )
+      .prepare("SELECT * FROM credit_transaction WHERE workspace_id = ? AND transaction_id = ?")
       .get(workspaceId, transactionId) as Record<string, unknown> | undefined;
     return row ? this.toTransaction(row) : null;
   }
@@ -499,7 +487,11 @@ export class CreditLedgerRepository {
   /** Usage rows recorded in the calendar month containing `at` (the D21
    * "used this month" read; the charged movement rows are the authority —
    * this read is the custom-provider visibility surface). */
-  listUsageForMonth(workspaceId: string, monthStart: string, monthEnd: string): CreditUsageRecordRow[] {
+  listUsageForMonth(
+    workspaceId: string,
+    monthStart: string,
+    monthEnd: string,
+  ): CreditUsageRecordRow[] {
     const rows = this.tx
       .connection()
       .prepare(

@@ -93,7 +93,10 @@ export function useRunCost(
     return {
       state: "error" as const,
       drillDown: null,
-      safeErrorMessage: safeCreditsMessage(query.error, "This run's credit records could not be loaded."),
+      safeErrorMessage: safeCreditsMessage(
+        query.error,
+        "This run's credit records could not be loaded.",
+      ),
     };
   }
   return { state: "ready" as const, drillDown: query.data, safeErrorMessage: undefined };

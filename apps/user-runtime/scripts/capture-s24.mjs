@@ -97,7 +97,11 @@ const post = async (path, body) => {
 const credits = runtime.credits;
 
 // The admin grant (the S32 top-up seam's ledger leg; D47/D20).
-const grant = credits.grant({ workspace_id: WS, amount_units: 200, related_id: "topup_capture_seed" });
+const grant = credits.grant({
+  workspace_id: WS,
+  amount_units: 200,
+  related_id: "topup_capture_seed",
+});
 console.log("granted 200 via", grant.transaction_id);
 
 // Run A: reserve 50, settle 30 — the unused 20 releases back (D20).
@@ -347,8 +351,8 @@ const fmt = (n) => n.toLocaleString("en-GB");
       remaining: pick("credits-remaining"),
       reserved: pick("credits-reserved"),
       usedThisMonth: pick("credits-used-this-month"),
-      runRows: [...document.querySelectorAll('[data-testid="credits-run-row"]')].map((row) =>
-        row.textContent ?? "",
+      runRows: [...document.querySelectorAll('[data-testid="credits-run-row"]')].map(
+        (row) => row.textContent ?? "",
       ),
       pill: document.querySelector('[data-testid="credits-pill"]')?.textContent ?? null,
     };
@@ -365,8 +369,10 @@ const fmt = (n) => n.toLocaleString("en-GB");
       `used-this-month ${rendered.usedThisMonth} != ledger ${fmt(state.used_this_month_units)}`,
     );
   }
-  if (!rendered.runRows.some((row) => row.includes(runA))) mismatches.push(`run row ${runA} missing`);
-  if (!rendered.runRows.some((row) => row.includes(runB))) mismatches.push(`run row ${runB} missing`);
+  if (!rendered.runRows.some((row) => row.includes(runA)))
+    mismatches.push(`run row ${runA} missing`);
+  if (!rendered.runRows.some((row) => row.includes(runB)))
+    mismatches.push(`run row ${runB} missing`);
   const runACost = truth.run_a_cost;
   // The drill-down renders only a run the user actually selects (no
   // fabricated default — G4): select run A through the real control.
@@ -391,13 +397,18 @@ const fmt = (n) => n.toLocaleString("en-GB");
   if (rendered.pill === null || !rendered.pill.includes(fmt(state.available_units))) {
     mismatches.push(`the pill does not render the ledger's remaining (${rendered.pill})`);
   }
-  writeFileSync(join(CAPTURE_OUT, "s24-truth-leg.json"), JSON.stringify({ rendered, mismatches }, null, 2));
+  writeFileSync(
+    join(CAPTURE_OUT, "s24-truth-leg.json"),
+    JSON.stringify({ rendered, mismatches }, null, 2),
+  );
   if (mismatches.length > 0) {
     console.error("AC8 TRUTH MISMATCH: the UI does not render the ledger's own record");
     for (const m of mismatches) console.error("  -", m);
     process.exit(1);
   }
-  console.log("AC8 truth leg passed: remaining/reserved/used-this-month, run rows, drill-down, and pill all render the ledger's own record");
+  console.log(
+    "AC8 truth leg passed: remaining/reserved/used-this-month, run rows, drill-down, and pill all render the ledger's own record",
+  );
   await context.close();
 }
 
@@ -415,7 +426,11 @@ async function capture(name, viewport, opts = {}) {
 await capture("s24-credits-1440.png", { width: 1440, height: 900 });
 await capture("s24-credits-768.png", { width: 768, height: 1024 }, { fullPage: true });
 await capture("s24-credits-360.png", { width: 360, height: 740 }, { fullPage: true });
-await capture("s24-credits-reduced-motion-1440.png", { width: 1440, height: 900 }, { reducedMotion: true });
+await capture(
+  "s24-credits-reduced-motion-1440.png",
+  { width: 1440, height: 900 },
+  { reducedMotion: true },
+);
 
 // ---------------------------------------------------------------------------
 // 6. The pill's reserved reveal: hover AND keyboard focus (§2.1 parity)
@@ -439,7 +454,9 @@ await capture("s24-credits-reduced-motion-1440.png", { width: 1440, height: 900 
     JSON.stringify({ revealDisplayBefore: before, revealDisplayAfterHover: after }, null, 2),
   );
   if (before !== "none" || after !== "block") {
-    console.error(`PILL HOVER GATE: reveal display before=${before} after=${after} (expected none -> block)`);
+    console.error(
+      `PILL HOVER GATE: reveal display before=${before} after=${after} (expected none -> block)`,
+    );
     process.exit(1);
   }
   console.log("pill hover reveal: none -> block on hover");
@@ -467,20 +484,34 @@ await capture("s24-credits-reduced-motion-1440.png", { width: 1440, height: 900 
         tag: element?.tagName ?? "none",
         testId: element?.getAttribute("data-testid") ?? null,
         text: (element?.textContent ?? "").slice(0, 60),
-        visibleFocus: element ? style?.outlineStyle !== "none" || (style?.boxShadow ?? "") !== "none" : false,
+        visibleFocus: element
+          ? style?.outlineStyle !== "none" || (style?.boxShadow ?? "") !== "none"
+          : false,
       };
     });
     trail.push(focused);
     if (focused.testId === "credits-pill") {
       pillIndex = step;
       await page.waitForTimeout(200);
-      revealOnFocus = await reveal.evaluate((element) => globalThis.getComputedStyle(element).display);
+      revealOnFocus = await reveal.evaluate(
+        (element) => globalThis.getComputedStyle(element).display,
+      );
     }
   }
   const visibleFocusCount = trail.filter((step) => step.visibleFocus).length;
   writeFileSync(
     join(CAPTURE_OUT, "s24-keyboard-trail.json"),
-    JSON.stringify({ steps: trail.length, pillFocusedAtStep: pillIndex, revealOnFocus, visibleFocusCount, trail: trail.slice(0, 12) }, null, 2),
+    JSON.stringify(
+      {
+        steps: trail.length,
+        pillFocusedAtStep: pillIndex,
+        revealOnFocus,
+        visibleFocusCount,
+        trail: trail.slice(0, 12),
+      },
+      null,
+      2,
+    ),
   );
   await page.screenshot({ path: join(CAPTURE_OUT, "s24-credits-keyboard-1440.png") });
   if (pillIndex === -1) {
@@ -488,14 +519,18 @@ await capture("s24-credits-reduced-motion-1440.png", { width: 1440, height: 900 
     process.exit(1);
   }
   if (revealOnFocus !== "block") {
-    console.error(`KEYBOARD GATE: the reserved reveal is not visible on focus (display=${revealOnFocus})`);
+    console.error(
+      `KEYBOARD GATE: the reserved reveal is not visible on focus (display=${revealOnFocus})`,
+    );
     process.exit(1);
   }
   if (visibleFocusCount < 2) {
     console.error("KEYBOARD GATE: fewer than two focused steps showed a visible focus indicator");
     process.exit(1);
   }
-  console.log(`keyboard trail: pill focused at step ${pillIndex}, reveal visible on focus, ${visibleFocusCount} visibly-focused steps`);
+  console.log(
+    `keyboard trail: pill focused at step ${pillIndex}, reveal visible on focus, ${visibleFocusCount} visibly-focused steps`,
+  );
   await context.close();
 }
 
@@ -546,7 +581,8 @@ console.log(
   await page.waitForSelector('[data-testid="credits-exhausted-card"]', { timeout: 15000 });
   const rendered = await page.evaluate(() => {
     const card = document.querySelector('[data-testid="credits-exhausted-card"]');
-    const pick = (testId) => document.querySelector(`[data-testid="${testId}"]`)?.textContent ?? null;
+    const pick = (testId) =>
+      document.querySelector(`[data-testid="${testId}"]`)?.textContent ?? null;
     return {
       cardText: card?.textContent ?? null,
       remaining: pick("credits-remaining"),
@@ -554,7 +590,8 @@ console.log(
     };
   });
   const mismatches = [];
-  if (exhaustedState.available_units !== 0) mismatches.push("the ledger did not actually reach zero");
+  if (exhaustedState.available_units !== 0)
+    mismatches.push("the ledger did not actually reach zero");
   if (rendered.remaining !== "0") mismatches.push(`remaining ${rendered.remaining} != 0`);
   if (rendered.cardText === null || !rendered.cardText.includes("Out of Shera credits")) {
     mismatches.push("the pause card's lead line is missing");
@@ -562,23 +599,34 @@ console.log(
   if (rendered.cardText === null || !rendered.cardText.includes("tops the account up")) {
     mismatches.push("the unblocking path (admin top-up) is missing");
   }
-  if (rendered.cardText === null || !rendered.cardText.includes("cancel them from their Operation chat")) {
+  if (
+    rendered.cardText === null ||
+    !rendered.cardText.includes("cancel them from their Operation chat")
+  ) {
     mismatches.push("the cancellation path is missing");
   }
-  if (rendered.cardText === null || !rendered.cardText.includes("1 scheduled trigger is paused for credits right now.")) {
+  if (
+    rendered.cardText === null ||
+    !rendered.cardText.includes("1 scheduled trigger is paused for credits right now.")
+  ) {
     mismatches.push("the D48 trigger pause count line is missing");
   }
   if (rendered.pill === null || !rendered.pill.includes("No Shera credits remaining")) {
     mismatches.push("the exhausted pill's unblocking copy is missing");
   }
   await page.screenshot({ path: join(CAPTURE_OUT, "s24-credits-exhausted-1440.png") });
-  writeFileSync(join(CAPTURE_OUT, "s24-exhausted-truth.json"), JSON.stringify({ rendered, mismatches }, null, 2));
+  writeFileSync(
+    join(CAPTURE_OUT, "s24-exhausted-truth.json"),
+    JSON.stringify({ rendered, mismatches }, null, 2),
+  );
   if (mismatches.length > 0) {
     console.error("EXHAUSTED TRUTH MISMATCH:");
     for (const m of mismatches) console.error("  -", m);
     process.exit(1);
   }
-  console.log("exhausted truth leg passed: the pause card, its unblocking paths, the trigger count, and the amber pill all render the real zero");
+  console.log(
+    "exhausted truth leg passed: the pause card, its unblocking paths, the trigger count, and the amber pill all render the real zero",
+  );
   await context.close();
 }
 

@@ -1483,7 +1483,8 @@ function wire(
     applyGrant: (workspaceId, topupId, amount) => {
       creditLedger.grant({ workspace_id: workspaceId, amount_units: amount, related_id: topupId });
     },
-    resumeRun: (workspaceId, runId) => scheduler.resumeRunAfterTopUp(workspaceId, runId).then(() => undefined),
+    resumeRun: (workspaceId, runId) =>
+      scheduler.resumeRunAfterTopUp(workspaceId, runId).then(() => undefined),
     afterTopUp: (workspaceId) => {
       scheduler.resumeAfterTopUp(workspaceId);
     },

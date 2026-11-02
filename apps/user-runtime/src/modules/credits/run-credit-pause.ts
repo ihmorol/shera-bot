@@ -27,9 +27,7 @@ export interface RunCreditPauseInput {
   availableUnits: number;
 }
 
-export type RunCreditPauseResult =
-  | { ok: true; toState: "PAUSED" }
-  | { ok: false; reason: string };
+export type RunCreditPauseResult = { ok: true; toState: "PAUSED" } | { ok: false; reason: string };
 
 export function pauseRunForInsufficientCredits(
   deps: RowLifecycleDeps,

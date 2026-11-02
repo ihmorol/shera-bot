@@ -99,10 +99,9 @@ export class CreditLedgerService {
   }
 
   /** The derived available balance of an account row. */
-  static availableUnits(account: Pick<
-    CreditAccountRow,
-    "granted_units" | "charged_units" | "reserved_units"
-  >): number {
+  static availableUnits(
+    account: Pick<CreditAccountRow, "granted_units" | "charged_units" | "reserved_units">,
+  ): number {
     return account.granted_units - account.charged_units - account.reserved_units;
   }
 
@@ -133,7 +132,10 @@ export class CreditLedgerService {
 
   /** Idempotently create the workspace's account (the D21 singleton). */
   ensureAccount(workspaceId: string): CreditAccountRow {
-    return this.deps.repository.insertAccount({ workspace_id: workspaceId, created_at: this.now() });
+    return this.deps.repository.insertAccount({
+      workspace_id: workspaceId,
+      created_at: this.now(),
+    });
   }
 
   /**
@@ -142,18 +144,19 @@ export class CreditLedgerService {
    * authority, this is the runtime-local ledger movement it applies).
    * Amounts are positive integer units.
    */
-  grant(input: {
-    workspace_id: string;
-    amount_units: number;
-    related_id: string | null;
-  }): { transaction_id: string; account: CreditAccountRow } {
+  grant(input: { workspace_id: string; amount_units: number; related_id: string | null }): {
+    transaction_id: string;
+    account: CreditAccountRow;
+  } {
     if (!Number.isInteger(input.amount_units) || input.amount_units <= 0) {
       throw new Error("grant amount must be a positive integer number of units");
     }
     const now = this.now();
     const transactionId = this.newId("ctx");
     const account = this.deps.tx.transaction((exec) => {
-      const ensured = this.deps.repository.insertAccount(
+      // Ensures the account row exists (idempotent) — its value is read
+      // fresh below, after the grant delta commits.
+      this.deps.repository.insertAccount(
         { workspace_id: input.workspace_id, created_at: now },
         exec,
       );
@@ -348,7 +351,9 @@ export class CreditLedgerService {
   ): { reservation_id: string; estimated_units: number } | null {
     const active = this.deps.repository.listActiveReservationsForTask(workspaceId, taskId);
     const first = active[0];
-    return first ? { reservation_id: first.reservation_id, estimated_units: first.estimated_units } : null;
+    return first
+      ? { reservation_id: first.reservation_id, estimated_units: first.estimated_units }
+      : null;
   }
 
   /**
@@ -746,5 +751,7 @@ export interface RunCostDrillDown {
 function nextMonthStart(at: string): string {
   const year = Number(at.slice(0, 4));
   const month = Number(at.slice(5, 7));
-  return month === 12 ? `${year + 1}-01-01T00:00:00.000Z` : `${year}-${String(month + 1).padStart(2, "0")}-01T00:00:00.000Z`;
+  return month === 12
+    ? `${year + 1}-01-01T00:00:00.000Z`
+    : `${year}-${String(month + 1).padStart(2, "0")}-01T00:00:00.000Z`;
 }

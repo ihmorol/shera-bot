@@ -326,10 +326,7 @@ describe("the fire pipeline (at-least-once with the ledger claim)", () => {
       kind: "task_completion",
       name: "follow-up after sweep",
       target_operation_id: harness.operationId,
-      config: {
-        outcomes: ["succeeded"],
-        provider: { provider_id: "prov_fake", model: "fake-model" },
-      } as never,
+      config: { outcomes: ["succeeded"] } as never,
       catch_up_policy: "skip",
       actor: { type: "user", id: "emon" },
     });
@@ -385,5 +382,74 @@ describe("the fire pipeline (at-least-once with the ledger claim)", () => {
     const stream = harness.journal.readFrom(WS, `task:${runs[0]?.run_id}`, 0, 100);
     expect(stream.map((row) => row.event_type)).toContain("task.failed");
     expect(walked).toHaveLength(1);
+  });
+
+  it("holds the D35 ladder for autonomous work: a gated tool pauses the run for approval, never auto-approved", async () => {
+    const harness = makeHarness();
+    const walked: Array<{ tool: unknown; provider: unknown }> = [];
+    const pausing = new SchedulerService({
+      workspaceId: WS,
+      triggers: new TriggersRepository(harness.tx),
+      operations: harness.operationsRepo,
+      ops: harness.ops,
+      journal: harness.journal,
+      events: new EventsService(harness.journal, harness.tx),
+      tx: harness.tx,
+      reservations: {
+        reserveForRun: () => ({ ok: true as const, reservation_id: "res" }),
+      },
+      now: () => "2026-10-31T12:00:00.000Z",
+      logFault: () => {},
+      planRunner: {
+        runPlan: async (input) => {
+          walked.push({ tool: input.plan.tool, provider: input.provider });
+          // The executor answered paused_for_approval for the LOCAL_MUTATION
+          // tool (its own AC7 pin): the walk relays the pause, never an
+          // auto-approval.
+          return { ok: "paused" as const, approval_id: "apr_s28_d35" };
+        },
+      } as SchedulerPlanRunner,
+    });
+    const createdTrigger = harness.schedules.createTrigger(WS, {
+      kind: "schedule",
+      name: "risky weekly sweep",
+      target_operation_id: harness.operationId,
+      config: {
+        cron: "0 9 * * 1",
+        plan: {
+          prompt: "Run the risky step.",
+          // A risky capability: the D35 ladder classes workspace.write as
+          // LOCAL_MUTATION — gated, never auto-run.
+          tool: {
+            tool_id: "tool_workspace_write",
+            tool_version: "1.0.0",
+            capability: "workspace.write",
+          },
+        },
+      },
+      catch_up_policy: "skip",
+      actor: { type: "user", id: "emon" },
+    });
+    const outcome = await pausing.fireOccurrence(WS, createdTrigger.trigger_id, {
+      idempotencyKey: "schedule:occ-d35",
+      dueAt: "2026-11-02T09:00:00.000Z",
+      detail: {},
+    });
+    // The firing SETTLED (the pause is a run state, not a failed occurrence).
+    expect(outcome).toMatchObject({ outcome: "fired" });
+    const runs = harness.ops.listRuns(WS, harness.operationId);
+    expect(runs).toHaveLength(1);
+    expect(runs[0]?.state).toBe("WAITING_FOR_APPROVAL");
+    // The risky plan (the LOCAL_MUTATION tool) is what the walk received.
+    expect((walked[0]?.tool as { tool_id?: string } | undefined)?.tool_id).toBe(
+      "tool_workspace_write",
+    );
+    // Never auto-approved: no terminal event on the run stream — the
+    // approval machinery owns the rest (the S20 decision paths).
+    const stream = harness.journal.readFrom(WS, `task:${runs[0]?.run_id}`, 0, 100);
+    const events = stream.map((row) => row.event_type);
+    expect(events).toContain("task.waiting_for_approval");
+    expect(events).not.toContain("task.succeeded");
+    expect(events).not.toContain("task.failed");
   });
 });

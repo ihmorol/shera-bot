@@ -318,7 +318,8 @@ function AddTriggerForm({
   onCreate,
   pending,
   safeError,
-  defaultOpen,
+  open,
+  onOpenChange,
 }: {
   operations: Array<{ operation_id: string; name: string }>;
   onCreate: (input: {
@@ -330,9 +331,11 @@ function AddTriggerForm({
   }) => void;
   pending: boolean;
   safeError?: string | undefined;
-  defaultOpen: boolean;
+  /** The form's open state is LIFTED (the empty state's call-to-action and
+   * the collapsed control share it — a cancelled form is reopenable). */
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
   const [kind, setKind] = useState<TriggerView["kind"]>("schedule");
   const [name, setName] = useState("");
   const [targetOperationId, setTargetOperationId] = useState(operations[0]?.operation_id ?? "");
@@ -392,7 +395,7 @@ function AddTriggerForm({
 
   if (!open) {
     return (
-      <Button variant="outline" onClick={() => setOpen(true)} className="w-full sm:w-auto">
+      <Button variant="outline" onClick={() => onOpenChange(true)} className="w-full sm:w-auto">
         <Plus className="size-4" aria-hidden="true" />
         New trigger
       </Button>
@@ -543,7 +546,12 @@ function AddTriggerForm({
           <CalendarClock className="size-4" aria-hidden="true" />
           {pending ? "Creating…" : "Create trigger"}
         </Button>
-        <Button type="button" variant="ghost" onClick={() => setOpen(false)} disabled={pending}>
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => onOpenChange(false)}
+          disabled={pending}
+        >
           Cancel
         </Button>
       </div>
@@ -623,6 +631,9 @@ export function SchedulesSettingsView(props: SchedulesSettingsViewProps) {
     defaultCreateOpen,
   } = props;
   const [editingId, setEditingId] = useState<string | null>(null);
+  // The create form's open state (null = the seeded default: open on an
+  // empty surface, or the surface's explicit request).
+  const [createOpen, setCreateOpen] = useState<boolean | null>(null);
   const [editName, setEditName] = useState("");
   const [editCron, setEditCron] = useState("");
 
@@ -645,11 +656,12 @@ export function SchedulesSettingsView(props: SchedulesSettingsViewProps) {
         onCreate={onCreate}
         pending={createPending}
         safeError={createSafeError}
-        defaultOpen={defaultCreateOpen ?? triggers.length === 0}
+        open={createOpen ?? defaultCreateOpen ?? triggers.length === 0}
+        onOpenChange={setCreateOpen}
       />
 
       {triggers.length === 0 ? (
-        <EmptyState onNew={() => undefined} />
+        <EmptyState onNew={() => setCreateOpen(true)} />
       ) : (
         <ul className="space-y-4" data-testid="schedule-trigger-list">
           {triggers.map((trigger) => (

@@ -180,7 +180,6 @@ describe("file watchers (AC5: once per real change, never per intermediate write
       config: {
         scope: "workspace",
         path_uri: "workspace://datasets/report.md",
-        provider: { provider_id: "prov_fake", model: "fake-model" },
       },
       catch_up_policy: "skip",
       actor: USER_ACTOR,
@@ -228,7 +227,6 @@ describe("file watchers (AC5: once per real change, never per intermediate write
       config: {
         scope: "workspace",
         path_uri: "workspace://flood.log",
-        provider: { provider_id: "prov_fake", model: "fake-model" },
       },
       catch_up_policy: "skip",
       actor: USER_ACTOR,
@@ -261,7 +259,6 @@ describe("file watchers (AC5: once per real change, never per intermediate write
         scope: "agent",
         path_uri: `agent://${AGENT}/notes`,
         agent_id: AGENT,
-        provider: { provider_id: "prov_fake", model: "fake-model" },
       },
       catch_up_policy: "skip",
       actor: USER_ACTOR,
@@ -334,7 +331,6 @@ describe("git watchers (the sha is the signature)", () => {
       config: {
         project_id: created.project_id,
         branch: "main",
-        provider: { provider_id: "prov_fake", model: "fake-model" },
       },
       catch_up_policy: "skip",
       actor: USER_ACTOR,
@@ -366,7 +362,6 @@ describe("condition triggers (the typed-predicate evaluator, edge-triggered)", (
       target_operation_id: harness.operationId,
       config: {
         predicate: { kind: "workspace_file_exists", path_uri: "workspace://ready.flag" },
-        provider: { provider_id: "prov_fake", model: "fake-model" },
       },
       catch_up_policy: "skip",
       actor: USER_ACTOR,
@@ -392,7 +387,6 @@ describe("condition triggers (the typed-predicate evaluator, edge-triggered)", (
       target_operation_id: harness.operationId,
       config: {
         predicate: { kind: "workspace_file_exists", path_uri: "workspace://ready.flag" },
-        provider: { provider_id: "prov_fake", model: "fake-model" },
         parent_task_id: "run_ctx",
       },
       catch_up_policy: "skip",
@@ -419,7 +413,6 @@ describe("condition triggers (the typed-predicate evaluator, edge-triggered)", (
       target_operation_id: harness.operationId,
       config: {
         predicate: { kind: "artifact_count_at_least", count: 2 },
-        provider: { provider_id: "prov_fake", model: "fake-model" },
       },
       catch_up_policy: "skip",
       actor: USER_ACTOR,
@@ -458,7 +451,6 @@ describe("the task-completion cascade (AC6 parent linkage)", () => {
       target_operation_id: harness.operationId,
       config: {
         outcomes: ["succeeded"],
-        provider: { provider_id: "prov_fake", model: "fake-model" },
       },
       catch_up_policy: "skip",
       actor: USER_ACTOR,
@@ -514,7 +506,6 @@ describe("the task-completion cascade (AC6 parent linkage)", () => {
       target_operation_id: harness.operationId,
       config: {
         outcomes: ["succeeded"],
-        provider: { provider_id: "prov_fake", model: "fake-model" },
       },
       catch_up_policy: "skip",
       actor: USER_ACTOR,

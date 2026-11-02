@@ -19,7 +19,7 @@
  */
 import { generateText } from "ai";
 
-import type { TaskRun } from "@shera-bot/contracts";
+import type { TaskRun, TaskTriggerEventType } from "@shera-bot/contracts";
 
 import type { ArtifactsRepository } from "../../adapters/sqlite/artifacts-repository.ts";
 import type { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
@@ -62,6 +62,10 @@ export interface AutonomousPlanInput {
   plan: TriggerPlan;
   /** The trigger's declared provider pair (already D17-gated by the walk). */
   provider?: { provider_id: string; model: string } | undefined;
+  /** The REAL typed trigger event (the G2 origin the scheduler wrote as the
+   * run stream's first event) — the executor proposal's provenance is THIS
+   * event, never a fabricated id. */
+  trigger_event: { event_type: TaskTriggerEventType; event_id: string };
 }
 
 export type AutonomousPlanOutcome =
@@ -203,7 +207,10 @@ export class AutonomousPlanRunner {
         task_id: runId,
         workspace_id: workspaceId,
         conversation_id: input.conversation_id,
-        created_from: { trigger_event_type: "trigger.scheduled", trigger_event_id: `evt_${runId}` },
+        created_from: {
+          trigger_event_type: input.trigger_event.event_type,
+          trigger_event_id: input.trigger_event.event_id,
+        },
         pack_snapshot: {
           pack_id: "pack_default",
           pack_version: "0.0.0",

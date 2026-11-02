@@ -44,7 +44,7 @@
  */
 import { createHash, randomUUID } from "node:crypto";
 
-import type { TypedExecutionEvent } from "@shera-bot/contracts";
+import type { TypedExecutionEvent, TaskTriggerEventType } from "@shera-bot/contracts";
 
 import type { ArtifactsRepository } from "../../adapters/sqlite/artifacts-repository.ts";
 import type { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
@@ -110,6 +110,7 @@ export interface SchedulerPlanRunner {
     run_id: string;
     plan: TriggerPlan;
     provider?: { provider_id: string; model: string } | undefined;
+    trigger_event: { event_type: TaskTriggerEventType; event_id: string };
   }): Promise<
     | { ok: true; result_summary: string }
     | { ok: false; code: string }
@@ -280,10 +281,18 @@ export class SchedulerService {
       return { outcome: "paused_credits" };
     }
 
-    // Step 3: the D17 provider-gate consult (before the run exists).
+    // Step 3: the D17 provider-gate consult (before the run exists). The
+    // gate consults the MODEL leg's provider: only the plan-carrying
+    // schedule kind declares one — the per-kind schemas refuse provider on
+    // the plan-less kinds, whose runs make no model call and so have
+    // nothing to gate. An enforcing posture still refuses a schedule that
+    // declares none.
     const config = JSON.parse(trigger.config_json) as Record<string, unknown>;
-    const provider = config["provider"] as { provider_id: string; model: string } | undefined;
-    if (this.deps.runGate !== undefined) {
+    const provider =
+      trigger.kind === "schedule"
+        ? (config["provider"] as { provider_id: string; model: string } | undefined)
+        : undefined;
+    if (trigger.kind === "schedule" && this.deps.runGate !== undefined) {
       const custody =
         provider === undefined
           ? {
@@ -365,7 +374,13 @@ export class SchedulerService {
     // Step 5: the autonomous D8 walk through the shared applier (the legs
     // run between the transactions — the model call is async and lives
     // OUTSIDE any SQLite unit, D10).
-    const walk = await this.walkPlan(trigger, runId, conversationId, config, provider);
+    const walk = await this.walkPlan(trigger, runId, conversationId, config, provider, {
+      // triggerEventForKind returns the TRIGGER vocabulary by construction
+      // (its cases are exhaustive over the seven kinds); the mapper's loose
+      // return type is narrowed here to the contract's trigger-event union.
+      event_type: eventType.event_type as TaskTriggerEventType,
+      event_id: triggerEventId,
+    });
     if (!walk.ok) {
       this.deps.triggers.updateFiring(workspaceId, triggerId, occurrence.idempotencyKey, {
         outcome: "failed",
@@ -507,6 +522,25 @@ export class SchedulerService {
           if (outcome.outcome === "fired") caughtUpCount += 1;
           if (outcome.outcome === "paused_credits" || outcome.outcome === "failed") break;
         }
+      }
+      // The per-occurrence honest record: every bounded occurrence the boot
+      // decision did NOT fire (the skip policy skips all of them; the
+      // catch_up policy's remainder stops at the pause/failure break) lands
+      // in the ledger as skipped_catchup — the v19 vocabulary's dedicated
+      // outcome, written per occurrence. The beyond-bound remainder stays
+      // with the aggregate decision below (writing unbounded rows is what
+      // the bound prevents).
+      const skippedRemainder = policy === "catch_up" ? bounded.slice(caughtUpCount) : bounded;
+      for (const occurrenceAt of skippedRemainder) {
+        this.deps.triggers.recordFiring({
+          workspace_id: this.deps.workspaceId,
+          trigger_id: trigger.trigger_id,
+          idempotency_key: `schedule:${trigger.trigger_id}:${occurrenceAt.toISOString()}`,
+          run_id: null,
+          outcome: "skipped_catchup",
+          detail_json: JSON.stringify({ policy, catch_up: true }),
+          fired_at: occurrenceAt.toISOString(),
+        });
       }
       const decision: "caught_up" | "skipped" = policy === "catch_up" ? "caught_up" : "skipped";
       const latestMissed = bounded[bounded.length - 1];
@@ -670,16 +704,28 @@ export class SchedulerService {
         };
         const isTrue = this.evaluatePredicate(sources, config.predicate);
         const previous = trigger.last_condition_state;
-        this.deps.triggers.updateTriggerFields(sources.workspaceId, trigger.trigger_id, {
-          last_condition_state: isTrue ? 1 : 0,
-          updated_at: now,
-        });
         // Edge-triggered: the false→true transition fires once per episode.
+        // The state advance follows the SETTLED fire (applySignatureTrigger's
+        // discipline): a credit-paused or failed fire leaves the edge
+        // pending — it is never consumed by a run that did not happen.
         if (isTrue && previous !== 1) {
-          await this.fireOccurrence(sources.workspaceId, trigger.trigger_id, {
+          const outcome = await this.fireOccurrence(sources.workspaceId, trigger.trigger_id, {
             idempotencyKey: `condition:${trigger.trigger_id}:edge:${now}`,
             dueAt: now,
             detail: { evaluated_at: now },
+          });
+          if (outcome.outcome === "fired" || outcome.outcome === "deduplicated") {
+            this.deps.triggers.updateTriggerFields(sources.workspaceId, trigger.trigger_id, {
+              last_condition_state: 1,
+              updated_at: now,
+            });
+          }
+        } else if (previous !== (isTrue ? 1 : 0)) {
+          // Not an edge: just record the observed state (true→false, or the
+          // steady episode's bookkeeping).
+          this.deps.triggers.updateTriggerFields(sources.workspaceId, trigger.trigger_id, {
+            last_condition_state: isTrue ? 1 : 0,
+            updated_at: now,
           });
         }
         continue;
@@ -825,6 +871,7 @@ export class SchedulerService {
     conversationId: string,
     config: Record<string, unknown>,
     provider: { provider_id: string; model: string } | undefined,
+    triggerEvent: { event_type: TaskTriggerEventType; event_id: string },
   ): Promise<{ ok: true } | { ok: false; code: string }> {
     const deps = this.lifecycleDeps();
     const step = (
@@ -855,6 +902,7 @@ export class SchedulerService {
       run_id: runId,
       plan,
       ...(provider !== undefined ? { provider } : {}),
+      trigger_event: triggerEvent,
     });
     if (legs.ok === "paused") {
       // The D35 ladder holds for autonomous work: a gated tool pauses the

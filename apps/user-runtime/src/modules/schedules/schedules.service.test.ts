@@ -207,6 +207,63 @@ describe("schedules service (typed declarative records)", () => {
     ).toThrowError(expect.objectContaining({ code: "TRIGGER_CONFIG_INVALID" }));
   });
 
+  it("never leaks the webhook secret digest through a view — the view carries only the fact of a secret", () => {
+    const { service, tx } = newService();
+    seedOperation(tx);
+    service.createTrigger(WS, {
+      kind: "webhook",
+      name: "hook with secret",
+      target_operation_id: OP,
+      config: { source: "form-service", secret: "shera-hook-secret-9f1b" },
+      catch_up_policy: "skip",
+      actor: USER,
+    });
+    const view = service.listTriggers(WS)[0];
+    if (view === undefined) throw new Error("trigger view missing");
+    // The trust-boundary copy: the fact of a secret, never the digest (a
+    // sha256 over a short secret is offline-brute-forceable — credential
+    // material that must not cross to the browser).
+    expect(view.config).toMatchObject({ source: "form-service", has_secret: true });
+    expect(JSON.stringify(view.config)).not.toContain("secret_digest");
+    // The STORED row keeps the digest — the webhook receiver reads it.
+    const row = new TriggersRepository(tx).getTrigger(WS, view.trigger_id);
+    expect(String(JSON.parse(String(row?.config_json))["secret_digest"])).toMatch(/^sha256:/);
+    // A webhook WITHOUT a secret carries no has_secret marker at all.
+    service.createTrigger(WS, {
+      kind: "webhook",
+      name: "hook without secret",
+      target_operation_id: OP,
+      config: { source: "ci-events" },
+      catch_up_policy: "skip",
+      actor: USER,
+    });
+    // (The two webhooks share the fixed clock's created_at, so select by
+    // name — the trigger_id tiebreak is random.)
+    const open = service.listTriggers(WS).find((row) => row.name === "hook without secret");
+    if (open === undefined) throw new Error("open webhook missing");
+    expect("has_secret" in open.config).toBe(false);
+    expect(JSON.stringify(open.config)).not.toContain("secret_digest");
+  });
+
+  it("refuses a provider pair on a plan-less kind — the walk has no model leg to configure", () => {
+    const { service, tx } = newService();
+    seedOperation(tx);
+    expect(() =>
+      service.createTrigger(WS, {
+        kind: "webhook",
+        name: "hook with dead provider config",
+        target_operation_id: OP,
+        config: {
+          source: "form-service",
+          provider: { provider_id: "prov_fake", model: "fake-model" },
+        },
+        catch_up_policy: "skip",
+        actor: USER,
+      }),
+    ).toThrowError(expect.objectContaining({ code: "TRIGGER_CONFIG_INVALID" }));
+    expect(service.listTriggers(WS)).toHaveLength(0);
+  });
+
   it("validates per-kind config for every watcher kind", () => {
     const { service, tx } = newService();
     seedOperation(tx);
@@ -260,11 +317,17 @@ describe("schedules service (typed declarative records)", () => {
       actor: USER,
     });
     const webhookView = service.getTriggerView(WS, webhook.trigger_id);
-    expect(webhookView?.config).toMatchObject({ source: "form-service" });
+    // The VIEW is the trust-boundary copy: the fact of a secret, never the
+    // digest (the redaction pin owns this — the digest is credential
+    // material that must not cross to the browser).
+    expect(webhookView?.config).toMatchObject({ source: "form-service", has_secret: true });
     expect(JSON.stringify(webhookView?.config)).not.toContain("shera-hook-secret");
-    expect((webhookView?.config as { secret_digest?: string }).secret_digest).toMatch(
-      /^sha256:[a-f0-9]{64}$/,
-    );
+    expect(JSON.stringify(webhookView?.config)).not.toContain("secret_digest");
+    // The STORED row keeps the digest — the webhook receiver reads it.
+    const storedConfig = JSON.parse(
+      String(new TriggersRepository(tx).getTrigger(WS, String(webhook.trigger_id))?.config_json),
+    ) as { secret_digest?: string };
+    expect(storedConfig.secret_digest).toMatch(/^sha256:[a-f0-9]{64}$/);
     // task_completion: outcome vocabulary.
     const completion = service.createTrigger(WS, {
       kind: "task_completion",

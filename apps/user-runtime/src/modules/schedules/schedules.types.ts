@@ -67,7 +67,6 @@ export const FileWatchConfigSchema = z.strictObject({
   scope: z.enum(["workspace", "agent"]),
   path_uri: ResourceUri,
   agent_id: Id.optional(),
-  provider: ProviderPairSchema.optional(),
 });
 export type FileWatchConfig = z.infer<typeof FileWatchConfigSchema>;
 
@@ -75,7 +74,6 @@ export type FileWatchConfig = z.infer<typeof FileWatchConfigSchema>;
 export const GitWatchConfigSchema = z.strictObject({
   project_id: Id,
   branch: z.string().min(1).max(256),
-  provider: ProviderPairSchema.optional(),
 });
 export type GitWatchConfig = z.infer<typeof GitWatchConfigSchema>;
 
@@ -84,7 +82,6 @@ export type GitWatchConfig = z.infer<typeof GitWatchConfigSchema>;
 export const WebhookConfigSchema = z.strictObject({
   source: z.string().min(1).max(128),
   secret: z.string().min(8).max(256).optional(),
-  provider: ProviderPairSchema.optional(),
 });
 export type WebhookConfig = z.infer<typeof WebhookConfigSchema>;
 
@@ -92,7 +89,6 @@ export type WebhookConfig = z.infer<typeof WebhookConfigSchema>;
 export const WebhookStoredConfigSchema = z.strictObject({
   source: z.string().min(1).max(128),
   secret_digest: ArgsDigest.optional(),
-  provider: ProviderPairSchema.optional(),
 });
 export type WebhookStoredConfig = z.infer<typeof WebhookStoredConfigSchema>;
 
@@ -103,7 +99,6 @@ export const TaskCompletionConfigSchema = z.strictObject({
     .min(1)
     .max(3)
     .default(["succeeded"]),
-  provider: ProviderPairSchema.optional(),
 });
 export type TaskCompletionConfig = z.infer<typeof TaskCompletionConfigSchema>;
 
@@ -122,7 +117,6 @@ export type ConditionPredicate = z.infer<typeof ConditionPredicateSchema>;
 
 export const ConditionConfigSchema = z.strictObject({
   predicate: ConditionPredicateSchema,
-  provider: ProviderPairSchema.optional(),
   /** The Agent whose condition this is (the evaluation's provenance). */
   evaluated_by_agent_id: Id.optional(),
   /** The parent run the fired run links to (AC6), when the condition is
@@ -134,7 +128,6 @@ export type ConditionConfig = z.infer<typeof ConditionConfigSchema>;
 /** External-event config: the typed source label. */
 export const ExternalEventConfigSchema = z.strictObject({
   source: z.string().min(1).max(128),
-  provider: ProviderPairSchema.optional(),
 });
 export type ExternalEventConfig = z.infer<typeof ExternalEventConfigSchema>;
 

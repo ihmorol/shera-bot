@@ -295,21 +295,32 @@ const SCHEDULES_PATH = "/app/settings/schedules";
   await page.waitForSelector('[data-testid="schedule-trigger-card"]', { timeout: 30000 });
   await page.waitForTimeout(1000);
   const viewA = runtime.schedules.getTriggerView(WS, triggerA.trigger_id);
+  const fmt = (iso, opts) =>
+    new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", ...opts }).format(new Date(iso));
   const nextIso = viewA.next_occurrence_at;
-  const expectedDay = new Intl.DateTimeFormat("en-GB", {
+  const expectedDay = fmt(nextIso, { day: "numeric", month: "short", year: "numeric" });
+  const expectedLastFired = fmt(viewA.last_fired_at, {
     day: "numeric",
     month: "short",
     year: "numeric",
-    timeZone: "UTC",
-  }).format(new Date(nextIso));
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const expectedState = viewA.state === "active" ? "Active" : "Paused";
   const rendered = await page.locator('[data-testid="schedule-trigger-card"]').first().innerText();
-  if (!rendered.includes(expectedDay)) {
+  const mismatches = [];
+  if (!rendered.includes(expectedDay)) mismatches.push(`next occurrence ${expectedDay}`);
+  if (!rendered.includes(expectedLastFired)) mismatches.push(`last firing ${expectedLastFired}`);
+  if (!rendered.includes(expectedState)) mismatches.push(`state ${expectedState}`);
+  if (mismatches.length > 0) {
     console.error("AC9 TRUTH MISMATCH: the card does not render the scheduler's record");
-    console.error("scheduler next occurrence:", nextIso, "→ expected to contain", expectedDay);
+    for (const m of mismatches) console.error("  missing:", m);
     console.error("rendered card:", rendered.slice(0, 400));
     process.exit(1);
   }
-  console.log("AC9 truth leg passed: the card renders the scheduler's own record");
+  console.log(
+    "AC9 truth leg passed: state, last firing, and next occurrence all render the scheduler's own record",
+  );
   await context.close();
 }
 

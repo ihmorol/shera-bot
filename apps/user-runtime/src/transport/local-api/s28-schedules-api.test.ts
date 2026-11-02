@@ -156,6 +156,29 @@ describe("the schedules HTTP surface (typed declarative records)", () => {
     expect(runtime.operations.listRuns(WS, operationId)).toHaveLength(0);
   });
 
+  it("refuses a provider pair on a plan-less kind with the typed config error (G2)", async () => {
+    const { origin, close, runtime } = await compose();
+    openHarnesses.push({ origin, close, runtime });
+    const operationId = await createOperation(origin, "Provider-less Op");
+    const refused = await postJson(origin, "/v1/schedules", {
+      workspace_id: WS,
+      kind: "webhook",
+      name: "hook with dead provider config",
+      target_operation_id: operationId,
+      config: {
+        source: "form-service",
+        provider: { provider_id: "prov_fake", model: "fake-model" },
+      },
+      catch_up_policy: "skip",
+      actor: USER,
+    });
+    expect(refused.status).toBe(400);
+    expect(refused.body.code).toBe("TRIGGER_CONFIG_INVALID");
+    const list = await getJson(origin, `/v1/schedules?workspace_id=${WS}`);
+    expect(list.body.triggers).toHaveLength(0);
+    expect(runtime.operations.listRuns(WS, operationId)).toHaveLength(0);
+  });
+
   it("answers a missing workspace_id and an unknown trigger with typed states", async () => {
     const { origin, close, runtime } = await compose();
     openHarnesses.push({ origin, close, runtime });

@@ -314,7 +314,7 @@ export class SchedulesService {
       name: row.name,
       kind: row.kind as TriggerKindValue,
       target_operation_id: row.target_operation_id,
-      config: JSON.parse(row.config_json) as Record<string, unknown>,
+      config: this.redactedConfig(row),
       catch_up_policy: row.catch_up_policy,
       state: row.state,
       pause_reason: row.pause_reason,
@@ -325,6 +325,18 @@ export class SchedulesService {
       updated_at: row.updated_at,
       recent_firings: firings.map((firing) => this.toFiringView(firing)),
     };
+  }
+
+  /** The view's config is the TRUST-BOUNDARY copy (G3): the webhook's
+   * secret_digest is credential material (a sha256 over a short secret is
+   * offline-brute-forceable) and never crosses to the browser — the view
+   * carries only the fact of a secret. */
+  private redactedConfig(row: TriggerRecordRow): Record<string, unknown> {
+    const config = JSON.parse(row.config_json) as Record<string, unknown>;
+    if (row.kind !== "webhook" && row.kind !== "external_event") return config;
+    if (!("secret_digest" in config)) return config;
+    const { secret_digest: _digest, ...rest } = config;
+    return { ...rest, has_secret: true };
   }
 
   private toFiringView(firing: TriggerFiringRow): TriggerFiringView {

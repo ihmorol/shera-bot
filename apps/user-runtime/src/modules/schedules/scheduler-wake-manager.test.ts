@@ -156,7 +156,6 @@ describe("the agent-folder wake manager (chokidar wakes the tick)", () => {
         scope: "agent",
         path_uri: `agent://${AGENT}/flood.md`,
         agent_id: AGENT,
-        provider: { provider_id: "prov_fake", model: "fake-model" },
       },
       catch_up_policy: "skip",
       actor: USER_ACTOR,

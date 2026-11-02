@@ -181,6 +181,31 @@ describe("catch-up versus skip (AC3, fake clock — the decision is RECORDED)", 
     expect(payload).toMatchObject({ decision: "skipped", missed_count: 2 });
   });
 
+  it("writes a skipped_catchup ledger row per bounded occurrence under the skip policy", async () => {
+    const harness = makeHarness("2026-11-02T09:05:00.000Z");
+    const triggerId = createSchedule(harness, "skip");
+    // Two missed weekly occurrences, both skipped: the decision is recorded
+    // PER OCCURRENCE in the ledger (the dedicated v19 outcome), not only as
+    // the aggregate event.
+    harness.clock.value = "2026-11-16T09:00:00.000Z";
+    const report = await harness.makeScheduler(() => harness.clock.value).reconcileBoot();
+    const decision = report.decisions[0];
+    expect(decision).toBeDefined();
+    if (decision === undefined) throw new Error("decision missing");
+    expect(decision.decision).toBe("skipped");
+    expect(decision.missed_count).toBe(2);
+    const view = harness.schedules.getTriggerView(WS, triggerId);
+    if (view === null) throw new Error("trigger view missing");
+    const skipped = view.recent_firings.filter((row) => row.outcome === "skipped_catchup");
+    expect(skipped).toHaveLength(2);
+    expect(skipped.every((row) => row.run_id === null)).toBe(true);
+    // And the aggregate decision still records the same window.
+    const stream = harness.journal.readFrom(WS, `trigger:${triggerId}`, 0, 100);
+    const recorded = stream.find((row) => row.event_type === "trigger.catchup_decided");
+    const payload = JSON.parse(String(recorded?.payload)) as { decision: string };
+    expect(payload).toMatchObject({ decision: "skipped" });
+  });
+
   it("catches up missed occurrences under the catch_up policy — once each, recorded", async () => {
     const harness = makeHarness("2026-11-02T09:05:00.000Z");
     const triggerId = createSchedule(harness, "catch_up");
@@ -229,9 +254,11 @@ describe("catch-up versus skip (AC3, fake clock — the decision is RECORDED)", 
     expect(decision).toBeDefined();
     if (decision === undefined) throw new Error("decision missing");
     expect(decision.policy).toBe("catch_up");
-    expect(decision.caught_up_count).toBeLessThanOrEqual(50);
+    // The bound is EXACTLY the recorded constant: fifty fired, never 49
+    // "or fewer under load" — the replay is deterministic.
+    expect(decision.caught_up_count).toBe(50);
     expect(decision.missed_count).toBeGreaterThan(decision.caught_up_count);
-    expect(harness.ops.listRuns(WS, harness.operationId).length).toBe(decision.caught_up_count);
+    expect(harness.ops.listRuns(WS, harness.operationId).length).toBe(50);
   });
 });
 

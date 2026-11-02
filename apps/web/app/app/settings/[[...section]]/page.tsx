@@ -8,6 +8,7 @@ import { PermissionsSettingsSurface } from "@/components/settings/permissions-se
 import { ToolsSettingsSurface } from "@/components/settings/tools-settings";
 import { ProvidersSettingsSurface } from "@/components/settings/providers-settings";
 import { SchedulesSettingsSurface } from "@/components/settings/schedules-settings";
+import { CreditsSettingsSurface } from "@/components/settings/credits-settings";
 import { WorkersSettingsSurface } from "@/components/settings/worker-admission-readout";
 import { SurfaceFrame } from "@/components/shell/surface-frame";
 import { findAgent } from "@/lib/navigation";
@@ -45,6 +46,21 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
     return (
       <SurfaceFrame title="Settings" meta="Agents">
         <AgentSettingsSurface agentId={`agent_${slug.replace(/-/g, "_")}`} />
+      </SurfaceFrame>
+    );
+  }
+
+  // S24 (§S9, D20/D21/D48, AC8): the Model budgets / Credits surface — the
+  // ledger's own numbers (remaining, reserved, used this month), the
+  // per-run drill-down that sums exactly to the ledger, custom-provider
+  // usage with its zero credit movement, and the exhausted-credit pause
+  // card with its unblocking paths.
+  if (section?.length === 1 && section[0] === "credits") {
+    return (
+      <SurfaceFrame title="Settings" meta="Model budgets / Credits">
+        <div className="mx-auto max-w-xl">
+          <CreditsSettingsSurface />
+        </div>
       </SurfaceFrame>
     );
   }

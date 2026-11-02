@@ -352,6 +352,124 @@ export class CreditLedgerService {
   }
 
   /**
+   * The runs that HAVE credit movements, newest first (bounded): the S9
+   * drill-down's picker rows — the ledger's own per-run net, never a
+   * recomputation from the UI.
+   */
+  runsSummary(
+    workspaceId: string,
+    limit = 20,
+  ): Array<{
+    task_id: string;
+    charged_units: number;
+    released_units: number;
+    active_reserved_units: number;
+    last_movement_at: string;
+  }> {
+    const movements = this.deps.repository.listTransactions(workspaceId, 10_000);
+    if (movements.length === 0) return [];
+    const byTask = new Map<string, typeof movements>();
+    for (const row of movements) {
+      if (row.task_id === null) continue;
+      const bucket = byTask.get(row.task_id) ?? [];
+      bucket.push(row);
+      byTask.set(row.task_id, bucket);
+    }
+    const entryTypeById = new Map(movements.map((row) => [row.transaction_id, row.entry_type]));
+    const rows = [...byTask.entries()].map(([taskId, taskMovements]) => {
+      const chargedUnits = taskMovements.reduce((sum, row) => {
+        if (row.entry_type === "settlement_charge") return sum + row.amount_units;
+        if (
+          row.entry_type === "adjustment" &&
+          entryTypeById.get(row.corrects_transaction_id ?? "") === "settlement_charge"
+        ) {
+          return sum - row.amount_units;
+        }
+        return sum;
+      }, 0);
+      const releasedUnits = taskMovements
+        .filter((row) => row.entry_type === "reservation_release")
+        .reduce((sum, row) => sum + row.amount_units, 0);
+      const lastMovementAt = taskMovements.reduce(
+        (latest, row) => (row.created_at > latest ? row.created_at : latest),
+        taskMovements[0]?.created_at ?? "",
+      );
+      return {
+        task_id: taskId,
+        charged_units: chargedUnits,
+        released_units: releasedUnits,
+        active_reserved_units: 0,
+        last_movement_at: lastMovementAt,
+      };
+    });
+    // The active holds join per run (the picker shows what is mid-call).
+    for (const row of rows) {
+      row.active_reserved_units = this.deps.repository
+        .listActiveReservationsForTask(workspaceId, row.task_id)
+        .reduce((sum, hold) => sum + hold.estimated_units, 0);
+    }
+    return rows
+      .sort((left, right) => right.last_movement_at.localeCompare(left.last_movement_at))
+      .slice(0, limit);
+  }
+
+  /** The usage rows recorded inside one UTC month window (the custom-provider
+   * usage read; the caller derives the window, the ledger owns the rows). */
+  usageForMonth(
+    workspaceId: string,
+    monthStart: string,
+    monthEnd: string,
+  ): import("../../adapters/sqlite/credit-ledger-repository.ts").CreditUsageRecordRow[] {
+    return this.deps.repository.listUsageForMonth(workspaceId, monthStart, monthEnd);
+  }
+
+  /**
+   * The per-run cost drill-down (AC8; D20's "estimated task cost" read):
+   * the run's OWN movement rows, usage records, settlements, and releases —
+   * the ledger's own numbers, never a recomputation. The drill-down sums
+   * EXACTLY to the ledger: charged_units is the net of the run's
+   * settlement_charge movements minus its charge-reversing adjustments;
+   * summing every run's drill-down reconciles the account.
+   */
+  runCost(workspaceId: string, taskId: string): RunCostDrillDown | null {
+    const account = this.deps.repository.findAccount(workspaceId);
+    if (!account) return null;
+    const allMovements = this.deps.repository.listTransactions(workspaceId, 10_000);
+    const entryTypeById = new Map(allMovements.map((row) => [row.transaction_id, row.entry_type]));
+    const movements = allMovements.filter((row) => row.task_id === taskId);
+    const chargedUnits = movements.reduce((sum, row) => {
+      if (row.entry_type === "settlement_charge") return sum + row.amount_units;
+      if (
+        row.entry_type === "adjustment" &&
+        entryTypeById.get(row.corrects_transaction_id ?? "") === "settlement_charge"
+      ) {
+        return sum - row.amount_units;
+      }
+      return sum;
+    }, 0);
+    const releasedUnits = movements
+      .filter((row) => row.entry_type === "reservation_release")
+      .reduce((sum, row) => sum + row.amount_units, 0);
+    const activeHeld = this.deps.repository
+      .listActiveReservationsForTask(workspaceId, taskId)
+      .reduce((sum, row) => sum + row.estimated_units, 0);
+    return {
+      task_id: taskId,
+      charged_units: chargedUnits,
+      released_units: releasedUnits,
+      active_reserved_units: activeHeld,
+      movements,
+      settlements: this.deps.repository
+        .listSettlements(workspaceId)
+        .filter((row) => row.task_id === taskId),
+      releases: this.deps.repository
+        .listReleases(workspaceId)
+        .filter((row) => row.task_id === taskId),
+      usage: this.deps.repository.listUsageForTask(workspaceId, taskId),
+    };
+  }
+
+  /**
    * SETTLE one reservation against the actual usage (D20). The charge is
    * the ACTUAL amount; an unused remainder (estimate > actual) releases
    * back as a recorded release row (reason `unused_estimate`) and its
@@ -611,7 +729,20 @@ export class CreditLedgerService {
   }
 }
 
-/** The first instant of the month after the one `at` belongs to (UTC). */
+/** The per-run cost drill-down (the AC8 read — the ledger's own rows). */
+export interface RunCostDrillDown {
+  task_id: string;
+  /** Net charged to this run (charges minus charge-reversing adjustments). */
+  charged_units: number;
+  /** Units given back (unused remainders, releases). */
+  released_units: number;
+  /** Units still held by the run's active reservations. */
+  active_reserved_units: number;
+  movements: CreditTransactionRow[];
+  settlements: import("../../adapters/sqlite/credit-ledger-repository.ts").CreditSettlementRow[];
+  releases: import("../../adapters/sqlite/credit-ledger-repository.ts").CreditReleaseRow[];
+  usage: import("../../adapters/sqlite/credit-ledger-repository.ts").CreditUsageRecordRow[];
+}
 function nextMonthStart(at: string): string {
   const year = Number(at.slice(0, 4));
   const month = Number(at.slice(5, 7));

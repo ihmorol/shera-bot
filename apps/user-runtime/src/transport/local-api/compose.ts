@@ -1561,6 +1561,11 @@ function wire(
       workspaceId: wireWorkspaceId,
       onTriggerMutation: () => wakeManager.sync(),
     },
+    // S24: the credits read surface (the ledger's own numbers).
+    credits: {
+      ledger: creditLedger,
+      workspaceId: wireWorkspaceId,
+    },
     ...(options.logUntypedFault ? { logUntypedFault: options.logUntypedFault } : {}),
   });
   return {

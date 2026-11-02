@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { AgentRosterSection } from "@/components/shell/agent-roster";
+import { CreditsPill } from "@/components/shell/credits-pill";
 import { LiveOperationChatsSection } from "@/components/shell/operation-chats-section";
 import { AgentAvatar } from "@/components/chat/agent-avatar";
 import { Button } from "@/components/ui/button";
@@ -308,11 +309,13 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         </section>
       </nav>
 
-      {/* Footer: pinned pack shown once as a label, not a control (D40).
-          pb-4 keeps the label inside the shell's 16px edge rhythm — it never
+      {/* Footer: the credits pill (S24, D21 — remaining, reserved on hover)
+          and the pinned pack shown once as a label, not a control (D40).
+          pb-4 keeps the row inside the shell's 16px edge rhythm — it never
           rides the viewport's bottom edge. */}
       <Separator />
-      <div className="px-4 pb-4 pt-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 pb-4 pt-3">
+        <CreditsPill workspaceId={readyWorkspaceId} />
         <p className="font-mono text-xs uppercase tracking-[0.16em] text-muted">student pack v1</p>
       </div>
     </div>

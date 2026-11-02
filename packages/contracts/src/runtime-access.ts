@@ -207,7 +207,16 @@ export function isBrowserRuntimePath(method: string, path: string): boolean {
       // workspace-scoped (E12); the webhook receiver has no browser path at
       // all.
       path === "/v1/schedules" ||
-      /^\/v1\/schedules\/[a-zA-Z0-9_-]+\/firings$/.test(path))
+      /^\/v1\/schedules\/[a-zA-Z0-9_-]+\/firings$/.test(path) ||
+      // S24 (D20/D21/D48, AC8): the credits READ surface — the account
+      // summary and one run's drill-down. Strictly GET: grants ride the
+      // recorded control-plane top-up (S32) and reservations/settlements
+      // ride the runtime's own model-call legs — a browser credit mutation
+      // would be a parallel funding path, so no POST/PUT/DELETE/PATCH arm
+      // exists here by construction (G6). Every read is workspace-scoped
+      // (E12) via the workspace_id query binding above.
+      path === "/v1/credits" ||
+      /^\/v1\/credits\/runs\/[a-zA-Z0-9_-]+$/.test(path))
   );
 }
 

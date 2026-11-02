@@ -335,7 +335,8 @@ export class SchedulesService {
     const config = JSON.parse(row.config_json) as Record<string, unknown>;
     if (row.kind !== "webhook" && row.kind !== "external_event") return config;
     if (!("secret_digest" in config)) return config;
-    const { secret_digest: _digest, ...rest } = config;
+    const rest = { ...config };
+    delete rest["secret_digest"];
     return { ...rest, has_secret: true };
   }
 

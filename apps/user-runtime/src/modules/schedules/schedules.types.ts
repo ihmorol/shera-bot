@@ -51,14 +51,6 @@ export const ScheduleConfigSchema = z.strictObject({
 });
 export type ScheduleConfig = z.infer<typeof ScheduleConfigSchema>;
 
-/** The optional explicit provider pair every RUN-CREATING kind may declare
- * (the D17 gate consults it at fire time; absent = the D17 posture under
- * enforcement refuses the firing as unconfigured). */
-const ProviderPairSchema = z.strictObject({
-  provider_id: Id,
-  model: z.string().min(1).max(256),
-});
-
 /** File-watch config: the D6 scopes. A workspace watcher follows the shared
  * workspace:// tree; an agent watcher follows ONE Agent's private folder
  * (the record names the agent — the service refuses a watcher on another

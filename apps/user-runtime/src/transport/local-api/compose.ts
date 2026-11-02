@@ -1310,10 +1310,9 @@ function wire(
   // EVERYTHING the run holds (worker through the supervisor port, in-flight
   // tool executions through the executor seam, queued children, write
   // leases, the S24 credit-reservation seam, pending approvals) and walks
-  // the recorded D8 two-step cancellation. The reservation port is the
-  // HONEST S24 seam: the credit ledger is slice S24 — the composition
-  // records the release request through the redacted fault log and nothing
-  // else (never a fake ledger, G4).
+  // the recorded D8 two-step cancellation. The reservation port is REAL now
+  // (S24): cancellation releases every active hold of the run with the
+  // contract's `task_cancelled` reason.
   const runCancellation = new RunCancellationService({
     tx,
     journal,
@@ -1334,11 +1333,15 @@ function wire(
     leases: writeLeases,
     reservations: {
       releaseForRun: (workspaceId, runId) => {
-        logFault("credit_reservation_release_requested", {
-          workspace_id: workspaceId,
-          run_id: runId,
-          seam: "s24-credit-ledger-not-built",
-        });
+        const released = creditLedger.releaseForRun(workspaceId, runId, "task_cancelled");
+        if (released.released_count > 0) {
+          logFault("credit_reservation_released_on_cancel", {
+            workspace_id: workspaceId,
+            run_id: runId,
+            released_count: released.released_count,
+            released_units: released.released_units,
+          });
+        }
       },
     },
     approvals,

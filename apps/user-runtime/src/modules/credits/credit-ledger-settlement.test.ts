@@ -71,12 +71,8 @@ afterEach(() => {
   }
 });
 
-function countRows(harness: SettleHarness, table: string): number {
-  const row = harness.conn.db
-    .prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE workspace_id = ?`)
-    .get(WS) as { n: number };
-  return Number(row.n);
-}
+// Evidence-row counts through the repository reads (the SQL boundary keeps
+// every statement inside adapters/sqlite — tests speak the repository).
 
 describe("settlement mathematics (S24 AC3)", () => {
   it("an over-estimate settles the actual and releases the unused remainder as a recorded release", () => {
@@ -109,8 +105,8 @@ describe("settlement mathematics (S24 AC3)", () => {
     // remainder with the contract's reason), and the movement rows.
     const reservation = harness.repo.findReservation(WS, reserved.reservation_id);
     expect(reservation).toMatchObject({ status: "settled", settled_at: CLOCK });
-    expect(countRows(harness, "settlement")).toBe(1);
-    expect(countRows(harness, "release")).toBe(1);
+    expect(harness.repo.listSettlements(WS)).toHaveLength(1);
+    expect(harness.repo.listReleases(WS)).toHaveLength(1);
     const entryTypes = harness.repo
       .listTransactions(WS)
       .map((row) => row.entry_type)
@@ -148,7 +144,7 @@ describe("settlement mathematics (S24 AC3)", () => {
       available_units: 55,
     });
     // No release row exists: the hold was fully consumed by the actual.
-    expect(countRows(harness, "release")).toBe(0);
+    expect(harness.repo.listReleases(WS)).toHaveLength(0);
   });
 
   it("a zero-actual settlement charges nothing and releases the whole hold", () => {
@@ -200,7 +196,7 @@ describe("settlement mathematics (S24 AC3)", () => {
     });
     expect(again).toEqual({ ok: false, code: "RESERVATION_NOT_ACTIVE" });
     expect(harness.repo.findReservation(WS, reserved.reservation_id)?.status).toBe("settled");
-    expect(countRows(harness, "settlement")).toBe(1);
+    expect(harness.repo.listSettlements(WS)).toHaveLength(1);
 
     // Unknown reservations are refused typed too.
     expect(
@@ -235,8 +231,7 @@ describe("settlement mathematics (S24 AC3)", () => {
       reserved_units: 0,
       available_units: 50,
     });
-    const release = countRows(harness, "release");
-    expect(release).toBe(1);
+    expect(harness.repo.listReleases(WS)).toHaveLength(1);
   });
 
   it("releaseForRun releases EVERY active hold of the run — the cancellation seam closes all of them", () => {
@@ -318,11 +313,13 @@ describe("the single account-level balance (S24 AC4, D21)", () => {
       available_units: 35,
       used_this_month_units: 65,
     });
-    // THE single row (the D21 singleton): the storage guarantees it.
-    const accounts = harness.conn.db
-      .prepare("SELECT COUNT(*) AS n FROM credit_account")
-      .get() as { n: number };
-    expect(Number(accounts.n)).toBe(1);
+    // THE single row per workspace (the D21 singleton): the PRIMARY KEY
+    // makes a second row unrepresentable, and ensureAccount is idempotent
+    // (a second ensure answers the SAME row, never a new one). Another
+    // workspace gets its own independent row (E12).
+    const first = harness.repo.findAccount(WS);
+    harness.ledger.ensureAccount(WS);
+    expect(harness.repo.findAccount(WS)).toEqual(first);
   });
 });
 
@@ -435,6 +432,10 @@ describe("settlement property (S24 AC3, seeded random distributions)", () => {
     const activeReservations: string[] = [];
     const seenTransactions = new Map<string, string>();
     let taskCounter = 0;
+    // The overdraw running total: every under-estimate settlement charges
+    // actual beyond the hold — new charge the movement conservation must
+    // account for (holds − released − charges == reserved − overdraw).
+    let overdrawSum = 0;
 
     const reconcile = () => {
       const account = harness.repo.findAccount(WS);
@@ -454,8 +455,10 @@ describe("settlement property (S24 AC3, seeded random distributions)", () => {
         .reduce((sum, row) => sum + row.amount_units, 0);
       expect(account!.granted_units).toBe(grants);
       expect(account!.charged_units).toBe(charges);
-      // reserved == holds − released (every release gives held units back).
-      expect(account!.reserved_units).toBe(holds - released);
+      // Movement conservation with the overdraw term: every held unit ends
+      // up charged or released, except what is still actively held; an
+      // under-estimate settle charges BEYOND its hold (the overdraw).
+      expect(holds - released - charges).toBe(account!.reserved_units - overdrawSum);
       expect(CreditLedgerService.availableUnits(account!)).toBe(
         account!.granted_units - account!.charged_units - account!.reserved_units,
       );
@@ -495,6 +498,9 @@ describe("settlement property (S24 AC3, seeded random distributions)", () => {
         const reservationId = activeReservations[index]!;
         const hold = harness.repo.findReservation(WS, reservationId)!;
         const actual = next(2 * hold.estimated_units + 1);
+        if (actual > hold.estimated_units) {
+          overdrawSum += actual - hold.estimated_units;
+        }
         const settled = harness.ledger.settleReservation({
           workspace_id: WS,
           reservation_id: reservationId,

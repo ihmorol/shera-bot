@@ -241,6 +241,7 @@ export class CreditLedgerService {
           reservation_id: reservationId,
           task_id: input.task_id,
           trigger_id: input.trigger_id ?? null,
+          estimated_units: input.estimate_units,
           estimate,
           created_at: now,
         },
@@ -292,13 +293,23 @@ export class CreditLedgerService {
     const now = this.now();
     const monthStart = `${now.slice(0, 7)}-01T00:00:00.000Z`;
     const monthEnd = nextMonthStart(now);
-    const usedThisMonth = this.deps.repository
-      .listTransactions(workspaceId)
-      .filter(
-        (row: CreditTransactionRow) =>
-          row.entry_type === "settlement_charge" && row.created_at >= monthStart && row.created_at < monthEnd,
-      )
-      .reduce((sum, row) => sum + row.amount_units, 0);
+    const monthRows = this.deps.repository.listTransactions(workspaceId);
+    const entryTypeById = new Map(monthRows.map((row) => [row.transaction_id, row.entry_type]));
+    // The NET settled usage of the month: charges minus the adjustments
+    // that reverse charges (a correction is itself a movement row, so the
+    // netting reads the correction's target's type — never a guess).
+    const usedThisMonth = monthRows
+      .filter((row) => row.created_at >= monthStart && row.created_at < monthEnd)
+      .reduce((sum, row) => {
+        if (row.entry_type === "settlement_charge") return sum + row.amount_units;
+        if (
+          row.entry_type === "adjustment" &&
+          entryTypeById.get(row.corrects_transaction_id ?? "") === "settlement_charge"
+        ) {
+          return sum - row.amount_units;
+        }
+        return sum;
+      }, 0);
     return {
       workspace_id: account.workspace_id,
       granted_units: account.granted_units,
@@ -313,6 +324,263 @@ export class CreditLedgerService {
    * zero movement IS the record; platform calls carry their charge). */
   recordUsage(input: Omit<CreditUsageInsert, "created_at">): void {
     this.deps.repository.insertUsageRecord({ ...input, created_at: this.now() });
+  }
+
+  /**
+   * SETTLE one reservation against the actual usage (D20). The charge is
+   * the ACTUAL amount; an unused remainder (estimate > actual) releases
+   * back as a recorded release row (reason `unused_estimate`) and its
+   * movement row; an under-estimate (actual > estimate) charges the actual
+   * — the derived available balance may overdraw, the honest state the
+   * next reservation refusal reads. Exactly-once: a reservation that is
+   * not actively held is refused typed. One transaction (D10): the
+   * settlement row, the release row, both movement rows, the reservation's
+   * status transition, and the account delta commit together.
+   */
+  settleReservation(input: {
+    workspace_id: string;
+    reservation_id: string;
+    actual_units: number;
+  }): { ok: true; settlement_id: string; released_units: number } | { ok: false; code: string } {
+    if (!Number.isInteger(input.actual_units) || input.actual_units < 0) {
+      throw new Error("actual_units must be a non-negative integer");
+    }
+    const now = this.now();
+    return this.deps.tx.transaction((exec) => {
+      const reservation = this.deps.repository.findReservation(
+        input.workspace_id,
+        input.reservation_id,
+        exec,
+      );
+      if (!reservation) return { ok: false as const, code: "RESERVATION_NOT_FOUND" };
+      if (reservation.status !== "reserved") {
+        return { ok: false as const, code: "RESERVATION_NOT_ACTIVE" };
+      }
+      const settlementId = this.newId("cst");
+      this.deps.repository.insertSettlement(
+        {
+          workspace_id: input.workspace_id,
+          settlement_id: settlementId,
+          reservation_id: reservation.reservation_id,
+          task_id: reservation.task_id,
+          actual_units: input.actual_units,
+          settled_at: now,
+        },
+        exec,
+      );
+      this.deps.repository.insertTransaction(
+        {
+          workspace_id: input.workspace_id,
+          transaction_id: this.newId("ctx"),
+          entry_type: "settlement_charge",
+          amount_units: input.actual_units,
+          task_id: reservation.task_id,
+          reservation_id: reservation.reservation_id,
+          related_id: null,
+          corrects_transaction_id: null,
+          created_at: now,
+        },
+        exec,
+      );
+      let releasedUnits = 0;
+      if (reservation.estimated_units > input.actual_units) {
+        releasedUnits = reservation.estimated_units - input.actual_units;
+        this.deps.repository.insertRelease(
+          {
+            workspace_id: input.workspace_id,
+            release_id: this.newId("rel"),
+            reservation_id: reservation.reservation_id,
+            task_id: reservation.task_id,
+            released_units: releasedUnits,
+            reason: "unused_estimate",
+            released_at: now,
+          },
+          exec,
+        );
+        this.deps.repository.insertTransaction(
+          {
+            workspace_id: input.workspace_id,
+            transaction_id: this.newId("ctx"),
+            entry_type: "reservation_release",
+            amount_units: releasedUnits,
+            task_id: reservation.task_id,
+            reservation_id: reservation.reservation_id,
+            related_id: null,
+            corrects_transaction_id: null,
+            created_at: now,
+          },
+          exec,
+        );
+      }
+      this.deps.repository.markReservationSettled(
+        input.workspace_id,
+        reservation.reservation_id,
+        now,
+        exec,
+      );
+      this.deps.repository.applyAccountDelta(
+        input.workspace_id,
+        { charged: input.actual_units, reserved: -reservation.estimated_units },
+        now,
+        exec,
+      );
+      return { ok: true as const, settlement_id: settlementId, released_units: releasedUnits };
+    });
+  }
+
+  /**
+   * RELEASE one reservation (D20: provider failures release unless the
+   * provider may have processed the request — an AMBIGUOUS outcome is NOT
+   * a release, E13; the reason vocabulary is the contract's closed set).
+   * Exactly-once, one transaction.
+   */
+  releaseReservation(input: {
+    workspace_id: string;
+    reservation_id: string;
+    reason: "provider_failure" | "task_cancelled" | "unused_estimate";
+  }): { ok: true; released_units: number } | { ok: false; code: string } {
+    const now = this.now();
+    return this.deps.tx.transaction((exec) => {
+      const reservation = this.deps.repository.findReservation(
+        input.workspace_id,
+        input.reservation_id,
+        exec,
+      );
+      if (!reservation) return { ok: false as const, code: "RESERVATION_NOT_FOUND" };
+      if (reservation.status !== "reserved") {
+        return { ok: false as const, code: "RESERVATION_NOT_ACTIVE" };
+      }
+      this.deps.repository.insertRelease(
+        {
+          workspace_id: input.workspace_id,
+          release_id: this.newId("rel"),
+          reservation_id: reservation.reservation_id,
+          task_id: reservation.task_id,
+          released_units: reservation.estimated_units,
+          reason: input.reason,
+          released_at: now,
+        },
+        exec,
+      );
+      this.deps.repository.insertTransaction(
+        {
+          workspace_id: input.workspace_id,
+          transaction_id: this.newId("ctx"),
+          entry_type: "reservation_release",
+          amount_units: reservation.estimated_units,
+          task_id: reservation.task_id,
+          reservation_id: reservation.reservation_id,
+          related_id: null,
+          corrects_transaction_id: null,
+          created_at: now,
+        },
+        exec,
+      );
+      this.deps.repository.markReservationReleased(
+        input.workspace_id,
+        reservation.reservation_id,
+        now,
+        exec,
+      );
+      this.deps.repository.applyAccountDelta(
+        input.workspace_id,
+        { reserved: -reservation.estimated_units },
+        now,
+        exec,
+      );
+      return { ok: true as const, released_units: reservation.estimated_units };
+    });
+  }
+
+  /**
+   * RELEASE every active hold of one run (the S22 cancellation seam — the
+   * composed port calls this with reason `task_cancelled`). Idempotent: a
+   * run holding nothing answers zeros. The zero-unit pre-flight consult
+   * reservation closes here too (a released zero is the honest record of
+   * the consult's close).
+   */
+  releaseForRun(
+    workspaceId: string,
+    taskId: string,
+    reason: "provider_failure" | "task_cancelled" | "unused_estimate",
+  ): { released_count: number; released_units: number } {
+    let releasedCount = 0;
+    let releasedUnits = 0;
+    this.deps.tx.transaction((exec) => {
+      const active = this.deps.repository.listActiveReservationsForTask(workspaceId, taskId, exec);
+      for (const reservation of active) {
+        const released = this.releaseReservation({
+          workspace_id: workspaceId,
+          reservation_id: reservation.reservation_id,
+          reason,
+        });
+        if (released.ok) {
+          releasedCount += 1;
+          releasedUnits += released.released_units;
+        }
+      }
+      return null;
+    });
+    return { released_count: releasedCount, released_units: releasedUnits };
+  }
+
+  /**
+   * CORRECT a movement (AC9): a NEW 'adjustment' row that reverses up to
+   * `amount_units` of the corrected row's account effect — the original row
+   * is never edited (the ledger has no UPDATE path). Supported targets:
+   * 'settlement_charge' (a charge correction) and 'grant' (a clawback).
+   * One transaction.
+   */
+  correctTransaction(input: {
+    workspace_id: string;
+    corrects_transaction_id: string;
+    amount_units: number;
+  }): { ok: true; transaction_id: string } | { ok: false; code: string } {
+    if (!Number.isInteger(input.amount_units) || input.amount_units <= 0) {
+      throw new Error("correction amount must be a positive integer number of units");
+    }
+    const now = this.now();
+    return this.deps.tx.transaction((exec) => {
+      const target = this.deps.repository.findTransaction(
+        input.workspace_id,
+        input.corrects_transaction_id,
+        exec,
+      );
+      if (!target) return { ok: false as const, code: "CORRECTION_TARGET_NOT_FOUND" };
+      if (target.entry_type !== "settlement_charge" && target.entry_type !== "grant") {
+        return { ok: false as const, code: "CORRECTION_NOT_SUPPORTED" };
+      }
+      if (input.amount_units > target.amount_units) {
+        return { ok: false as const, code: "CORRECTION_EXCEEDS_ORIGINAL" };
+      }
+      const transactionId = this.newId("ctx");
+      this.deps.repository.insertTransaction(
+        {
+          workspace_id: input.workspace_id,
+          transaction_id: transactionId,
+          entry_type: "adjustment",
+          amount_units: input.amount_units,
+          task_id: target.task_id,
+          reservation_id: target.reservation_id,
+          related_id: null,
+          corrects_transaction_id: target.transaction_id,
+          created_at: now,
+        },
+        exec,
+      );
+      // The reversal: a corrected charge reduces charged; a corrected grant
+      // reduces granted. The counters' CHECKs make an over-reversal past
+      // zero unrepresentable (the typed bound above covers the row).
+      this.deps.repository.applyAccountDelta(
+        input.workspace_id,
+        target.entry_type === "settlement_charge"
+          ? { charged: -input.amount_units }
+          : { granted: -input.amount_units },
+        now,
+        exec,
+      );
+      return { ok: true as const, transaction_id: transactionId };
+    });
   }
 }
 

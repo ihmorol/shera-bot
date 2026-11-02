@@ -138,6 +138,9 @@ export interface CreditReservationInsert {
   reservation_id: string;
   task_id: string;
   trigger_id: string | null;
+  /** The held units — the reservation's own truth, independent of whether a
+   * cost_estimate detail row accompanies it. */
+  estimated_units: number;
   estimate: CostEstimateRow | null;
   created_at: string;
 }
@@ -300,7 +303,7 @@ export class CreditLedgerRepository {
           input.task_id,
           input.trigger_id,
           input.estimate?.estimate_id ?? null,
-          input.estimate?.estimated_units ?? 0,
+          input.estimated_units,
           input.created_at,
         );
       const row = this.findReservation(input.workspace_id, input.reservation_id, target);
@@ -406,6 +409,48 @@ export class CreditLedgerRepository {
       return row;
     };
     return exec ? run(exec) : this.tx.transaction(run);
+  }
+
+  /** The workspace's settlement rows, newest first (the drill-down read). */
+  listSettlements(workspaceId: string, limit = 500): CreditSettlementRow[] {
+    const rows = this.tx
+      .connection()
+      .prepare(
+        `SELECT * FROM settlement WHERE workspace_id = ?
+         ORDER BY settled_at DESC, settlement_id DESC LIMIT ?`,
+      )
+      .all(workspaceId, limit) as Record<string, unknown>[];
+    return rows.map(
+      (row) =>
+        ({
+          workspace_id: String(row["workspace_id"]),
+          settlement_id: String(row["settlement_id"]),
+          reservation_id: String(row["reservation_id"]),
+          task_id: String(row["task_id"]),
+          actual_units: Number(row["actual_units"]),
+          settled_at: String(row["settled_at"]),
+        }) satisfies CreditSettlementRow,
+    );
+  }
+
+  /** The workspace's release rows, newest first (the drill-down read). */
+  listReleases(workspaceId: string, limit = 500): CreditReleaseRow[] {
+    const rows = this.tx
+      .connection()
+      .prepare(
+        `SELECT * FROM release WHERE workspace_id = ?
+         ORDER BY released_at DESC, release_id DESC LIMIT ?`,
+      )
+      .all(workspaceId, limit) as Record<string, unknown>[];
+    return rows.map((row) => ({
+      workspace_id: String(row["workspace_id"]),
+      release_id: String(row["release_id"]),
+      reservation_id: String(row["reservation_id"]),
+      task_id: String(row["task_id"]),
+      released_units: Number(row["released_units"]),
+      reason: row["reason"] as CreditReleaseReason,
+      released_at: String(row["released_at"]),
+    }));
   }
 
   // ── Usage + estimates (the D20 measurement records) ────────────────────────

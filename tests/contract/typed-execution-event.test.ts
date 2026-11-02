@@ -72,6 +72,11 @@ describe("TypedExecutionEvent envelope shape (D26)", () => {
   });
 
   it("keeps the D34 trigger vocabulary closed and typed", () => {
+    // S28 (PRD §8's eight autonomous trigger categories): the runtime trigger
+    // vocabulary gains the four categories the initial S02 set did not carry —
+    // Git changes, task completion, agent-evaluated conditions, and external
+    // service events. Every one is a TYPED event (never prose — G2); the set
+    // stays closed and the closed-ness stays pinned here.
     expect([...TASK_TRIGGER_EVENT_TYPES].sort()).toEqual(
       [
         "tool.proposed",
@@ -81,6 +86,10 @@ describe("TypedExecutionEvent envelope shape (D26)", () => {
         "trigger.scheduled",
         "trigger.webhook",
         "trigger.file_event",
+        "trigger.git_event",
+        "trigger.task_completed",
+        "trigger.condition_met",
+        "trigger.external_event",
       ].sort(),
     );
   });

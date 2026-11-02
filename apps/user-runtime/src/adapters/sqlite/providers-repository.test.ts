@@ -74,7 +74,7 @@ describe("provider catalog storage (S23 migration v18)", () => {
   it("appends the provider catalog as version 15 of the committed chain", () => {
     const v18 = MIGRATIONS.find((migration) => migration.version === 18);
     expect(v18?.name).toBe("provider-catalog");
-    expect(MIGRATIONS.at(-1)?.version).toBe(18);
+    expect(MIGRATIONS.at(-1)?.version).toBe(19);
   });
 
   it("creates the STRICT tables through the migration runner", () => {

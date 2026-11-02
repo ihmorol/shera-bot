@@ -322,6 +322,42 @@ export type ProviderConfigurationRefusedPayload = z.infer<
 >;
 
 /**
+ * Scheduler decision records (S28; E5, D48, G3) — journaled on the TRIGGER's
+ * stream (trigger:<trigger_id>): the runtime scheduler's own decision
+ * vocabulary, the machine-readable companion the UI reads instead of
+ * guessing from the row bookkeeping (the same discipline as S22's
+ * run.failure_decided). Payloads carry bounded typed fields only — never
+ * webhook bodies, never provider material (G3).
+ */
+export const TriggerCreditPausedPayload = z.strictObject({
+  workspace_id: z.string().min(1),
+  trigger_id: z.string().min(1),
+  reason: z.literal("insufficient_credits"),
+});
+export type TriggerCreditPausedPayload = z.infer<typeof TriggerCreditPausedPayload>;
+
+export const TriggerCreditResumedPayload = z.strictObject({
+  workspace_id: z.string().min(1),
+  trigger_id: z.string().min(1),
+});
+export type TriggerCreditResumedPayload = z.infer<typeof TriggerCreditResumedPayload>;
+
+export const TriggerCatchupDecidedPayload = z.strictObject({
+  workspace_id: z.string().min(1),
+  trigger_id: z.string().min(1),
+  /** The per-trigger E5 policy the decision applied. */
+  policy: z.enum(["catch_up", "skip"]),
+  decision: z.enum(["caught_up", "skipped"]),
+  /** How many occurrences the downtime window held. */
+  missed_count: z.number().int().min(0),
+  /** How many were re-fired (bounded — the rest are recorded as skipped). */
+  caught_up_count: z.number().int().min(0),
+  window_from: z.string().min(1),
+  window_to: z.string().min(1),
+});
+export type TriggerCatchupDecidedPayload = z.infer<typeof TriggerCatchupDecidedPayload>;
+
+/**
  * Terminal live-view events (S18 chunk 1; PRD §4.3, D10, D27, G3). Journaled
  * on `terminal:<workspace_id>:<agent_id>` streams, one event per
  * terminal_events row, written in the SAME transaction as its row (D10) by
@@ -414,6 +450,9 @@ export const EVENT_TYPES = {
   "worker.stopped": { schema_version: 1, payload: WorkerStoppedPayload },
   "worker.reaped": { schema_version: 1, payload: WorkerReapedPayload },
   "run.failure_decided": { schema_version: 1, payload: RunFailureDecisionPayload },
+  "trigger.credit_paused": { schema_version: 1, payload: TriggerCreditPausedPayload },
+  "trigger.credit_resumed": { schema_version: 1, payload: TriggerCreditResumedPayload },
+  "trigger.catchup_decided": { schema_version: 1, payload: TriggerCatchupDecidedPayload },
   "provider.configuration_refused": {
     schema_version: 1,
     payload: ProviderConfigurationRefusedPayload,

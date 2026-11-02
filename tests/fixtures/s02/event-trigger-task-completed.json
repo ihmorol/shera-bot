@@ -1,0 +1,18 @@
+{
+  "event_id": "evt_008",
+  "stream_id": "task:task_002",
+  "sequence": 1,
+  "event_type": "trigger.task_completed",
+  "event_version": 1,
+  "actor": { "type": "system", "id": "scheduler" },
+  "task_id": "task_002",
+  "conversation_id": "conv_001",
+  "occurred_at": "2026-10-31T09:05:00.000Z",
+  "payload": {
+    "trigger_id": "trg_followup_001",
+    "parent_task_id": "task_001",
+    "outcome": "succeeded",
+    "completed_at": "2026-10-31T09:04:40.000Z"
+  },
+  "redaction_class": "internal"
+}

@@ -68,7 +68,14 @@ import type { SqliteTransactions } from "./transactions.ts";
  * Actor shape never address this repository directly — the gateway composes
  * user and Agent paths.
  */
-export type WorkspaceStorageActor = { type: "user"; id: string } | { type: "agent"; id: string };
+export type WorkspaceStorageActor =
+  | { type: "user"; id: string }
+  | { type: "agent"; id: string }
+  // S28: the runtime's OWN storage reader (the scheduler's watcher
+  // signature scans read through the SAME repository surface — D11: the
+  // runtime gateway owns persistence). Only AGENT actors are scope-confined
+  // (the guard below); user and runtime actors read what the container owns.
+  | { type: "runtime"; id: string };
 
 /**
  * The agent:// folder-URI host charset (packages/contracts agent.ts, mirrored

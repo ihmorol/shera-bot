@@ -305,7 +305,10 @@ export class WriteLeasesRepository {
     workspaceId: string,
     uri: string,
     taskId: string,
-    holder: WorkspaceStorageActor,
+    // A lease holder is always a task's user or Agent work (D6: task-scoped)
+    // — the runtime's own storage reader never holds a lease, so the holder
+    // union stays the S17 pair even though the storage actor widened.
+    holder: { type: "user" | "agent"; id: string },
     ttlMs: number,
   ): WriteLease {
     assertTtl(ttlMs);

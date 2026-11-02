@@ -22,6 +22,8 @@
     "@shera-bot/contracts": "workspace:*",
     "@shera-bot/pi-protocol": "workspace:*",
     "ai": "7.0.157",
+    "chokidar": "6.0.0",
+    "cron-parser": "5.10.2",
     "express": "5.2.1",
     "playwright": "1.64.1",
     "simple-git": "^4.0.2",

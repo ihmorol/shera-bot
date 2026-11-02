@@ -36,6 +36,18 @@ function existing(path: string) {
     throw error;
   }
 }
+/**
+ * The on-disk directory of ONE Agent's private folder — the layout rule in
+ * ONE place (the per-workspace scope hash + the agent segment). The S28
+ * watcher signature scan reads the SAME tree this store writes (never a
+ * second layout).
+ */
+export function agentFolderDir(root: string, workspaceId: string, agentId: string): string {
+  if (!validSegment(agentId)) throw new Error("invalid private folder owner");
+  const scope = createHash("sha256").update(workspaceId).digest("hex");
+  return join(resolve(root), scope, agentId);
+}
+
 /** Runtime-owned storage, outside the files exposed to task processes. */
 export class FileAgentFolderStore implements AgentFolderStore {
   readonly root: string;

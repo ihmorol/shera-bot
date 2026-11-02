@@ -33,6 +33,12 @@ const TRIGGER_FIXTURES: ReadonlyArray<[string, string]> = [
   ["trigger.scheduled", "event-trigger-scheduled.json"],
   ["trigger.webhook", "event-trigger-webhook.json"],
   ["trigger.file_event", "event-trigger-file.json"],
+  // S28 (PRD §8): the four additional autonomous trigger categories create
+  // runs from their typed events exactly like the original set (G2).
+  ["trigger.git_event", "event-trigger-git.json"],
+  ["trigger.task_completed", "event-trigger-task-completed.json"],
+  ["trigger.condition_met", "event-trigger-condition.json"],
+  ["trigger.external_event", "event-trigger-external.json"],
 ];
 
 describe("G2: task runs are created only from typed execution events", () => {

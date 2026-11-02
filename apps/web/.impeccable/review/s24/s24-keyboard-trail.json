@@ -1,0 +1,80 @@
+{
+  "steps": 23,
+  "pillFocusedAtStep": 22,
+  "revealOnFocus": "block",
+  "visibleFocusCount": 23,
+  "trail": [
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "Skip to conversation",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "SShera Bot",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "CCitation ManagerThe Citation Manager maintains source index",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "DDeveloperThe Developer inspects repositories, creates and m",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "GGeneral AssistantThe General Assistant handles general ques",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "PProgramming TutorThe Programming Tutor helps students under",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "RResearcherThe Researcher investigates questions and produce",
+      "visibleFocus": true
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "rendered": {
+    "cardText": "Out of Shera creditsModel calls pause with “insufficient credits” until an administrator tops the account up. Paused runs resume automatically after the top-up — or you can cancel them from their Operation chat. 1 scheduled trigger is paused for credits right now.Credits never affect tools, files, or approvals — only model calls consume them.",
+    "remaining": "0",
+    "pill": "0credits left25 reserved for running tasksNo Shera credits remaining. An administrator top-up resumes paused runs."
+  },
+  "mismatches": []
+}

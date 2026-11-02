@@ -1,0 +1,13 @@
+{
+  "rendered": {
+    "remaining": "145",
+    "reserved": "25",
+    "usedThisMonth": "30",
+    "runRows": [
+      "run_7b91ad_summary25 reserved0 charged",
+      "run_3f8a2c_litreview20 released30 charged"
+    ],
+    "pill": "145credits left25 reserved for running tasks145 Shera credits remaining, 25 reserved for running tasks."
+  },
+  "mismatches": []
+}

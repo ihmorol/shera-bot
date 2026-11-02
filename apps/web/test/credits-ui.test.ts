@@ -151,6 +151,23 @@ function renderCredits(props: Record<string, unknown> = {}): string {
   );
 }
 
+/**
+ * The drill-down's rendered movement rows, parsed out of the static markup —
+ * the AC8 numeric pin reads the RENDERED rows (label + amount), never the
+ * fixture, so a dropped or altered row breaks the reconciliation.
+ */
+function renderedMovementRows(html: string): Array<{ label: string; amount: number }> {
+  const rows: Array<{ label: string; amount: number }> = [];
+  const rowPattern = /<li[^>]*><span[^>]*>([^<]+)<\/span><span[^>]*>([\d,]+)<\/span><\/li>/g;
+  for (const match of html.matchAll(rowPattern)) {
+    rows.push({
+      label: match[1] ?? "",
+      amount: Number((match[2] ?? "0").replace(/,/g, "")),
+    });
+  }
+  return rows;
+}
+
 describe("S24 — the truthful credits readout (AC8, D21)", () => {
   it("renders the ledger's own numbers — remaining, reserved, used this month", () => {
     const html = renderCredits();
@@ -164,6 +181,12 @@ describe("S24 — the truthful credits readout (AC8, D21)", () => {
     expect(html).toContain("Remaining (not reserved)");
     expect(html).toContain("Reserved for running tasks");
     expect(html).toContain("Used this month");
+    // Product-language copy: the accounting honesty without the internal
+    // decision-ID references (those live in the code comments, not the UI).
+    expect(html).toContain("The account-level balance.");
+    expect(html).toContain("prototype accounting, not billing.");
+    expect(html).not.toContain("(D20)");
+    expect(html).not.toContain("(D21)");
   });
 
   it("the per-run drill-down renders the run's OWN movement rows, summing to the charged number", () => {
@@ -182,6 +205,78 @@ describe("S24 — the truthful credits readout (AC8, D21)", () => {
     expect(html).toContain("410 ms");
     // The release reason in the product's own words.
     expect(html).toContain("the estimate exceeded the actual usage");
+  });
+
+  it("the RENDERED movement rows reconcile to the charged number — the ledger's own identity (AC8 numeric pin)", () => {
+    const html = renderCredits();
+    const rows = renderedMovementRows(html);
+    const sumWhere = (label: string) =>
+      rows.filter((row) => row.label === label).reduce((sum, row) => sum + row.amount, 0);
+    // Every movement row renders, verbatim, with the ledger's own amounts —
+    // none dropped, none altered.
+    expect(rows.map((row) => row.label)).toEqual([
+      "Reserved for a model call",
+      "Charged after the call",
+      "Released (unused)",
+    ]);
+    // The ledger's identity (credit-ledger.service runCost): net charged is
+    // the settlement charges minus the charge-reversing corrections.
+    const netCharged = sumWhere("Charged after the call") - sumWhere("Correction (refunded)");
+    expect(netCharged).toBe(30);
+    // The detail header states the SAME number — the rows and the headline
+    // can never disagree.
+    expect(html).toMatch(/30<\/span> charged ·/);
+    // The reserve→settle→release complement renders too (the honest legs):
+    expect(sumWhere("Reserved for a model call")).toBe(50);
+    expect(sumWhere("Released (unused)")).toBe(20);
+  });
+
+  it("a corrected charge renders the correction row and the NET charged number the ledger recorded (AC9 meets AC8)", () => {
+    const adjusted = drillDown({
+      charged_units: 20,
+      movements: [
+        ...drillDown().movements,
+        {
+          workspace_id: "ws-local-default",
+          transaction_id: "ctx_4",
+          entry_type: "adjustment",
+          amount_units: 10,
+          task_id: "run_credit_1",
+          reservation_id: "res_1",
+          related_id: null,
+          corrects_transaction_id: "ctx_2",
+          created_at: "2026-11-02T10:00:00.000Z",
+        },
+      ],
+    });
+    const html = renderCredits({ drillDown: adjusted });
+    const rows = renderedMovementRows(html);
+    const sumWhere = (label: string) =>
+      rows.filter((row) => row.label === label).reduce((sum, row) => sum + row.amount, 0);
+    // The correction renders as its own appended row (append-only, AC9) and
+    // names its effect in the product's words: a run-scoped correction is
+    // always a charge refund (grants are account-level and never appear
+    // here).
+    expect(html).toContain("Correction (refunded)");
+    expect(sumWhere("Correction (refunded)")).toBe(10);
+    // charges − corrections == the charged number the ledger itself recorded.
+    expect(sumWhere("Charged after the call") - sumWhere("Correction (refunded)")).toBe(
+      adjusted.charged_units,
+    );
+    expect(html).toMatch(/20<\/span> charged ·/);
+  });
+
+  it("the run rows' charged numbers sum to the account's charged total — the drill-downs reconcile the ledger (AC8)", () => {
+    const html = renderCredits();
+    // The picker rows' charged numbers (the detail header's "charged ·"
+    // suffix differs, so this matches run rows only).
+    const runCharged = [...html.matchAll(/([\d,]+)<\/span> charged<\/span>/g)].map((match) =>
+      Number((match[1] ?? "0").replace(/,/g, "")),
+    );
+    expect(runCharged).toEqual([30, 20]);
+    expect(runCharged.reduce((sum, amount) => sum + amount, 0)).toBe(50);
+    // The account's own charged total on the same surface.
+    expect(html).toMatch(/charged 50 ·/);
   });
 
   it("custom-provider usage reads as measured-locally with ZERO Shera credits (D20)", () => {

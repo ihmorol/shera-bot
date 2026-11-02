@@ -1270,9 +1270,12 @@ export function createLocalApi(deps: LocalApiDeps): Express {
   // journal read. Registered BEFORE the error handlers.
   if (deps.runControl) {
     registerRunControlRoutes(app, deps.runControl);
-    if (deps.schedules !== undefined) {
-      registerSchedulesRoutes(app, deps.schedules);
-    }
+  }
+  // S28: the schedules + webhook surface — registered INDEPENDENTLY of the
+  // run-control option (a composition passing schedules without runControl
+  // must not silently lose the whole surface — G4's silent-drop class).
+  if (deps.schedules !== undefined) {
+    registerSchedulesRoutes(app, deps.schedules);
   }
 
   // Typed failures and unknown routes: the SheraError taxonomy, never an

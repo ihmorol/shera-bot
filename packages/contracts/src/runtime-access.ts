@@ -201,10 +201,11 @@ export function isBrowserRuntimePath(method: string, path: string): boolean {
       // direct browser write.
       path === "/v1/projects" ||
       /^\/v1\/projects\/[a-zA-Z0-9_-]+(?:\/worktrees|\/merge-requests)?$/.test(path) ||
-      // S28 (AC9/AC10): the schedules truthful list, one trigger's recent
-      // firings ledger (the run cards' data source), and the PATCH edit arm
-      // (the AC10 edit control). Every read is workspace-scoped (E12); the
-      // webhook receiver has no browser path at all.
+      // S28 (AC9/AC10): the schedules truthful list and one trigger's
+      // recent firings ledger (the run cards' data source); the edit and
+      // pause/resume controls are the POST surface above. Every read is
+      // workspace-scoped (E12); the webhook receiver has no browser path at
+      // all.
       path === "/v1/schedules" ||
       /^\/v1\/schedules\/[a-zA-Z0-9_-]+\/firings$/.test(path))
   );

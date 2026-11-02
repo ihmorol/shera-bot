@@ -55,7 +55,9 @@ export interface SchedulesApiHandle {
 const WorkspaceQuery = z.strictObject({ workspace_id: WorkspaceId });
 
 const ActorBody = z.strictObject({
-  type: z.string().min(1).max(32),
+  // The v19 CHECK's closed vocabulary — an out-of-vocabulary actor is a
+  // precise 400 here, never a storage-layer CHECK failure.
+  type: z.enum(["user", "agent", "runtime", "admin", "system"]),
   id: z.string().min(1).max(256),
 });
 
@@ -321,11 +323,23 @@ export function registerSchedulesRoutes(app: Express, deps: SchedulesApiHandle):
         return;
       }
     }
-    // The dedup key: the delivery id header, else the digest of the parsed
-    // body's stable encoding (D23 rule 6 — the key is DATA). The delivery
-    // CONTENT never persists: the fired payload carries the bounded,
-    // content-free summary only (G3). (express.json has already consumed
-    // and bounded the stream — the 64 kb cap is the transport bound.)
+    // The receiver speaks JSON deliveries ONLY: a non-JSON content type is
+    // a typed 415 BEFORE the dedup key is derived — digesting the parser's
+    // empty fallback would hand every non-JSON delivery the SAME idempotency
+    // key, so the second distinct delivery would answer `deduplicated`
+    // forever (D23 rule 6: the key is DATA — distinct deliveries are
+    // distinct keys, or they are refused).
+    const requestContentType =
+      typeof req.headers["content-type"] === "string" ? req.headers["content-type"] : "";
+    if (!requestContentType.startsWith("application/json")) {
+      const mapped = errorResponse(
+        415,
+        "UNSUPPORTED_MEDIA_TYPE",
+        "Webhook deliveries must be JSON.",
+      );
+      res.status(mapped.status).json(mapped.body);
+      return;
+    }
     const encodedBody = JSON.stringify(req.body ?? null) ?? "";
     const bodyDigest = `sha256:${createHash("sha256").update(encodedBody).digest("hex")}`;
     const headerDelivery = req.headers["x-shera-delivery-id"];

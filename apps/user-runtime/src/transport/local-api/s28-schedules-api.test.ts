@@ -179,6 +179,57 @@ describe("the schedules HTTP surface (typed declarative records)", () => {
     expect(runtime.operations.listRuns(WS, operationId)).toHaveLength(0);
   });
 
+  it("refuses a non-JSON delivery with a typed 415 and creates nothing (the dedup key never collides)", async () => {
+    const { origin, close, runtime } = await compose();
+    openHarnesses.push({ origin, close, runtime });
+    const operationId = await createOperation(origin, "Media Op");
+    const created = await postJson(origin, "/v1/schedules", {
+      workspace_id: WS,
+      kind: "webhook",
+      name: "json-only hook",
+      target_operation_id: operationId,
+      config: { source: "form-service" },
+      catch_up_policy: "skip",
+      actor: USER,
+    });
+    expect(created.status).toBe(201);
+    // Two DISTINCT non-JSON deliveries: both refused — never one fired and
+    // one `deduplicated` through a shared empty-parse digest.
+    for (const body of ["first plain text", "a different plain text"]) {
+      const refused = await fetch(origin + "/v1/webhooks/" + created.body.trigger_id, {
+        method: "POST",
+        headers: { "content-type": "text/plain" },
+        body,
+      });
+      expect(refused.status).toBe(415);
+      const payload = (await refused.json()) as { code: string };
+      expect(payload.code).toBe("UNSUPPORTED_MEDIA_TYPE");
+    }
+    expect(runtime.operations.listRuns(WS, operationId)).toHaveLength(0);
+  });
+
+  it("refuses an out-of-vocabulary actor type with the precise 400", async () => {
+    const { origin, close, runtime } = await compose();
+    openHarnesses.push({ origin, close, runtime });
+    const operationId = await createOperation(origin, "Actor Op");
+    const created = await postJson(origin, "/v1/schedules", {
+      workspace_id: WS,
+      kind: "webhook",
+      name: "actor hook",
+      target_operation_id: operationId,
+      config: { source: "form-service" },
+      catch_up_policy: "skip",
+      actor: USER,
+    });
+    expect(created.status).toBe(201);
+    const refused = await postJson(origin, `/v1/schedules/${created.body.trigger_id}/pause`, {
+      workspace_id: WS,
+      actor: { type: "superuser", id: "someone" },
+    });
+    expect(refused.status).toBe(400);
+    expect(refused.body.code).toBe("CONTRACT_VALIDATION_FAILED");
+  });
+
   it("answers a missing workspace_id and an unknown trigger with typed states", async () => {
     const { origin, close, runtime } = await compose();
     openHarnesses.push({ origin, close, runtime });

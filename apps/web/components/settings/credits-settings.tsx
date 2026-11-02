@@ -40,7 +40,10 @@ const MOVEMENT_LABELS: Record<string, string> = {
   reservation_hold: "Reserved for a model call",
   settlement_charge: "Charged after the call",
   reservation_release: "Released (unused)",
-  adjustment: "Correction (new entry)",
+  // A run-scoped correction is always a charge refund: grants are
+  // account-level (task_id null) and never appear in a run's drill-down,
+  // so the label can honestly name the effect, not the mechanism.
+  adjustment: "Correction (refunded)",
 };
 
 const RELEASE_LABELS: Record<string, string> = {
@@ -256,8 +259,7 @@ export function CreditsSettingsView({
       <div className="space-y-4">
         <p className="text-sm text-muted">
           No credit account exists in this workspace yet. It is provisioned
-          when the administrator grants the first credits (the recorded top-up
-          path).
+          when an administrator grants the first credits.
         </p>
       </div>
     );
@@ -275,9 +277,9 @@ export function CreditsSettingsView({
       <div>
         <h2 className="text-base text-text">Shera credits</h2>
         <p className="mt-1 max-w-prose text-sm text-muted">
-          The account-level balance (D21). Requests reserve a bounded estimate
-          before a model call, settle against the actual usage, and release
-          what they did not use — the numbers below are the ledger's own.
+          The account-level balance. Requests reserve a bounded estimate before
+          a model call, settle against the actual usage, and release what they
+          did not use — the numbers below are the ledger's own.
         </p>
         <div className="mt-5 flex flex-wrap gap-x-10 gap-y-4">
           <HeadlineNumber
@@ -299,7 +301,7 @@ export function CreditsSettingsView({
         </div>
         <p className="mt-3 text-xs text-muted">
           Granted {units(account.granted_units)} · charged {units(account.charged_units)} ·
-          prototype accounting, not billing (D20).
+          prototype accounting, not billing.
         </p>
       </div>
 

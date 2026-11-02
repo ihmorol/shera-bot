@@ -333,6 +333,13 @@ export async function startRuntimeNode(config: RuntimeNodeConfig = {}): Promise<
     executionTools: {
       workspaceRoots: { [defaultWorkspaceId]: executionWorkspaceRoot },
     },
+    // S25 (issue #26): the research and data tools. The SearXNG base URL is
+    // configuration (SHERA_SEARXNG_URL) — without it the search tool does
+    // not exist (G4); page fetch, document parse, spreadsheet analysis, and
+    // image understanding read public pages and the workspace file store.
+    researchTools: {
+      searxngBaseUrl: process.env.SHERA_SEARXNG_URL ?? null,
+    },
     // S23 (D17/G4): the REAL runtime enforces provider custody — a turn or
     // run without a usable provider is refused with the typed configuration
     // state. The E2E mock keeps its own posture (no enforcement; the

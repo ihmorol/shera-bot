@@ -22,6 +22,12 @@
  */
 import type { ArtifactsRepository } from "../../adapters/sqlite/artifacts-repository.ts";
 import {
+  PrivateScopeDeniedError,
+  WorkspaceNodeNotFoundError,
+  WorkspacePathError,
+  type WorkspaceFilesRepository,
+} from "../../adapters/sqlite/workspace-files-repository.ts";
+import {
   assertExecutionAuthority,
   type ToolBinding,
   type ToolBindingResult,
@@ -29,6 +35,8 @@ import {
 } from "../tools/tool-binding.ts";
 import { searxngSearch, type SearxngSearchOutcome } from "./searxng-search.ts";
 import { assertFetchableUrl, fetchReadablePage, PAGE_MAX_BODY_BYTES } from "./page-fetch.ts";
+import { parseDocumentBytes } from "./document-parse.ts";
+import { analyzeSpreadsheetBytes } from "./spreadsheet-analysis.ts";
 import { ResearchToolError } from "./research-errors.ts";
 import { redactSecrets } from "../terminals/secret-redaction.ts";
 
@@ -47,6 +55,12 @@ export interface ResearchToolDeps {
    * provenance (chunk 2+). `null` disables artifact writes (unit tests).
    */
   artifacts: Pick<ArtifactsRepository, "insertArtifact"> | null;
+  /**
+   * The S17 row-based workspace file store (chunk 3): the uploaded-file
+   * tools read through the SAME repository surface as the panel. `null`
+   * (no store) means those tools do not exist (G4).
+   */
+  files: Pick<WorkspaceFilesRepository, "read"> | null;
 }
 
 /** Query length budget (characters). */
@@ -229,4 +243,179 @@ export function makePageFetchBinding(deps: ResearchToolDeps): ToolBinding {
       return { ok: true, text };
     },
   };
+}
+
+/**
+ * Read one uploaded file's bytes from the S17 ROW-BASED workspace store
+ * (the shared workspace:// scope — the same surface the panel reads). The
+ * storage layer's own typed errors map onto the research vocabulary; the
+ * executing Agent is the storage actor, so another Agent's private folder
+ * stays the typed denial it already is (D39) — and these tools read the
+ * shared scope only.
+ */
+function readWorkspaceFileBytes(
+  deps: ResearchToolDeps,
+  ctx: ToolExecutionContext,
+  uri: string,
+): Uint8Array {
+  if (deps.files === null) {
+    throw new ResearchToolError(
+      "RESEARCH_INPUT_INVALID",
+      "the workspace file store is not available in this container",
+    );
+  }
+  if (!uri.startsWith("workspace://")) {
+    throw new ResearchToolError(
+      "RESEARCH_INPUT_INVALID",
+      "the path must be a workspace:// URI in the shared scope (the prototype's document and data tools read the shared workspace)",
+    );
+  }
+  try {
+    return deps.files.read(ctx.execution.workspace_id, uri, {
+      type: "agent",
+      id: ctx.execution.agent_id,
+    }).content;
+  } catch (error) {
+    if (error instanceof WorkspacePathError || error instanceof PrivateScopeDeniedError) {
+      throw new ResearchToolError(
+        "RESEARCH_INPUT_INVALID",
+        `the path is outside the readable scope: ${error.message}`,
+      );
+    }
+    if (error instanceof WorkspaceNodeNotFoundError) {
+      throw new ResearchToolError(
+        "RESEARCH_SOURCE_NOT_FOUND",
+        "the file does not exist in the workspace",
+      );
+    }
+    throw error;
+  }
+}
+
+/** One artifact insert with redacted bytes and the run + agent provenance. */
+function insertResearchArtifact(
+  deps: ResearchToolDeps,
+  ctx: ToolExecutionContext,
+  input: { name: string; artifactType: string; mimeType: string; text: string },
+): string | null {
+  if (deps.artifacts === null) {
+    return null;
+  }
+  const ref = deps.artifacts.insertArtifact({
+    workspace_id: ctx.execution.workspace_id,
+    name: input.name,
+    artifact_type: input.artifactType,
+    mime_type: input.mimeType,
+    // G3: the artifact bytes are REDACTED before the sink — one redaction
+    // boundary before every sink (the S26 posture).
+    content: Buffer.from(redactSecrets(input.text), "utf8"),
+    producer_agent_id: ctx.execution.agent_id,
+    producer_task_id: ctx.execution.task_id,
+  });
+  return ref.artifact_id;
+}
+
+/**
+ * The document-parse binding (tool_document_parse). Arguments: `path`
+ * (required — a workspace:// URI in the shared scope). PDFs through unpdf,
+ * text documents as themselves; the parsed text becomes an artifact with
+ * provenance on EVERY parse (the issue's "structured text artifacts with
+ * provenance") and the result carries the bounded head plus the pointer.
+ */
+export function makeDocumentParseBinding(deps: ResearchToolDeps): ToolBinding {
+  return {
+    name: "research-document-parse",
+    preview() {
+      return null; // read-only: no preview ceremony (G6/D35)
+    },
+    execute: () => refuseSyncExecute(),
+    async executeAsync(args, ctx) {
+      assertExecutionAuthority(ctx.authority);
+      const path = typeof args.path === "string" ? args.path.trim() : "";
+      if (path === "" || path.length > 4096) {
+        throw new ResearchToolError(
+          "RESEARCH_INPUT_INVALID",
+          "the path must be a workspace:// URI of at most 4096 characters",
+        );
+      }
+      const bytes = readWorkspaceFileBytes(deps, ctx, path);
+      const parsed = await parseDocumentBytes(path, bytes);
+      const text = parsed.text;
+      const artifactId = insertResearchArtifact(deps, ctx, {
+        name: `document-parse-${ctx.execution.execution_id}`,
+        artifactType: "research_document_text",
+        mimeType: "text/plain; charset=utf-8",
+        text,
+      });
+      const header = `Parsed ${path} — ${parsed.kind === "pdf" ? `PDF, ${parsed.pages ?? "?"} page(s)` : "text"} (${text.length} chars)`;
+      const artifactNote =
+        artifactId !== null
+          ? `\n[full text (${text.length} chars) captured as artifact ${artifactId.slice(0, 8)}…]`
+          : "";
+      const headBudget = Math.max(0, RESEARCH_RESULT_HEAD_CHARS - header.length - artifactNote.length);
+      const head = text.slice(0, headBudget);
+      return { ok: true, text: `${header}${artifactNote}\n${head}`.trimEnd() };
+    },
+  };
+}
+
+/**
+ * The spreadsheet-analysis binding (tool_spreadsheet_analyze). Arguments:
+ * `path` (required — a workspace:// URI), optional `sheet`. SheetJS CE
+ * decodes the workbook; the deterministic statistics run over the rows;
+ * the full table becomes the structured CSV artifact (provenance-stamped)
+ * and the result carries the bounded summary plus the pointer.
+ */
+export function makeSpreadsheetAnalyzeBinding(deps: ResearchToolDeps): ToolBinding {
+  return {
+    name: "research-spreadsheet-analyze",
+    preview() {
+      return null; // read-only: no preview ceremony (G6/D35)
+    },
+    execute: () => refuseSyncExecute(),
+    async executeAsync(args, ctx) {
+      assertExecutionAuthority(ctx.authority);
+      const path = typeof args.path === "string" ? args.path.trim() : "";
+      if (path === "" || path.length > 4096) {
+        throw new ResearchToolError(
+          "RESEARCH_INPUT_INVALID",
+          "the path must be a workspace:// URI of at most 4096 characters",
+        );
+      }
+      const sheet = typeof args.sheet === "string" && args.sheet !== "" ? args.sheet : null;
+      const bytes = readWorkspaceFileBytes(deps, ctx, path);
+      const analysis = analyzeSpreadsheetBytes(path, bytes, sheet);
+      const statLines = analysis.numericStats.map(
+        (stat) =>
+          `${stat.column}: n=${stat.count} min=${formatNumber(stat.min)} max=${formatNumber(stat.max)} sum=${formatNumber(stat.sum)} mean=${formatNumber(stat.mean)}`,
+      );
+      const header = `Analysed ${path} — sheet "${analysis.sheetName}" of [${analysis.sheetNames.join(", ")}]: ${analysis.rowCount} rows × ${analysis.columnCount} columns`;
+      const artifactId = insertResearchArtifact(deps, ctx, {
+        name: `spreadsheet-analysis-${ctx.execution.execution_id}`,
+        artifactType: "research_table_data",
+        mimeType: "text/csv; charset=utf-8",
+        text: analysis.csv,
+      });
+      const artifactNote =
+        artifactId !== null
+          ? `\n[full table (${analysis.csv.length} chars CSV) captured as artifact ${artifactId.slice(0, 8)}…]`
+          : "";
+      const headBudget = Math.max(
+        0,
+        RESEARCH_RESULT_HEAD_CHARS -
+          header.length -
+          artifactNote.length -
+          statLines.join("\n").length -
+          2,
+      );
+      const head = analysis.csv.slice(0, headBudget);
+      const text = `${header}\n${statLines.join("\n")}${artifactNote}\n${head}`.trimEnd();
+      return { ok: true, text };
+    },
+  };
+}
+
+/** One bounded number for the stats line (integers plain, else 2 decimals). */
+function formatNumber(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }

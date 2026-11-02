@@ -93,6 +93,7 @@ import {
   type ToolsApiHandle,
 } from "./s21-tools-api.ts";
 import { registerExecutionTools } from "./s26-execution-api.ts";
+import { registerResearchTools } from "./s25-research-api.ts";
 import { spawnSandboxedExecution } from "../../adapters/process/execution-process-spawn.ts";
 import { HarnessRunService } from "../../modules/runtime/harness-run-service.ts";
 import { ProviderCredentialVault } from "../../modules/providers/provider-credential-vault.ts";
@@ -198,6 +199,19 @@ export interface ComposeLocalApiOptions {
   executionTools?: {
     workspaceRoots: Record<string, string>;
     cgroupBaseDir?: string | null;
+  };
+  /**
+   * S25 (issue #26): the research and data tools — web search, page fetch,
+   * document parse, spreadsheet analysis, image understanding. All are
+   * READ_ONLY (the D35 ladder executes them automatically) and read only
+   * public endpoints and the workspace file store. The SearXNG base URL is
+   * CONFIGURATION: absent, the search tool does not exist and the inventory
+   * answers truthfully without it (G4). The page-fetch and uploaded-file
+   * tools need no endpoint configuration and register whenever their sinks
+   * (artifacts, workspace files) exist — which the composition always wires.
+   */
+  researchTools?: {
+    searxngBaseUrl?: string | null;
   };
   /** Path of the container-local SQLite database file. */
   dbPath: string;
@@ -1242,6 +1256,22 @@ function wire(
         : {}),
     });
   }
+  // S25 (issue #26): the research and data tools — always the workspace
+  // sinks (artifacts + files), the SearXNG endpoint only where configured
+  // (G4: no configuration, no search tool). Registered through the SAME
+  // executor seam as every other family: the D35 ladder (READ_ONLY runs
+  // automatically), the per-tool limits, the redaction-before-write, and
+  // the history rows are the executor's, not the bindings'.
+  registerResearchTools(toolRegistry, wireWorkspaceId, {
+    searxng:
+      options.researchTools?.searxngBaseUrl !== null &&
+      options.researchTools?.searxngBaseUrl !== undefined &&
+      options.researchTools.searxngBaseUrl !== ""
+        ? { baseUrl: options.researchTools.searxngBaseUrl }
+        : null,
+    artifacts: workspaceArtifacts,
+    files: workspaceFiles,
+  });
   const approvalsApi = buildApprovalsApiHandle({
     approvals,
     approvalsRepository,

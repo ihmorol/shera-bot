@@ -20,7 +20,9 @@
  */
 import type { ToolRegistry } from "../../modules/tools/tool-registry.ts";
 import {
+  makeDocumentParseBinding,
   makePageFetchBinding,
+  makeSpreadsheetAnalyzeBinding,
   makeWebSearchBinding,
   type ResearchToolDeps,
 } from "../../modules/research/research-bindings.ts";
@@ -42,6 +44,12 @@ const SEARCH_MAX_RESPONSE_BYTES = 65_536;
 
 /** The page-fetch tool's response budget (the result head + pointer). */
 const PAGE_FETCH_MAX_RESPONSE_BYTES = 65_536;
+
+/** The document-parse tool's response budget (the result head + pointer). */
+const DOC_PARSE_MAX_RESPONSE_BYTES = 65_536;
+
+/** The spreadsheet tool's response budget (the summary + pointer). */
+const SHEET_ANALYZE_MAX_RESPONSE_BYTES = 65_536;
 
 /**
  * Register the S25 research built-ins for one workspace. Chunk 1 ships the
@@ -125,4 +133,74 @@ export function registerResearchTools(
     max_response_bytes: PAGE_FETCH_MAX_RESPONSE_BYTES,
     bindingName: "research-page-fetch",
   });
+
+  // The uploaded-file tools (chunk 3) read the S17 row-based workspace
+  // store: they exist only where a store is wired (G4). Both are pure
+  // functions of the file's bytes — the E13 recovery class is replayable
+  // (re-running a parse over the same bytes reproduces the same result).
+  if (deps.files !== null) {
+    registry.registerBinding("research-document-parse", makeDocumentParseBinding(deps));
+    registry.registerBuiltinTool({
+      definition: {
+        tool_id: "tool_document_parse",
+        workspace_id: workspaceId,
+        version: "1.0.0",
+        name: "Document parse",
+        purpose:
+          "Parse an uploaded document from the shared workspace (PDF text through unpdf; text/markdown as themselves) into a structured text artifact with provenance. Read-only: runs automatically without approval.",
+        owner: { kind: "platform" } as const,
+        inventory_scope: "shared" as const,
+        input_schema: {
+          type: "object",
+          properties: { path: { type: "string", minLength: 1, maxLength: 4096 } },
+          required: ["path"],
+        },
+        output_schema: { type: "object" },
+        capabilities: ["research.parse.document"],
+        risk_class: "READ_ONLY" as const,
+        timeout_ms: 60_000,
+        resource_limits: RESEARCH_TOOL_RESOURCE_LIMITS,
+        redaction_policy: "standard" as const,
+        approval_policy: "auto_read_only" as const,
+        recovery: "replayable" as const,
+        created_at: new Date().toISOString(),
+      },
+      enabled: true,
+      max_response_bytes: DOC_PARSE_MAX_RESPONSE_BYTES,
+      bindingName: "research-document-parse",
+    });
+    registry.registerBinding("research-spreadsheet-analyze", makeSpreadsheetAnalyzeBinding(deps));
+    registry.registerBuiltinTool({
+      definition: {
+        tool_id: "tool_spreadsheet_analyze",
+        workspace_id: workspaceId,
+        version: "1.0.0",
+        name: "Spreadsheet analysis",
+        purpose:
+          "Read and analyse an uploaded spreadsheet or CSV from the shared workspace (SheetJS CE): sheet shape, deterministic per-column statistics, and the full table as a CSV artifact with provenance. Read-only: runs automatically without approval.",
+        owner: { kind: "platform" } as const,
+        inventory_scope: "shared" as const,
+        input_schema: {
+          type: "object",
+          properties: {
+            path: { type: "string", minLength: 1, maxLength: 4096 },
+            sheet: { type: "string" },
+          },
+          required: ["path"],
+        },
+        output_schema: { type: "object" },
+        capabilities: ["research.analyze.spreadsheet"],
+        risk_class: "READ_ONLY" as const,
+        timeout_ms: 60_000,
+        resource_limits: RESEARCH_TOOL_RESOURCE_LIMITS,
+        redaction_policy: "standard" as const,
+        approval_policy: "auto_read_only" as const,
+        recovery: "replayable" as const,
+        created_at: new Date().toISOString(),
+      },
+      enabled: true,
+      max_response_bytes: SHEET_ANALYZE_MAX_RESPONSE_BYTES,
+      bindingName: "research-spreadsheet-analyze",
+    });
+  }
 }

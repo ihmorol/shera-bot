@@ -157,6 +157,7 @@ function buildRuntime(): ResearchRuntime {
   registerResearchTools(registry, WS, {
     searxng: { baseUrl: fixtureOrigin },
     artifacts: null,
+    files: null,
   });
   const executor = new ToolExecutor({
     registry,
@@ -228,7 +229,7 @@ describe("research tool inventory declarations (S25 chunk 1, AC7)", () => {
     const dir = mkdtempSync(join(tmpdir(), "shera-s25-research-"));
     tempDirs.push(dir);
     const registry = new ToolRegistry();
-    registerResearchTools(registry, WS, { searxng: null, artifacts: null });
+    registerResearchTools(registry, WS, { searxng: null, artifacts: null, files: null });
     expect(registry.resolve(WS, "tool_web_search", "1.0.0")).toBeNull();
   });
 });

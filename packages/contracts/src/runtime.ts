@@ -25,7 +25,7 @@
  */
 import { z } from "zod";
 
-import { Id, IsoDateTime, ResourceTier, Sha256Hex } from "./primitives.ts";
+import { Id, IsoDateTime, ResourceTier, Sha256Hex, WorkspaceId } from "./primitives.ts";
 
 /**
  * PRD §3.3 resource tiers as machine-applicable constants. These numbers are
@@ -227,6 +227,103 @@ export const RuntimeCredentialCommitResponse = z.strictObject({
   committed: z.literal(true),
 });
 export type RuntimeCredentialCommitResponse = z.infer<typeof RuntimeCredentialCommitResponse>;
+
+// ---------------------------------------------------------------------------
+// S32 admin commands over the internal channel (issue #33, D47; PRD §15).
+// The SAME authenticated per-container channel as registration/rotation —
+// no second control-plane→runtime path exists or is invented here. Every
+// admin command names its workspace (tenant-checked runtime-side) and the
+// admin actor the control plane attributes (the token id).
+// ---------------------------------------------------------------------------
+
+/** Emergency cancel-all: stop every non-terminal run of the targeted workspace. */
+export const RUNTIME_ADMIN_CANCEL_ALL_PATH = "/internal/v1/admin/cancel-all" as const;
+
+export const RuntimeAdminCancelAllRequest = z.strictObject({
+  workspace_id: WorkspaceId,
+  actor: z.strictObject({ type: z.literal("admin"), id: Id }),
+});
+export type RuntimeAdminCancelAllRequest = z.infer<typeof RuntimeAdminCancelAllRequest>;
+
+/** The per-run outcome vocabulary is the S22 RunCancellationService's. */
+export const RUNTIME_ADMIN_RUN_OUTCOMES = [
+  "cancelled",
+  "already_cancelled",
+  "already_settled",
+  "actor_refused",
+  "not_found",
+] as const;
+export const RuntimeAdminRunOutcome = z.enum(RUNTIME_ADMIN_RUN_OUTCOMES);
+
+export const RuntimeAdminCancelAllResponse = z.strictObject({
+  workspace_id: WorkspaceId,
+  results: z.array(z.strictObject({ run_id: Id, outcome: RuntimeAdminRunOutcome })),
+});
+export type RuntimeAdminCancelAllResponse = z.infer<typeof RuntimeAdminCancelAllResponse>;
+
+/**
+ * Credit top-up (D48): the admin grant that unblocks runs paused with
+ * `insufficient_credits`. The control plane records the grant durably; the
+ * runtime applies the resume through the recorded D8 `resume_task` row.
+ */
+export const RUNTIME_ADMIN_CREDITS_TOP_UP_PATH = "/internal/v1/admin/credits/top-up" as const;
+
+export const RuntimeAdminCreditTopUpRequest = z.strictObject({
+  workspace_id: WorkspaceId,
+  /** The control-plane grant record id (the audit join). */
+  topup_id: Id,
+  /** Positive integer accounting units (D48: internal prototype accounting). */
+  amount: z.number().int().positive(),
+  actor: z.strictObject({ type: z.literal("admin"), id: Id }),
+});
+export type RuntimeAdminCreditTopUpRequest = z.infer<typeof RuntimeAdminCreditTopUpRequest>;
+
+export const RUNTIME_ADMIN_TOPUP_SKIP_REASONS = [
+  "pause_reason_not_insufficient_credits",
+  "resume_refused",
+] as const;
+export const RuntimeAdminTopUpSkipReason = z.enum(RUNTIME_ADMIN_TOPUP_SKIP_REASONS);
+
+export const RuntimeAdminCreditTopUpResponse = z.strictObject({
+  workspace_id: WorkspaceId,
+  topup_id: Id,
+  resumed_run_ids: z.array(Id),
+  skipped: z.array(z.strictObject({ run_id: Id, reason: RuntimeAdminTopUpSkipReason })),
+});
+export type RuntimeAdminCreditTopUpResponse = z.infer<typeof RuntimeAdminCreditTopUpResponse>;
+
+/**
+ * Task-failure read (PRD §15 "view recent ... task failures"): the runtime's
+ * FAILED / RECOVERY_REQUIRED runs with their failure journal events. The
+ * control plane merges this with its own container-failure security events.
+ */
+export const RUNTIME_ADMIN_TASK_FAILURES_PATH = "/internal/v1/admin/task-failures" as const;
+
+export const RuntimeAdminTaskFailuresRequest = z.strictObject({
+  workspace_id: WorkspaceId,
+  limit: z.number().int().min(1).max(200).default(50),
+});
+export type RuntimeAdminTaskFailuresRequest = z.infer<typeof RuntimeAdminTaskFailuresRequest>;
+
+export const RuntimeAdminTaskFailureRecord = z.strictObject({
+  run_id: Id,
+  state: z.enum(["FAILED", "RECOVERY_REQUIRED"]),
+  occurred_at: IsoDateTime,
+  events: z.array(
+    z.strictObject({
+      type: Id,
+      occurred_at: IsoDateTime,
+      reason: z.string().max(300).nullable(),
+    }),
+  ),
+});
+export type RuntimeAdminTaskFailureRecord = z.infer<typeof RuntimeAdminTaskFailureRecord>;
+
+export const RuntimeAdminTaskFailuresResponse = z.strictObject({
+  workspace_id: WorkspaceId,
+  failures: z.array(RuntimeAdminTaskFailureRecord),
+});
+export type RuntimeAdminTaskFailuresResponse = z.infer<typeof RuntimeAdminTaskFailuresResponse>;
 
 // ---------------------------------------------------------------------------
 // Process-internal backend types (NOT wire schemas — never serialized to the

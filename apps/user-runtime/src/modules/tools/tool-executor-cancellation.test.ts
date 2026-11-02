@@ -18,9 +18,13 @@
  *
  * Governing records: AC5, D32, D9 (no grant from a cancelled approval), G6.
  */
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+import {
+  cleanupTempResources,
+  makeTempDir,
+  trackConnection,
+} from "../../../test/helpers/temp-resources.ts";
 
 import { afterAll, describe, expect, it } from "vitest";
 
@@ -46,8 +50,6 @@ const CONV = "conv_001";
 const AGENT = "agent_researcher";
 const NOW = "2026-10-29T12:00:00.000Z";
 const HASH = "a".repeat(64);
-
-const tempDirs: string[] = [];
 
 interface Runtime {
   executor: ToolExecutor;
@@ -75,9 +77,8 @@ function makeRun(taskId: string = TASK, overrides: Partial<TaskRun> = {}): TaskR
 }
 
 function buildRuntime(): Runtime {
-  const dir = mkdtempSync(join(tmpdir(), "shera-tool-cancel-"));
-  tempDirs.push(dir);
-  const conn = openDatabase(join(dir, "runtime.db"));
+  const dir = makeTempDir("shera-tool-cancel-");
+  const conn = trackConnection(openDatabase(join(dir, "runtime.db")));
   applyMigrations(conn.db);
   const tx = new SqliteTransactions(conn.db);
   const journal = new EventJournalRepository(tx);
@@ -139,10 +140,14 @@ function buildRuntime(): Runtime {
   return { executor, repo, approvals, conn, notes: bindings.notes };
 }
 
-afterAll(() => {
-  for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { recursive: true, force: true });
-  }
+afterAll(async () => {
+  // The E20 pattern (test/helpers/temp-resources.ts): close every tracked
+  // connection first, then delete with a bounded backoff. This suite never
+  // closed its SQLite connections at all — on Windows the still-open handles
+  // locked the temp tree and the single unretried rmSync went EPERM at
+  // teardown (suite-level red with all assertions passing; observed on the
+  // S32 fresh-archive gate).
+  await cleanupTempResources();
 });
 
 const RAW_ARGS = { path: "notes.md", line: "second line" };

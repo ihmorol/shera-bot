@@ -37,6 +37,11 @@ const PROCESS_EXCEPTIONS = new Set([
   "apps/control-plane/test/helpers/test-app.ts",
   // Spawns the ephemeral postgres cluster the S04/S05 DB suites run against.
   "apps/control-plane/test/helpers/pg-cluster.ts",
+  // The S32 shera-admin bin-executable probe: spawning the CLI entry as a
+  // REAL child process IS the AC1 "callable" proof (the guarded main()
+  // self-invocation fires only as node's entry point). Test-only; the
+  // production control plane never spawns processes.
+  "apps/control-plane/test/helpers/cli-bin.ts",
   // S09 kill -9 recovery probe: spawns the E8 mock runtime as a child process
   // so the probe can SIGKILL it mid-stream and verify restart recovery on the
   // same SQLite file (test-only; the runtime never spawns processes itself).

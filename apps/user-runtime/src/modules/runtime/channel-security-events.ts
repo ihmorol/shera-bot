@@ -8,14 +8,20 @@
  * never credential material, never request bodies (G3).
  */
 
-export const INTERNAL_CHANNEL_EVENT_TYPES = ["internal_channel_rejected"] as const;
+export const INTERNAL_CHANNEL_EVENT_TYPES = [
+  "internal_channel_rejected",
+  // S32: an authenticated channel request that named another runtime's
+  // workspace (the tenant check refused the admin command before execution).
+  "internal_admin_command_refused",
+] as const;
 
 export type InternalChannelEventType = (typeof INTERNAL_CHANNEL_EVENT_TYPES)[number];
 
 export interface InternalChannelSecurityEvent {
   event: InternalChannelEventType;
-  /** Bounded reason vocabulary: missing_bearer | malformed_bearer | invalid_credential. */
-  reason: "missing_bearer" | "malformed_bearer" | "invalid_credential";
+  /** Bounded reason vocabulary; admin-command refusals name their reason. */
+  reason:
+    "missing_bearer" | "malformed_bearer" | "invalid_credential" | "workspace_tenant_mismatch";
   path: string;
   occurred_at: string;
 }

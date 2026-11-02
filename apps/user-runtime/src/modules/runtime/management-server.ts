@@ -12,6 +12,7 @@ import { Id } from "@shera-bot/contracts";
 import { channelState } from "../../adapters/fs/channel-state.ts";
 import { ChannelCredentialStore } from "./channel-credentials.ts";
 import { createInternalApi, InMemorySecurityEventRecorder } from "./internal-api.ts";
+import type { RuntimeAdminCommandsHandle } from "../admin/runtime-admin-commands.ts";
 
 export interface ManagementConfig {
   host: string;
@@ -85,6 +86,8 @@ export function createManagementServer(
   localApi: Express,
   dbPath: string,
   localPort: number,
+  /** S32: the composed admin command seam (issue #33). */
+  adminCommands?: RuntimeAdminCommandsHandle,
 ): ManagementServer {
   Id.parse(config.accountId);
   const state = channelState(
@@ -108,6 +111,7 @@ export function createManagementServer(
     accountId: config.accountId,
     localApi,
     securityEvents,
+    ...(adminCommands ? { adminCommands } : {}),
   });
   const server = createServer(internal.app) as ManagementServer;
   const liveSockets = new Set<Duplex>();

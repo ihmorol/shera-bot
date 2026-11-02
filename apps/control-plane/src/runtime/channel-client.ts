@@ -12,12 +12,21 @@
  * message (G3).
  */
 import {
+  RUNTIME_ADMIN_CANCEL_ALL_PATH,
+  RUNTIME_ADMIN_CREDITS_TOP_UP_PATH,
+  RUNTIME_ADMIN_TASK_FAILURES_PATH,
   RUNTIME_CREDENTIALS_COMMIT_PATH,
   RUNTIME_CREDENTIALS_PATH,
   RUNTIME_REGISTRATION_PATH,
+  RuntimeAdminCancelAllResponse,
+  RuntimeAdminCreditTopUpResponse,
+  RuntimeAdminTaskFailuresResponse,
   RuntimeCredentialCommitResponse,
   RuntimeCredentialRotationResponse,
   RuntimeRegistrationResponse,
+  type RuntimeAdminCancelAllRequest,
+  type RuntimeAdminCreditTopUpRequest,
+  type RuntimeAdminTaskFailuresRequest,
   type RuntimeRegistrationRequest,
 } from "@shera-bot/contracts";
 
@@ -42,7 +51,7 @@ export interface RuntimeChannelClientOptions {
 async function call<T extends { parse(input: unknown): unknown }>(
   endpoint: string,
   path: string,
-  method: "POST" | "PUT",
+  method: "GET" | "POST" | "PUT",
   bearer: string,
   body: unknown,
   responseSchema: T,
@@ -56,7 +65,7 @@ async function call<T extends { parse(input: unknown): unknown }>(
         "content-type": "application/json",
         authorization: `Bearer ${bearer}`,
       },
-      body: JSON.stringify(body),
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       signal: AbortSignal.timeout(options.timeout_ms ?? DEFAULT_TIMEOUT_MS),
     });
   } catch (error) {
@@ -139,5 +148,66 @@ export class RuntimeChannelClient {
       RuntimeCredentialCommitResponse,
       this.options,
     );
+  }
+
+  /**
+   * S32: the emergency cancel-all for one user's workspace (issue #33, AC4).
+   * The SAME authenticated channel; the runtime executes through its own S22
+   * cancellation machinery. A 403 (tenant mismatch) or 503 (not wired) rides
+   * back as ChannelRejected for the caller to type.
+   */
+  async cancelAll(
+    endpoint: string,
+    bearer: string,
+    request: RuntimeAdminCancelAllRequest,
+  ): Promise<RuntimeAdminCancelAllResponse> {
+    return call(
+      endpoint,
+      RUNTIME_ADMIN_CANCEL_ALL_PATH,
+      "POST",
+      bearer,
+      request,
+      RuntimeAdminCancelAllResponse,
+      this.options,
+    ) as Promise<RuntimeAdminCancelAllResponse>;
+  }
+
+  /** S32: apply a credit top-up (D48) — the runtime resumes the
+   * insufficient-credit pauses through the recorded resume path. */
+  async applyCreditTopUp(
+    endpoint: string,
+    bearer: string,
+    request: RuntimeAdminCreditTopUpRequest,
+  ): Promise<RuntimeAdminCreditTopUpResponse> {
+    return call(
+      endpoint,
+      RUNTIME_ADMIN_CREDITS_TOP_UP_PATH,
+      "POST",
+      bearer,
+      request,
+      RuntimeAdminCreditTopUpResponse,
+      this.options,
+    ) as Promise<RuntimeAdminCreditTopUpResponse>;
+  }
+
+  /** S32: the task-failure read over the recorded channel. */
+  async listTaskFailures(
+    endpoint: string,
+    bearer: string,
+    request: RuntimeAdminTaskFailuresRequest,
+  ): Promise<RuntimeAdminTaskFailuresResponse> {
+    const params = new URLSearchParams({
+      workspace_id: request.workspace_id,
+      limit: String(request.limit),
+    });
+    return call(
+      endpoint,
+      `${RUNTIME_ADMIN_TASK_FAILURES_PATH}?${params.toString()}`,
+      "GET",
+      bearer,
+      undefined,
+      RuntimeAdminTaskFailuresResponse,
+      this.options,
+    ) as Promise<RuntimeAdminTaskFailuresResponse>;
   }
 }

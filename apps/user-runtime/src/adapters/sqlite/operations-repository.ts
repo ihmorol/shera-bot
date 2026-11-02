@@ -838,6 +838,23 @@ export class OperationsRepository {
     return rows.map((row) => this.runFromRow(row));
   }
 
+  /**
+   * Every run in ONE workspace regardless of state (S32 admin commands).
+   * Parsed through the contract like every other read; the admin cancel-all
+   * walks this list and the S22 machinery decides each outcome.
+   */
+  listAllWorkspaceRuns(workspaceId: string, exec?: DatabaseSync): OperationRun[] {
+    const db = exec ?? this.tx.connection();
+    const rows = db
+      .prepare(
+        `SELECT ${RUN_COLUMNS} FROM operation_runs
+         WHERE workspace_id = ?
+         ORDER BY created_at, run_id`,
+      )
+      .all(workspaceId) as unknown as OperationRunSqlRow[];
+    return rows.map((row) => this.runFromRow(row));
+  }
+
   listRuns(workspaceId: string, operationId: string, exec?: DatabaseSync): OperationRun[] {
     const db = exec ?? this.tx.connection();
     const rows = db

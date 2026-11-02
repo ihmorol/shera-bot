@@ -124,6 +124,10 @@ import {
   type AdmissionPolicy,
 } from "../../modules/workers/admission.ts";
 import { OperationsRunSeam } from "../../modules/workers/operations-run-seam.ts";
+import {
+  buildRuntimeAdminCommandsHandle,
+  type RuntimeAdminCommandsHandle,
+} from "../../modules/admin/runtime-admin-commands.ts";
 import { RunFlowOperationsService } from "../../modules/workers/task-run-flow.ts";
 import {
   TaskWorkerSupervisor,
@@ -459,10 +463,21 @@ export interface RuntimeHandle {
    * operator seam.
    */
   runControl: RunControlApiHandle;
+  /**
+   * S32: the admin command seam the internal API serves to the control plane
+   * over the recorded channel (emergency cancel-all now; credit top-up and
+   * the task-failure read with their chunks). Undefined never happens — the
+   * handle exists even when nothing is running (an honest empty walk).
+   */
+  adminCommands: RuntimeAdminCommandsHandle;
   /** S23: the provider registry seam — configuration, custody, resolution. */
   providers: ProviderService;
   /** The shared transaction primitive (S26 composition tests seed grants here). */
   tx: SqliteTransactions;
+  /** The event journal (the runtime's durable record; S32 admin reads/tests). */
+  journal: EventJournalRepository;
+  /** The typed events service (S32 lifecycle fixtures drive recorded transitions). */
+  events: EventsService;
   /** Closes the gateway (and with it the HTTP server), then SQLite. */
   close(): Promise<void>;
 }
@@ -492,6 +507,7 @@ interface Wired {
   retryCoordinator: RetryCoordinator;
   runCancellation: RunCancellationService;
   runControl: RunControlApiHandle;
+  adminCommands: RuntimeAdminCommandsHandle;
   providers: ProviderService;
   setPublisher(publisher: ConversationPublisher): void;
 }
@@ -1294,6 +1310,24 @@ function wire(
     journal,
   });
 
+  // S32 (issue #33): the admin command handle the internal API serves to the
+  // control plane over the recorded channel. The cancellation leg re-enters
+  // the SAME RunCancellationService the user stop control uses — the admin
+  // command is an actor on the recorded path, never a parallel one.
+  const adminCommands = buildRuntimeAdminCommandsHandle({
+    listWorkspaceRuns: (workspaceId) => operationsRepository.listAllWorkspaceRuns(workspaceId),
+    runCancellation,
+    tx,
+    journal,
+    events,
+    runControl: new OperationsRunSeam(operations),
+    findRunOperation: (workspaceId, runId) =>
+      operationsRepository.findRunOperation(workspaceId, runId),
+    findChat: (workspaceId, operationId) => operationsRepository.findChat(workspaceId, operationId),
+    ...(options.now ? { now: options.now } : {}),
+    logFault: (event, fields) => logFault(event, fields),
+  });
+
   const replay = new ReplayService({
     journal,
     loadSnapshot: (workspaceId, streamId) => {
@@ -1384,6 +1418,7 @@ function wire(
     retryCoordinator,
     runCancellation,
     runControl: runControlApi,
+    adminCommands,
     providers,
     setPublisher(next) {
       publisher = next;
@@ -1595,7 +1630,10 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     agents: wired.agents,
     folders: wired.folders,
     operations: wired.operations,
+    adminCommands: wired.adminCommands,
     replyStreamer,
+    journal: wired.journal,
+    events: wired.events,
     sessions: wired.sessions,
     workers: wired.workers,
     approvals: wired.approvals,

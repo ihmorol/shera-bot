@@ -216,6 +216,62 @@ export const controlSecurityEvents = pgTable(
   ],
 );
 
+/**
+ * S32 (D47, issue #33): the owner-held admin API token. The raw token exists
+ * only at creation (displayed once to the owner, G3) and in the presenting
+ * request; this table stores ONLY the SHA-256 digest. Rotation revokes the
+ * previous token (AC5); at most one token is active at a time — a lost token
+ * is recovered by creating a new one, which is a rotation by effect.
+ *
+ * `token_digest_hint` is the first 12 hex characters of the DIGEST: it
+ * identifies a token in events and CLI output without being token material.
+ */
+export const controlAdminTokens = pgTable(
+  "control_admin_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** SHA-256 of the raw token — the only stored form (G3). */
+    tokenSha256: text("token_sha256").notNull().unique(),
+    /** First 12 hex chars of the digest; not secret material. */
+    tokenDigestHint: text("token_digest_hint").notNull(),
+    /** "cli" (the local operator command) or "rotation". */
+    createdBy: text("created_by").notNull().default("cli"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => [index("control_admin_tokens_revoked_idx").on(t.revokedAt)],
+);
+
+/**
+ * S32 (D48, issue #33): the durable record of an admin credit top-up — the
+ * unblocking path for a run paused with `insufficient_credits`. Credits are
+ * internal prototype accounting (D48); the S24 ledger (runtime-local, not
+ * built yet) will own the balance, and this central row is the admin-action
+ * record the seam consults (minimal operational metadata, PRD §12). Every
+ * row is mirrored by an `admin_credit_topup` security event.
+ */
+export const controlCreditTopups = pgTable(
+  "control_credit_topups",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => controlAccounts.id, { onDelete: "cascade" }),
+    /** Integer accounting units; always positive (D48 internal accounting). */
+    amount: integer("amount").notNull(),
+    /** Bounded operator note (optional; redacted before storage). */
+    reason: text("reason"),
+    /** Links the runtime-side resume to this grant (the journal correlation). */
+    correlationId: text("correlation_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("control_credit_topups_account_idx").on(t.accountId),
+    check("control_credit_topups_amount_check", sql`${t.amount} > 0`),
+  ],
+);
+
 export const controlAccountsRelations = relations(controlAccounts, ({ many }) => ({
   oauthAccounts: many(controlOauthAccounts),
   sessions: many(controlSessions),
@@ -243,4 +299,6 @@ export const CONTROL_PLANE_TABLES = [
   "control_container_mappings",
   "control_backups",
   "control_security_events",
+  "control_admin_tokens",
+  "control_credit_topups",
 ] as const;

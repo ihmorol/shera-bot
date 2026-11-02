@@ -6,7 +6,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
@@ -26,6 +26,12 @@ export const SECURITY_EVENT_TYPES = [
   "runtime_operation_failed",
   "runtime_channel_auth_failed",
   "runtime_channel_token_rotated",
+  // S32 (admin API/CLI; D47, PRD §15 "security-relevant actions are logged").
+  "admin_token_created",
+  "admin_token_rotated",
+  "admin_auth_rejected",
+  "admin_action",
+  "admin_action_failed",
 ] as const;
 
 export type SecurityEventType = (typeof SECURITY_EVENT_TYPES)[number];
@@ -39,11 +45,19 @@ export interface SecurityEventInput {
 }
 
 export class SecurityEventService {
-  constructor(
-    private readonly db: NodePgDatabase,
-    private readonly registry: SecretRegistry,
-    private readonly logger: ControlPlaneLogger,
-  ) {}
+  // Explicit field declarations (not constructor parameter properties): the
+  // S32 CLI's bin entry loads this module through plain `node` type stripping,
+  // which does not support parameter-property syntax. Same shape as the
+  // sibling AdminTokenService. No behavior change.
+  private readonly db: NodePgDatabase;
+  private readonly registry: SecretRegistry;
+  private readonly logger: ControlPlaneLogger;
+
+  constructor(db: NodePgDatabase, registry: SecretRegistry, logger: ControlPlaneLogger) {
+    this.db = db;
+    this.registry = registry;
+    this.logger = logger;
+  }
 
   async record(input: SecurityEventInput): Promise<void> {
     try {
@@ -63,6 +77,44 @@ export class SecurityEventService {
         reason: error instanceof Error ? error.message : String(error),
       });
     }
+  }
+
+  /**
+   * S32 (PRD §15 failures view): the account's recent events of the given
+   * types, newest first, bounded. Read-only; the redaction guarantee is the
+   * write-time one (details were scrubbed before insert).
+   */
+  async listForAccount(
+    accountId: string,
+    eventTypes: readonly string[],
+    limit: number,
+  ): Promise<
+    Array<{
+      id: string;
+      eventType: string;
+      accountId: string | null;
+      details: Record<string, unknown>;
+      occurredAt: Date;
+    }>
+  > {
+    const rows = await this.db
+      .select()
+      .from(controlSecurityEvents)
+      .where(
+        and(
+          eq(controlSecurityEvents.accountId, accountId),
+          inArray(controlSecurityEvents.eventType, [...eventTypes]),
+        ),
+      )
+      .orderBy(desc(controlSecurityEvents.occurredAt))
+      .limit(limit);
+    return rows.map((row) => ({
+      id: row.id,
+      eventType: row.eventType,
+      accountId: row.accountId,
+      details: row.details,
+      occurredAt: row.occurredAt,
+    }));
   }
 
   async listByType(eventType: SecurityEventType): Promise<

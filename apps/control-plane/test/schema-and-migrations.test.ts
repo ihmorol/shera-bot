@@ -21,6 +21,10 @@ const EXPECTED_PUBLIC_TABLES = [
   "control_container_mappings",
   "control_backups",
   "control_security_events",
+  // S32 (issue #33, D47/D48): the owner-held admin token (hash-only) and the
+  // admin credit top-up record (the D48 unblocking path's central evidence).
+  "control_admin_tokens",
+  "control_credit_topups",
 ].sort();
 
 let cluster: TestCluster;

@@ -234,7 +234,7 @@ export function makePageFetchBinding(deps: ResearchToolDeps): ToolBinding {
             producer_agent_id: ctx.execution.agent_id,
             producer_task_id: ctx.execution.task_id,
           });
-          artifactNote = `\n[full content (${page.chars} chars) captured as artifact ${ref.artifact_id.slice(0, 8)}…]`;
+          artifactNote = `\n[full content (${page.chars} chars) captured as artifact ${ref.artifact_id.slice(0, 17)}…]`;
         } catch {
           // The artifact sink failing never fails the read — the bounded
           // head still records the result honestly (the S26 posture).
@@ -362,7 +362,7 @@ export function makeDocumentParseBinding(deps: ResearchToolDeps): ToolBinding {
       const header = `Parsed ${path} — ${parsed.kind === "pdf" ? `PDF, ${parsed.pages ?? "?"} page(s)` : "text"} (${text.length} chars)`;
       const artifactNote =
         artifactId !== null
-          ? `\n[full text (${text.length} chars) captured as artifact ${artifactId.slice(0, 8)}…]`
+          ? `\n[full text (${text.length} chars) captured as artifact ${artifactId.slice(0, 17)}…]`
           : "";
       const headBudget = Math.max(0, RESEARCH_RESULT_HEAD_CHARS - header.length - artifactNote.length);
       const head = text.slice(0, headBudget);
@@ -410,7 +410,7 @@ export function makeSpreadsheetAnalyzeBinding(deps: ResearchToolDeps): ToolBindi
       });
       const artifactNote =
         artifactId !== null
-          ? `\n[full table (${analysis.csv.length} chars CSV) captured as artifact ${artifactId.slice(0, 8)}…]`
+          ? `\n[full table (${analysis.csv.length} chars CSV) captured as artifact ${artifactId.slice(0, 17)}…]`
           : "";
       const headBudget = Math.max(
         0,
@@ -495,7 +495,7 @@ export function makeImageUnderstandBinding(deps: ResearchToolDeps): ToolBinding 
       const header = `Described ${path} (${mediaType}, ${bytes.byteLength} bytes)`;
       const artifactNote =
         artifactId !== null
-          ? `\n[full description (${description.length} chars) captured as artifact ${artifactId.slice(0, 8)}…]`
+          ? `\n[full description (${description.length} chars) captured as artifact ${artifactId.slice(0, 17)}…]`
           : "";
       const headBudget = Math.max(0, RESEARCH_RESULT_HEAD_CHARS - header.length - artifactNote.length);
       const head = description.slice(0, headBudget);

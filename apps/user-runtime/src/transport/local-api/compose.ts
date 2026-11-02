@@ -1477,6 +1477,16 @@ function wire(
     findRunOperation: (workspaceId, runId) =>
       operationsRepository.findRunOperation(workspaceId, runId),
     findChat: (workspaceId, operationId) => operationsRepository.findChat(workspaceId, operationId),
+    // S24 (AC2): the top-up applies the GRANT to the runtime ledger (the
+    // central control_credit_topups row stays the authority), re-drives each
+    // resumed run to completion, and re-arms the credit-paused triggers.
+    applyGrant: (workspaceId, topupId, amount) => {
+      creditLedger.grant({ workspace_id: workspaceId, amount_units: amount, related_id: topupId });
+    },
+    resumeRun: (workspaceId, runId) => scheduler.resumeRunAfterTopUp(workspaceId, runId).then(() => undefined),
+    afterTopUp: (workspaceId) => {
+      scheduler.resumeAfterTopUp(workspaceId);
+    },
     ...(options.now ? { now: options.now } : {}),
     logFault: (event, fields) => logFault(event, fields),
   });

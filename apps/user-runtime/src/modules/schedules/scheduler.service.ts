@@ -486,6 +486,111 @@ export class SchedulerService {
     return { resumed };
   }
 
+  /**
+   * Re-drive ONE credit-resumed run to completion (S24, AC2; the admin
+   * top-up's applyCreditTopUp calls this through the composed seam after
+   * the recorded D8 `resume_task` row put the run back in QUEUED). The run
+   * walks the SAME plan legs from its CURRENT state (start → the plan
+   * runner's legs → complete) — never a second state machine, never a
+   * second reservation while one stands (the runner reuses the hold). The
+   * firing ledger records the re-drive's outcome against the same firing
+   * row (the run linkage is already there).
+   *
+   * A run with no firing linkage (a non-scheduler pause — none exists in
+   * this prototype) is left QUEUED: the honest state, recorded in E39.
+   */
+  async resumeRunAfterTopUp(
+    workspaceId: string,
+    runId: string,
+  ): Promise<{ redriven: boolean; outcome?: string }> {
+    const operationId = this.deps.operations.findRunOperation(workspaceId, runId);
+    if (operationId === null) return { redriven: false };
+    let state: string;
+    try {
+      state = this.deps.ops.getRun(workspaceId, operationId, runId).state;
+    } catch {
+      return { redriven: false };
+    }
+    if (state !== "QUEUED") return { redriven: false };
+
+    const firing = this.deps.triggers.findFiringByRun(workspaceId, runId);
+    if (firing === null || firing.trigger_id === null) return { redriven: false };
+    const trigger = this.deps.triggers.getTrigger(workspaceId, firing.trigger_id);
+    if (trigger === null) return { redriven: false };
+
+    const config = JSON.parse(trigger.config_json) as Record<string, unknown>;
+    const provider =
+      trigger.kind === "schedule"
+        ? (config["provider"] as { provider_id: string; model: string } | undefined)
+        : undefined;
+    const conversationId = this.deps.operations.findChat(workspaceId, operationId) ?? operationId;
+
+    // The run stream's FIRST trigger event is the G2 origin — the re-drive
+    // reuses it as provenance (never a fabricated event id).
+    const stream = this.deps.journal.readFrom(workspaceId, taskStreamId(runId), 0, 10);
+    const originEvent = stream.find((row) => row.event_type.startsWith("trigger."));
+    if (originEvent === undefined) return { redriven: false };
+
+    const walk = await this.walkPlan(
+      trigger,
+      runId,
+      conversationId,
+      config,
+      provider,
+      {
+        event_type: originEvent.event_type as TaskTriggerEventType,
+        event_id: originEvent.event_id,
+      },
+      true,
+    );
+    if (walk.ok) {
+      this.deps.triggers.updateFiring(workspaceId, firing.trigger_id, firing.idempotency_key, {
+        outcome: "fired",
+        run_id: runId,
+        detail_json: JSON.stringify({ redriven_after_topup: true }),
+      });
+      return { redriven: true, outcome: "fired" };
+    }
+    if (walk.kind === "paused_credits") {
+      // The top-up was too small for the estimate: the trigger re-pauses
+      // (the same recorded pause), the run is PAUSED again.
+      this.deps.triggers.updateFiring(workspaceId, firing.trigger_id, firing.idempotency_key, {
+        outcome: "paused_credits",
+        run_id: runId,
+        detail_json: JSON.stringify({
+          requested_units: walk.requested_units,
+          available_units: walk.available_units,
+          redriven_after_topup: true,
+        }),
+      });
+      this.deps.triggers.updateTriggerState(workspaceId, firing.trigger_id, {
+        state: "paused",
+        pause_reason: "insufficient_credits",
+        updated_at: this.now(),
+      });
+      this.appendTriggerStreamEvent(workspaceId, firing.trigger_id, "trigger.credit_paused", {
+        workspace_id: workspaceId,
+        trigger_id: firing.trigger_id,
+        reason: "insufficient_credits",
+      });
+      return { redriven: true, outcome: "paused_credits" };
+    }
+    if (walk.kind === "recovery_required") {
+      this.deps.triggers.updateFiring(workspaceId, firing.trigger_id, firing.idempotency_key, {
+        outcome: "fired",
+        run_id: runId,
+        detail_json: JSON.stringify({ code: walk.code, recovery: true }),
+      });
+      return { redriven: true, outcome: "recovery_required" };
+    }
+    this.deps.triggers.updateFiring(workspaceId, firing.trigger_id, firing.idempotency_key, {
+      outcome: "failed",
+      run_id: runId,
+      detail_json: JSON.stringify({ code: walk.code }),
+    });
+    return { redriven: true, outcome: "failed" };
+  }
+
   // ── Boot reconciliation (PRD §13, E5, AC3/AC4) ──────────────────────────────
 
   /**
@@ -933,6 +1038,10 @@ export class SchedulerService {
     config: Record<string, unknown>,
     provider: { provider_id: string; model: string } | undefined,
     triggerEvent: { event_type: TaskTriggerEventType; event_id: string },
+    /** The re-drive entry (S24 resumeRunAfterTopUp): the run is ALREADY
+     * QUEUED (the recorded resume_task row put it there) — the walk starts
+     * at start_task, never a second queue_task. */
+    startFromQueued = false,
   ): Promise<WalkResult> {
     const deps = this.lifecycleDeps();
     const step = (
@@ -946,7 +1055,9 @@ export class SchedulerService {
       });
       return applied.ok;
     };
-    if (!step("queue_task")) return { ok: false, kind: "failed", code: "WALK_QUEUED_REJECTED" };
+    if (!startFromQueued && !step("queue_task")) {
+      return { ok: false, kind: "failed", code: "WALK_QUEUED_REJECTED" };
+    }
     if (!step("start_task")) return { ok: false, kind: "failed", code: "WALK_STARTED_REJECTED" };
     const plan = (config["plan"] as TriggerPlan | undefined) ?? { prompt: "" };
     const runner = this.deps.planRunner ?? {

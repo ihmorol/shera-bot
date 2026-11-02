@@ -307,6 +307,18 @@ describe("schedules service (typed declarative records)", () => {
         actor: USER,
       }),
     ).toThrowError(expect.objectContaining({ code: "TRIGGER_CONFIG_INVALID" }));
+    // A leading-dash branch is refused: the value reaches `git rev-parse` as
+    // argv, and a dash-leading name could arrive as a git OPTION.
+    expect(() =>
+      service.createTrigger(WS, {
+        kind: "git_watch",
+        name: "dash branch",
+        target_operation_id: OP,
+        config: { project_id: "proj_thesis", branch: "--upload-pack=evil" },
+        catch_up_policy: "skip",
+        actor: USER,
+      }),
+    ).toThrowError(expect.objectContaining({ code: "TRIGGER_CONFIG_INVALID" }));
     // webhook: source + a create-only secret stored as a DIGEST only (G3).
     const webhook = service.createTrigger(WS, {
       kind: "webhook",

@@ -65,7 +65,14 @@ export type FileWatchConfig = z.infer<typeof FileWatchConfigSchema>;
 /** Git-watch config: one branch of one project (the sha is the signature). */
 export const GitWatchConfigSchema = z.strictObject({
   project_id: Id,
-  branch: z.string().min(1).max(256),
+  // The branch value reaches `git rev-parse` as argv (no shell — but a
+  // leading dash can still inject a git OPTION), so it must never start
+  // with one.
+  branch: z
+    .string()
+    .min(1)
+    .max(256)
+    .regex(/^(?!-)[A-Za-z0-9._/-]+$/, "expected a branch name without a leading dash"),
 });
 export type GitWatchConfig = z.infer<typeof GitWatchConfigSchema>;
 

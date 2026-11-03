@@ -89,9 +89,7 @@ describe("the schedules HTTP surface (typed declarative records)", () => {
     // same-Monday occurrences only while now is before 09:00/10:30. A real
     // wall clock made this test time-bombed (red after 2026-11-02T09:00Z);
     // the scheduler's truth source is the injected clock (E37), so pin it.
-    const { origin, close, runtime } = await compose(
-      () => "2026-11-02T08:30:00.000Z",
-    );
+    const { origin, close, runtime } = await compose(() => "2026-11-02T08:30:00.000Z");
     openHarnesses.push({ origin, close, runtime });
     const operationId = await createOperation(origin, "Sweep Op");
     const created = await postJson(origin, "/v1/schedules", {

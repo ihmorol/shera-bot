@@ -192,7 +192,15 @@ function buildRuntime(clockNowMs: () => number = () => 1_000): FetchRuntime {
   const tools = new ToolsRepository(conn.db);
   const artifacts = new ArtifactsRepository(tx);
   const registry = new ToolRegistry();
-  registerResearchTools(registry, WS, { searxng: null, artifacts, files: null, visionModel: null });
+  registerResearchTools(registry, WS, {
+    searxng: null,
+    artifacts,
+    files: null,
+    visionModel: null,
+    // The G7 fixture posture: the deterministic fixtures run on loopback, so
+    // the fixture origin is the explicitly allowed one (review fix F2).
+    pageFetchAllowedOrigins: [fixtureOrigin],
+  });
   const executor = new ToolExecutor({
     registry,
     tools,

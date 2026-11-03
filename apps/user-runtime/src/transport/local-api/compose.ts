@@ -219,6 +219,15 @@ export interface ComposeLocalApiOptions {
      * drives deterministic mock models (G7).
      */
     visionModel?: (() => import("ai").LanguageModel) | null;
+    /**
+     * The page-fetch host guard's explicitly allowed origins (review fix
+     * F2) — the loopback fixture posture (G7) names its fixture origins
+     * here so the deterministic fixtures can be fetched; the production
+     * composition leaves it unset (every dangerous target refused
+     * pre-connect; the broader host-allowlist product policy stays the
+     * recorded owner item).
+     */
+    pageFetchAllowedOrigins?: readonly string[];
   };
   /** Path of the container-local SQLite database file. */
   dbPath: string;
@@ -1281,6 +1290,12 @@ function wire(
     ...(options.researchTools?.visionModel !== undefined
       ? { visionModel: options.researchTools.visionModel }
       : { visionModel: null }),
+    // The page-fetch host guard (review fix F2): unset in production (every
+    // dangerous target refused pre-connect); the fixture posture names its
+    // loopback origins explicitly.
+    ...(options.researchTools?.pageFetchAllowedOrigins !== undefined
+      ? { pageFetchAllowedOrigins: options.researchTools.pageFetchAllowedOrigins }
+      : {}),
   });
   const approvalsApi = buildApprovalsApiHandle({
     approvals,

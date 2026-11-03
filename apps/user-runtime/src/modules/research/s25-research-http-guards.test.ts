@@ -73,7 +73,7 @@ function countedResponse(init: {
   });
   const response = new Response(stream, {
     status: init.status,
-    headers: init.headers,
+    ...(init.headers !== undefined ? { headers: init.headers } : {}),
   });
   return { response, pulledBytes: () => pulled, cancelled: () => cancelled };
 }

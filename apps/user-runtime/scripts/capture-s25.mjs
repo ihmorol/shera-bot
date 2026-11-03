@@ -160,6 +160,10 @@ const runtime = composeRuntime({
   researchTools: {
     searxngBaseUrl: fixtureOrigin,
     visionModel: () => visionModel,
+    // The page-fetch host guard (review fix F2): the deterministic fixtures
+    // run on loopback, so the fixture origin is the explicitly allowed one
+    // (G7 posture; production composition passes nothing).
+    pageFetchAllowedOrigins: [fixtureOrigin],
   },
 });
 await new Promise((resolveListen) => runtime.httpServer.listen(0, "127.0.0.1", resolveListen));

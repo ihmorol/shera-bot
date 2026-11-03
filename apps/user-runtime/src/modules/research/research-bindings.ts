@@ -69,6 +69,16 @@ export interface ResearchToolDeps {
    * means the image tool does not exist (G4).
    */
   visionModel: (() => LanguageModel) | null;
+  /**
+   * The page-fetch host guard's explicitly allowed origins (review fix F2):
+   * exact `scheme://host:port` origins exempt from the dangerous-target
+   * refusal — the default-CI/capture fixture posture (G7) names its loopback
+   * fixture origins here. PRODUCTION passes nothing: every dangerous target
+   * (loopback/private/link-local/unique-local/multicast/reserved, by literal
+   * or resolved address) is refused pre-connect, and the broader "which
+   * external hosts are allowed" product policy stays the recorded owner item.
+   */
+  pageFetchAllowedOrigins?: readonly string[];
 }
 
 /** Query length budget (characters). */
@@ -194,7 +204,10 @@ export function makePageFetchBinding(deps: ResearchToolDeps): ToolBinding {
           "the url must be a non-empty http(s) URL of at most 2048 characters",
         );
       }
-      // The scheme guard runs BEFORE any fetch leaves the process.
+      // The scheme guard runs BEFORE any fetch leaves the process (the fast
+      // argument validation); the FULL host guard (dangerous-target refusal,
+      // by literal or resolved address) runs inside fetchReadablePage before
+      // EVERY connect — the initial URL and every followed redirect hop.
       assertFetchableUrl(url);
       const timeoutMs = assertDeadlineLeft(ctx);
       const page = await fetchReadablePage({
@@ -203,6 +216,7 @@ export function makePageFetchBinding(deps: ResearchToolDeps): ToolBinding {
         timeoutMs,
         maxBodyBytes: PAGE_MAX_BODY_BYTES,
         signal: ctx.signal,
+        allowedOrigins: deps.pageFetchAllowedOrigins ?? [],
       });
       if (ctx.nowMs() > ctx.deadline) {
         return {

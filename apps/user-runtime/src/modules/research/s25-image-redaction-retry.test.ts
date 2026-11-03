@@ -155,6 +155,9 @@ function buildRuntime(options: RuntimeOptions = {}): S25Runtime {
       options.visionModel === undefined
         ? () => makeVisionModel(options.visionDescription ?? "A small diagram of a data pipeline.")
         : options.visionModel,
+    // The G7 fixture posture: the leaky-page fixture runs on loopback, so
+    // the fixture origin is the explicitly allowed one (review fix F2).
+    pageFetchAllowedOrigins: [fixtureOrigin],
   });
   const executor = new ToolExecutor({
     registry,

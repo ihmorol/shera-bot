@@ -381,6 +381,63 @@ describe("the append-only ledger (S24 AC9)", () => {
     });
   });
 
+  it("corrections are bounded CUMULATIVELY — prior adjustments covering the target refuse a further one (review F9)", () => {
+    const harness = makeHarness();
+    harness.ledger.ensureAccount(WS);
+    harness.ledger.grant({ workspace_id: WS, amount_units: 200, related_id: null });
+    const reserved = harness.ledger.reserveForRun({
+      workspace_id: WS,
+      task_id: "run_corrected",
+      estimate_units: 120,
+    });
+    if (!reserved.ok) throw new Error("reservation refused");
+    harness.ledger.settleReservation({
+      workspace_id: WS,
+      reservation_id: reserved.reservation_id,
+      actual_units: 100,
+    });
+    const charge = harness.repo
+      .listTransactions(WS)
+      .find((row) => row.entry_type === "settlement_charge");
+    if (!charge) throw new Error("no charge row");
+
+    // Partial corrections stay allowed while the cumulative total fits.
+    const first = harness.ledger.correctTransaction({
+      workspace_id: WS,
+      corrects_transaction_id: charge.transaction_id,
+      amount_units: 60,
+    });
+    expect(first).toMatchObject({ ok: true });
+    // The sum of prior adjustments (60) plus the requested 50 exceeds the
+    // original 100 — the repeated correction is refused typed.
+    const second = harness.ledger.correctTransaction({
+      workspace_id: WS,
+      corrects_transaction_id: charge.transaction_id,
+      amount_units: 50,
+    });
+    expect(second).toMatchObject({ ok: false, code: "CORRECTION_ALREADY_COVERED" });
+    // The remaining 40 still corrects (cumulative 100 = the original).
+    const third = harness.ledger.correctTransaction({
+      workspace_id: WS,
+      corrects_transaction_id: charge.transaction_id,
+      amount_units: 40,
+    });
+    expect(third).toMatchObject({ ok: true });
+    // Fully covered: any further correction is refused.
+    const fourth = harness.ledger.correctTransaction({
+      workspace_id: WS,
+      corrects_transaction_id: charge.transaction_id,
+      amount_units: 1,
+    });
+    expect(fourth).toMatchObject({ ok: false, code: "CORRECTION_ALREADY_COVERED" });
+    // The account moved exactly once per granted correction: 100 reversed.
+    expect(harness.repo.findAccount(WS)).toMatchObject({ charged_units: 0 });
+    const adjustments = harness.repo
+      .listTransactions(WS)
+      .filter((row) => row.entry_type === "adjustment");
+    expect(adjustments.map((row) => row.amount_units).sort((a, b) => a - b)).toEqual([40, 60]);
+  });
+
   it("a correction is bounded by the corrected row's amount and refuses unknown or non-correctable rows", () => {
     const harness = makeHarness();
     harness.ledger.ensureAccount(WS);

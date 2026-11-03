@@ -1335,12 +1335,15 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
    *
    * credit_transaction: the APPEND-ONLY movement ledger (AC9) — grants,
    * reservation holds, settlement charges, reservation releases, and
-   * adjustments. No UPDATE or DELETE path exists anywhere in the ledger
-   * repository; a correction is a NEW 'adjustment' row whose
-   * corrects_transaction_id names the row it corrects (the original row is
-   * never edited). related_id carries the cross-reference (the control
-   * plane's topup id for a grant); task_id/reservation_id carry the run
-   * linkage the UI drill-down joins on.
+   * adjustments. Append-only is STORAGE-enforced (review F5): the no-update
+   * and no-delete triggers RAISE on any in-place edit or row removal — the
+   * repository module also has no UPDATE/DELETE statement for the table.
+   * A correction is a NEW 'adjustment' row whose corrects_transaction_id
+   * names the row it corrects (the original row is never edited).
+   * related_id carries the cross-reference (the control plane's topup id
+   * for a grant — at most ONE grant movement per reference per workspace,
+   * the review-F2 partial UNIQUE index); task_id/reservation_id carry the
+   * run linkage the UI drill-down joins on.
    *
    * usage_record: local usage + latency per model call (D20) — recorded for
    * BOTH provider origins; custom-provider rows carry charged_units 0 (they
@@ -1408,6 +1411,23 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
 
       CREATE INDEX IF NOT EXISTS credit_transactions_by_task_idx
         ON credit_transaction (workspace_id, task_id, created_at);
+
+      -- Append-only is STORAGE-enforced, not just repository discipline
+      -- (review F5, AC9): the ledger has no UPDATE and no DELETE anywhere —
+      -- a correction is a NEW 'adjustment' row. These triggers make any
+      -- in-place edit or row removal unrepresentable at the connection
+      -- itself, so the guarantee holds even for raw statements.
+      CREATE TRIGGER IF NOT EXISTS credit_transaction_no_update
+        BEFORE UPDATE ON credit_transaction
+      BEGIN
+        SELECT RAISE(ABORT, 'credit_transaction_is_append_only');
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS credit_transaction_no_delete
+        BEFORE DELETE ON credit_transaction
+      BEGIN
+        SELECT RAISE(ABORT, 'credit_transaction_is_append_only');
+      END;
 
       CREATE TABLE IF NOT EXISTS usage_record (
         workspace_id    TEXT    NOT NULL,

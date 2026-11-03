@@ -188,3 +188,148 @@ describe("the search over-cap refusal is pinned, not dead code (review fix F4)",
     expect(counted.cancelled()).toBe(true);
   });
 });
+
+describe("the page-fetch host guard (review fix F2)", () => {
+  /** A fetch seam that must never run for a refused target. */
+  function neverFetch(): { fetchImpl: typeof fetch; calls: string[] } {
+    const calls: string[] = [];
+    const fetchImpl = (async (input: string | URL) => {
+      calls.push(String(input));
+      throw new Error(`the fetch must never run for a refused target (${String(input)})`);
+    }) as typeof fetch;
+    return { fetchImpl, calls };
+  }
+
+  it("refuses dangerous IP-literal targets BEFORE any connect with a typed refusal", async () => {
+    const forbiddenTargets = [
+      "http://127.0.0.1:9/loopback",
+      "http://169.254.169.254/latest/meta-data/",
+      "http://10.1.2.3/internal",
+      "http://192.168.1.10/router",
+      "http://172.16.0.1/internal",
+      "http://0.0.0.0/any",
+      "http://100.64.0.1/cgnat",
+      "http://[::1]/loopback6",
+      "http://[fe80::1]/link-local",
+      "http://[fc00::1]/unique-local",
+      "http://[::ffff:10.0.0.1]/v4-mapped",
+      "http://224.0.0.1/multicast",
+    ];
+    for (const target of forbiddenTargets) {
+      const { fetchImpl, calls } = neverFetch();
+      try {
+        await fetchReadablePage({
+          fetchImpl,
+          url: target,
+          timeoutMs: 1_000,
+          maxBodyBytes: 64 * 1024,
+        });
+        expect.unreachable(`expected ${target} to refuse pre-connect`);
+      } catch (error) {
+        expect(error).toBeInstanceOf(ResearchToolError);
+        expect((error as ResearchToolError).code).toBe("RESEARCH_INPUT_INVALID");
+      }
+      expect(calls).toEqual([]); // nothing left the process
+    }
+  });
+
+  it("refuses a hostname whose RESOLVED addresses are private BEFORE any connect", async () => {
+    const { fetchImpl, calls } = neverFetch();
+    try {
+      await fetchReadablePage({
+        fetchImpl,
+        url: "http://internal.rebindable.example/private",
+        timeoutMs: 1_000,
+        maxBodyBytes: 64 * 1024,
+        resolveHost: async () => ["10.9.8.7", "192.168.0.5"],
+      });
+      expect.unreachable("expected the resolved-private hostname to refuse pre-connect");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ResearchToolError);
+      expect((error as ResearchToolError).code).toBe("RESEARCH_INPUT_INVALID");
+    }
+    expect(calls).toEqual([]); // no connect to any resolved address
+  });
+
+  it("refuses a redirect to a private address AT the redirect hop, before any connect", async () => {
+    const calls: string[] = [];
+    const fetchImpl = (async (input: string | URL) => {
+      calls.push(String(input));
+      if (calls.length === 1) {
+        return new Response(null, {
+          status: 302,
+          headers: { location: "http://169.254.169.254/latest/meta-data/" },
+        });
+      }
+      throw new Error(`the private redirect hop must never be fetched (${String(input)})`);
+    }) as typeof fetch;
+    try {
+      await fetchReadablePage({
+        fetchImpl,
+        url: "http://93.184.216.34/open-redirect",
+        timeoutMs: 1_000,
+        maxBodyBytes: 64 * 1024,
+      });
+      expect.unreachable("expected the private redirect target to refuse at the hop");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ResearchToolError);
+      expect((error as ResearchToolError).code).toBe("RESEARCH_INPUT_INVALID");
+    }
+    expect(calls).toEqual(["http://93.184.216.34/open-redirect"]); // the public hop only
+  });
+
+  it("follows at most five redirect hops and refuses a longer chain typed", async () => {
+    let calls = 0;
+    const fetchImpl = (async () => {
+      calls += 1;
+      return new Response(null, {
+        status: 302,
+        headers: { location: `http://93.184.216.34/hop-${calls}` },
+      });
+    }) as typeof fetch;
+    try {
+      await fetchReadablePage({
+        fetchImpl,
+        url: "http://93.184.216.34/redirect-loop",
+        timeoutMs: 1_000,
+        maxBodyBytes: 64 * 1024,
+      });
+      expect.unreachable("expected the endless redirect chain to refuse typed");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ResearchToolError);
+      expect((error as ResearchToolError).code).toBe("RESEARCH_RESPONSE_INVALID");
+      expect((error as Error).message).toContain("redirect");
+    }
+    // Initial request + at most five followed hops — never an unbounded loop.
+    expect(calls).toBeLessThanOrEqual(6);
+  });
+
+  it("reports the FINAL URL after following redirects, following each hop manually", async () => {
+    const calls: Array<{ url: string; redirect: string }> = [];
+    const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
+      calls.push({ url: String(input), redirect: String(init?.redirect ?? "?") });
+      if (calls.length === 1) {
+        return new Response(null, {
+          status: 302,
+          headers: { location: "http://93.184.216.34/article" },
+        });
+      }
+      return new Response(
+        "<!doctype html><html><head><title>After Redirect</title></head><body><article><p>The final page content.</p></article></body></html>",
+        { status: 200, headers: { "content-type": "text/html; charset=utf-8" } },
+      );
+    }) as unknown as typeof fetch;
+    const outcome = await fetchReadablePage({
+      fetchImpl,
+      url: "http://93.184.216.34/redirect",
+      timeoutMs: 1_000,
+      maxBodyBytes: 64 * 1024,
+    });
+    // The redirect is followed MANUALLY (the tool validates every hop itself,
+    // never the platform's opaque follow) and the outcome names the FINAL url.
+    expect(calls[0]!.redirect).toBe("manual");
+    expect(outcome.url).toBe("http://93.184.216.34/article");
+    expect(outcome.title).toBe("After Redirect");
+    expect(outcome.markdown).toContain("The final page content.");
+  });
+});

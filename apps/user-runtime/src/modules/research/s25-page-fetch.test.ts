@@ -339,6 +339,30 @@ describe("page fetch executes read-only through the executor (S25 chunk 2)", () 
   });
 });
 
+describe("the page-fetch host guard through the executor (review fix F2)", () => {
+  it("refuses a loopback target PRE-connect with the typed input refusal through the ONE path", async () => {
+    // A port that is momentarily bound and then released: a guaranteed-closed
+    // loopback endpoint, so the RED state (no guard) fails with the transient
+    // connect refusal — never the typed pre-connect refusal the fix enforces.
+    const grab = createServer();
+    await new Promise<void>((resolve) => grab.listen(0, "127.0.0.1", resolve));
+    const closedPort = (grab.address() as AddressInfo).port;
+    await new Promise<void>((resolve) => grab.close(() => resolve()));
+    const rt = buildRuntime();
+    const before = fetchCalls;
+    const dispatched = fetchProposal(rt, { url: `http://127.0.0.1:${closedPort}/internal` });
+    if (dispatched.outcome !== "dispatched") throw new Error("expected dispatched");
+    const outcome = await dispatched.completion;
+    expect(outcome.outcome).toBe("execution_failed");
+    if (outcome.outcome !== "execution_failed") throw new Error("expected failed");
+    expect(outcome.error_code).toBe("RESEARCH_INPUT_INVALID");
+    expect(fetchCalls).toBe(before); // the fixture was never contacted
+    const row = rt.tools.listExecutionsByTask(WS, TASK)[0]!;
+    expect(row.status).toBe("failed");
+    expect(row.error_code).toBe("RESEARCH_INPUT_INVALID");
+  });
+});
+
 describe("the D27 network separation (S25 chunk 2)", () => {
   it("the research family opens sockets; the execution family spawns network-disabled", async () => {
     // Research side: the fetch above reached a real loopback socket; this leg

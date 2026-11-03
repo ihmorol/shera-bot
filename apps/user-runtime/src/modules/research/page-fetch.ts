@@ -14,7 +14,7 @@ import { Readability } from "@mozilla/readability";
 import TurndownService from "turndown";
 import { parseHTML } from "linkedom";
 
-import { drainResponse, mapFetchFailure, readBodyWithCap } from "./research-http.ts";
+import { cancelResponseBody, mapFetchFailure, readBodyWithCap } from "./research-http.ts";
 import { ResearchToolError } from "./research-errors.ts";
 
 /** The fetch byte cap (AC3): a larger page is truncated by policy. */
@@ -100,7 +100,9 @@ export async function fetchReadablePage(deps: {
     });
   }
   if (!response.ok) {
-    await drainResponse(response);
+    // The refusal path never drains the body: cancel the stream (bounded by
+    // construction — the body's size is irrelevant to the refusal).
+    await cancelResponseBody(response);
     if (response.status === 404 || response.status === 410) {
       throw new ResearchToolError(
         "RESEARCH_SOURCE_NOT_FOUND",
@@ -121,7 +123,7 @@ export async function fetchReadablePage(deps: {
   const contentType = response.headers.get("content-type") ?? "text/plain";
   const kind = extractionContentType(contentType);
   if (kind === null) {
-    await drainResponse(response);
+    await cancelResponseBody(response);
     throw new ResearchToolError(
       "RESEARCH_SOURCE_UNREADABLE",
       `the page's content type (${contentType.split(";")[0] ?? contentType}) is not a readable document`,

@@ -16,7 +16,7 @@
  */
 import { ToolBindingError } from "../tools/tool-binding.ts";
 import { ResearchToolError } from "./research-errors.ts";
-import { drainResponse, mapFetchFailure, readBodyWithCap } from "./research-http.ts";
+import { cancelResponseBody, mapFetchFailure, readBodyWithCap } from "./research-http.ts";
 
 /** The documented SearXNG JSON result item (the fields the tool consumes). */
 export interface SearxngResultItem {
@@ -164,8 +164,9 @@ export async function searxngSearch(
     });
   }
   if (!response.ok) {
-    // Drain (bounded) so the socket is released, then refuse typed.
-    await drainResponse(response);
+    // The refusal path never drains the body: cancel the stream (bounded by
+    // construction — the body's size is irrelevant to the refusal).
+    await cancelResponseBody(response);
     throw statusError(response.status);
   }
   const download = await readBodyWithCap(response, input.maxBodyBytes);

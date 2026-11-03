@@ -18,9 +18,10 @@ export interface DownloadOutcome {
 
 /**
  * Read one response body under a hard byte cap. A declared content-length
- * over the cap refuses before the body starts; a streamed body that grows
- * past the cap mid-read stops at the cap (the socket is cancelled) and
- * reports `truncated` — the caller applies the tool's own policy.
+ * over the cap refuses before the body starts (the body stream is cancelled,
+ * never held open); a streamed body that grows past the cap mid-read stops
+ * at the cap (the socket is cancelled) and reports `truncated` — the caller
+ * applies the tool's own policy.
  */
 export async function readBodyWithCap(
   response: Response,
@@ -28,6 +29,9 @@ export async function readBodyWithCap(
 ): Promise<DownloadOutcome> {
   const declaredLength = response.headers.get("content-length");
   if (declaredLength !== null && Number(declaredLength) > maxBodyBytes) {
+    // Cancel — the over-cap body is never read, and the socket is released
+    // instead of pinned open by an unread stream.
+    await cancelResponseBody(response);
     return { text: "", bytes: 0, truncated: true };
   }
   const reader = response.body?.getReader();
@@ -86,11 +90,19 @@ export function mapFetchFailure(
   );
 }
 
-/** Drain one response body in a bounded way before a typed refusal. */
-export async function drainResponse(response: Response): Promise<void> {
+/**
+ * Cancel one response's body stream (review fix F1): every refusal path —
+ * non-2xx statuses, non-readable content types, over-cap declared lengths —
+ * releases the socket this way instead of draining the body. Draining an
+ * arbitrary (potentially hostile, arbitrarily large) body through
+ * `arrayBuffer()` was the unbounded-memory hole the fix round closed: the
+ * refusal never reads the body, so its size is irrelevant by construction.
+ * The promise never rejects — the body is irrelevant to the refusal.
+ */
+export async function cancelResponseBody(response: Response): Promise<void> {
   try {
-    await response.arrayBuffer();
+    await response.body?.cancel();
   } catch {
-    // the body is irrelevant to the refusal
+    // a failed cancel must never mask the typed refusal that follows
   }
 }

@@ -526,3 +526,69 @@ describe("settlement property (S24 AC3, seeded random distributions)", () => {
     }
   });
 });
+
+describe("grant idempotency — the replayed top-up (review F2, security)", () => {
+  it("a replayed grant with the same related_id is a recorded no-op — one grant movement, the account credited once", () => {
+    const harness = makeHarness();
+    harness.ledger.ensureAccount(WS);
+    const first = harness.ledger.grant({
+      workspace_id: WS,
+      amount_units: 50,
+      related_id: "topup_replay_0001",
+    });
+    expect(first.deduplicated).toBe(false);
+
+    // The replay: the SAME top-up applied twice (the internal admin command
+    // retried). The ledger must not double-grant: the second application is
+    // the recorded no-op — the SAME movement returned, no new row, no delta.
+    const replay = harness.ledger.grant({
+      workspace_id: WS,
+      amount_units: 50,
+      related_id: "topup_replay_0001",
+    });
+    expect(replay.deduplicated).toBe(true);
+    expect(replay.transaction_id).toBe(first.transaction_id);
+
+    const grants = harness.repo
+      .listTransactions(WS)
+      .filter((row) => row.entry_type === "grant" && row.related_id === "topup_replay_0001");
+    expect(grants).toHaveLength(1);
+    expect(harness.repo.findAccount(WS)).toMatchObject({ granted_units: 50 });
+  });
+
+  it("distinct related ids stay independent grants, and a NULL related_id grant is never deduplicated", () => {
+    const harness = makeHarness();
+    harness.ledger.ensureAccount(WS);
+    harness.ledger.grant({ workspace_id: WS, amount_units: 10, related_id: "topup_a" });
+    harness.ledger.grant({ workspace_id: WS, amount_units: 20, related_id: "topup_b" });
+    const unnamed = harness.ledger.grant({ workspace_id: WS, amount_units: 5, related_id: null });
+    expect(unnamed.deduplicated).toBe(false);
+    // Two NULL-related grants are two movements (the index excludes NULLs).
+    const secondUnnamed = harness.ledger.grant({
+      workspace_id: WS,
+      amount_units: 5,
+      related_id: null,
+    });
+    expect(secondUnnamed.deduplicated).toBe(false);
+    expect(harness.repo.findAccount(WS)).toMatchObject({ granted_units: 40 });
+  });
+
+  it("the storage layer enforces the dedup — a direct second grant row with the same related_id is unrepresentable", () => {
+    const harness = makeHarness();
+    harness.ledger.ensureAccount(WS);
+    harness.ledger.grant({ workspace_id: WS, amount_units: 50, related_id: "topup_direct_0001" });
+    expect(() =>
+      harness.repo.insertTransaction({
+        workspace_id: WS,
+        transaction_id: "ctx_direct_replay",
+        entry_type: "grant",
+        amount_units: 50,
+        task_id: null,
+        reservation_id: null,
+        related_id: "topup_direct_0001",
+        corrects_transaction_id: null,
+        created_at: CLOCK,
+      }),
+    ).toThrowError(/UNIQUE|unique/i);
+  });
+});

@@ -227,5 +227,25 @@ describe("the top-up resume path (S24 AC2, D48)", () => {
     const view = runtime.schedules.getTriggerView(WS, triggerId);
     expect(view?.state).toBe("active");
     expect(view?.pause_reason).toBeNull();
+
+    // THE REPLAY (review F2, security): the same internal admin command
+    // applied twice must not double-grant. The second application is the
+    // RECORDED no-op — the same topupId's grant is deduplicated on
+    // related_id, the ledger keeps ONE grant movement, and no paused run
+    // exists to resume again.
+    const replayed = await runtime.adminCommands.applyCreditTopUp({
+      workspaceId: WS,
+      topupId: "topup_test_0001",
+      amount: 100,
+      actor: ADMIN,
+    });
+    expect(replayed.grant_deduplicated).toBe(true);
+    expect(replayed.resumed_run_ids).toEqual([]);
+    const grants = ledgerRepo
+      .listTransactions(WS)
+      .filter((row) => row.entry_type === "grant" && row.related_id === "topup_test_0001");
+    expect(grants).toHaveLength(1);
+    expect(runtime.credits.accountState(WS)).toMatchObject({ granted_units: 101 });
+    expect(completions).toBe(1); // the completed run was not re-driven
   });
 });

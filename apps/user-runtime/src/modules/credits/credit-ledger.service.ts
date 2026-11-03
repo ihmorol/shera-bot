@@ -323,23 +323,15 @@ export class CreditLedgerService {
     const now = this.now();
     const monthStart = `${now.slice(0, 7)}-01T00:00:00.000Z`;
     const monthEnd = nextMonthStart(now);
-    const monthRows = this.deps.repository.listTransactions(workspaceId);
-    const entryTypeById = new Map(monthRows.map((row) => [row.transaction_id, row.entry_type]));
-    // The NET settled usage of the month: charges minus the adjustments
-    // that reverse charges (a correction is itself a movement row, so the
-    // netting reads the correction's target's type — never a guess).
-    const usedThisMonth = monthRows
-      .filter((row) => row.created_at >= monthStart && row.created_at < monthEnd)
-      .reduce((sum, row) => {
-        if (row.entry_type === "settlement_charge") return sum + row.amount_units;
-        if (
-          row.entry_type === "adjustment" &&
-          entryTypeById.get(row.corrects_transaction_id ?? "") === "settlement_charge"
-        ) {
-          return sum - row.amount_units;
-        }
-        return sum;
-      }, 0);
+    // The NET settled usage of the month, aggregated IN SQL over the whole
+    // month window (review F7): charges minus the adjustments that reverse
+    // charges — the ledger's own SUM, never an in-memory page that could
+    // silently truncate a busy account's displayed truth.
+    const usedThisMonth = this.deps.repository.sumUsedUnitsForMonth(
+      workspaceId,
+      monthStart,
+      monthEnd,
+    );
     return {
       workspace_id: account.workspace_id,
       granted_units: account.granted_units,
@@ -375,7 +367,9 @@ export class CreditLedgerService {
   /**
    * The runs that HAVE credit movements, newest first (bounded): the S9
    * drill-down's picker rows — the ledger's own per-run net, never a
-   * recomputation from the UI.
+   * recomputation from the UI. The per-run aggregates are computed IN SQL
+   * over EVERY movement (review F7): no page bound can silently drop a run
+   * from the picker; the `limit` bounds the DISPLAYED rows, not the truth.
    */
   runsSummary(
     workspaceId: string,
@@ -387,51 +381,17 @@ export class CreditLedgerService {
     active_reserved_units: number;
     last_movement_at: string;
   }> {
-    const movements = this.deps.repository.listTransactions(workspaceId, 10_000);
-    if (movements.length === 0) return [];
-    const byTask = new Map<string, typeof movements>();
-    for (const row of movements) {
-      if (row.task_id === null) continue;
-      const bucket = byTask.get(row.task_id) ?? [];
-      bucket.push(row);
-      byTask.set(row.task_id, bucket);
-    }
-    const entryTypeById = new Map(movements.map((row) => [row.transaction_id, row.entry_type]));
-    const rows = [...byTask.entries()].map(([taskId, taskMovements]) => {
-      const chargedUnits = taskMovements.reduce((sum, row) => {
-        if (row.entry_type === "settlement_charge") return sum + row.amount_units;
-        if (
-          row.entry_type === "adjustment" &&
-          entryTypeById.get(row.corrects_transaction_id ?? "") === "settlement_charge"
-        ) {
-          return sum - row.amount_units;
-        }
-        return sum;
-      }, 0);
-      const releasedUnits = taskMovements
-        .filter((row) => row.entry_type === "reservation_release")
-        .reduce((sum, row) => sum + row.amount_units, 0);
-      const lastMovementAt = taskMovements.reduce(
-        (latest, row) => (row.created_at > latest ? row.created_at : latest),
-        taskMovements[0]?.created_at ?? "",
-      );
-      return {
-        task_id: taskId,
-        charged_units: chargedUnits,
-        released_units: releasedUnits,
-        active_reserved_units: 0,
-        last_movement_at: lastMovementAt,
-      };
-    });
-    // The active holds join per run (the picker shows what is mid-call).
+    const rows = this.deps.repository
+      .summarizeRuns(workspaceId, limit)
+      .map((row) => ({ ...row, active_reserved_units: 0 }));
+    // The active holds join per displayed run (the picker shows what is
+    // mid-call).
     for (const row of rows) {
       row.active_reserved_units = this.deps.repository
         .listActiveReservationsForTask(workspaceId, row.task_id)
         .reduce((sum, hold) => sum + hold.estimated_units, 0);
     }
-    return rows
-      .sort((left, right) => right.last_movement_at.localeCompare(left.last_movement_at))
-      .slice(0, limit);
+    return rows;
   }
 
   /** The usage rows recorded inside one UTC month window (the custom-provider
@@ -455,9 +415,12 @@ export class CreditLedgerService {
   runCost(workspaceId: string, taskId: string): RunCostDrillDown | null {
     const account = this.deps.repository.findAccount(workspaceId);
     if (!account) return null;
-    const allMovements = this.deps.repository.listTransactions(workspaceId, 10_000);
-    const entryTypeById = new Map(allMovements.map((row) => [row.transaction_id, row.entry_type]));
-    const movements = allMovements.filter((row) => row.task_id === taskId);
+    // The run's OWN movement rows (review F7): a task's rows are exactly its
+    // own — no workspace-wide page bound stands between the run and its
+    // drill-down. A correction copies its target's task_id, so the targets
+    // of the run's adjustments are inside these rows.
+    const movements = this.deps.repository.listTransactionsForTask(workspaceId, taskId);
+    const entryTypeById = new Map(movements.map((row) => [row.transaction_id, row.entry_type]));
     const chargedUnits = movements.reduce((sum, row) => {
       if (row.entry_type === "settlement_charge") return sum + row.amount_units;
       if (

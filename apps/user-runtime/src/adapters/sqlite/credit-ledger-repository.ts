@@ -286,6 +286,98 @@ export class CreditLedgerRepository {
     return row ? this.toTransaction(row) : null;
   }
 
+  /**
+   * The month's NET settled usage, aggregated IN SQL (review F7): the whole
+   * month window is summed — never an in-memory page of the newest rows, so
+   * a busy account cannot silently truncate the displayed truth. Charges
+   * add; adjustments that correct a settlement_charge subtract (the target's
+   * entry type is joined, never guessed).
+   */
+  sumUsedUnitsForMonth(
+    workspaceId: string,
+    monthStart: string,
+    monthEnd: string,
+    exec?: SqliteExec,
+  ): number {
+    const row = (exec ?? this.tx.connection())
+      .prepare(
+        `SELECT COALESCE(SUM(
+           CASE
+             WHEN t.entry_type = 'settlement_charge' THEN t.amount_units
+             WHEN t.entry_type = 'adjustment'
+                  AND tgt.entry_type = 'settlement_charge' THEN -t.amount_units
+             ELSE 0
+           END), 0) AS used_units
+         FROM credit_transaction t
+         LEFT JOIN credit_transaction tgt
+           ON tgt.workspace_id = t.workspace_id
+          AND tgt.transaction_id = t.corrects_transaction_id
+         WHERE t.workspace_id = ? AND t.created_at >= ? AND t.created_at < ?`,
+      )
+      .get(workspaceId, monthStart, monthEnd) as { used_units: number | bigint };
+    return Number(row.used_units);
+  }
+
+  /** Every movement row of ONE run (the drill-down's own rows — a task's
+   * rows are exactly its own, no workspace-wide page stands between). */
+  listTransactionsForTask(workspaceId: string, taskId: string, exec?: SqliteExec) {
+    const rows = (exec ?? this.tx.connection())
+      .prepare(
+        `SELECT * FROM credit_transaction WHERE workspace_id = ? AND task_id = ?
+         ORDER BY created_at ASC, transaction_id ASC`,
+      )
+      .all(workspaceId, taskId) as Record<string, unknown>[];
+    return rows.map((row) => this.toTransaction(row));
+  }
+
+  /**
+   * The per-run movement aggregates, computed IN SQL over EVERY movement
+   * (review F7): each run's net charged (charges minus charge-reversing
+   * adjustments), released, and last-movement timestamp — no bound can
+   * silently drop a run from the picker. Newest movement first.
+   */
+  summarizeRuns(
+    workspaceId: string,
+    limit: number,
+    exec?: SqliteExec,
+  ): Array<{
+    task_id: string;
+    charged_units: number;
+    released_units: number;
+    last_movement_at: string;
+  }> {
+    const rows = (exec ?? this.tx.connection())
+      .prepare(
+        `SELECT t.task_id AS task_id,
+           COALESCE(SUM(
+             CASE
+               WHEN t.entry_type = 'settlement_charge' THEN t.amount_units
+               WHEN t.entry_type = 'adjustment'
+                    AND tgt.entry_type = 'settlement_charge' THEN -t.amount_units
+               ELSE 0
+             END), 0) AS charged_units,
+           COALESCE(SUM(
+             CASE WHEN t.entry_type = 'reservation_release' THEN t.amount_units ELSE 0 END),
+             0) AS released_units,
+           MAX(t.created_at) AS last_movement_at
+         FROM credit_transaction t
+         LEFT JOIN credit_transaction tgt
+           ON tgt.workspace_id = t.workspace_id
+          AND tgt.transaction_id = t.corrects_transaction_id
+         WHERE t.workspace_id = ? AND t.task_id IS NOT NULL
+         GROUP BY t.task_id
+         ORDER BY last_movement_at DESC, MAX(t.transaction_id) DESC
+         LIMIT ?`,
+      )
+      .all(workspaceId, limit) as Array<Record<string, unknown>>;
+    return rows.map((row) => ({
+      task_id: String(row["task_id"]),
+      charged_units: Number(row["charged_units"]),
+      released_units: Number(row["released_units"]),
+      last_movement_at: String(row["last_movement_at"]),
+    }));
+  }
+
   // ── Reservation / settlement / release ─────────────────────────────────────
 
   /** Insert ONE reservation hold row (status 'reserved'). */

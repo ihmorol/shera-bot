@@ -142,24 +142,41 @@ export class CreditLedgerService {
    * Append a GRANT (the admin top-up seam; D20 "admin grants credits through
    * the control plane" — the control plane's durable topup record is the
    * authority, this is the runtime-local ledger movement it applies).
-   * Amounts are positive integer units.
+   * Amounts are positive integer units. IDEMPOTENT on `related_id` (review
+   * F2): a replayed application of the SAME control-plane top-up is the
+   * recorded no-op — the original movement is returned untouched, no second
+   * row, no second delta (the UNIQUE partial index is the storage backstop
+   * behind this lookup). A NULL related_id grant is never deduplicated.
    */
   grant(input: { workspace_id: string; amount_units: number; related_id: string | null }): {
     transaction_id: string;
     account: CreditAccountRow;
+    deduplicated: boolean;
   } {
     if (!Number.isInteger(input.amount_units) || input.amount_units <= 0) {
       throw new Error("grant amount must be a positive integer number of units");
     }
     const now = this.now();
     const transactionId = this.newId("ctx");
-    const account = this.deps.tx.transaction((exec) => {
+    return this.deps.tx.transaction((exec) => {
       // Ensures the account row exists (idempotent) — its value is read
       // fresh below, after the grant delta commits.
       this.deps.repository.insertAccount(
         { workspace_id: input.workspace_id, created_at: now },
         exec,
       );
+      if (input.related_id !== null) {
+        const existing = this.deps.repository.findGrantByRelatedId(
+          input.workspace_id,
+          input.related_id,
+          exec,
+        );
+        if (existing) {
+          const current = this.deps.repository.findAccount(input.workspace_id, exec);
+          if (!current) throw new Error("account vanished inside the grant transaction");
+          return { transaction_id: existing.transaction_id, account: current, deduplicated: true };
+        }
+      }
       this.deps.repository.insertTransaction(
         {
           workspace_id: input.workspace_id,
@@ -182,9 +199,8 @@ export class CreditLedgerService {
       );
       const updated = this.deps.repository.findAccount(input.workspace_id, exec);
       if (!updated) throw new Error("account vanished inside the grant transaction");
-      return updated;
+      return { transaction_id: transactionId, account: updated, deduplicated: false };
     });
-    return { transaction_id: transactionId, account };
   }
 
   /**

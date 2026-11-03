@@ -271,6 +271,21 @@ export class CreditLedgerRepository {
     return row ? this.toTransaction(row) : null;
   }
 
+  /**
+   * The 'grant' movement a control-plane reference already produced (the
+   * replay dedup's lookup-before-insert; the UNIQUE partial index is the
+   * storage backstop behind it). Related ids are workspace-scoped.
+   */
+  findGrantByRelatedId(workspaceId: string, relatedId: string, exec?: SqliteExec) {
+    const row = (exec ?? this.tx.connection())
+      .prepare(
+        `SELECT * FROM credit_transaction
+         WHERE workspace_id = ? AND related_id = ? AND entry_type = 'grant'`,
+      )
+      .get(workspaceId, relatedId) as Record<string, unknown> | undefined;
+    return row ? this.toTransaction(row) : null;
+  }
+
   // ── Reservation / settlement / release ─────────────────────────────────────
 
   /** Insert ONE reservation hold row (status 'reserved'). */

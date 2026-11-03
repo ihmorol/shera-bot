@@ -407,6 +407,7 @@ export function createInternalApi(deps: InternalApiDeps): InternalApi {
         const response: RuntimeAdminCreditTopUpResponse = {
           workspace_id: result.workspace_id,
           topup_id: result.topup_id,
+          grant_deduplicated: result.grant_deduplicated,
           resumed_run_ids: result.resumed_run_ids,
           skipped: result.skipped,
         };

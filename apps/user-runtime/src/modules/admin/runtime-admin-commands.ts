@@ -50,6 +50,9 @@ export interface RuntimeAdminCancelAllResult {
 export interface RuntimeAdminTopUpResult {
   workspace_id: string;
   topup_id: string;
+  /** Review F2: TRUE when this topupId's grant was ALREADY applied (the
+   * replayed command is the recorded no-op — one grant movement stands). */
+  grant_deduplicated: boolean;
   resumed_run_ids: string[];
   skipped: Array<{
     run_id: string;
@@ -93,9 +96,13 @@ export interface RuntimeAdminCommandsDeps {
    * `control_credit_topups` row stays the authority; this is the
    * runtime-local movement (credit_transaction 'grant', related_id =
    * the central topup id). Applied BEFORE any resume, so the re-drive's
-   * reservation consults a funded account.
+   * reservation consults a funded account. Idempotent on the topup id
+   * (review F2): the answered `deduplicated` flag is the recorded no-op
+   * the result carries.
    */
-  applyGrant?: ((workspaceId: string, topupId: string, amount: number) => void) | undefined;
+  applyGrant?:
+    | ((workspaceId: string, topupId: string, amount: number) => { deduplicated: boolean })
+    | undefined;
   /**
    * S24 (AC2): the re-drive for one resumed run — the composed scheduler's
    * resumeRunAfterTopUp (the run walks its plan legs from QUEUED with the
@@ -148,9 +155,13 @@ export function buildRuntimeAdminCommandsHandle(
     async applyCreditTopUp(input) {
       // S24 (AC2): the GRANT lands first — the re-drive below consults a
       // funded account. Contained: a grant failure aborts the top-up with
-      // the typed error (nothing resumed on an unapplied grant).
+      // the typed error (nothing resumed on an unapplied grant). The replay
+      // is NOT a failure (review F2): a deduplicated application is the
+      // recorded no-op the result reports.
+      let grantDeduplicated = false;
       try {
-        deps.applyGrant?.(input.workspaceId, input.topupId, input.amount);
+        const applied = deps.applyGrant?.(input.workspaceId, input.topupId, input.amount);
+        grantDeduplicated = applied?.deduplicated ?? false;
       } catch (error) {
         deps.logFault?.("admin_topup_grant_failed", {
           workspace_id: input.workspaceId,
@@ -222,6 +233,7 @@ export function buildRuntimeAdminCommandsHandle(
       return {
         workspace_id: input.workspaceId,
         topup_id: input.topupId,
+        grant_deduplicated: grantDeduplicated,
         resumed_run_ids: resumedRunIds,
         skipped,
       };

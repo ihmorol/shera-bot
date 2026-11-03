@@ -1536,7 +1536,12 @@ function wire(
     // central control_credit_topups row stays the authority), re-drives each
     // resumed run to completion, and re-arms the credit-paused triggers.
     applyGrant: (workspaceId, topupId, amount) => {
-      creditLedger.grant({ workspace_id: workspaceId, amount_units: amount, related_id: topupId });
+      const applied = creditLedger.grant({
+        workspace_id: workspaceId,
+        amount_units: amount,
+        related_id: topupId,
+      });
+      return { deduplicated: applied.deduplicated };
     },
     resumeRun: (workspaceId, runId) =>
       scheduler.resumeRunAfterTopUp(workspaceId, runId).then(() => undefined),

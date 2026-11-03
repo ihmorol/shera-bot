@@ -1394,6 +1394,15 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
         PRIMARY KEY (workspace_id, transaction_id)
       ) STRICT;
 
+      -- The grant-replay dedup (review F2): ONE 'grant' movement per
+      -- control-plane reference per workspace — a replayed admin top-up
+      -- cannot double-grant (the service's lookup-before-insert is the
+      -- typed path; this partial index is the storage backstop). NULL
+      -- related_id grants (opening balances) are exempt.
+      CREATE UNIQUE INDEX IF NOT EXISTS credit_transaction_grant_related_idx
+        ON credit_transaction (workspace_id, related_id)
+        WHERE entry_type = 'grant' AND related_id IS NOT NULL;
+
       CREATE INDEX IF NOT EXISTS credit_transactions_by_time_idx
         ON credit_transaction (workspace_id, created_at);
 

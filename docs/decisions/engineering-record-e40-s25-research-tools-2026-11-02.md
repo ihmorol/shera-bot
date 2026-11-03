@@ -60,6 +60,8 @@ The standalone worktree full-suite run at the same code (pre-docs commit) was 21
 
 ## Alternatives considered (preserved)
 
+**Integration note (2026-11-03):** origin/main's S28 fixture clock fix (PR #74) merged into this branch at `4679053` — the merged branch's definitive full-suite run is **2153/2153, exit 0** (worktree, real PostgreSQL 16). The "S28 schedules fixture date dependence" sibling item above is CLOSED on main; the S16 load-flake note stands as the documented family record.
+
 - **A SearXNG client library or any code-level SearXNG dependency:** rejected — SearXNG is AGPL; the recorded posture is an UNMODIFIED EXTERNAL container over HTTP with no code linking. The client in `searxng-search.ts` speaks the documented JSON API shape and nothing else.
 - **Self-hosting pdf.js / SheetJS forks for the CVE posture:** rejected for this slice — unpdf bundles pdf.js serverlessly (the recorded leverage), and SheetJS CE 0.18.5 is what npm serves; the upstream 0.20.x fixes distribute via cdn.sheetjs.com, a different resolution channel — recorded as the owner item rather than silently pinning a non-registry tarball behind a frozen lockfile. **SUPERSEDED by the fix round (F3):** the CDN proved reachable from the building box, so xlsx 0.20.3 is now EXPLICITLY pinned from the upstream tarball (recorded, never silent) — the alternative stands as the chunk-time choice under the then-unverified channel, and the CVE exposure is closed.
 - **A per-tool retry loop inside the executor or the bindings:** rejected — the runtime's retry policy (S22) owns retries at the RUN level; the tool surfaces the typed retryable code and the coordinator re-drives (the AC6 re-propose pin). The AI SDK's `maxRetries: 0` keeps each provider call one-shot.

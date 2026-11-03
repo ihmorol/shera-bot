@@ -48,7 +48,7 @@ The impeccable skill ran exactly per its SKILL.md (context loader → audit/crit
 
 ### Fresh-archive gate (Linux, at the fix-round tip a339223 + the record commit)
 
-`git archive HEAD | tar -x` + `pnpm install --frozen-lockfile` (xlsx 0.20.3 resolved from the pinned CDN tarball) → lint exit 0 → format:check exit 0 → typecheck exit 0 → test **2152/2153** (the single failure the S28 schedules fixture's date dependence — a `0 9 * * 1` trigger whose expected next occurrence hardcodes today's 09:00 UTC; verified failing identically at the base commit in the chunk round, sibling code untouched, never widened) → build exit 0 → license:inventory exit 0 (xlsx 0.20.3 Apache-2.0 in the written inventory) → boundary-guards exit 0 → mockup:test exit 0. The worktree full-suite run at the same code was 2151/2153: additionally the S16 QUEUED re-drive leg timed out there (and in three isolated re-runs on the busy box) but PASSED in the archive run — and it was verified failing IDENTICALLY at the pre-fix base commit 94cef59 via a detached checkout: the documented S16 load-flake family, never widened. The S25 suites grew 29 → 35 tests in the fix round (the guards suite 10, the parse-caps suite 6, the executor-level guard pin, the CSV-doubled-quote unit pin) — 47 S25-family tests total with the image/retry suite.
+`git archive HEAD | tar -x` + `pnpm install --frozen-lockfile` (xlsx 0.20.3 resolved from the pinned CDN tarball) → lint exit 0 → format:check exit 0 → typecheck exit 0 → test **2152/2153** at the fix-round tip (the single failure the S28 schedules fixture's date dependence, then CLOSED on main by PR #74) — **2153/2153 at the merged branch** (main's fix merged at 4679053; definitive run, exit 0) → build exit 0 → license:inventory exit 0 (xlsx 0.20.3 Apache-2.0 in the written inventory) → boundary-guards exit 0 → mockup:test exit 0. The worktree full-suite run at the same code was 2151/2153: additionally the S16 QUEUED re-drive leg timed out there (and in three isolated re-runs on the busy box) but PASSED in the archive run — and it was verified failing IDENTICALLY at the pre-fix base commit 94cef59 via a detached checkout: the documented S16 load-flake family, never widened. The S25 suites grew 29 → 35 tests in the fix round (the guards suite 10, the parse-caps suite 6, the executor-level guard pin, the CSV-doubled-quote unit pin) — 47 S25-family tests total with the image/retry suite.
 
 ## Review record
 
@@ -83,7 +83,7 @@ Honest no-abort-seam record: pdf.js (the unpdf 1.3.2 bundle) exposes no `signal`
 - **Host-allowlist product policy (narrowed by the fix round)** — the SSRF hole is CLOSED: dangerous targets (loopback/private/link-local/unique-local/multicast/reserved, by literal or resolved address) are refused PRE-connect and every redirect hop is re-validated. The owner item is the product decision for which PUBLIC hosts page-fetch may read (the prototype answers "any public host the container can reach") plus DNS-rebinding socket pinning.
 - **Live MCP-server wrapping** beyond the research half (standing from E33 — the research bindings arrive through the same typed seam).
 - **WS fanout for tool states** (the visible-tab poll posture, standing from S21).
-- **S28 schedules fixture date dependence** — sibling slice owner item (verified pre-existing at the base commit of this branch).
+- ~~**S28 schedules fixture date dependence**~~ — CLOSED on main (PR #74, the fixture clock pin); merged into this branch at 4679053.
 - Real OAuth/Docker/container restarts (standing from E22–E38).
 
 ## Commits

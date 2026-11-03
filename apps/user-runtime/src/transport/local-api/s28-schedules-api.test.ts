@@ -32,9 +32,9 @@ interface RunningRuntime {
   close(): Promise<void>;
 }
 
-async function compose(): Promise<RunningRuntime> {
+async function compose(now?: () => string): Promise<RunningRuntime> {
   const dbPath = join(makeTempDir("shera-s28-api-"), "runtime.db");
-  const runtime = composeRuntime({ dbPath, packsRoot: PACKS_ROOT });
+  const runtime = composeRuntime({ dbPath, packsRoot: PACKS_ROOT, ...(now ? { now } : {}) });
   trackConnection(runtime);
   await new Promise<void>((resolveListen) =>
     runtime.httpServer.listen(0, "127.0.0.1", resolveListen),
@@ -84,7 +84,14 @@ afterEach(async () => {
 
 describe("the schedules HTTP surface (typed declarative records)", () => {
   it("creates, lists, pauses, resumes, and edits a trigger through the routes", async () => {
-    const { origin, close, runtime } = await compose();
+    // The runtime's injected clock is PINNED to Monday 2026-11-02 08:30 UTC:
+    // the fixture's `0 9 * * 1` / `30 10 * * 1` expectations below are the
+    // same-Monday occurrences only while now is before 09:00/10:30. A real
+    // wall clock made this test time-bombed (red after 2026-11-02T09:00Z);
+    // the scheduler's truth source is the injected clock (E37), so pin it.
+    const { origin, close, runtime } = await compose(
+      () => "2026-11-02T08:30:00.000Z",
+    );
     openHarnesses.push({ origin, close, runtime });
     const operationId = await createOperation(origin, "Sweep Op");
     const created = await postJson(origin, "/v1/schedules", {

@@ -97,6 +97,40 @@ describe("run-control allowlist (S22, PRD §8, AC3/AC15)", () => {
   });
 });
 
+describe("credits allowlist (S24, D20/D21/D48, AC8, G6)", () => {
+  it("allowlists the two credits reads the UI renders", () => {
+    // AC8: the credits pill and the settings surface read the ledger's OWN
+    // numbers — the account summary and one run's drill-down. Both GETs,
+    // both workspace-scoped (E12) via the proxy's workspace_id binding.
+    expect(isBrowserRuntimePath("GET", "/v1/credits")).toBe(true);
+    expect(isBrowserRuntimePath("GET", "/v1/credits/runs/run_01")).toBe(true);
+  });
+
+  it("opens NO mutation path on the credits surface — no parallel funding path", () => {
+    // G6/D20: grants ride the recorded control-plane top-up seam (S32) and
+    // reserves/settlements ride the runtime's own model-call legs — a browser
+    // credit mutation would be a second funding or spending path, so the
+    // allowlist has no POST/PUT/DELETE/PATCH arm for any /v1/credits/* path
+    // by construction. Pinned per verb on both read paths (S18-style).
+    for (const [method, path] of [
+      ["POST", "/v1/credits"],
+      ["PUT", "/v1/credits"],
+      ["DELETE", "/v1/credits"],
+      ["PATCH", "/v1/credits"],
+      ["POST", "/v1/credits/runs/run_01"],
+      ["PUT", "/v1/credits/runs/run_01"],
+      ["DELETE", "/v1/credits/runs/run_01"],
+      ["PATCH", "/v1/credits/runs/run_01"],
+      // And the funding-shaped paths a browser must never reach at all:
+      // no top-up, no grant, no correction route exists behind the proxy.
+      ["POST", "/v1/credits/topup"],
+      ["POST", "/v1/credits/grants"],
+      ["POST", "/v1/credits/runs/run_01/correct"],
+    ] as const)
+      expect(isBrowserRuntimePath(method, path), `${method} ${path}`).toBe(false);
+  });
+});
+
 describe("workspace panel allowlist (S17, D6/D39/G6)", () => {
   it("allows the workspace reads the panel renders", () => {
     for (const path of [

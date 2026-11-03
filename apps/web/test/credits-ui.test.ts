@@ -14,6 +14,7 @@ import { describe, expect, it } from "vitest";
 
 import { CreditsSettingsView } from "../components/settings/credits-settings";
 import { CreditsPillView } from "../components/shell/credits-pill";
+import { CreditsSummarySchema } from "../lib/credits-api";
 import type { CreditsSummary, RunCostDrillDown } from "../lib/credits-api";
 
 /** The runtime's own wire shape, verbatim (what GET /v1/credits returns). */
@@ -229,6 +230,24 @@ describe("S24 — the truthful credits readout (AC8, D21)", () => {
     // The reserve→settle→release complement renders too (the honest legs):
     expect(sumWhere("Reserved for a model call")).toBe(50);
     expect(sumWhere("Released (unused)")).toBe(20);
+  });
+
+  it("an honest negative used-this-month parses the ledger's answer and renders it verbatim (review F4)", () => {
+    // A this-month correction against a prior-month charge can push the
+    // month's NET below zero — the client schema must accept the ledger's
+    // honest answer (the surface computes nothing and refuses nothing
+    // honest; the shape matches remaining_units).
+    const negative = summary({
+      account: { ...summary().account!, used_this_month_units: -15 },
+    });
+    expect(CreditsSummarySchema.parse(negative)).toMatchObject({
+      account: { used_this_month_units: -15 },
+    });
+    // And the surface renders the negative as the number it is — never
+    // clamped to a fabricated zero.
+    const html = renderCredits({ summary: negative });
+    expect(html).toContain('data-testid="credits-used-this-month"');
+    expect(html).toContain(">-15</p>");
   });
 
   it("a corrected charge renders the correction row and the NET charged number the ledger recorded (AC9 meets AC8)", () => {

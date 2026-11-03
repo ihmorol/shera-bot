@@ -8,11 +8,12 @@
  * automatically — no approval row, no preview ceremony) with the full
  * contracts declaration: version, input/output schema, capabilities,
  * risk class, timeout, resource limits, redaction policy. The E13 recovery
- * class is DATA: tools with confident retry semantics declare it
- * (search/fetch → idempotent_retry; parsers → replayable); the tool whose
- * retry semantics are genuinely ambiguous (image understanding — a provider
- * call whose cost may already be spent) OMITS the class and carries the
- * stored default needs_human (AC7 pins the default).
+ * class is DATA: the tools with confident retry semantics declare it
+ * (page fetch → idempotent_retry; the two parsers → replayable); the tools
+ * whose retry semantics are genuinely ambiguous (search — an endpoint-side
+ * query the call may have already served; image understanding — a provider
+ * call whose cost may already be spent) OMIT the class and carry the stored
+ * needs_human default (AC7 pins the default both ways).
  *
  * G4: a tool registers only where its configuration exists — without a
  * SearXNG endpoint the search tool does not exist and the inventory answers

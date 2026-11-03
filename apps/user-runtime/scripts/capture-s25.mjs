@@ -110,7 +110,7 @@ const fixture = createServer((req, res) => {
       res.end(ARTICLE_HTML);
       return;
     }
-    if (url.pathname === "/flaky-search" || url.pathname === "/search") {
+    if (url.pathname === "/flaky-search") {
       res.writeHead(503, { "content-type": "application/json" });
       res.end(JSON.stringify({ error: "transient" }));
       return;
@@ -493,7 +493,9 @@ cleanups.push(() => control.close());
 
 const webOrigin = "http://127.0.0.1:4321";
 const nextArgs =
-  process.env.SHERA_CAPTURE_PROD === "1" ? ["start", "--port", "4321"] : ["dev", "--port", "4321"];
+  process.env.SHERA_CAPTURE_PROD === "1"
+    ? ["start", "--port", "4321", "-H", "127.0.0.1"]
+    : ["dev", "--port", "4321", "-H", "127.0.0.1"];
 const next = spawn(
   process.execPath,
   [join(repoRoot, "apps", "web", "node_modules", "next", "dist", "bin", "next"), ...nextArgs],

@@ -294,6 +294,14 @@ describe("page fetch executes read-only through the executor (S25 chunk 2)", () 
     // The history row carries the pointer, not the payload (G3/D23 rule 8).
     const row = rt.tools.listExecutionsByTask(WS, TASK)[0]!;
     expect(row.result_summary!.length).toBeLessThanOrEqual(9_000);
+    // The pointer LEADS the result positionally (review F9): the artifact
+    // reference lands BEFORE the content head, so the executor's summary
+    // bound can never cut the pointer and keep the payload.
+    const pointerAt = outcome.result_summary.indexOf("captured as artifact");
+    const contentAt = outcome.result_summary.indexOf("Evidence tables should cite the source");
+    expect(pointerAt).toBeGreaterThanOrEqual(0);
+    expect(contentAt).toBeGreaterThan(pointerAt);
+    expect(outcome.result_summary.indexOf("Read ")).toBeLessThan(pointerAt);
   });
 
   it("AC3: a streamed response over the byte cap is truncated by policy, never a crash", async () => {

@@ -133,8 +133,10 @@ function RunRow({
         onClick={() => onSelect(run.task_id)}
         aria-expanded={selected}
         className={cn(
-          "flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left text-sm transition-colors",
-          "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky",
+          // The ring is the global :focus-visible rule's (a11y.test.ts §2.3 —
+          // never redeclared per component); border-color only, so the ring
+          // lands at full strength (the button.tsx treatment).
+          "flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left text-sm transition-[border-color,background-color]",
           selected
             ? "border-line-accent bg-surface-elevated"
             : "border-transparent hover:bg-surface-elevated",

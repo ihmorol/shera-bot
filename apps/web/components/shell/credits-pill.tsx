@@ -37,8 +37,10 @@ export function CreditsPillView({ account }: { account: CreditsAccountView }) {
       data-testid="credits-pill"
       aria-describedby={detailId}
       className={cn(
-        "group relative inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors",
-        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky",
+        // The ring is the global :focus-visible rule's (never redeclared
+        // here — a11y.test.ts §2.3); the border-only transition keeps the
+        // ring from fading in (the button.tsx treatment).
+        "group relative inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-[border-color]",
         exhausted
           ? "border-approval/60 text-approval hover:border-approval"
           : "border-line text-text hover:border-line-accent",

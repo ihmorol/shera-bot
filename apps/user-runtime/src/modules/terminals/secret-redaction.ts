@@ -66,9 +66,16 @@ const CONNECTION_STRING_USERINFO = /\b([a-z][a-z0-9+.-]*:\/\/)([^\s:@/'"&#]+):([
  * full-token match (the anchored start) dominates every mid-token start the
  * unanchored span could find — the same spans collapse, pinned by the same
  * tests.
+ *
+ * S25 extension: the quoted-value alternative also matches the CSV-doubled
+ * quoting (`"key": ""value""` — a JSON snippet inside a spreadsheet cell
+ * comes back from the SheetJS round-trip with doubled quotes, and the plain
+ * quoted-value alternative would match only the empty `""` prefix and leave
+ * the value readable). Additive: an undoubled JSON value matches exactly as
+ * before.
  */
 const SECRET_KEY_ASSIGNMENT =
-  /(?<!["'A-Za-z0-9_.-])(["'A-Za-z0-9_.-]*(?:password|passwd|pwd|secret|token|api_?key|access_?key|private_?key|credential|cookie)["'A-Za-z0-9_.-]*)([ \t]*[:=][ \t]*|[ \t]+)("[^"\n]*"|'[^'\n]*'|[^\s,&"']+)/gi;
+  /(?<!["'A-Za-z0-9_.-])(["'A-Za-z0-9_.-]*(?:password|passwd|pwd|secret|token|api_?key|access_?key|private_?key|credential|cookie)["'A-Za-z0-9_.-]*)([ \t]*[:=][ \t]*|[ \t]+)(""[^"\n]*""|"[^"\n]*"|'[^'\n]*'|[^\s,&"']+)/gi;
 
 /**
  * Redact every secret-shaped value in one chunk of output. Order matters:

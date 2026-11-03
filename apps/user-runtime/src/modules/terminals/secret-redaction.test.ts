@@ -94,6 +94,23 @@ describe("redactSecrets (S18 G3 boundary)", () => {
     expect(redactSecrets(redacted)).toBe(redacted);
   });
 
+  it("redacts CSV-doubled quoted secret values (the S25 spreadsheet round-trip shape)", () => {
+    // A JSON snippet inside a spreadsheet cell returns from the SheetJS
+    // round-trip with DOUBLED quotes — the plain quoted-value alternative
+    // would match only the empty `""` prefix and leave the value readable.
+    // Unit pin for the leak channel the S25 upload e2e holds (review F8).
+    const doubled = redactSecrets('"api_key": ""sk-live-abc123def456""');
+    expect(doubled).not.toContain("sk-live-abc123def456");
+    expect(doubled).toContain('"api_key":');
+    // The doubled KEY spelling the round-trip produces redacts too.
+    const doubledKey = redactSecrets('""password"": ""hunter2-hunter2-hunter2""');
+    expect(doubledKey).not.toContain("hunter2-hunter2-hunter2");
+    expect(doubledKey).toContain("password");
+    // Additive: an undoubled JSON value matches exactly as before.
+    const undoubled = redactSecrets('{"api_key": "sk-live-abc123def456"}');
+    expect(undoubled).not.toContain("sk-live-abc123def456");
+  });
+
   it("redacts echoed set-cookie headers (review round: cookie is a secret family, AC4)", () => {
     const redacted = redactSecrets("set-cookie: shera_session=4a9d7f2b1c8e; Path=/");
     expect(redacted).not.toContain("4a9d7f2b1c8e");

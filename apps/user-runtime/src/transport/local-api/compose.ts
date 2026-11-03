@@ -95,6 +95,7 @@ import {
   type ToolsApiHandle,
 } from "./s21-tools-api.ts";
 import { registerExecutionTools } from "./s26-execution-api.ts";
+import { registerResearchTools } from "./s25-research-api.ts";
 import { spawnSandboxedExecution } from "../../adapters/process/execution-process-spawn.ts";
 import { HarnessRunService } from "../../modules/runtime/harness-run-service.ts";
 import { ProviderCredentialVault } from "../../modules/providers/provider-credential-vault.ts";
@@ -200,6 +201,35 @@ export interface ComposeLocalApiOptions {
   executionTools?: {
     workspaceRoots: Record<string, string>;
     cgroupBaseDir?: string | null;
+  };
+  /**
+   * S25 (issue #26): the research and data tools — web search, page fetch,
+   * document parse, spreadsheet analysis, image understanding. All are
+   * READ_ONLY (the D35 ladder executes them automatically) and read only
+   * public endpoints and the workspace file store. The SearXNG base URL is
+   * CONFIGURATION: absent, the search tool does not exist and the inventory
+   * answers truthfully without it (G4). The page-fetch and uploaded-file
+   * tools need no endpoint configuration and register whenever their sinks
+   * (artifacts, workspace files) exist — which the composition always wires.
+   */
+  researchTools?: {
+    searxngBaseUrl?: string | null;
+    /**
+     * The vision-model resolver for image understanding (chunk 4): absent
+     * or null, the image tool does not exist (G4). The REAL runtime wires
+     * it from the SHERA_VISION_* environment configuration; default CI
+     * drives deterministic mock models (G7).
+     */
+    visionModel?: (() => import("ai").LanguageModel) | null;
+    /**
+     * The page-fetch host guard's explicitly allowed origins (review fix
+     * F2) — the loopback fixture posture (G7) names its fixture origins
+     * here so the deterministic fixtures can be fetched; the production
+     * composition leaves it unset (every dangerous target refused
+     * pre-connect; the broader host-allowlist product policy stays the
+     * recorded owner item).
+     */
+    pageFetchAllowedOrigins?: readonly string[];
   };
   /** Path of the container-local SQLite database file. */
   dbPath: string;
@@ -1269,6 +1299,31 @@ function wire(
         : {}),
     });
   }
+  // S25 (issue #26): the research and data tools — always the workspace
+  // sinks (artifacts + files), the SearXNG endpoint only where configured
+  // (G4: no configuration, no search tool). Registered through the SAME
+  // executor seam as every other family: the D35 ladder (READ_ONLY runs
+  // automatically), the per-tool limits, the redaction-before-write, and
+  // the history rows are the executor's, not the bindings'.
+  registerResearchTools(toolRegistry, wireWorkspaceId, {
+    searxng:
+      options.researchTools?.searxngBaseUrl !== null &&
+      options.researchTools?.searxngBaseUrl !== undefined &&
+      options.researchTools.searxngBaseUrl !== ""
+        ? { baseUrl: options.researchTools.searxngBaseUrl }
+        : null,
+    artifacts: workspaceArtifacts,
+    files: workspaceFiles,
+    ...(options.researchTools?.visionModel !== undefined
+      ? { visionModel: options.researchTools.visionModel }
+      : { visionModel: null }),
+    // The page-fetch host guard (review fix F2): unset in production (every
+    // dangerous target refused pre-connect); the fixture posture names its
+    // loopback origins explicitly.
+    ...(options.researchTools?.pageFetchAllowedOrigins !== undefined
+      ? { pageFetchAllowedOrigins: options.researchTools.pageFetchAllowedOrigins }
+      : {}),
+  });
   const approvalsApi = buildApprovalsApiHandle({
     approvals,
     approvalsRepository,

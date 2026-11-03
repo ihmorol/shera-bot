@@ -1,0 +1,94 @@
+{
+  "recorded_at": "2026-11-02T12:00:00.000Z",
+  "posture": "Each run is a REAL manual execution through the real runtime composition and the ONE execution path (executor.executeProposal), seeded through the real HTTP surface. The SearXNG endpoint and the vision model are the local deterministic fixtures the slice records (the real-container and live-provider integrations are the NOT-VERIFIED owner items).",
+  "inventory": [
+    "tool_document_parse v1.0.0 active READ_ONLY recovery=replayable",
+    "tool_image_understand v1.0.0 active READ_ONLY recovery=needs_human",
+    "tool_note_append v1.0.0 active LOCAL_MUTATION recovery=needs_human",
+    "tool_note_read v1.0.0 active READ_ONLY recovery=needs_human",
+    "tool_page_fetch v1.0.0 active READ_ONLY recovery=idempotent_retry",
+    "tool_spreadsheet_analyze v1.0.0 active READ_ONLY recovery=replayable",
+    "tool_web_search v1.0.0 active READ_ONLY recovery=needs_human"
+  ],
+  "artifact_count": 3,
+  "runs": [
+    {
+      "tool_id": "tool_document_parse",
+      "capability": "research.parse.document",
+      "status": "succeeded",
+      "risk_class": "READ_ONLY",
+      "recovery": "replayable",
+      "approval_id": null,
+      "error_code": null,
+      "args_summary": "{\"path\":\"workspace://papers/attention.pdf\"}",
+      "result_summary": "Parsed workspace://papers/attention.pdf — PDF, 1 page(s) (24 chars)\n[full text (24 chars) captured as artifact artifact_68fa228e…]\nHello S25 document parse",
+      "started_at": "2026-11-02T12:00:00.000Z",
+      "finished_at": "2026-11-02T12:00:00.000Z"
+    },
+    {
+      "tool_id": "tool_web_search",
+      "capability": "research.search",
+      "status": "succeeded",
+      "risk_class": "READ_ONLY",
+      "recovery": "needs_human",
+      "approval_id": null,
+      "error_code": null,
+      "args_summary": "{\"query\":\"transformer architecture literature\"}",
+      "result_summary": "SearXNG search \"transformer architecture literature\" — 2 results\n1. Attention Is All You Need\n   https://arxiv.org/abs/1706.03762\n   The dominant sequence transduction models are based on attention mechanisms.\n   engine: arxiv\n2. SearXNG documentation\n   https://docs.searxng.org/\n   SearXNG is a privacy-respecting metasearch engine.\n   engine: duckduckgo",
+      "started_at": "2026-11-02T12:00:00.000Z",
+      "finished_at": "2026-11-02T12:00:00.000Z"
+    },
+    {
+      "tool_id": "tool_page_fetch",
+      "capability": "research.fetch",
+      "status": "succeeded",
+      "risk_class": "READ_ONLY",
+      "recovery": "idempotent_retry",
+      "approval_id": null,
+      "error_code": null,
+      "args_summary": "{\"url\":\"http://127.0.0.1:37469/article\"}",
+      "result_summary": "Read http://127.0.0.1:37469/article — \"Attention Paper Review\" (463 chars extracted)\nThe dominant sequence transduction models are based on complex recurrent or convolutional neural networks. We propose the Transformer, which dispenses with recurrence entirely and relies entirely on an attention mechanism to draw global dependencies between input and output.\n\nThe Transformer allows for significantly more parallelization and can reach a new state of the art in translation quality after being trained for as little as twelve hours on eight GPUs.",
+      "started_at": "2026-11-02T12:00:00.000Z",
+      "finished_at": "2026-11-02T12:00:00.000Z"
+    },
+    {
+      "tool_id": "tool_spreadsheet_analyze",
+      "capability": "research.analyze.spreadsheet",
+      "status": "succeeded",
+      "risk_class": "READ_ONLY",
+      "recovery": "replayable",
+      "approval_id": null,
+      "error_code": null,
+      "args_summary": "{\"path\":\"workspace://data/cities.csv\"}",
+      "result_summary": "Analysed workspace://data/cities.csv — sheet \"Sheet1\" of [Sheet1]: 4 rows × 2 columns\npopulation: n=3 min=193324 max=545245 sum=970369 mean=323456.33\n[full table (55 chars CSV) captured as artifact artifact_b4b7e7f8…]\ncity,population\nLisbon,545245\nPorto,231800\nBraga,193324",
+      "started_at": "2026-11-02T12:00:00.000Z",
+      "finished_at": "2026-11-02T12:00:00.000Z"
+    },
+    {
+      "tool_id": "tool_image_understand",
+      "capability": "research.describe.image",
+      "status": "succeeded",
+      "risk_class": "READ_ONLY",
+      "recovery": "needs_human",
+      "approval_id": null,
+      "error_code": null,
+      "args_summary": "{\"path\":\"workspace://images/diagram.png\"}",
+      "result_summary": "Described workspace://images/diagram.png (image/png, 70 bytes)\n[full description (137 chars) captured as artifact artifact_ea2aa157…]\nA small architecture diagram: input embeddings flow through stacked attention and feed-forward blocks into a linear softmax output layer.",
+      "started_at": "2026-11-02T12:00:00.000Z",
+      "finished_at": "2026-11-02T12:00:00.000Z"
+    },
+    {
+      "tool_id": "tool_page_fetch",
+      "capability": "research.fetch",
+      "status": "failed",
+      "risk_class": "READ_ONLY",
+      "recovery": "idempotent_retry",
+      "approval_id": null,
+      "error_code": "RESEARCH_INPUT_INVALID",
+      "args_summary": "{\"url\":\"file:///etc/passwd\"}",
+      "result_summary": null,
+      "started_at": "2026-11-02T12:00:00.000Z",
+      "finished_at": "2026-11-02T12:00:00.000Z"
+    }
+  ]
+}

@@ -73,3 +73,19 @@ export function summarizeArgs(args: unknown, budgetBytes = 512): string {
   }
   return redactAndBound(serialized, budgetBytes);
 }
+
+/**
+ * The ARTIFACT redaction (S25; G3/AC5): the same two passes the recorded
+ * tool surfaces run — the S18 vocabulary, then the tool-layer entropy pass —
+ * WITHOUT bounding (an artifact holds the full derived content; its size is
+ * the source's, and the truncation policy is the tool's own). The derived
+ * artifact bytes are redacted at the binding boundary, before the sink —
+ * the executor's later passes cover only the history row, not artifact
+ * bytes, so this is the boundary that makes the derived files clean by
+ * construction.
+ */
+export function redactArtifactText(text: string): string {
+  return redactSecrets(text).replace(TOOL_HIGH_ENTROPY_RUN, (run) =>
+    /\d/.test(run) && /[A-Za-z]/.test(run) ? "[REDACTED]" : run,
+  );
+}

@@ -20,6 +20,13 @@ import { ResearchToolError } from "./research-errors.ts";
 /** The image formats the tool handles (the honest, closed set). */
 export const SUPPORTED_IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".gif"] as const;
 
+/**
+ * The image payload cap (review fix F6): a larger upload is the typed
+ * refusal BEFORE the vision call — a hostile payload never rides the
+ * provider request.
+ */
+export const IMAGE_MAX_PAYLOAD_BYTES = 20 * 1024 * 1024;
+
 /** The honest default instruction when the proposal carries no prompt. */
 export const DEFAULT_IMAGE_PROMPT =
   "Describe this image factually: its subject, any visible text, and the details relevant to the requesting task.";
@@ -57,7 +64,17 @@ export async function describeImageBytes(deps: {
   prompt: string;
   timeoutMs: number;
   signal?: AbortSignal;
+  maxPayloadBytes?: number;
 }): Promise<{ description: string }> {
+  // The payload cap runs BEFORE the vision call (review fix F6): a hostile
+  // oversized upload is counted, never sent to the provider.
+  const maxPayloadBytes = deps.maxPayloadBytes ?? IMAGE_MAX_PAYLOAD_BYTES;
+  if (deps.bytes.byteLength > maxPayloadBytes) {
+    throw new ResearchToolError(
+      "RESEARCH_INPUT_INVALID",
+      `the image exceeds the ${maxPayloadBytes}-byte payload cap (${deps.bytes.byteLength} bytes)`,
+    );
+  }
   const timeoutSignal = AbortSignal.timeout(deps.timeoutMs);
   const abortSignal =
     deps.signal !== undefined ? AbortSignal.any([timeoutSignal, deps.signal]) : timeoutSignal;

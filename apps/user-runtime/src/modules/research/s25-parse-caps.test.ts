@@ -252,8 +252,9 @@ describe("the parse INPUT caps (review fix F5/F6)", () => {
 describe("the DERIVED artifact caps (review fix F5)", () => {
   it("truncates an over-budget parsed text into the artifact with the honest marker", async () => {
     const rt = buildRuntime();
-    // Under the input cap (so the parse runs) but over the derived budget.
-    const size = DERIVED_CAP_CHARS - 1024 * 1024;
+    // Under the input cap (so the parse runs) but over the derived budget:
+    // 5 MiB < the 20 MiB input cap, > the 4 MiB derived budget.
+    const size = DERIVED_CAP_CHARS + 1024 * 1024;
     seedFile(rt, "workspace://hostile/wide.txt", hostileBytes(size, ""));
     const outcome = await settled(
       proposal(rt, "tool_document_parse", "research.parse.document", {
@@ -276,7 +277,7 @@ describe("the DERIVED artifact caps (review fix F5)", () => {
 
   it("truncates an over-budget CSV artifact with the honest marker", async () => {
     const rt = buildRuntime();
-    const size = DERIVED_CAP_CHARS - 1024 * 1024;
+    const size = DERIVED_CAP_CHARS + 1024 * 1024;
     seedFile(rt, "workspace://hostile/wide.csv", hostileBytes(size, "a,a,"));
     const outcome = await settled(
       proposal(rt, "tool_spreadsheet_analyze", "research.analyze.spreadsheet", {

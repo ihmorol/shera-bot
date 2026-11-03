@@ -378,12 +378,17 @@ export function makeDocumentParseBinding(deps: ResearchToolDeps): ToolBinding {
         artifactId !== null
           ? `\n[full text (${text.length} chars) captured as artifact ${artifactId.slice(0, 17)}…]`
           : "";
+      // The derived-text budget cut the parse: the cut is recorded in the
+      // result too (the honest marker also rides inside the artifact text).
+      const truncationNote = parsed.truncated
+        ? `\n[the parsed text was truncated at the derived budget]`
+        : "";
       const headBudget = Math.max(
         0,
-        RESEARCH_RESULT_HEAD_CHARS - header.length - artifactNote.length,
+        RESEARCH_RESULT_HEAD_CHARS - header.length - artifactNote.length - truncationNote.length,
       );
       const head = text.slice(0, headBudget);
-      return { ok: true, text: `${header}${artifactNote}\n${head}`.trimEnd() };
+      return { ok: true, text: `${header}${artifactNote}${truncationNote}\n${head}`.trimEnd() };
     },
   };
 }
@@ -429,16 +434,23 @@ export function makeSpreadsheetAnalyzeBinding(deps: ResearchToolDeps): ToolBindi
         artifactId !== null
           ? `\n[full table (${analysis.csv.length} chars CSV) captured as artifact ${artifactId.slice(0, 17)}…]`
           : "";
+      // The derived CSV budget cut the table: the cut is recorded in the
+      // result too (the honest marker also rides inside the artifact text).
+      const truncationNote = analysis.csvTruncated
+        ? `\n[the table CSV was truncated at the derived budget]`
+        : "";
       const headBudget = Math.max(
         0,
         RESEARCH_RESULT_HEAD_CHARS -
           header.length -
           artifactNote.length -
+          truncationNote.length -
           statLines.join("\n").length -
           2,
       );
       const head = analysis.csv.slice(0, headBudget);
-      const text = `${header}\n${statLines.join("\n")}${artifactNote}\n${head}`.trimEnd();
+      const text =
+        `${header}\n${statLines.join("\n")}${artifactNote}${truncationNote}\n${head}`.trimEnd();
       return { ok: true, text };
     },
   };

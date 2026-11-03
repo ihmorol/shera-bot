@@ -11,6 +11,13 @@
  *   - the full table rendered as CSV — the structured artifact (always
  *     written, provenance-stamped), while the result text carries the
  *     bounded summary and the pointer.
+ *
+ * The parse-bomb caps (review fix F5): the INPUT byte cap refuses a hostile
+ * oversized upload typed BEFORE the workbook is decoded, and the DERIVED CSV
+ * budget truncates an over-budget table with the honest marker — the
+ * artifact holds the real head, its size bounded, the cut recorded (G4).
+ * SheetJS CE's decode is synchronous (no abort seam — recorded honestly in
+ * E40); the input cap is what bounds the decoder's work.
  */
 import * as XLSX from "xlsx";
 
@@ -19,12 +26,19 @@ import { ResearchToolError } from "./research-errors.ts";
 /** The tabular formats the analyser handles (the honest, closed set). */
 export const SUPPORTED_SPREADSHEET_EXTENSIONS = [".xlsx", ".xls", ".csv"] as const;
 
+/** The analysis INPUT cap: a larger upload refuses typed before any decode. */
+export const SPREADSHEET_MAX_INPUT_BYTES = 20 * 1024 * 1024;
+/** The DERIVED CSV budget: a larger table is truncated with the marker. */
+export const SPREADSHEET_CSV_MAX_CHARS = 4 * 1024 * 1024;
+
 export interface SheetAnalysis {
   sheetName: string;
   sheetNames: string[];
   rowCount: number;
   columnCount: number;
   headers: string[];
+  /** True when the derived CSV budget cut the table. */
+  csvTruncated: boolean;
   numericStats: Array<{
     column: string;
     count: number;
@@ -46,16 +60,34 @@ function isNumericCell(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
+/** Per-call cap overrides (the tool's defaults are the constants above). */
+export interface SpreadsheetCapOptions {
+  maxInputBytes?: number;
+  maxCsvChars?: number;
+}
+
 /**
  * Analyse one uploaded spreadsheet's bytes: the named sheet or the first
  * sheet. Every failure is typed; a PDF (or any non-tabular format) is the
- * typed unreadable refusal, never a guessed parse.
+ * typed unreadable refusal, never a guessed parse; an over-cap upload
+ * refuses typed BEFORE the workbook is decoded (review fix F5).
  */
 export function analyzeSpreadsheetBytes(
   path: string,
   bytes: Uint8Array,
   sheetName?: string | null,
+  opts: SpreadsheetCapOptions = {},
 ): SheetAnalysis {
+  const maxInputBytes = opts.maxInputBytes ?? SPREADSHEET_MAX_INPUT_BYTES;
+  const maxCsvChars = opts.maxCsvChars ?? SPREADSHEET_CSV_MAX_CHARS;
+  if (bytes.byteLength > maxInputBytes) {
+    // The parse-bomb refusal happens BEFORE the decoder (and before the
+    // redaction boundary) — the hostile bytes are counted, never decoded.
+    throw new ResearchToolError(
+      "RESEARCH_INPUT_INVALID",
+      `the spreadsheet exceeds the ${maxInputBytes}-byte analysis cap (${bytes.byteLength} bytes)`,
+    );
+  }
   const extension = extensionOf(path);
   if (
     !SUPPORTED_SPREADSHEET_EXTENSIONS.includes(
@@ -130,7 +162,19 @@ export function analyzeSpreadsheetBytes(
       });
     }
   }
-  const csv = XLSX.utils.sheet_to_csv(sheet);
+  const rendered = XLSX.utils.sheet_to_csv(sheet);
+  if (rendered.length > maxCsvChars) {
+    return {
+      sheetName: requested,
+      sheetNames,
+      rowCount: rows.length,
+      columnCount,
+      headers,
+      numericStats,
+      csv: `${rendered.slice(0, maxCsvChars)}\n[the table CSV was truncated at the ${maxCsvChars}-character budget]`,
+      csvTruncated: true,
+    };
+  }
   return {
     sheetName: requested,
     sheetNames,
@@ -138,6 +182,7 @@ export function analyzeSpreadsheetBytes(
     columnCount,
     headers,
     numericStats,
-    csv,
+    csv: rendered,
+    csvTruncated: false,
   };
 }

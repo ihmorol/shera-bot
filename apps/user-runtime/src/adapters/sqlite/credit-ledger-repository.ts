@@ -331,6 +331,22 @@ export class CreditLedgerRepository {
   }
 
   /**
+   * The total units already corrected away from ONE target row (review F9):
+   * the sum of the 'adjustment' movements naming it — the cumulative bound
+   * a further correction must fit within.
+   */
+  sumAdjustmentsFor(workspaceId: string, transactionId: string, exec?: SqliteExec): number {
+    const row = (exec ?? this.tx.connection())
+      .prepare(
+        `SELECT COALESCE(SUM(amount_units), 0) AS corrected_units
+         FROM credit_transaction
+         WHERE workspace_id = ? AND corrects_transaction_id = ? AND entry_type = 'adjustment'`,
+      )
+      .get(workspaceId, transactionId) as { corrected_units: number | bigint };
+    return Number(row.corrected_units);
+  }
+
+  /**
    * The per-run movement aggregates, computed IN SQL over EVERY movement
    * (review F7): each run's net charged (charges minus charge-reversing
    * adjustments), released, and last-movement timestamp — no bound can

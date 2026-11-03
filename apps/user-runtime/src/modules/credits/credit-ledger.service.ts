@@ -658,7 +658,10 @@ export class CreditLedgerService {
    * `amount_units` of the corrected row's account effect — the original row
    * is never edited (the ledger has no UPDATE path). Supported targets:
    * 'settlement_charge' (a charge correction) and 'grant' (a clawback).
-   * One transaction.
+   * The bound is CUMULATIVE (review F9): the adjustments already naming the
+   * target count — a further correction is refused typed
+   * (`CORRECTION_ALREADY_COVERED`) once they cover the requested amount
+   * within the original's budget. One transaction.
    */
   correctTransaction(input: {
     workspace_id: string;
@@ -681,6 +684,18 @@ export class CreditLedgerService {
       }
       if (input.amount_units > target.amount_units) {
         return { ok: false as const, code: "CORRECTION_EXCEEDS_ORIGINAL" };
+      }
+      // The CUMULATIVE bound (review F9): the adjustments already naming
+      // this target count too — a further correction is refused typed when
+      // the prior ones (plus the requested amount) cover the original. The
+      // counters' CHECKs would otherwise catch the over-reversal untyped.
+      const alreadyCorrected = this.deps.repository.sumAdjustmentsFor(
+        input.workspace_id,
+        target.transaction_id,
+        exec,
+      );
+      if (alreadyCorrected + input.amount_units > target.amount_units) {
+        return { ok: false as const, code: "CORRECTION_ALREADY_COVERED" };
       }
       const transactionId = this.newId("ctx");
       this.deps.repository.insertTransaction(

@@ -89,7 +89,14 @@ export type ToolExecutorFailureCode =
   /** S26: the kernel or wall clock ended the process at an enforced limit. */
   | "SANDBOX_LIMIT_EXCEEDED"
   /** S26: the cancel seam fired and the process tree was terminated. */
-  | "TOOL_EXECUTION_CANCELLED";
+  | "TOOL_EXECUTION_CANCELLED"
+  /** S25 research/data failures (typed retryability: research-errors.ts). */
+  | "TRANSIENT_NETWORK"
+  | "RESEARCH_INPUT_INVALID"
+  | "RESEARCH_RESPONSE_INVALID"
+  | "RESEARCH_SOURCE_NOT_FOUND"
+  | "RESEARCH_SOURCE_UNREADABLE"
+  | "RESEARCH_PROVIDER_UNAVAILABLE";
 
 /**
  * The slice of the S20 approvals boundary the executor consumes. The real
@@ -1217,7 +1224,15 @@ function normalizeBindingCode(code: string): ToolExecutorFailureCode {
     code === "SANDBOX_PATH_ESCAPE" ||
     code === "SANDBOX_LAUNCH_FAILED" ||
     code === "SANDBOX_LIMIT_EXCEEDED" ||
-    code === "TOOL_EXECUTION_CANCELLED"
+    code === "TOOL_EXECUTION_CANCELLED" ||
+    // S25 research/data family: the typed codes pass through so the recorded
+    // error_code carries the retryability class (research-errors.ts, AC6).
+    code === "TRANSIENT_NETWORK" ||
+    code === "RESEARCH_INPUT_INVALID" ||
+    code === "RESEARCH_RESPONSE_INVALID" ||
+    code === "RESEARCH_SOURCE_NOT_FOUND" ||
+    code === "RESEARCH_SOURCE_UNREADABLE" ||
+    code === "RESEARCH_PROVIDER_UNAVAILABLE"
   ) {
     return code;
   }

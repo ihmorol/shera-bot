@@ -131,7 +131,10 @@ function HistoryRow({
         {entry.result_summary ? (
           <div className="flex min-w-0 flex-col gap-1">
             <dt className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted">Result</dt>
-            <dd className="text-[13px] text-text">{entry.result_summary}</dd>
+            {/* The executor's transcripts are multi-line (the artifact pointer
+                leads, then the bounded head) — whitespace-pre-line keeps the
+                recorded structure instead of collapsing it into one run-on. */}
+            <dd className="whitespace-pre-line text-[13px] text-text">{entry.result_summary}</dd>
           </div>
         ) : null}
         {entry.error_code ? (

@@ -23,7 +23,11 @@ const AccountSummary = z.strictObject({
   charged_units: z.number().int().min(0),
   reserved_units: z.number().int().min(0),
   remaining_units: z.number().int(),
-  used_this_month_units: z.number().int().min(0),
+  // The month's NET settled usage can honestly go NEGATIVE (review F4): a
+  // this-month correction against a prior-month charge reverses more than
+  // this month's charges. Same shape as remaining_units — the ledger's own
+  // answer is rendered verbatim, never clamped.
+  used_this_month_units: z.number().int(),
   exhausted: z.boolean(),
 });
 

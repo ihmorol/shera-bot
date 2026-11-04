@@ -50,6 +50,20 @@ Solo fresh-archive gate at branch tip `e08bfe6` — `git archive HEAD | tar -x` 
 
 The prior builder's gate history is in E39: RUN 1 at `9b653c3` caught the merged S28 fixture file's format debt (fixed `8a3be03`); RUN 2 at `8a3be03` was all-green.
 
+The FIX-ROUND fresh-archive gate at the fix-round tip — `git archive HEAD | tar -x` into a fresh `/tmp` dir, then every step, each `cmd > file 2>&1; echo exit=$?`:
+
+| #   | Step                                             | Exit | Result                                     |
+| --- | ------------------------------------------------ | ---- | ------------------------------------------ |
+| 1   | `pnpm install --frozen-lockfile`                 | 0    | clean install from the archive             |
+| 2   | `pnpm lint`                                      | 0    | zero findings                              |
+| 3   | `pnpm format:check`                              | 0    | clean                                      |
+| 4   | `pnpm typecheck`                                 | 0    | clean (10 packages)                        |
+| 5   | `pnpm test` (`SHERA_PG_BIN`, real PostgreSQL 16) | 0    | **2201 passed / 2201 in 191 files**        |
+| 6   | `pnpm build`                                     | 0    | all workspaces build                       |
+| 7   | `pnpm license:inventory`                         | 0    | all licenses allowed or reviewed-exception |
+| 8   | `pnpm boundary-guards`                           | 0    | PASS — 459 source files scanned            |
+| 9   | `pnpm mockup:test`                               | 0    | pass                                       |
+
 ## Fresh-context review passes
 
 - Standards pass: **PASS-WITH-FINDINGS** (orchestrator)

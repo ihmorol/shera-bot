@@ -1,0 +1,23 @@
+# S27 ST-03 GREEN-with-control proof (2026-11-05)
+#
+# The D27 environment allowlist RESTORED (git checkout — no bypass in the tree):
+# buildSandboxEnv again returns the fixed five-key allowlist; the runtime's environment
+# (with its planted synthetic secrets) is structurally invisible to executed code.
+#
+# Command: SHERA_PG_BIN=/usr/lib/postgresql/16/bin pnpm vitest run tests/security/s27-st03-env-secret-exposure.test.ts
+# Expected: ALL PASS (the suite that failed 2/2 in the red run).
+
+
+ RUN  v5.0.1 /home/emon-morol/projects/github-cloud-projects/shera-bot-s27
+
+ ✓ tests/security/s27-st03-env-secret-exposure.test.ts (2 tests) 660ms
+   ✓ S27 ST-03 — child environment secret exposure (D27 allowlist) (2)
+     ✓ executed code sees ONLY the allowlist keys — the runtime's env is invisible 352ms
+     ✓ neither secret value reaches any sink: capture, terminal rows, journal, or raw database bytes 303ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  02:36:18
+   Duration  1.81s (tests 42%, transform 39%, import 18%, worker 1%)
+
+exit=0

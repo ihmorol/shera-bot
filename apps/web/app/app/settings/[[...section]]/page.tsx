@@ -148,6 +148,15 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
         <ul className="mt-6 space-y-2">
           <li className="flex items-center justify-between rounded-xl border border-line bg-surface px-4 py-3">
             <Link
+              href={routes.settings("credits")}
+              className="text-sm text-text underline underline-offset-4 hover:text-cool-highlight"
+            >
+              Credits
+            </Link>
+            <span className="font-mono text-xs uppercase tracking-[0.16em] text-muted">open</span>
+          </li>
+          <li className="flex items-center justify-between rounded-xl border border-line bg-surface px-4 py-3">
+            <Link
               href={routes.settings("workers")}
               className="text-sm text-text underline underline-offset-4 hover:text-cool-highlight"
             >
@@ -191,7 +200,7 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
             </Link>
             <span className="font-mono text-xs uppercase tracking-[0.16em] text-muted">open</span>
           </li>
-          {["Profile", "Memory", "Credits", "Workspace"].map((item) => (
+          {["Profile", "Memory", "Workspace"].map((item) => (
             <li
               key={item}
               className="flex items-center justify-between rounded-xl border border-line bg-surface px-4 py-3"

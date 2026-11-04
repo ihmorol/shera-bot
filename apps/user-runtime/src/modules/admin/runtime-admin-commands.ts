@@ -50,6 +50,9 @@ export interface RuntimeAdminCancelAllResult {
 export interface RuntimeAdminTopUpResult {
   workspace_id: string;
   topup_id: string;
+  /** Review F2: TRUE when this topupId's grant was ALREADY applied (the
+   * replayed command is the recorded no-op — one grant movement stands). */
+  grant_deduplicated: boolean;
   resumed_run_ids: string[];
   skipped: Array<{
     run_id: string;
@@ -88,6 +91,29 @@ export interface RuntimeAdminCommandsDeps {
   runControl: TaskRunOperationsSeam;
   findRunOperation: (workspaceId: string, runId: string) => string | null;
   findChat: (workspaceId: string, operationId: string) => string | null;
+  /**
+   * S24 (AC2): the ledger grant the top-up APPLIES — the central
+   * `control_credit_topups` row stays the authority; this is the
+   * runtime-local movement (credit_transaction 'grant', related_id =
+   * the central topup id). Applied BEFORE any resume, so the re-drive's
+   * reservation consults a funded account. Idempotent on the topup id
+   * (review F2): the answered `deduplicated` flag is the recorded no-op
+   * the result carries.
+   */
+  applyGrant?:
+    | ((workspaceId: string, topupId: string, amount: number) => { deduplicated: boolean })
+    | undefined;
+  /**
+   * S24 (AC2): the re-drive for one resumed run — the composed scheduler's
+   * resumeRunAfterTopUp (the run walks its plan legs from QUEUED with the
+   * funded account). Awaited per resumed run.
+   */
+  resumeRun?: ((workspaceId: string, runId: string) => Promise<void>) | undefined;
+  /**
+   * S24: the workspace-level seam fired after the per-run walk — the
+   * composed scheduler's resumeAfterTopUp (credit-paused TRIGGERS re-arm).
+   */
+  afterTopUp?: ((workspaceId: string) => void) | undefined;
   now?: (() => string) | undefined;
   logFault?: ((event: string, fields: Record<string, unknown>) => void) | undefined;
 }
@@ -127,6 +153,27 @@ export function buildRuntimeAdminCommandsHandle(
     },
 
     async applyCreditTopUp(input) {
+      // S24 (AC2): the GRANT lands first — the re-drive below consults a
+      // funded account. Contained: a grant failure aborts the top-up with
+      // the typed error (nothing resumed on an unapplied grant). The replay
+      // is NOT a failure (review F2): a deduplicated application is the
+      // recorded no-op the result reports.
+      // No initializer: the catch rethrows, so the flag is definitely
+      // assigned by the try's only assignment whenever control reaches the
+      // result below (the lint no-useless-assignment pin).
+      let grantDeduplicated: boolean;
+      try {
+        const applied = deps.applyGrant?.(input.workspaceId, input.topupId, input.amount);
+        grantDeduplicated = applied?.deduplicated ?? false;
+      } catch (error) {
+        deps.logFault?.("admin_topup_grant_failed", {
+          workspace_id: input.workspaceId,
+          topup_id: input.topupId,
+          name: error instanceof Error ? error.name : "Error",
+          message: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }
       const runs = deps.listWorkspaceRuns(input.workspaceId);
       const resumedRunIds: string[] = [];
       const skipped: RuntimeAdminTopUpResult["skipped"] = [];
@@ -153,6 +200,18 @@ export function buildRuntimeAdminCommandsHandle(
         });
         if (applied.ok) {
           resumedRunIds.push(run.run_id);
+          // S24 (AC2): the resumed run RE-DRIVES to completion (the composed
+          // scheduler re-walks its plan legs from QUEUED). Awaited per run —
+          // the walk's own outcomes are already recorded by the scheduler.
+          try {
+            await deps.resumeRun?.(input.workspaceId, run.run_id);
+          } catch (error) {
+            deps.logFault?.("admin_topup_redrive_failed", {
+              run_id: run.run_id,
+              name: error instanceof Error ? error.name : "Error",
+              message: error instanceof Error ? error.message : String(error),
+            });
+          }
         } else {
           // A lost race (the run settled/resumed concurrently) is contained:
           // the run's own state is the truth, the grant stays recorded.
@@ -163,9 +222,21 @@ export function buildRuntimeAdminCommandsHandle(
           });
         }
       }
+      // The workspace-level seam: credit-paused TRIGGERS re-arm (S28's
+      // resumeAfterTopUp — the next occurrence fires through the same route
+      // family).
+      try {
+        deps.afterTopUp?.(input.workspaceId);
+      } catch (error) {
+        deps.logFault?.("admin_topup_after_failed", {
+          workspace_id: input.workspaceId,
+          name: error instanceof Error ? error.name : "Error",
+        });
+      }
       return {
         workspace_id: input.workspaceId,
         topup_id: input.topupId,
+        grant_deduplicated: grantDeduplicated,
         resumed_run_ids: resumedRunIds,
         skipped,
       };

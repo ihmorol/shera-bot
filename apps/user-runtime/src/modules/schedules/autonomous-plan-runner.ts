@@ -17,6 +17,8 @@
  * approval machinery exactly like any other proposal (PRD §8: risky actions
  * pause for approval by default — an autonomous run is no exception).
  */
+import { randomUUID } from "node:crypto";
+
 import { generateText } from "ai";
 
 import type { TaskRun, TaskTriggerEventType } from "@shera-bot/contracts";
@@ -30,6 +32,7 @@ import type { ProviderRow } from "../../adapters/sqlite/providers-repository.ts"
 import type { ProviderCredentialsService } from "../providers/provider-credentials.ts";
 import { ProviderAdapters } from "../providers/provider-adapters.ts";
 import type { ProviderService } from "../providers/provider-service.ts";
+import { CreditLedgerService } from "../credits/credit-ledger.service.ts";
 import { canonicalArgsDigest, type ToolExecutor } from "../tools/tool-executor.service.ts";
 import { taskStreamId } from "../tasks/task-events.ts";
 import type { TriggerPlan } from "./schedules.types.ts";
@@ -41,6 +44,60 @@ const MODEL_CALL_TIMEOUT_MS = 15_000;
 /** The stream-record bound for the model's answer (G3: bounded, never a dump). */
 const RESULT_SUMMARY_MAX_CHARS = 500;
 
+/**
+ * The S24 credit port (the ledger service satisfies it structurally). The
+ * model leg consults it ONLY for platform-origin providers (D20): a custom
+ * provider never reserves, never charges — it records usage with zero
+ * credit movement.
+ */
+export interface PlanCreditLedger {
+  reserveForRun(input: {
+    workspace_id: string;
+    task_id: string;
+    estimate_units: number;
+    provider_id: string;
+    model: string;
+  }):
+    | { ok: true; reservation_id: string }
+    | { ok: false; code: "insufficient_credits"; available_units: number; requested_units: number };
+  /** The run's single active hold (a recovery re-entry reuses it — an
+   * ambiguous outcome kept the hold; a resumed run never takes a second
+   * reservation for the same call). */
+  activeReservationFor(
+    workspaceId: string,
+    taskId: string,
+  ): { reservation_id: string; estimated_units: number } | null;
+  settleReservation(input: {
+    workspace_id: string;
+    reservation_id: string;
+    actual_units: number;
+  }): { ok: true; released_units: number } | { ok: false; code: string };
+  releaseReservation(input: {
+    workspace_id: string;
+    reservation_id: string;
+    reason: "provider_failure" | "task_cancelled" | "unused_estimate";
+  }): { ok: true; released_units: number } | { ok: false; code: string };
+  /** Close every leftover active hold of the run (the zero-unit pre-flight
+   * consult reservation) once the call's own hold is settled. */
+  releaseForRun(
+    workspaceId: string,
+    taskId: string,
+    reason: "provider_failure" | "task_cancelled" | "unused_estimate",
+  ): { released_count: number; released_units: number };
+  recordUsage(input: {
+    workspace_id: string;
+    usage_id: string;
+    task_id: string;
+    provider_id: string;
+    model: string;
+    provider_origin: "platform" | "user";
+    input_tokens: number | null;
+    output_tokens: number | null;
+    latency_ms: number | null;
+    charged_units: number;
+  }): void;
+}
+
 export interface AutonomousPlanRunnerDeps {
   providers: Pick<ProviderService, "getProviderView">;
   credentials: Pick<ProviderCredentialsService, "decryptForCall">;
@@ -50,6 +107,12 @@ export interface AutonomousPlanRunnerDeps {
   events: Pick<EventsService, "appendEvent">;
   tx: SqliteTransactions;
   operations: OperationsRepository;
+  /** The S24 credit ledger; absent = the honest no-consult posture (G4 —
+   * the gap is visible in the composed wiring, never a fake allow). */
+  credits?: PlanCreditLedger | undefined;
+  /** The hard abort window for the model call (tests shrink it; production
+   * keeps the recorded default). */
+  modelCallTimeoutMs?: number | undefined;
   now?: (() => string) | undefined;
   logFault?: ((event: string, fields: Record<string, unknown>) => void) | undefined;
 }
@@ -71,7 +134,14 @@ export interface AutonomousPlanInput {
 export type AutonomousPlanOutcome =
   | { ok: true; result_summary: string }
   | { ok: false; code: string }
-  | { ok: "paused"; approval_id: string };
+  | { ok: "paused"; approval_id: string }
+  /** S24/D48: the platform-provider reservation was refused — the WALK
+   * writes the D48 pause (the runner never touches run state). */
+  | { ok: "paused_credits"; requested_units: number; available_units: number }
+  /** S24/E13: an ambiguous provider outcome (the provider may have
+   * processed the request) — no blind retry, no silent release; the hold
+   * stands and the decision is recorded on the run's stream. */
+  | { ok: "recovery_required"; code: string };
 
 /** One bounded line of provider text for the run's stream (G3). */
 function boundedSummary(text: string): string {
@@ -92,7 +162,7 @@ export class AutonomousPlanRunner {
     workspaceId: string,
     runId: string,
     conversationId: string,
-    type: "progress.reported" | "artifact.published",
+    type: "progress.reported" | "artifact.published" | "run.credit_outcome_ambiguous",
     payload: Record<string, unknown>,
   ): void {
     try {
@@ -130,11 +200,58 @@ export class AutonomousPlanRunner {
     }
   }
 
+  /**
+   * The ambiguity record (S24/E13): the typed, VISIBLE decision on the
+   * run's own stream — the reservation stands, the outcome is unknown, a
+   * human decides. Contained: the run's state is the RECOVERY_REQUIRED row;
+   * this record is its companion, so a record failure is fault-logged and
+   * never breaks the recovery transition.
+   */
+  private recordAmbiguousOutcome(
+    workspaceId: string,
+    runId: string,
+    providerId: string,
+    reservationId: string,
+  ): void {
+    try {
+      this.deps.events.appendEvent({
+        event_id: `evt_run_credit_ambiguous_${runId}_${randomUUID().slice(0, 8)}`,
+        stream_id: taskStreamId(runId),
+        type: "run.credit_outcome_ambiguous",
+        payload: {
+          workspace_id: workspaceId,
+          run_id: runId,
+          reason: "ambiguous_provider_outcome",
+          provider_id: providerId,
+          reservation_id: reservationId,
+        },
+        workspace_id: workspaceId,
+        correlation_id: runId,
+      });
+    } catch (error) {
+      this.deps.logFault?.("run_credit_ambiguity_record_failed", {
+        workspace_id: workspaceId,
+        run_id: runId,
+        name: error instanceof Error ? error.name : "Error",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
   async runPlan(input: AutonomousPlanInput): Promise<AutonomousPlanOutcome> {
     const { workspace_id: workspaceId, run_id: runId, plan } = input;
     const summaries: string[] = [];
 
     // Leg 1 — the model call (a REAL request through the S23 provider stack).
+    // The S24 credit discipline lives here (D20/D48): a PLATFORM provider
+    // reserves a bounded estimate BEFORE the call, settles against the
+    // actual usage, and releases the remainder; a refusal is the typed
+    // `paused_credits` outcome (the WALK writes the D48 pause). A CUSTOM
+    // provider (origin 'user') never touches credits — it records usage
+    // with zero credit movement. An AMBIGUOUS outcome (the provider may
+    // have processed the request) neither retries nor releases: the hold
+    // stands, the decision is recorded, and the run enters the E13
+    // recovery class.
     if (input.provider !== undefined) {
       const entry = this.deps.providers.getProviderView(workspaceId, input.provider.provider_id);
       if (entry === null) {
@@ -157,11 +274,54 @@ export class AutonomousPlanRunner {
         created_at: entry.created_at,
         updated_at: entry.updated_at,
       };
+      const isPlatform = entry.origin === "platform";
+      const credits = this.deps.credits;
+      let reservationId: string | null = null;
+      let estimatedUnits = 0;
+      if (isPlatform && credits) {
+        // A recovery re-entry reuses the standing hold (an ambiguous
+        // outcome kept it — never a second reservation for the same call).
+        const standing = credits.activeReservationFor(workspaceId, runId);
+        if (standing) {
+          reservationId = standing.reservation_id;
+          estimatedUnits = standing.estimated_units;
+        } else {
+          const estimateUnits = CreditLedgerService.estimateUnits({
+            prompt_chars: plan.prompt.length,
+            max_output_tokens: MODEL_CALL_MAX_OUTPUT_TOKENS,
+          });
+          const reserved = credits.reserveForRun({
+            workspace_id: workspaceId,
+            task_id: runId,
+            estimate_units: estimateUnits,
+            provider_id: entry.id,
+            model: input.provider.model,
+          });
+          if (!reserved.ok) {
+            // The D48 refusal: the typed outcome carries the refused
+            // estimate and the available balance for the pause record.
+            return {
+              ok: "paused_credits",
+              requested_units: reserved.requested_units,
+              available_units: reserved.available_units,
+            };
+          }
+          reservationId = reserved.reservation_id;
+          estimatedUnits = estimateUnits;
+        }
+      }
       let credential: string | null = null;
       if (entry.api_mode === "api_key") {
         try {
           credential = this.deps.credentials.decryptForCall(workspaceId, entry.id);
         } catch {
+          if (reservationId !== null && credits) {
+            credits.releaseReservation({
+              workspace_id: workspaceId,
+              reservation_id: reservationId,
+              reason: "provider_failure",
+            });
+          }
           return { ok: false, code: "PROVIDER_CREDENTIAL_REVOKED" };
         }
       }
@@ -169,9 +329,17 @@ export class AutonomousPlanRunner {
       try {
         model = ProviderAdapters.resolveLanguageModel(row, credential, input.provider.model);
       } catch {
+        if (reservationId !== null && credits) {
+          credits.releaseReservation({
+            workspace_id: workspaceId,
+            reservation_id: reservationId,
+            reason: "provider_failure",
+          });
+        }
         return { ok: false, code: "PROVIDER_CONFIG_INVALID" };
       }
       let completionText: string;
+      const callStarted = Date.now();
       try {
         // The bounded autonomous call (the connection-test posture: ONE real
         // request, no retry layer, a hard abort window — E34's lesson).
@@ -180,9 +348,61 @@ export class AutonomousPlanRunner {
           prompt: plan.prompt,
           maxOutputTokens: MODEL_CALL_MAX_OUTPUT_TOKENS,
           maxRetries: 0,
-          abortSignal: AbortSignal.timeout(MODEL_CALL_TIMEOUT_MS),
+          abortSignal: AbortSignal.timeout(this.deps.modelCallTimeoutMs ?? MODEL_CALL_TIMEOUT_MS),
         });
         completionText = completion.text;
+        const latencyMs = Date.now() - callStarted;
+        const inputTokens = completion.usage?.inputTokens ?? null;
+        const outputTokens = completion.usage?.outputTokens ?? null;
+        if (isPlatform) {
+          // SETTLE against the actual usage; the unused remainder releases
+          // (the ledger's settleReservation owns the split). The zero-unit
+          // pre-flight consult closed itself at consult time. The usage
+          // record claims what the ledger ACTUALLY charged (review F8):
+          // only an `ok` settle charges — a typed refusal
+          // (RESERVATION_NOT_ACTIVE) records charged_units 0, never the
+          // pre-assigned actual.
+          let settledUnits = 0;
+          if (reservationId !== null && credits) {
+            const actual = CreditLedgerService.usageUnits(
+              { input_tokens: inputTokens, output_tokens: outputTokens },
+              estimatedUnits,
+            );
+            const settled = credits.settleReservation({
+              workspace_id: workspaceId,
+              reservation_id: reservationId,
+              actual_units: actual,
+            });
+            if (settled.ok) settledUnits = actual;
+          }
+          credits?.recordUsage({
+            workspace_id: workspaceId,
+            usage_id: `usage_${runId}_${randomUUID().slice(0, 8)}`,
+            task_id: runId,
+            provider_id: entry.id,
+            model: input.provider.model,
+            provider_origin: "platform",
+            input_tokens: inputTokens,
+            output_tokens: outputTokens,
+            latency_ms: latencyMs,
+            charged_units: settledUnits,
+          });
+        } else {
+          // D20: the CUSTOM provider consumed no Shera credits — the usage
+          // and latency are still measured, with zero credit movement.
+          credits?.recordUsage({
+            workspace_id: workspaceId,
+            usage_id: `usage_${runId}_${randomUUID().slice(0, 8)}`,
+            task_id: runId,
+            provider_id: entry.id,
+            model: input.provider.model,
+            provider_origin: "user",
+            input_tokens: inputTokens,
+            output_tokens: outputTokens,
+            latency_ms: latencyMs,
+            charged_units: 0,
+          });
+        }
       } catch (error) {
         this.deps.logFault?.("autonomous_model_call_failed", {
           workspace_id: workspaceId,
@@ -190,6 +410,23 @@ export class AutonomousPlanRunner {
           provider_id: input.provider.provider_id,
           name: error instanceof Error ? error.name : "Error",
         });
+        const ambiguous = isAmbiguousProviderOutcome(error);
+        if (isPlatform && reservationId !== null && credits) {
+          if (ambiguous) {
+            // AMBIGUOUS (E13): the provider may have processed the request.
+            // No blind retry, no silent release — the hold stands, the
+            // decision is recorded (the typed, VISIBLE record on the run's
+            // stream), the run enters recovery.
+            this.recordAmbiguousOutcome(workspaceId, runId, entry.id, reservationId);
+            return { ok: "recovery_required", code: "AMBIGUOUS_PROVIDER_OUTCOME" };
+          }
+          // A clean failure (the request never landed): release the hold.
+          credits.releaseReservation({
+            workspace_id: workspaceId,
+            reservation_id: reservationId,
+            reason: "provider_failure",
+          });
+        }
         return { ok: false, code: "PROVIDER_CALL_FAILED" };
       }
       summaries.push(boundedSummary(completionText));
@@ -291,4 +528,17 @@ export class AutonomousPlanRunner {
     const record = this.deps.operations.getOperation(workspaceId, operationId);
     return record?.coordinator_agent_id ?? "runtime-scheduler";
   }
+}
+
+/**
+ * The ambiguity classification (D20/E13, recorded): the request was SENT
+ * and its processing state is UNKNOWN — the abort window fired mid-flight
+ * (TimeoutError/AbortError). Everything else reads as a clean failure (the
+ * request never landed: connection refused, DNS, auth, config) and
+ * releases the hold. The classification is deliberately narrow — ambiguity
+ * keeps a hold standing, so over-classifying would strand credits.
+ */
+function isAmbiguousProviderOutcome(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return error.name === "TimeoutError" || error.name === "AbortError";
 }

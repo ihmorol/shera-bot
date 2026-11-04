@@ -47,6 +47,8 @@ import { CommandReceiptsRepository } from "../../adapters/sqlite/command-receipt
 import { ConversationsRepository } from "../../adapters/sqlite/conversations-repository.ts";
 import { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
 import { OperationsRepository } from "../../adapters/sqlite/operations-repository.ts";
+import { CreditLedgerRepository } from "../../adapters/sqlite/credit-ledger-repository.ts";
+import { CreditLedgerService } from "../../modules/credits/credit-ledger.service.ts";
 import { TaskWorkersRepository } from "../../adapters/sqlite/task-workers-repository.ts";
 import { TerminalEventsRepository } from "../../adapters/sqlite/terminal-events-repository.ts";
 import { WorkspaceFilesRepository } from "../../adapters/sqlite/workspace-files-repository.ts";
@@ -275,6 +277,12 @@ export interface ComposeLocalApiOptions {
    * enforcement exists to prevent).
    */
   providerEnforcement?: boolean;
+  /**
+   * S24: the model call's hard abort window for the autonomous plan runner
+   * (tests shrink it to exercise the ambiguous-outcome class; production
+   * keeps the recorded 15s default).
+   */
+  modelCallTimeoutMs?: number;
 }
 
 export interface LocalApiHandle {
@@ -293,6 +301,9 @@ export interface LocalApiHandle {
   approvals: ApprovalsService;
   /** S23: the provider registry seam — configuration, custody, resolution. */
   providers: ProviderService;
+  /** S24: the credit ledger seam — the ONE account-level balance and its
+   * reserve→settle→release machinery (the tests consult it directly). */
+  credits: CreditLedgerService;
   /**
    * S18 chunk 2: the shared browser profile service seam when configured;
    * undefined otherwise (G4 — no browser process ever spawns without it).
@@ -510,6 +521,9 @@ export interface RuntimeHandle {
   adminCommands: RuntimeAdminCommandsHandle;
   /** S23: the provider registry seam — configuration, custody, resolution. */
   providers: ProviderService;
+  /** S24: the credit ledger seam — the ONE account-level balance and its
+   * reserve→settle→release machinery (the tests consult it directly). */
+  credits: CreditLedgerService;
   /**
    * S28: the runtime-owned scheduler stack — the declarative trigger records
    * (the HTTP surface relays into the service), the firing engine (tests and
@@ -561,6 +575,7 @@ interface Wired {
   runControl: RunControlApiHandle;
   adminCommands: RuntimeAdminCommandsHandle;
   providers: ProviderService;
+  credits: CreditLedgerService;
   schedules: SchedulesService;
   scheduler: SchedulerService;
   wakeManager: SchedulerWakeManager;
@@ -872,6 +887,18 @@ function wire(
   // (the agents-seed discipline); without a pack every roster validation is
   // refused typed and nothing Operation-shaped can be created.
   const operationsRepository = new OperationsRepository(tx);
+
+  // S24: the internal credit ledger (PRD §9, D20, D21, D48, issue #25). The
+  // ONE account-level balance per workspace over the v20 STRICT tables; the
+  // recorded reservation seam below consults it for real now (reserve a
+  // bounded estimate before a platform-provider call — a refusal is the
+  // typed `insufficient_credits` the D48 pause writes from).
+  const creditLedgerRepository = new CreditLedgerRepository(tx);
+  const creditLedger = new CreditLedgerService({
+    repository: creditLedgerRepository,
+    tx,
+    ...(options.now ? { now: options.now } : {}),
+  });
 
   // S23: the provider registry stack (PRD §9, D17, D20, D22, E9). The vault
   // key lives beside the database (the container-local volume is the D22
@@ -1351,10 +1378,9 @@ function wire(
   // EVERYTHING the run holds (worker through the supervisor port, in-flight
   // tool executions through the executor seam, queued children, write
   // leases, the S24 credit-reservation seam, pending approvals) and walks
-  // the recorded D8 two-step cancellation. The reservation port is the
-  // HONEST S24 seam: the credit ledger is slice S24 — the composition
-  // records the release request through the redacted fault log and nothing
-  // else (never a fake ledger, G4).
+  // the recorded D8 two-step cancellation. The reservation port is REAL now
+  // (S24): cancellation releases every active hold of the run with the
+  // contract's `task_cancelled` reason.
   const runCancellation = new RunCancellationService({
     tx,
     journal,
@@ -1375,11 +1401,15 @@ function wire(
     leases: writeLeases,
     reservations: {
       releaseForRun: (workspaceId, runId) => {
-        logFault("credit_reservation_release_requested", {
-          workspace_id: workspaceId,
-          run_id: runId,
-          seam: "s24-credit-ledger-not-built",
-        });
+        const released = creditLedger.releaseForRun(workspaceId, runId, "task_cancelled");
+        if (released.released_count > 0) {
+          logFault("credit_reservation_released_on_cancel", {
+            workspace_id: workspaceId,
+            run_id: runId,
+            released_count: released.released_count,
+            released_units: released.released_units,
+          });
+        }
       },
     },
     approvals,
@@ -1426,6 +1456,12 @@ function wire(
     events,
     tx,
     operations: operationsRepository,
+    // S24: the credit legs of the model call (reserve → settle → release
+    // for platform providers; usage with zero movement for custom ones).
+    credits: creditLedger,
+    ...(options.modelCallTimeoutMs !== undefined
+      ? { modelCallTimeoutMs: options.modelCallTimeoutMs }
+      : {}),
     ...(options.now ? { now: options.now } : {}),
     logFault: (event, fields) => logFault(event, fields),
   });
@@ -1438,16 +1474,29 @@ function wire(
     events,
     tx,
     planRunner: autonomousPlanRunner,
+    // S24: the recorded reservation seam, now backed by the REAL ledger
+    // (the S28 consult's zero-estimate shape is preserved — a zero hold
+    // records the consult; the bounded reservation happens at the model
+    // leg where the request shape is known).
     reservations: {
       reserveForRun: (input) => {
-        logFault("credit_reservation_consulted", {
+        const outcome = creditLedger.reserveForRun({
           workspace_id: input.workspace_id,
+          task_id: input.run_id,
           trigger_id: input.trigger_id,
-          run_id: input.run_id,
-          estimate_credits: input.estimate_credits,
-          seam: "s24-credit-ledger-not-built",
+          estimate_units: input.estimate_credits,
         });
-        return { ok: true, reservation_id: `res_${input.run_id}` };
+        if (!outcome.ok) {
+          logFault("credit_reservation_refused", {
+            workspace_id: input.workspace_id,
+            trigger_id: input.trigger_id,
+            run_id: input.run_id,
+            estimate_credits: input.estimate_credits,
+            available_units: outcome.available_units,
+          });
+          return outcome;
+        }
+        return outcome;
       },
     },
     ...(providerGate
@@ -1483,6 +1532,22 @@ function wire(
     findRunOperation: (workspaceId, runId) =>
       operationsRepository.findRunOperation(workspaceId, runId),
     findChat: (workspaceId, operationId) => operationsRepository.findChat(workspaceId, operationId),
+    // S24 (AC2): the top-up applies the GRANT to the runtime ledger (the
+    // central control_credit_topups row stays the authority), re-drives each
+    // resumed run to completion, and re-arms the credit-paused triggers.
+    applyGrant: (workspaceId, topupId, amount) => {
+      const applied = creditLedger.grant({
+        workspace_id: workspaceId,
+        amount_units: amount,
+        related_id: topupId,
+      });
+      return { deduplicated: applied.deduplicated };
+    },
+    resumeRun: (workspaceId, runId) =>
+      scheduler.resumeRunAfterTopUp(workspaceId, runId).then(() => undefined),
+    afterTopUp: (workspaceId) => {
+      scheduler.resumeAfterTopUp(workspaceId);
+    },
     ...(options.now ? { now: options.now } : {}),
     logFault: (event, fields) => logFault(event, fields),
   });
@@ -1557,6 +1622,11 @@ function wire(
       workspaceId: wireWorkspaceId,
       onTriggerMutation: () => wakeManager.sync(),
     },
+    // S24: the credits read surface (the ledger's own numbers).
+    credits: {
+      ledger: creditLedger,
+      workspaceId: wireWorkspaceId,
+    },
     ...(options.logUntypedFault ? { logUntypedFault: options.logUntypedFault } : {}),
   });
   return {
@@ -1586,6 +1656,7 @@ function wire(
     runControl: runControlApi,
     adminCommands,
     providers,
+    credits: creditLedger,
     schedules,
     scheduler,
     wakeManager,
@@ -1605,6 +1676,7 @@ export function composeLocalApi(options: ComposeLocalApiOptions): LocalApiHandle
     toolRegistry: wired.toolRegistry,
     toolsApi: wired.toolsApi,
     providers: wired.providers,
+    credits: wired.credits,
     browser: wired.browser,
     close: () => wired.conn.close(),
   };
@@ -1840,6 +1912,7 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     retryCoordinator: wired.retryCoordinator,
     runControl: wired.runControl,
     providers: wired.providers,
+    credits: wired.credits,
     schedules: wired.schedules,
     scheduler: wired.scheduler,
     noteStore: wired.noteStore,

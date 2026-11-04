@@ -287,6 +287,9 @@ export const RuntimeAdminTopUpSkipReason = z.enum(RUNTIME_ADMIN_TOPUP_SKIP_REASO
 export const RuntimeAdminCreditTopUpResponse = z.strictObject({
   workspace_id: WorkspaceId,
   topup_id: Id,
+  // Review F2: TRUE when this topup id's grant was already applied — the
+  // replayed command is the recorded no-op (one grant movement stands).
+  grant_deduplicated: z.boolean(),
   resumed_run_ids: z.array(Id),
   skipped: z.array(z.strictObject({ run_id: Id, reason: RuntimeAdminTopUpSkipReason })),
 });

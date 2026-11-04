@@ -97,6 +97,7 @@ export function decideRecovery(pending: RecoveryPendingAction | null | undefined
 export type RecoveryOutcome =
   | { outcome: "resumed"; basis: "replayable" | "idempotent_retry"; state: RunState }
   | { outcome: "paused_for_review"; reason: string; state: RunState }
+  | { outcome: "resume_failed"; reason: string; state: RunState }
   | { outcome: "skipped"; reason: string; state: RunState | null };
 
 export interface RecoveryScanReport {
@@ -121,6 +122,13 @@ export interface RecoveryDriverDeps {
   runControl: TaskRunOperationsSeam;
   /** The recovery-owned run scan (the boot pass over RUNNING + RECOVERY_REQUIRED). */
   runs: Pick<OperationsRepository, "listRunsByState">;
+  /**
+   * Whether a LIVE worker row still stands on this run (the S16 reaper keeps
+   * live rows). A run with live work is NOT interrupted — the conservative
+   * rule the S16 re-queue uses applies verbatim: never re-drive someone's
+   * live worker.
+   */
+  hasLiveWorker: (workspaceId: string, runId: string) => boolean;
   /**
    * The latest checkpoint's recovery basis for one task (composed to the
    * RunCheckpointsRepository). Null = no checkpoint exists — nothing vouches
@@ -183,6 +191,15 @@ export class RecoveryDriver {
       return {
         outcome: "skipped",
         reason: `run is ${currentState}, not recovery-owned`,
+        state: currentState,
+      };
+    }
+    if (this.deps.hasLiveWorker(workspaceId, runId)) {
+      // Live work stands on this run — the reaper kept its row; nothing is
+      // interrupted here (the S16 conservative rule, verbatim).
+      return {
+        outcome: "skipped",
+        reason: "a live worker row is on this run",
         state: currentState,
       };
     }
@@ -255,7 +272,8 @@ export class RecoveryDriver {
       // Contained: the re-drive failed after the (legal) transition. The run
       // reads RUNNING with no worker — exactly the interrupted state — and
       // the next boot's reconciliation + driver own it again. The marker
-      // records the honest no-replay outcome (B4).
+      // records the honest no-replay outcome (B4), and the OUTCOME says
+      // resume_failed — the run did NOT get its re-drive.
       this.faultLog("recovery_resume_failed", {
         workspace_id: workspaceId,
         run_id: runId,
@@ -272,7 +290,7 @@ export class RecoveryDriver {
         resume_from_checkpoint_version: checkpointVersion,
         replayed: false,
       });
-      return { outcome: "resumed", basis: decision.basis, state: "RUNNING" };
+      return { outcome: "resume_failed", reason: "resume_port_failed", state: "RUNNING" };
     }
 
     this.appendDecided(workspaceId, runId, {

@@ -165,6 +165,8 @@ function makeHarness(): RecoveryHarness {
     runs: {
       listRunsByState: (state) => operationsRepo.listRunsByState(state),
     },
+    // The matrix harness has no worker rows — nothing is ever live.
+    hasLiveWorker: () => false,
     resume: (input) => {
       resumeCalls.push({
         runId: input.runId,

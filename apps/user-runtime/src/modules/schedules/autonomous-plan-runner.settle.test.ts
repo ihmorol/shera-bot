@@ -118,8 +118,9 @@ async function makeRunner(): Promise<{
       }
       return { ok: true as const, reservation_id: reserved.reservation_id };
     },
-    activeReservationFor: (workspaceId, taskId) => realLedger.activeReservationFor(workspaceId, taskId),
-    settleReservation: (input) => {
+    activeReservationFor: (workspaceId, taskId) =>
+      realLedger.activeReservationFor(workspaceId, taskId),
+    settleReservation: () => {
       state.settleAttempts += 1;
       return { ok: false as const, code: "RESERVATION_NOT_ACTIVE" };
     },

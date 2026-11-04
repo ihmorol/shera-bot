@@ -118,10 +118,14 @@ describe("the composed cancellation closes the credited run's hold (review F6)",
 
     // The USER stop control through the composed HTTP route — the recorded
     // D8 cancellation, the same path the run's stop button drives.
-    const cancel = await postJson(origin, `/v1/operations/${operationId}/runs/run_cancel_release/cancel`, {
-      workspace_id: WS,
-      cancelled_by: ACTOR,
-    });
+    const cancel = await postJson(
+      origin,
+      `/v1/operations/${operationId}/runs/run_cancel_release/cancel`,
+      {
+        workspace_id: WS,
+        cancelled_by: ACTOR,
+      },
+    );
     expect(cancel.status).toBe(200);
     expect(cancel.body).toMatchObject({
       outcome: "cancelled",
@@ -132,7 +136,10 @@ describe("the composed cancellation closes the credited run's hold (review F6)",
     // The drill-down: the release row names the CANCELLATION reason, the
     // movement row is the ledger's own reservation_release, and nothing
     // stays held.
-    const drillDown = await getJson(origin, `/v1/credits/runs/run_cancel_release?workspace_id=${WS}`);
+    const drillDown = await getJson(
+      origin,
+      `/v1/credits/runs/run_cancel_release?workspace_id=${WS}`,
+    );
     expect(drillDown.status).toBe(200);
     const releases = drillDown.body["releases"] as Array<Record<string, unknown>>;
     expect(releases).toHaveLength(1);

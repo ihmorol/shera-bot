@@ -158,7 +158,10 @@ export function buildRuntimeAdminCommandsHandle(
       // the typed error (nothing resumed on an unapplied grant). The replay
       // is NOT a failure (review F2): a deduplicated application is the
       // recorded no-op the result reports.
-      let grantDeduplicated = false;
+      // No initializer: the catch rethrows, so the flag is definitely
+      // assigned by the try's only assignment whenever control reaches the
+      // result below (the lint no-useless-assignment pin).
+      let grantDeduplicated: boolean;
       try {
         const applied = deps.applyGrant?.(input.workspaceId, input.topupId, input.amount);
         grantDeduplicated = applied?.deduplicated ?? false;

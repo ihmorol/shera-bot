@@ -56,6 +56,9 @@ export type RowLifecycleCommand =
   | "pause_insufficient_credits"
   | "fail_task"
   | "recovery_required"
+  /** S31 (D32/D33): the RecoveryDriver's class-guarded auto-resume
+   * (RECOVERY_REQUIRED → RUNNING, runtime actor, E13 data as the guard). */
+  | "recovery_auto_resume"
   | "cancel_task"
   | "cancel_complete"
   /** S32 (D48): the admin top-up's unblocking resume (PAUSED → QUEUED). */

@@ -150,10 +150,10 @@ function streamEvents(harness: PauseHarness, runId: string) {
 }
 
 describe("D48 run-level credit pause (S24 AC1)", () => {
-  it("appends the credit ledger as version 20 of the committed chain", () => {
+  it("appends the credit ledger as version 20 of the committed chain (S31's renumbered v21 run-checkpoints is the head)", () => {
     const harness = makeHarness();
     expect(appliedMigrationVersions(harness.conn.db)).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
     ]);
   });
 

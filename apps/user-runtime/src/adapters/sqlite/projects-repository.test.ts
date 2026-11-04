@@ -85,17 +85,19 @@ describe("S19 v15 migration (projects-and-git)", () => {
     const v16 = MIGRATIONS.find((migration) => migration.version === 16);
     expect(v16?.name).toBe("projects-archive-source");
     // The S21 integration appended v17 (tool-inventory), S23 appended v18
-    // (provider-catalog), S28 appended v19 (trigger-records), and S24
-    // appended v20 (credit-ledger) after this migration; the S19 entries
-    // themselves never move once merged.
-    expect(MIGRATIONS.at(-1)?.version).toBe(20);
-    expect(MIGRATIONS.at(-1)?.name).toBe("credit-ledger");
-    expect(MIGRATIONS.at(-2)?.name).toBe("trigger-records");
-    expect(MIGRATIONS.at(-3)?.name).toBe("provider-catalog");
-    expect(MIGRATIONS.at(-4)?.name).toBe("tool-inventory");
-    expect(MIGRATIONS.at(-5)?.name).toBe("projects-archive-source");
+    // (provider-catalog), S28 appended v19 (trigger-records), S24 appended
+    // v20 (credit-ledger), and S31 appended v21 (run-checkpoints) after
+    // this migration; the S19 entries themselves never move once merged.
+    expect(MIGRATIONS.at(-2)?.version).toBe(20);
+    expect(MIGRATIONS.at(-2)?.name).toBe("credit-ledger");
+    expect(MIGRATIONS.at(-1)?.version).toBe(21);
+    expect(MIGRATIONS.at(-1)?.name).toBe("run-checkpoints");
+    expect(MIGRATIONS.at(-3)?.name).toBe("trigger-records");
+    expect(MIGRATIONS.at(-4)?.name).toBe("provider-catalog");
+    expect(MIGRATIONS.at(-5)?.name).toBe("tool-inventory");
+    expect(MIGRATIONS.at(-6)?.name).toBe("projects-archive-source");
     const applied = appliedMigrationVersions(conn.db);
-    expect(applied.at(-1)).toBe(20);
+    expect(applied.at(-1)).toBe(21);
   });
 
   it("v16 widens projects.source_kind to admit archives while keeping the strict enum", () => {

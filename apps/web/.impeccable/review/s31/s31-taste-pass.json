@@ -1,0 +1,31 @@
+{
+  "taste_pass": {
+    "method": "the impeccable gate per its SKILL.md: `impeccable context` loaded (PRODUCT.md, web target), the operate.md playbook + craft-floor.md read before any UI edit, `impeccable detect` over the three new surface modules (exit 0, zero findings), then the adversarial pass below against the PRODUCTION build's rendered structure (the JSON evidence this gate is judged on; the PNGs are the visual record)",
+    "surfaces": [
+      "apps/web/components/shell/recovery-banner.tsx",
+      "apps/web/components/shell/recovery-banner-host.tsx",
+      "apps/web/components/operations/run-recovery-timeline.tsx"
+    ],
+    "findings": [
+      {
+        "id": "T1",
+        "severity": "P2",
+        "finding": "the S11 banner strip stacked above AppShell's h-dvh root double-counted the viewport height (the shell scrolled the strip out of view at 360px)",
+        "fix": "AppShell's root became min-h-0 flex-1 inside the layout's h-dvh column — the shell fills the space BESIDE the strip, never over it; rebuilt + recaptured in the same round",
+        "evidence": "s31-recovery-review-360.png recaptured after the rebuild (2026-11-04); apps/web/components/shell/app-shell.tsx"
+      }
+    ],
+    "checks": {
+      "contrast": "the §2.1 status tokens only (text-approval / text-sky / text-live on bg-surface) — the same pairs the WAITING_FOR_APPROVAL run state and the §6.4 connection banner render; no new colors introduced",
+      "depth": "1px border-line boxes only; no halos, no colored border-left (the craft-floor ban respected — the timeline rail is structure, not a colored stripe)",
+      "spacing": "the banner strip matches the connection banner's px-4/py-2 rhythm (lg:px-6); the timeline reuses the runs panel's meta-row scale (text-[11px], gap-1.5)",
+      "type": "font-mono meta + text-sm body only — no display face in labels; the review count renders as data, not a hero metric",
+      "motion": "one authored moment: the recovering state's spinner (the same animate-spin the §6.4 reconnecting banner uses); nothing else moves; prefers-reduced-motion recorded in s31-reduced-motion.json",
+      "states": "idle renders NOTHING (no chrome without content); hover + focus-visible on the review deep link; aria-busy on recovering; the banner is a strip, never a modal",
+      "browser_surfaces": "focus-visible outline-approval on the deep link (2px offset), theme-consistent with the §3.3 chrome; no custom scrollbars introduced",
+      "copy": "the S11 text verbatim (test-pinned); 'Review the task' names the action; the resume marker says 'resumed from last safe step' and anchors the checkpoint version + step; the pause marker names the unprovable step and promises no outcome; the exact-resume claims are banned at the source level by the suite",
+      "a11y": "role=status on every banner state; aria-live polite on recovering/resumed; icon+text pairing everywhere (§2.3: color never the only signal); the keyboard trail reached the review deep link on the first Tab (s31-keyboard-trail.json, visibleFocus: true)"
+    },
+    "verdict": "one finding, fixed and recaptured in one round; the confirmation pass (the recapture) is clean"
+  }
+}

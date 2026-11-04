@@ -334,6 +334,23 @@ export const TASK_TRANSITIONS: readonly TaskTransitionRow[] = [
     event: "task.recovery_resumed",
   },
   {
+    // S31 (D32/D33, E13): the runtime-actor AUTO-resume that 2026-09-19 note
+    // reserved — THIS is the layer adding it. Legality is guarded by DATA, not
+    // by this row alone: the CheckpointService's latest record must carry a
+    // pending action whose declared E13 class permits the re-execution
+    // (replayable, or idempotent_retry WITH its recorded idempotency key — a
+    // keyless idempotent_retry is unprovable and stays paused). The
+    // RecoveryDriver is the row's only caller; a separate command + reason
+    // (`recovery_class_permits`) keeps the journal honest about WHO resumed —
+    // a class-driven auto-resume is never rendered as a human approval.
+    from: "RECOVERY_REQUIRED",
+    to: "RUNNING",
+    command: "recovery_auto_resume",
+    actors: ["runtime"],
+    reason: "recovery_class_permits",
+    event: "task.recovery_resumed",
+  },
+  {
     from: "RECOVERY_REQUIRED",
     to: "CANCELLING",
     command: "cancel_task",

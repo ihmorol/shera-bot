@@ -86,12 +86,15 @@ function firingInput(overrides: Partial<TriggerFiringInsert> = {}): TriggerFirin
 
 describe("v19 migration (trigger records)", () => {
   it("is the committed chain's v19 entry with the trigger-records tables STRICT and workspace-scoped", () => {
-    // S24 appended v20 (credit-ledger) after this migration; the v19 entry
+    // S24 appended v20 (credit-ledger) after this migration, and S31
+    // appended v21 (run-checkpoints) after the credit ledger; the v19 entry
     // itself never moves once merged.
     const v19 = MIGRATIONS.find((migration) => migration.version === 19);
     expect(v19?.name).toBe("trigger-records");
-    expect(MIGRATIONS.at(-1)?.version).toBe(20);
-    expect(MIGRATIONS.at(-1)?.name).toBe("credit-ledger");
+    expect(MIGRATIONS.at(-2)?.version).toBe(20);
+    expect(MIGRATIONS.at(-2)?.name).toBe("credit-ledger");
+    expect(MIGRATIONS.at(-1)?.version).toBe(21);
+    expect(MIGRATIONS.at(-1)?.name).toBe("run-checkpoints");
     expect(appliedMigrationVersions(newDb().conn.db)).toContain(19);
   });
 

@@ -1,0 +1,36 @@
+{
+  "workspace_state": "resumed",
+  "resumed": [
+    {
+      "run_id": "run_s31_cap_replayable",
+      "basis": "replayable",
+      "checkpoint_version": 1,
+      "step_id": "step_parse_papers_1",
+      "replayed": true
+    }
+  ],
+  "timelines": {
+    "run_s31_cap_replayable": {
+      "run_id": "run_s31_cap_replayable",
+      "markers": [
+        {
+          "kind": "checkpoint",
+          "at": "2026-11-04T17:03:36.522Z",
+          "checkpoint_version": 1,
+          "step_id": "step_parse_papers_1"
+        },
+        {
+          "kind": "restart",
+          "at": "2026-11-04T17:03:36.571Z"
+        },
+        {
+          "kind": "resume",
+          "at": "2026-11-04T17:03:36.851Z",
+          "basis": "replayable",
+          "checkpoint_version": 1,
+          "step_id": "step_parse_papers_1"
+        }
+      ]
+    }
+  }
+}

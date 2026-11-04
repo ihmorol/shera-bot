@@ -124,8 +124,13 @@ export interface ToolCheckpointPort {
     conversationId: string;
     executionId: string;
     toolId: string;
-    capability: string;
+    /** The resolved definition's capabilities (never the proposal string). */
+    capabilities: readonly string[];
     recovery: RecoveryClass;
+    /** The resolved definition's risk class (the recovery cap's input). */
+    riskClass: string;
+    /** The execution's journalled args digest (the idempotency key's input). */
+    argsDigest: string;
   }): void;
 }
 
@@ -912,8 +917,13 @@ export class ToolExecutor {
         conversationId: input.proposal.conversation_id,
         executionId,
         toolId: resolved.definition.tool_id,
-        capability: input.proposal.capability,
+        // The RESOLVED DEFINITION supplies every recovery field (the runtime
+        // never trusts the proposal's capability string nor the tool result
+        // with recovery data — the boundary data is runtime-verified).
+        capabilities: resolved.definition.capabilities,
         recovery: resolved.definition.recovery,
+        riskClass: resolved.definition.risk_class,
+        argsDigest: input.proposal.args_digest,
       });
     } catch {
       // A checkpoint gap is honest; a crashed executor is not.

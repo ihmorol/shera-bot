@@ -48,7 +48,10 @@ import type { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import type { EventEnvelope } from "../events/events.types.ts";
 import type { EventsService } from "../events/events.service.ts";
 import type { RecoveryDecidedPayload } from "../events/events.types.ts";
-import type { TaskRunOperationsSeam } from "../workers/task-worker-supervisor.service.ts";
+import type {
+  TaskRunOperationsSeam,
+  TaskWorkerSpec,
+} from "../workers/task-worker-supervisor.service.ts";
 import { taskStreamId } from "../tasks/task-events.ts";
 import { applyRowLifecycleTransition, type RowLifecycleDeps } from "../tasks/run-lifecycle.ts";
 
@@ -61,6 +64,12 @@ export interface RecoveryPendingAction {
   recovery_class?: unknown;
   /** The recorded idempotency token an idempotent_retry re-drive rides. */
   idempotency_key?: unknown;
+  /**
+   * The tool's RUNTIME-VERIFIED D9 risk class (recorded by the writer from
+   * the resolved definition — never the tool's own claim). The cap reads it;
+   * its absence is fail-closed (see decideRecovery).
+   */
+  risk_class?: unknown;
 }
 
 export type RecoveryDecision =
@@ -68,23 +77,38 @@ export type RecoveryDecision =
   | { action: "resume"; basis: "idempotent_retry"; idempotencyKey: string }
   | {
       action: "pause_for_review";
-      reason: "recovery_class_needs_human" | "no_idempotency_key";
+      reason: "recovery_class_needs_human" | "no_idempotency_key" | "risk_class_caps_recovery";
     };
 
 /**
- * The pure E13 class decision (the same purity discipline as the S22 retry
- * policy: never throws, never reads a clock, never mutates inputs). Every
- * input the record does not explicitly vouch for pauses — the runtime never
- * guesses an effect safe to replay.
+ * The pure E13 class decision, CAPPED by the tool's runtime-verified risk
+ * class (the same purity discipline as the S22 retry policy: never throws,
+ * never reads a clock, never mutates inputs). Every input the record does not
+ * explicitly vouch for pauses — the runtime never guesses an effect safe to
+ * replay.
+ *
+ * THE TRUST BOUNDARY (G6 — agents never self-approve, applied to recovery):
+ * tools-inventory stores an agent-DECLARED recovery class verbatim, so the
+ * declared class alone can never authorize a re-execution. Effective class =
+ * the declared class ONLY when the record's risk_class is READ_ONLY; for
+ * every other risk class (or a missing one — the record must PROVE
+ * read-only) the effective class is needs_human regardless of declaration.
+ * A malicious WRITE tool declaring `replayable` therefore pauses
+ * RECOVERY_REQUIRED at every restart instead of blind-re-executing; only a
+ * runtime-verified READ_ONLY tool's declaration may auto-resume, and a
+ * non-read-only declaration awaits a recorded owner decision.
  */
 export function decideRecovery(
   pending: RecoveryPendingAction | null | undefined,
 ): RecoveryDecision {
   const declared = pending?.recovery_class;
-  if (declared === "replayable") {
-    return { action: "resume", basis: "replayable", idempotencyKey: null };
-  }
-  if (declared === "idempotent_retry") {
+  if (declared === "replayable" || declared === "idempotent_retry") {
+    if (pending?.risk_class !== "READ_ONLY") {
+      return { action: "pause_for_review", reason: "risk_class_caps_recovery" };
+    }
+    if (declared === "replayable") {
+      return { action: "resume", basis: "replayable", idempotencyKey: null };
+    }
     const key = pending?.idempotency_key;
     if (typeof key === "string" && key.length >= 1 && key.length <= 200) {
       return { action: "resume", basis: "idempotent_retry", idempotencyKey: key };
@@ -93,6 +117,16 @@ export function decideRecovery(
   }
   // needs_human, an undeclared class, or no pending action at all.
   return { action: "pause_for_review", reason: "recovery_class_needs_human" };
+}
+
+/**
+ * The re-drive's worker spec (P2 threading): the recorded idempotency key
+ * rides the worker configuration so the re-execution lands under the SAME
+ * key the original consumed (the collapse's whole mechanism). An unkeyed
+ * replayable re-drive carries no config.
+ */
+export function recoveryRedriveSpec(idempotencyKey: string | null): TaskWorkerSpec {
+  return idempotencyKey === null ? {} : { config: { recovery_idempotency_key: idempotencyKey } };
 }
 
 /** What the driver decided for one run (the per-run surface and the scan row). */

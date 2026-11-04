@@ -1,16 +1,21 @@
 /**
  * S31 chunk 3 — the composed boot walk (PRD §13, AC19/AC25; issue #32).
  *
- * The restart-recovery composition, END TO END over the composed runtime:
- * the gateway boots over a store a crashed previous gateway left behind
- * (interrupted runs, dead worker rows, checkpoints), and the boot sequence —
- * the S16 worker reconciliation FIRST, then the S31 recovery scan — decides
- * every recovery-owned run from the recorded checkpoints:
+ * The restart-recovery composition, END TO END over the composed runtime —
+ * and the checkpoints are written by the PRODUCTION WRITER (the P1 fix): the
+ * first gateway REALLY executes each tool through the ONE executor path (the
+ * S21 executor's succeeded-execution hook → the real CheckpointService
+ * recordFromToolExecution), so the recovery basis is runtime data from the
+ * resolved definition, never a hand-seeded pendingAction:
  *
- *  - the interrupted `replayable` run re-drives through the REAL supervisor
- *    (the fake worker child spawns; the run's stream shows the new worker);
- *  - the interrupted `needs_human` run lands RECOVERY_REQUIRED with the
- *    honest no-replay marker — and no worker ever spawns for it;
+ *  - the interrupted READ_ONLY tool that declares `replayable` auto-resumes
+ *    through the REAL supervisor seam (the fake worker child spawns; the
+ *    run's stream shows the new worker);
+ *  - the interrupted EXTERNAL_WRITE tool that DECLARES `replayable` — the
+ *    untrusted declaration exactly as tools-inventory stores it — pauses
+ *    RECOVERY_REQUIRED with reason `risk_class_caps_recovery` (the trust
+ *    boundary: agents never self-approve recovery, G6); no worker ever
+ *    spawns for it;
  *  - the run a pending approval is waiting on is untouched;
  *  - no WS client (no browser) is attached for ANY of it — the AC25
  *    browser-closure survival leg.
@@ -27,31 +32,33 @@ import { fileURLToPath } from "node:url";
 
 import { afterAll, describe, expect, it } from "vitest";
 
-import { openDatabase } from "../../adapters/sqlite/connection.ts";
+import type { TaskRun } from "@shera-bot/contracts";
+
+import { ApprovalsRepository } from "../../adapters/sqlite/approvals-repository.ts";
+import { openDatabase, type SqliteConnection } from "../../adapters/sqlite/connection.ts";
 import { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
-import { applyMigrations } from "../../adapters/sqlite/migrations.ts";
-import { OperationsRepository } from "../../adapters/sqlite/operations-repository.ts";
-import { RunCheckpointsRepository } from "../../adapters/sqlite/run-checkpoints-repository.ts";
 import { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import { TaskWorkersRepository } from "../../adapters/sqlite/task-workers-repository.ts";
-import { CheckpointService } from "../../modules/tasks/checkpoint.service.ts";
 import { taskStreamId } from "../../modules/tasks/task-events.ts";
 import { spawnFakeTaskWorker } from "../../modules/workers/fake-task-worker.ts";
-import { EventsService } from "../../modules/events/events.service.ts";
-import { OperationsService } from "../../modules/operations/operations.service.ts";
+import { canonicalArgsDigest } from "../../modules/tools/tool-executor.service.ts";
 import { composeRuntime, type RuntimeHandle } from "./compose.ts";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const PACKS_ROOT = resolve(here, "../../../../../agent-packs");
 const WS = "ws_s31_boot";
-const AGENT = "agent_boot_test";
+const AGENT = "agent_researcher"; // a pinned-pack agent (the composed gateway validates against the REAL pack)
 const NOW = "2026-11-04T13:00:00.000Z";
 
 const tempDirs: string[] = [];
 const runtimes: RuntimeHandle[] = [];
+/** The first gateway closes itself mid-test (the second composes over the
+ * same file); afterAll skips it — a double close is a raw adapter error. */
+const closedRuntimes = new WeakSet<RuntimeHandle>();
 
 afterAll(() => {
   for (const runtime of runtimes.splice(0)) {
+    if (closedRuntimes.has(runtime)) continue;
     try {
       runtime.close();
     } catch {
@@ -68,55 +75,40 @@ function track(runtime: RuntimeHandle): RuntimeHandle {
   return runtime;
 }
 
-/** Pre-seed the crashed state through the raw repositories (the previous
- * gateway's rows), BEFORE the new gateway composes over the same file. */
-async function seedCrashedState(dbPath: string): Promise<{
+/** The run projection the proposal rides (the caller-held D5 projection). */
+function runProjection(taskId: string): TaskRun {
+  return {
+    task_id: taskId,
+    workspace_id: WS,
+    conversation_id: "conv_s31_boot",
+    created_from: { trigger_event_type: "tool.proposed", trigger_event_id: "evt_s31_boot" },
+    pack_snapshot: { pack_id: "student", pack_version: "1.0.0", pack_hash: "0".repeat(64) },
+    roster: [AGENT],
+    state: "RUNNING",
+    version: 3,
+    retry_count: 0,
+    created_at: NOW,
+    updated_at: NOW,
+  };
+}
+
+/** The first gateway: create the operation, the runs, the two agent tools,
+ * and drive BOTH tool executions through the real executor — the
+ * succeeded-execution hook writes the production checkpoints. */
+async function executeCrashedWorkload(dbPath: string): Promise<{
   operationId: string;
   replayable: string;
-  ambiguous: string;
+  capped: string;
   approvalRun: string;
 }> {
-  const conn = openDatabase(dbPath);
-  applyMigrations(conn.db);
-  const tx = new SqliteTransactions(conn.db);
-  const journal = new EventJournalRepository(tx);
-  const events = new EventsService(journal, tx);
-  const operationsRepo = new OperationsRepository(tx);
-  const taskWorkers = new TaskWorkersRepository(tx);
-  const checkpoints = new RunCheckpointsRepository(tx);
-  const checkpointService = new CheckpointService({
-    tx,
-    journal,
-    events,
-    checkpoints,
-    now: () => NOW,
-  });
-  const ops = new OperationsService({
-    operations: operationsRepo,
-    tx,
-    packCatalog: {
-      pack_id: "pack_student",
-      pack_version: "1.0.0",
-      agents: [
-        {
-          agent_id: AGENT,
-          display_name: "Boot Test Agent",
-          role_description: "crashed mid-run",
-          default_provider: { provider_id: "fake", model: "fake-model" },
-          skills: [],
-          tools: [],
-          connectors: [],
-          ui_identity: { avatar_hue: 17, initial_glyph: "B" },
-          home_operation_id: null,
-        },
-      ],
-      locateAgentPack: (agentId: string) => (agentId === AGENT ? "pack_student" : null),
-      skills: [],
-      connectors: [],
-    },
-  });
+  const firstGateway = track(
+    composeRuntime({ dbPath, packsRoot: PACKS_ROOT, workspaceId: WS, now: () => NOW }),
+  );
+  // The first gateway's own boot pass visits an empty store; await it so the
+  // workload below is created AFTER the scan (the pass is once-per-boot).
+  await firstGateway.recovery.bootPass;
 
-  const operationId = ops.createOperation(WS, {
+  const operationId = firstGateway.operations.createOperation(WS, {
     definition_ref: null,
     name: "Boot Recovery Operation",
     roster_agent_ids: [AGENT],
@@ -124,41 +116,16 @@ async function seedCrashedState(dbPath: string): Promise<{
   }).operation_id;
 
   const replayable = "run_boot_replayable";
-  const ambiguous = "run_boot_ambiguous";
+  const capped = "run_boot_capped";
   const approvalRun = "run_boot_approval";
   for (const [runId, state] of [
     [replayable, "RUNNING"],
-    [ambiguous, "RUNNING"],
+    [capped, "RUNNING"],
     [approvalRun, "WAITING_FOR_APPROVAL"],
   ] as const) {
-    ops.createRun(WS, operationId, { run_id: runId });
-    ops.applyRunState(WS, operationId, runId, state);
+    firstGateway.operations.createRun(WS, operationId, { run_id: runId });
+    firstGateway.operations.applyRunState(WS, operationId, runId, state);
   }
-
-  const take = (runId: string, stepId: string, pending: Record<string, unknown>): void => {
-    const verdict = checkpointService.record({
-      workspaceId: WS,
-      taskId: runId,
-      conversationId: operationId,
-      stepId,
-      stepKind: "completed_search",
-      completedActions: [{ kind: "tool_execution", summary: "the crashed boundary" }],
-      pendingAction: pending as never,
-      artifactRefs: [],
-      resumeInstructions: `Resume ${runId} from ${stepId}.`,
-    });
-    if (!verdict.ok) throw new Error(`checkpoint refused: ${verdict.safeMessage}`);
-  };
-  take(replayable, "step_boot_1", {
-    kind: "tool_execution",
-    summary: "parse the document",
-    recovery_class: "replayable",
-  });
-  take(ambiguous, "step_boot_2", {
-    kind: "tool_execution",
-    summary: "send the external request",
-    recovery_class: "needs_human",
-  });
 
   // The dead worker rows the crash left behind — a real dead pid via the
   // EXCEPTED fake task worker (zero steps: it exits right after the
@@ -167,30 +134,154 @@ async function seedCrashedState(dbPath: string): Promise<{
   const deadHandle = spawnFakeTaskWorker({ steps: 0 });
   await deadHandle.waitForExit();
   const deadPid = deadHandle.child.pid ?? 1;
-  const stamp = NOW;
-  for (const runId of [replayable, ambiguous]) {
+  const taskWorkers = new TaskWorkersRepository(firstGateway.tx);
+  for (const runId of [replayable, capped]) {
     taskWorkers.insertWorker({
       workspace_id: WS,
       run_id: runId,
       worker_id: `wk_dead_${runId}`,
       pid: deadPid,
       state: "running",
-      heartbeat_at: stamp,
-      lease_expires_at: stamp,
+      heartbeat_at: NOW,
+      lease_expires_at: NOW,
       last_progress_json: null,
-      started_at: stamp,
+      started_at: NOW,
     });
   }
 
-  return { operationId, replayable, ambiguous, approvalRun };
+  // The two agent-created tools, created through the runtime's OWN inventory
+  // (the D38 intersection against the loaded pack's allow-list): a READ_ONLY
+  // tool honestly declaring `replayable`, and an EXTERNAL_WRITE tool
+  // declaring `replayable` — the untrusted declaration the risk-class cap
+  // exists for (tools-inventory stores agent declarations verbatim).
+  firstGateway.toolsApi.createTool({
+    workspace_id: WS,
+    requested_by: { type: "agent", id: AGENT },
+    actor: { type: "user", id: "user_owner" },
+    tool: {
+      tool_id: "tool_boot_read_replayable",
+      name: "Read the crash-recovery note",
+      purpose: "The boot leg's READ_ONLY tool declaring replayable (auto-activates, E4).",
+      input_schema: { type: "object", properties: {}, required: [] },
+      output_schema: { type: "object" },
+      capabilities: ["file.read"],
+      risk_class: "READ_ONLY",
+      inventory_scope: "shared",
+      recovery: "replayable",
+    },
+  });
+  firstGateway.toolsApi.createTool({
+    workspace_id: WS,
+    requested_by: { type: "agent", id: AGENT },
+    actor: { type: "user", id: "user_owner" },
+    tool: {
+      tool_id: "tool_boot_write_declares_replayable",
+      name: "Post the external update",
+      purpose: "The boot leg's EXTERNAL_WRITE tool declaring replayable (the capped leg).",
+      input_schema: { type: "object", properties: {}, required: [] },
+      output_schema: { type: "object" },
+      capabilities: ["file.write"],
+      risk_class: "EXTERNAL_WRITE",
+      inventory_scope: "shared",
+      recovery: "replayable",
+    },
+  });
+  // The risky tool's E4 activation is a USER decision (G6 — the agent can
+  // never grant, even to itself).
+  firstGateway.toolsApi.activateTool({
+    workspace_id: WS,
+    tool_id: "tool_boot_write_declares_replayable",
+    version: "1.0.0",
+    target: { kind: "agent", id: AGENT },
+    actor: { type: "user", id: "user_owner" },
+  });
+  // The D35 gate's grant fast-path (AC26 — the grant skips the prompt, never
+  // the policy check): the task-principal "always approve this tool" grant,
+  // recorded in the one runtime place exactly as a user decision would.
+  new ApprovalsRepository(firstGateway.tx).insertGrant({
+    grant_id: "grant_s31_boot_write",
+    workspace_id: WS,
+    source_choice: "always-approve-this-tool",
+    principal_type: "task",
+    principal_id: capped,
+    tool_id: "tool_boot_write_declares_replayable",
+    tool_version: "1.0.0",
+    capability: "file.write",
+    resource_scope: `workspace:${WS}`,
+    conversation_scope: "any",
+    workspace_scope: WS,
+    expires_at: null,
+    one_time: false,
+    created_by: { type: "user", id: "user_owner" },
+    approved_at: NOW,
+    revoked_at: null,
+    args_digest: null,
+    consumed_at: null,
+  });
+
+  // The two REAL executions — each settles through the executor, and each
+  // settled execution's hook writes the production checkpoint (the recovery
+  // basis is the resolved definition's data, never a fixture).
+  const execute = (runId: string, toolId: string, capability: string): void => {
+    const rawArgs = {};
+    const outcome = firstGateway.tools.executeProposal({
+      proposal: {
+        workspace_id: WS,
+        task_id: runId,
+        conversation_id: "conv_s31_boot",
+        tool_id: toolId,
+        tool_version: "1.0.0",
+        capability,
+        args_digest: canonicalArgsDigest(rawArgs),
+        proposal_summary: `the boot leg's ${toolId} execution`,
+      },
+      run: runProjection(runId),
+      agent_id: AGENT,
+      rawArgs,
+      resource_scope: `workspace:${WS}`,
+    });
+    if (outcome.outcome !== "executed") {
+      throw new Error(`the ${toolId} leg did not execute (got ${outcome.outcome})`);
+    }
+  };
+  execute(replayable, "tool_boot_read_replayable", "file.read");
+  execute(capped, "tool_boot_write_declares_replayable", "file.write");
+
+  // The production-writer evidence BEFORE the restart: both checkpoints carry
+  // the DECLARED class AND the runtime-verified risk class.
+  const replayableRow = firstGateway.checkpoints.latestForTask(WS, replayable);
+  const cappedRow = firstGateway.checkpoints.latestForTask(WS, capped);
+  expect(replayableRow).not.toBeNull();
+  expect(cappedRow).not.toBeNull();
+  const replayablePending = JSON.parse(replayableRow!.pending_action_json!) as Record<
+    string,
+    unknown
+  >;
+  const cappedPending = JSON.parse(cappedRow!.pending_action_json!) as Record<string, unknown>;
+  expect(replayablePending).toMatchObject({
+    kind: "tool_execution",
+    tool_id: "tool_boot_read_replayable",
+    recovery_class: "replayable",
+    risk_class: "READ_ONLY",
+  });
+  expect(cappedPending).toMatchObject({
+    kind: "tool_execution",
+    tool_id: "tool_boot_write_declares_replayable",
+    recovery_class: "replayable",
+    risk_class: "EXTERNAL_WRITE",
+  });
+
+  closedRuntimes.add(firstGateway);
+  firstGateway.close();
+  return { operationId, replayable, capped, approvalRun };
 }
 
 describe("S31 composed boot walk — recovery decisions at gateway start", () => {
-  it("resumes the replayable run through the real supervisor, pauses the ambiguous run, and touches nothing waiting on an approval", async () => {
+  it("resumes the READ_ONLY replayable run through the real supervisor, pauses the WRITE tool that declared replayable, and touches nothing waiting on an approval", async () => {
     const dir = mkdtempSync(join(tmpdir(), "shera-s31-boot-"));
     tempDirs.push(dir);
     const dbPath = join(dir, "runtime.db");
-    const seeded = await seedCrashedState(dbPath);
+    const seeded = await executeCrashedWorkload(dbPath);
 
     // The NEW gateway composes over the crashed store — the fake worker
     // harness configured, exactly as the S16 wiring tests compose it. No WS
@@ -239,7 +330,12 @@ describe("S31 composed boot walk — recovery decisions at gateway start", () =>
       ]),
     );
     expect(visited.get(seeded.replayable)).toMatchObject({ outcome: "resumed" });
-    expect(visited.get(seeded.ambiguous)).toMatchObject({ outcome: "paused_for_review" });
+    // The trust boundary, composed: the WRITE tool's `replayable` declaration
+    // pauses — the cap reason names the risk class, never the declaration.
+    expect(visited.get(seeded.capped)).toMatchObject({
+      outcome: "paused_for_review",
+      reason: "risk_class_caps_recovery",
+    });
     // The waiting run never enters the scan's remit at all.
     expect(visited.has(seeded.approvalRun)).toBe(false);
 
@@ -247,7 +343,7 @@ describe("S31 composed boot walk — recovery decisions at gateway start", () =>
     // lifecycle + checkpoint + recovery markers; the RAW run stream holds
     // the worker events (the S13 run-stream semantics the supervisor and
     // the reaper journal on).
-    const conn = openDatabase(dbPath);
+    const conn: SqliteConnection = openDatabase(dbPath);
     const journal = new EventJournalRepository(new SqliteTransactions(conn.db));
     const taskStreamOf = (runId: string): string[] =>
       journal.readFrom(WS, taskStreamId(runId), 0, 1_000).map((row) => row.event_type);
@@ -255,17 +351,18 @@ describe("S31 composed boot walk — recovery decisions at gateway start", () =>
       journal.readFrom(WS, runId, 0, 1_000).map((row) => row.event_type);
     const replayableTask = taskStreamOf(seeded.replayable);
     const replayableWorkers = workerStreamOf(seeded.replayable);
-    const ambiguousTask = taskStreamOf(seeded.ambiguous);
-    const ambiguousWorkers = workerStreamOf(seeded.ambiguous);
+    const cappedTask = taskStreamOf(seeded.capped);
+    const cappedWorkers = workerStreamOf(seeded.capped);
     conn.close();
 
     expect(replayableTask).toContain("checkpoint.taken");
     expect(replayableWorkers).toContain("worker.reaped");
     expect(replayableTask).toContain("recovery.decided");
     expect(replayableWorkers).toContain("worker.started");
-    // The ambiguous run: paused, honest marker, and NO worker ever spawned.
-    expect(ambiguousTask).toContain("recovery.decided");
-    expect(ambiguousTask).toContain("task.recovery_required");
-    expect(ambiguousWorkers).not.toContain("worker.started");
+    // The capped run: paused with the honest marker, and NO worker ever
+    // spawned — the declared-replayable WRITE effect is never re-executed.
+    expect(cappedTask).toContain("recovery.decided");
+    expect(cappedTask).toContain("task.recovery_required");
+    expect(cappedWorkers).not.toContain("worker.started");
   }, 30_000);
 });

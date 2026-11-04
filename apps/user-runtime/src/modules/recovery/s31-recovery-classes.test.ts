@@ -49,7 +49,7 @@ import { OperationsService } from "../operations/operations.service.ts";
 import { TASK_TRANSITIONS } from "../tasks/task-transitions.ts";
 import { CheckpointService } from "../tasks/checkpoint.service.ts";
 import { taskStreamId } from "../tasks/task-events.ts";
-import { decideRecovery, RecoveryDriver } from "./recovery-driver.service.ts";
+import { decideRecovery, recoveryRedriveSpec, RecoveryDriver } from "./recovery-driver.service.ts";
 
 const WS = "ws_s31_recovery";
 const AGENT = "agent_recovery_test";
@@ -279,6 +279,7 @@ describe("S31 recovery policy — the E13 class decision is pure fail-closed dat
       summary: "parse the document",
       tool_id: "tool_document_parse",
       recovery_class: "replayable",
+      risk_class: "READ_ONLY",
     });
     expect(decision).toEqual({ action: "resume", basis: "replayable", idempotencyKey: null });
   });
@@ -290,6 +291,7 @@ describe("S31 recovery policy — the E13 class decision is pure fail-closed dat
       tool_id: "tool_charge",
       recovery_class: "idempotent_retry",
       idempotency_key: "idem_charge_1",
+      risk_class: "READ_ONLY",
     });
     expect(decision).toEqual({
       action: "resume",
@@ -303,6 +305,7 @@ describe("S31 recovery policy — the E13 class decision is pure fail-closed dat
       kind: "tool_execution",
       summary: "charge the card",
       recovery_class: "idempotent_retry",
+      risk_class: "READ_ONLY",
     });
     expect(decision).toEqual({ action: "pause_for_review", reason: "no_idempotency_key" });
   });
@@ -328,6 +331,77 @@ describe("S31 recovery policy — the E13 class decision is pure fail-closed dat
   });
 });
 
+// ── The trust boundary (the D35 ladder applied to recovery; G6) ──────────────
+//
+// Tools-inventory stores an agent-DECLARED recovery class verbatim. The
+// decision layer therefore CAPS the declared class by the tool's runtime-
+// verified risk class: only a READ_ONLY tool may auto-resume; a WRITE or
+// EXTERNAL tool's declaration — however friendly — pauses RECOVERY_REQUIRED.
+// A malicious WRITE tool declaring `replayable` must never blind-re-execute
+// at every restart (G6: agents never self-approve).
+
+describe("S31 recovery policy — the risk-class cap is the trust boundary", () => {
+  it("a non-READ_ONLY tool declaring replayable pauses — the declaration never outranks the risk class", () => {
+    const decision = decideRecovery({
+      kind: "tool_execution",
+      summary: "the external write its declaration calls replayable",
+      tool_id: "tool_external_post",
+      recovery_class: "replayable",
+      risk_class: "EXTERNAL_WRITE",
+    });
+    expect(decision).toEqual({ action: "pause_for_review", reason: "risk_class_caps_recovery" });
+  });
+
+  it("a non-READ_ONLY idempotent_retry pauses even WITH its recorded key (the cap beats the key)", () => {
+    const decision = decideRecovery({
+      kind: "tool_execution",
+      summary: "the charge its declaration calls idempotent_retry",
+      tool_id: "tool_charge",
+      recovery_class: "idempotent_retry",
+      idempotency_key: "idem_charge_1",
+      risk_class: "FINANCIAL_OR_IRREVERSIBLE",
+    });
+    expect(decision).toEqual({ action: "pause_for_review", reason: "risk_class_caps_recovery" });
+  });
+
+  it("a declaration with NO recorded risk_class is capped (fail-closed — the record must prove READ_ONLY)", () => {
+    const decision = decideRecovery({
+      kind: "tool_execution",
+      summary: "no risk class on the record",
+      tool_id: "tool_mystery",
+      recovery_class: "replayable",
+    });
+    expect(decision).toEqual({ action: "pause_for_review", reason: "risk_class_caps_recovery" });
+  });
+
+  it("a READ_ONLY tool declaring replayable resumes (the boundary's affirmative leg)", () => {
+    const decision = decideRecovery({
+      kind: "tool_execution",
+      summary: "parse the document",
+      tool_id: "tool_document_parse",
+      recovery_class: "replayable",
+      risk_class: "READ_ONLY",
+    });
+    expect(decision).toEqual({ action: "resume", basis: "replayable", idempotencyKey: null });
+  });
+
+  it("a READ_ONLY idempotent_retry resumes under its recorded key", () => {
+    const decision = decideRecovery({
+      kind: "tool_execution",
+      summary: "refresh the cached read",
+      tool_id: "tool_cache_refresh",
+      recovery_class: "idempotent_retry",
+      idempotency_key: "idem_cache_1",
+      risk_class: "READ_ONLY",
+    });
+    expect(decision).toEqual({
+      action: "resume",
+      basis: "idempotent_retry",
+      idempotencyKey: "idem_cache_1",
+    });
+  });
+});
+
 // ── The class matrix (one scripted case per class) ───────────────────────────
 
 describe("S31 recovery driver — the class matrix (issue #32)", () => {
@@ -339,6 +413,7 @@ describe("S31 recovery driver — the class matrix (issue #32)", () => {
       summary: "parse the downloaded document",
       tool_id: "tool_document_parse",
       recovery_class: "replayable",
+      risk_class: "READ_ONLY",
     });
     // The pre-interruption effect never landed (the worker died first).
     expect(harness.ledger.effects).toHaveLength(0);
@@ -372,6 +447,7 @@ describe("S31 recovery driver — the class matrix (issue #32)", () => {
       tool_id: "tool_external_post",
       recovery_class: "idempotent_retry",
       idempotency_key: "idem_s31_charge_1",
+      risk_class: "READ_ONLY",
     });
     // The WORST case: the original effect LANDED before the interruption
     // (the confirmation was lost with the worker).
@@ -401,6 +477,7 @@ describe("S31 recovery driver — the class matrix (issue #32)", () => {
       summary: "send the external request",
       tool_id: "tool_external_post",
       recovery_class: "needs_human",
+      risk_class: "EXTERNAL_WRITE",
     });
     // The ambiguous effect MAY have landed before the interruption.
     harness.ledger.execute(null);
@@ -437,6 +514,7 @@ describe("S31 recovery driver — the class matrix (issue #32)", () => {
       kind: "tool_execution",
       summary: "save the artifact",
       recovery_class: "replayable",
+      risk_class: "READ_ONLY",
     });
 
     const outcome = await harness.driver.recoverRun(WS, runId);
@@ -471,6 +549,7 @@ describe("S31 recovery driver — the class matrix (issue #32)", () => {
       kind: "tool_execution",
       summary: "replayable pending",
       recovery_class: "replayable",
+      risk_class: "READ_ONLY",
     });
     // Move it out of the recovery slice's remit.
     harness.ops.applyRunState(WS, harness.operationId, runId, "QUEUED");
@@ -489,12 +568,14 @@ describe("S31 recovery driver — the class matrix (issue #32)", () => {
       kind: "tool_execution",
       summary: "replayable pending",
       recovery_class: "replayable",
+      risk_class: "READ_ONLY",
     });
     const ambiguousRun = createRun(harness, "RUNNING");
     takeCheckpoint(harness, ambiguousRun, {
       kind: "tool_execution",
       summary: "ambiguous pending",
       recovery_class: "needs_human",
+      risk_class: "EXTERNAL_WRITE",
     });
 
     const report = await harness.driver.recoverInterruptedRuns();
@@ -506,6 +587,51 @@ describe("S31 recovery driver — the class matrix (issue #32)", () => {
     expect(byRun.get(ambiguousRun)).toMatchObject({ outcome: "paused_for_review" });
     // One pass, one decision per run: no double re-drives.
     expect(harness.resumeCalls).toHaveLength(1);
+  });
+
+  it("a non-READ_ONLY tool declaring replayable pauses RECOVERY_REQUIRED — the capped effect is NEVER replayed (the composed trust boundary)", async () => {
+    const harness = makeHarness();
+    const runId = createRun(harness, "RUNNING");
+    // The untrusted declaration, exactly as tools-inventory stores it: an
+    // agent-declared `replayable` on an EXTERNAL_WRITE tool.
+    takeCheckpoint(harness, runId, {
+      kind: "tool_execution",
+      summary: "the external write its declaration calls replayable",
+      tool_id: "tool_external_post",
+      recovery_class: "replayable",
+      risk_class: "EXTERNAL_WRITE",
+    });
+    // The effect MAY have landed before the interruption.
+    harness.ledger.execute(null);
+    expect(harness.ledger.effects).toHaveLength(1);
+
+    const outcome = await harness.driver.recoverRun(WS, runId);
+
+    expect(outcome).toMatchObject({ outcome: "paused_for_review" });
+    expect(runState(harness, runId)).toBe("RECOVERY_REQUIRED");
+    // The declared-replayable WRITE effect is never blind-re-executed (G6:
+    // agents never self-approve recovery) — the ledger is untouched, the
+    // resume port is never called.
+    expect(harness.resumeCalls).toHaveLength(0);
+    expect(harness.ledger.effects).toHaveLength(1);
+    // The marker names the CAP, not the declaration.
+    const decided = runEvents(harness, runId).filter((e) => e.type === "recovery.decided");
+    expect(decided).toHaveLength(1);
+    expect(decided[0]!.payload).toMatchObject({ basis: null, replayed: false });
+  });
+});
+
+// ── The re-drive spec (the recorded key's ride to the worker) ────────────────
+
+describe("S31 recovery re-drive spec — the recorded key threads to the worker seam", () => {
+  it("carries the recorded idempotency key in the worker spec config (the collapse rides the SAME key)", () => {
+    expect(recoveryRedriveSpec("idem_s31_charge_1")).toEqual({
+      config: { recovery_idempotency_key: "idem_s31_charge_1" },
+    });
+  });
+
+  it("carries no config for an unkeyed replayable re-drive", () => {
+    expect(recoveryRedriveSpec(null)).toEqual({});
   });
 });
 

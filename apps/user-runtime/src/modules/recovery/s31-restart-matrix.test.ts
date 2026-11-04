@@ -408,12 +408,14 @@ async function seed(): Promise<SeededState> {
     summary: "parse the downloaded document",
     tool_id: "tool_document_parse",
     recovery_class: "replayable",
+    risk_class: "READ_ONLY",
   });
   take(interruptedAmbiguous, "step_request_1", {
     kind: "tool_execution",
     summary: "send the external request",
     tool_id: "tool_external_post",
     recovery_class: "needs_human",
+    risk_class: "EXTERNAL_WRITE",
   });
 
   // The pending approval: the S20 request + its five E3 reminder slots.

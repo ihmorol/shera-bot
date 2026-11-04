@@ -151,6 +151,7 @@ import { RunCancellationService } from "../../modules/tasks/run-cancellation.ser
 import { CheckpointService } from "../../modules/tasks/checkpoint.service.ts";
 import {
   RecoveryDriver,
+  recoveryRedriveSpec,
   type RecoveryScanReport,
 } from "../../modules/recovery/recovery-driver.service.ts";
 import { buildRecoveryApiHandle } from "./s31-recovery-api.ts";
@@ -1518,7 +1519,15 @@ function wire(
         // exist. The driver records the honest resume_failed outcome.
         throw new Error("no worker system is configured for this runtime");
       }
-      await workers.supervisor.startWorker(input.workspaceId, input.runId);
+      // The recorded idempotency key rides the worker spec (the re-drive
+      // lands under the SAME key the original consumed — the collapse's
+      // mechanism; the residual gap for a real harness re-deriving different
+      // args is recorded in E41).
+      await workers.supervisor.startWorker(
+        input.workspaceId,
+        input.runId,
+        recoveryRedriveSpec(input.idempotencyKey),
+      );
     },
     ...(options.now ? { now: options.now } : {}),
     publish: (event) => recoveryPublisher?.(event),

@@ -28,7 +28,7 @@
  *
  * Governing records: PRD §13, D32, D33, E13, D23 rules 5/6; AC5/AC19/AC25.
  */
-import { EVENT_ENVELOPES } from "@shera-bot/contracts";
+import { EVENT_ENVELOPES, RECOVERY_CLASSES, RISK_CLASSES } from "@shera-bot/contracts";
 
 import type { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
 import type { RunCheckpointsRepository } from "../../adapters/sqlite/run-checkpoints-repository.ts";
@@ -71,6 +71,43 @@ export function stepKindForCapability(capability: string): CheckpointStepKind {
   return CAPABILITY_STEP_KINDS[capability] ?? "tool_execution";
 }
 
+/**
+ * The boundary kind for a tool's RESOLVED DEFINITION capabilities (P3 fix:
+ * the writer derives the boundary from the runtime-registered definition,
+ * never from the proposal's agent-supplied capability string). The first
+ * capability with a recorded mapping names the specific boundary; otherwise
+ * the generic succeeded-tool boundary.
+ */
+export function stepKindForCapabilities(capabilities: readonly string[]): CheckpointStepKind {
+  for (const capability of capabilities) {
+    const mapped = CAPABILITY_STEP_KINDS[capability];
+    if (mapped !== undefined) return mapped;
+  }
+  return "tool_execution";
+}
+
+/** The first of the definition's capabilities (the resume instructions' noun). */
+export function capabilityLabelFor(capabilities: readonly string[]): string {
+  return capabilities[0] ?? "tool";
+}
+
+/** The idempotency-key budget the recovery decision re-checks (1..200). */
+const MAX_IDEMPOTENCY_KEY = 200;
+
+/**
+ * The runtime-derived idempotency key for an idempotent_retry tool (P2 fix):
+ * the execution identity — tool id + the journalled args digest — never an
+ * agent-chosen token (a chosen key could collide to suppress effects). The
+ * digest is stable for the same args, so a re-drive of the same proposal
+ * collapses under the SAME key; the residual gap (a real harness re-deriving
+ * different args) is recorded in E41.
+ */
+export function recoveryIdempotencyKeyFor(toolId: string, argsDigest: string): string {
+  const digest = argsDigest.startsWith("sha256:") ? argsDigest.slice("sha256:".length) : argsDigest;
+  const full = `idem_${toolId}_${digest}`;
+  return full.length <= MAX_IDEMPOTENCY_KEY ? full : full.slice(0, MAX_IDEMPOTENCY_KEY);
+}
+
 /** One completed action recorded at the boundary (bounded fields, G3). */
 export interface CheckpointCompletedAction {
   kind: string;
@@ -84,10 +121,16 @@ export interface CheckpointPendingAction {
   kind: string;
   summary: string;
   tool_id?: string;
-  /** The E13 recovery class the pending tool declares (chunk 2 consumes it). */
+  /** The E13 recovery class the pending tool DECLARES (the cap consumes it). */
   recovery_class?: "replayable" | "idempotent_retry" | "needs_human";
   /** The idempotency key an idempotent_retry re-drive re-executes under. */
   idempotency_key?: string;
+  /**
+   * The tool's RUNTIME-VERIFIED D9 risk class (the recovery decision caps
+   * the declared class by it — only a READ_ONLY tool may auto-resume; the
+   * writer records it from the resolved definition, never from the tool).
+   */
+  risk_class?: string;
 }
 
 export interface RecordCheckpointInput {
@@ -176,6 +219,15 @@ export class CheckpointService {
    * digest/pointer-shaped (G3) — the tool identity, its DECLARED recovery
    * class (E13 data, never inference), and the settled confirmation; never
    * result content (the executor's own history row is the redacted record).
+   *
+   * The pending action is RECORDED FOR REAL (the P1 fix): kind
+   * `tool_execution`, the tool's id, a writer-bounded summary, the DECLARED
+   * recovery class, the runtime-derived idempotency key for an
+   * idempotent_retry, and the tool's RUNTIME-VERIFIED risk class — all of it
+   * RUNTIME data from the resolved definition and the execution record,
+   * never from the tool result. The recovery decision caps the declared
+   * class by the risk class (only a READ_ONLY tool may auto-resume), so the
+   * declared class alone never authorizes a re-execution (G6).
    */
   recordFromToolExecution(input: {
     workspaceId: string;
@@ -183,15 +235,25 @@ export class CheckpointService {
     conversationId: string;
     executionId: string;
     toolId: string;
-    capability: string;
+    /** The resolved definition's capabilities (never the proposal string). */
+    capabilities: readonly string[];
     recovery: "replayable" | "idempotent_retry" | "needs_human";
+    /** The resolved definition's risk class (the cap's input). */
+    riskClass: string;
+    /** The execution's journalled args digest (the key's derivation input). */
+    argsDigest: string;
   }): RecordCheckpointResult {
+    const capability = capabilityLabelFor(input.capabilities);
+    const idempotencyKey =
+      input.recovery === "idempotent_retry"
+        ? recoveryIdempotencyKeyFor(input.toolId, input.argsDigest)
+        : null;
     return this.record({
       workspaceId: input.workspaceId,
       taskId: input.taskId,
       conversationId: input.conversationId,
       stepId: `step_tool_${input.executionId}`,
-      stepKind: stepKindForCapability(input.capability),
+      stepKind: stepKindForCapabilities(input.capabilities),
       completedActions: [
         {
           kind: "tool_execution",
@@ -199,16 +261,24 @@ export class CheckpointService {
           ref: `execution:${input.executionId}`,
         },
       ],
-      pendingAction: null,
+      pendingAction: {
+        kind: "tool_execution",
+        summary: `${input.toolId} (${capability}) — the effect a re-drive from this boundary would re-execute`,
+        tool_id: input.toolId,
+        recovery_class: input.recovery,
+        risk_class: input.riskClass,
+        ...(idempotencyKey !== null ? { idempotency_key: idempotencyKey } : {}),
+      },
       artifactRefs: [],
       externalEffectState: {
         tool_id: input.toolId,
-        capability: input.capability,
+        capability,
         recovery_class: input.recovery,
+        risk_class: input.riskClass,
         execution_id: input.executionId,
         settled: "confirmed",
       },
-      resumeInstructions: `Resume after ${input.toolId} (${input.capability}); re-drive the pending plan from this step.`,
+      resumeInstructions: `Resume after ${input.toolId} (${capability}); re-drive the pending plan from this step.`,
     });
   }
 
@@ -284,6 +354,36 @@ export class CheckpointService {
         pending.summary.length > MAX_ACTION_SUMMARY
       ) {
         return invalid("the pending action must be a bounded kind/summary record");
+      }
+      // The E13 fields are CLOSED enums at the writer too (defense in depth —
+      // the decision layer re-checks them; a malformed class never lands).
+      if (
+        pending.recovery_class !== undefined &&
+        !(RECOVERY_CLASSES as readonly string[]).includes(pending.recovery_class)
+      ) {
+        return invalid("the pending action's recovery_class is not a declared E13 class");
+      }
+      if (
+        pending.risk_class !== undefined &&
+        !(RISK_CLASSES as readonly string[]).includes(pending.risk_class)
+      ) {
+        return invalid("the pending action's risk_class is not a declared D9 class");
+      }
+      if (
+        pending.idempotency_key !== undefined &&
+        (typeof pending.idempotency_key !== "string" ||
+          pending.idempotency_key.length < 1 ||
+          pending.idempotency_key.length > MAX_IDEMPOTENCY_KEY)
+      ) {
+        return invalid("the pending action's idempotency_key must be 1..200 characters");
+      }
+      if (
+        pending.tool_id !== undefined &&
+        (typeof pending.tool_id !== "string" ||
+          pending.tool_id.length < 1 ||
+          pending.tool_id.length > MAX_ACTION_REF)
+      ) {
+        return invalid("the pending action's tool_id must be a bounded string");
       }
     }
     const completedJson = boundedJson(completedActions);

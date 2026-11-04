@@ -67,7 +67,9 @@ import { registerResearchTools } from "../../transport/local-api/s25-research-ap
 import {
   CHECKPOINT_STEP_KINDS,
   CheckpointService,
+  recoveryIdempotencyKeyFor,
   stepKindForCapability,
+  stepKindForCapabilities,
 } from "./checkpoint.service.ts";
 import { taskStreamId } from "./task-events.ts";
 
@@ -145,31 +147,11 @@ function buildRuntime(): CheckpointRuntime {
     tx,
     nowMs: () => 1_000,
     now: () => NOW,
+    // The REAL production writer (the P1 fix — the port is the service's own
+    // recordFromToolExecution, never a test-side re-implementation).
     checkpoints: {
       recordFromToolExecution: (input) => {
-        checkpointService.record({
-          workspaceId: input.workspaceId,
-          taskId: input.taskId,
-          conversationId: input.conversationId,
-          stepId: `step_tool_${input.executionId}`,
-          stepKind: stepKindForCapability(input.capability),
-          completedActions: [
-            {
-              kind: "tool_execution",
-              summary: `${input.toolId} completed`,
-              ref: `execution:${input.executionId}`,
-            },
-          ],
-          pendingAction: null,
-          artifactRefs: [],
-          externalEffectState: {
-            tool_id: input.toolId,
-            recovery_class: input.recovery,
-            execution_id: input.executionId,
-            settled: "confirmed",
-          },
-          resumeInstructions: "Continue from the completed tool step.",
-        });
+        checkpointService.recordFromToolExecution(input);
       },
     },
   });
@@ -513,10 +495,23 @@ describe("S31 executor hook — a succeeded tool execution is a semantic boundar
     const row = rows[0]!;
     expect(row.step_kind).toBe("downloaded_document");
     expect(row.checkpoint_version).toBe(1);
+    // The pending action is the REAL writer record (the P1 fix): the tool's
+    // identity, its DECLARED class, and the runtime-verified risk class —
+    // recorded from the resolved definition, never from the tool result.
+    const pending = JSON.parse(row.pending_action_json!) as Record<string, unknown>;
+    expect(pending).toMatchObject({
+      kind: "tool_execution",
+      tool_id: "tool_document_parse",
+      recovery_class: "replayable",
+      risk_class: "READ_ONLY",
+    });
+    expect(String(pending.summary)).toContain("tool_document_parse");
+    expect(pending.idempotency_key).toBeUndefined();
     const effects = JSON.parse(row.external_effect_state_json!) as Record<string, unknown>;
     expect(effects).toMatchObject({
       tool_id: "tool_document_parse",
       recovery_class: "replayable",
+      risk_class: "READ_ONLY",
       settled: "confirmed",
     });
     const markers = streamEvents(rt, TASK).filter((e) => e.type === "checkpoint.taken");
@@ -543,6 +538,123 @@ describe("S31 executor hook — a succeeded tool execution is a semantic boundar
     expect(settled2.outcome).toBe("executed");
     expect(rt.checkpoints.listForTask(WS, TASK)).toHaveLength(2);
     expect(rt.checkpoints.latestForTask(WS, TASK)?.checkpoint_version).toBe(2);
+  });
+});
+
+describe("S31 checkpoint writer — the recovery fields are validated runtime data", () => {
+  it("derives the idempotency key from the execution identity for an idempotent_retry tool (deterministic, bounded, never agent-chosen)", () => {
+    const rt = buildRuntime();
+    const digest = canonicalArgsDigest({ path: "workspace://uploads/notes.txt" });
+    const verdict = rt.checkpointService.recordFromToolExecution({
+      workspaceId: WS,
+      taskId: TASK,
+      conversationId: CONV,
+      executionId: "exe_idem_1",
+      toolId: "tool_cache_refresh",
+      capabilities: ["anything.else"],
+      recovery: "idempotent_retry",
+      riskClass: "READ_ONLY",
+      argsDigest: digest,
+    });
+    expect(verdict.ok).toBe(true);
+    if (!verdict.ok) return;
+    const pending = JSON.parse(
+      rt.checkpoints.latestForTask(WS, TASK)!.pending_action_json!,
+    ) as Record<string, unknown>;
+    expect(pending.idempotency_key).toBe(recoveryIdempotencyKeyFor("tool_cache_refresh", digest));
+    expect(String(pending.idempotency_key)).toContain("tool_cache_refresh");
+    expect(String(pending.idempotency_key).length).toBeLessThanOrEqual(200);
+    // Deterministic: the same digest derives the SAME key (the collapse's
+    // precondition) — and a replayable tool records NO key.
+    expect(recoveryIdempotencyKeyFor("tool_cache_refresh", digest)).toBe(
+      recoveryIdempotencyKeyFor("tool_cache_refresh", digest),
+    );
+    const replayable = rt.checkpointService.recordFromToolExecution({
+      workspaceId: WS,
+      taskId: `${TASK}_b`,
+      conversationId: CONV,
+      executionId: "exe_replay_1",
+      toolId: "tool_document_parse",
+      capabilities: ["research.parse.document"],
+      recovery: "replayable",
+      riskClass: "READ_ONLY",
+      argsDigest: digest,
+    });
+    expect(replayable.ok).toBe(true);
+    if (!replayable.ok) return;
+    const replayPending = JSON.parse(
+      rt.checkpoints.latestForTask(WS, `${TASK}_b`)!.pending_action_json!,
+    ) as Record<string, unknown>;
+    expect(replayPending.idempotency_key).toBeUndefined();
+  });
+
+  it("refuses a pending action whose recovery_class is not a declared E13 class (the closed enum at the writer)", () => {
+    const rt = buildRuntime();
+    const verdict = rt.checkpointService.record({
+      workspaceId: WS,
+      taskId: TASK,
+      conversationId: CONV,
+      stepId: "step_bad_class",
+      stepKind: "tool_execution",
+      pendingAction: {
+        kind: "tool_execution",
+        summary: "the malformed class",
+        recovery_class: "auto_replay" as never,
+      },
+      resumeInstructions: "Resume.",
+    });
+    expect(verdict.ok).toBe(false);
+    if (verdict.ok) throw new Error("the malformed class must refuse");
+    expect(verdict.code).toBe("CHECKPOINT_INVALID");
+    expect(rt.checkpoints.listForTask(WS, TASK)).toHaveLength(0);
+  });
+
+  it("refuses a pending action whose risk_class is not a declared D9 class", () => {
+    const rt = buildRuntime();
+    const verdict = rt.checkpointService.record({
+      workspaceId: WS,
+      taskId: TASK,
+      conversationId: CONV,
+      stepId: "step_bad_risk",
+      stepKind: "tool_execution",
+      pendingAction: {
+        kind: "tool_execution",
+        summary: "the malformed risk class",
+        recovery_class: "replayable",
+        risk_class: "SORT_OF_SAFE" as never,
+      },
+      resumeInstructions: "Resume.",
+    });
+    expect(verdict.ok).toBe(false);
+    if (verdict.ok) throw new Error("the malformed risk class must refuse");
+  });
+
+  it("refuses a pending action whose idempotency_key exceeds the decision's bound", () => {
+    const rt = buildRuntime();
+    const verdict = rt.checkpointService.record({
+      workspaceId: WS,
+      taskId: TASK,
+      conversationId: CONV,
+      stepId: "step_bad_key",
+      stepKind: "tool_execution",
+      pendingAction: {
+        kind: "tool_execution",
+        summary: "the over-long key",
+        recovery_class: "idempotent_retry",
+        idempotency_key: "k".repeat(201),
+      },
+      resumeInstructions: "Resume.",
+    });
+    expect(verdict.ok).toBe(false);
+    if (verdict.ok) throw new Error("the over-long key must refuse");
+  });
+
+  it("maps the boundary kind from the resolved definition's capability list (data, not the proposal string)", () => {
+    expect(stepKindForCapabilities(["research.parse.document", "other.thing"])).toBe(
+      "downloaded_document",
+    );
+    expect(stepKindForCapabilities(["other.thing", "research.search"])).toBe("completed_search");
+    expect(stepKindForCapabilities(["other.thing"])).toBe("tool_execution");
   });
 });
 

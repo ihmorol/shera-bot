@@ -498,6 +498,24 @@ describe("S29 memory: the AC27 publication boundary (integration)", () => {
     expect(noProvenance.status).toBe(400);
     expect(noProvenance.body).toMatchObject({ code: "MEMORY_PROVENANCE_REQUIRED" });
 
+    // The recorded scheme set (fix-round F2): a source reference is a URI
+    // from the closed recorded vocabulary — a ref outside the set is not a
+    // memory reference, and the envelope refuses it at the boundary.
+    const foreignScheme = await post(
+      origin,
+      "/v1/memory/commands",
+      createCommand({
+        scope: "workspace",
+        summary: "Ref with an unrecorded scheme",
+        content: "A reference outside the recorded scheme set is not a memory reference.",
+        sensitivity: "normal",
+        source_refs: ["ftp://reel/archive/tape"],
+        confidence: 0.6,
+      }),
+    );
+    expect(foreignScheme.status).toBe(400);
+    expect(foreignScheme.body).toMatchObject({ code: "CONTRACT_VALIDATION_FAILED" });
+
     await running.close();
   });
 });

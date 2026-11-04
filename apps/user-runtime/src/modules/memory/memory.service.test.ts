@@ -179,6 +179,24 @@ describe("memory service backstops (S29 chunk 1)", () => {
     expect(after[1]!.content).toBe("The workspace note's amended content.");
   });
 
+  it("refuses an automatic candidate whose source refs leave the recorded scheme set (fix-round F2 backstop)", async () => {
+    const suite = makeSuite();
+    await expect(
+      suite.service.proposeCandidate({
+        workspace_id: WORKSPACE,
+        proposed_by_agent_id: "agent_researcher",
+        scope: "workspace",
+        summary: "Unschemed candidate",
+        content: "The candidate's only reference is not a recorded-scheme URI.",
+        source_refs: ["ftp://reel/archive/tape"],
+        confidence: 0.6,
+        sensitivity: "normal",
+      }),
+    ).rejects.toMatchObject({ code: "MEMORY_COMMAND_INVALID" });
+    // Nothing was created.
+    expect(suite.memory.listEntries(WORKSPACE)).toHaveLength(0);
+  });
+
   it("replays a command's recorded result on a repeated idempotency key (D23 rule 6)", async () => {
     const suite = makeSuite();
     const command = createCommand();

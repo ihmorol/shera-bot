@@ -306,6 +306,132 @@ describe("S29 chunk 2: the write-time secret rejection (AC2)", () => {
   });
 });
 
+describe("S29 chunk 2: the source_refs scan gap (fix-round F2)", () => {
+  const REF_SECRET = "sk-proj-4f9a2b8c1d3e5f7a9b1c3d5e7f9a1b3c5d7e9f1a3b5c7d9e";
+  const REF_NEEDLE_FILE = "file:///srv/exports/OpenAI_API_KEY=sk-proj-4f9a2b8c1d3e5f7a9b1c3d5e7f9a1b3c5d7e9f1a3b5c7d9e";
+
+  it("rejects a secret inside source_refs on CREATE — the ref is scanned like every other write field, nothing stored", async () => {
+    const running = await composeOn(join(makeTempDir("shera-s29-refcreate-"), "runtime.db"));
+    const { origin, dbPath } = running;
+
+    const rejected = await post(
+      origin,
+      "/v1/memory/commands",
+      createCommand({
+        scope: "workspace",
+        summary: "Notes from the vault export",
+        content: "The note body itself is perfectly clean.",
+        sensitivity: "normal",
+        source_refs: ["conversation://direct/user_emon", REF_NEEDLE_FILE],
+        confidence: 0.8,
+      }),
+    );
+    expect(rejected.status).toBe(400);
+    expect(rejected.body).toMatchObject({ code: "MEMORY_SECRET_REJECTED" });
+    // The refusal never echoes the secret (G3) — and the scan covers the REF
+    // itself, not just the summary and content.
+    expect(JSON.stringify(rejected.body)).not.toContain(REF_SECRET);
+
+    // Nothing stored: the needle appears nowhere in the database surface.
+    const bytes = databaseBytes(dbPath);
+    expect(bytes.includes(REF_SECRET)).toBe(false);
+    const view = (await (await fetch(`${origin}/v1/memory?workspace_id=${WORKSPACE}`)).json()) as {
+      scopes: Record<string, unknown[]>;
+    };
+    const total = Object.values(view.scopes).reduce((sum, rows) => sum + rows.length, 0);
+    expect(total).toBe(0);
+
+    await running.close();
+  });
+
+  it("rejects a secret inside source_refs on EDIT — the stored entry keeps its own provenance", async () => {
+    const running = await composeOn(join(makeTempDir("shera-s29-refedit-"), "runtime.db"));
+    const { origin, dbPath } = running;
+
+    const created = await post(
+      origin,
+      "/v1/memory/commands",
+      createCommand({
+        scope: "workspace",
+        summary: "Clean note",
+        content: "The original note body.",
+        sensitivity: "normal",
+        source_refs: ["conversation://direct/user_emon"],
+        confidence: 0.7,
+      }),
+    );
+    expect(created.status).toBe(200);
+    const memoryId = (created.body["entry"] as { memory_id: string }).memory_id;
+
+    const rejected = await post(origin, "/v1/memory/commands", {
+      command_id: "cmd_ref_edit",
+      idempotency_key: "idem_ref_edit",
+      workspace_id: WORKSPACE,
+      actor: { type: "user", id: "user_emon" },
+      issued_at: "2026-11-04T10:05:00.000Z",
+      type: "memory.edit",
+      memory_id: memoryId,
+      summary: "Clean note",
+      content: "The edited body is still clean.",
+      sensitivity: "normal",
+      source_refs: [REF_NEEDLE_FILE],
+      confidence: 0.7,
+      expires_at: null,
+    });
+    expect(rejected.status).toBe(400);
+    expect(rejected.body).toMatchObject({ code: "MEMORY_SECRET_REJECTED" });
+
+    // The entry is untouched — content AND provenance (the rejected edit
+    // stored nothing, ref included).
+    const view = (await (await fetch(`${origin}/v1/memory?workspace_id=${WORKSPACE}`)).json()) as {
+      scopes: Record<string, { memory_id: string; content: string; source_refs: string[] }[]>;
+    };
+    const entry = view.scopes["workspace"]!.find((row) => row.memory_id === memoryId);
+    expect(entry!.content).toBe("The original note body.");
+    expect(entry!.source_refs).toEqual(["conversation://direct/user_emon"]);
+    expect(databaseBytes(dbPath).includes(REF_SECRET)).toBe(false);
+
+    await running.close();
+  });
+
+  it("rejects a secret inside an automatic candidate's source_refs — the proposal event never exists", async () => {
+    const running = await composeOn(join(makeTempDir("shera-s29-refcand-"), "runtime.db"));
+    const { origin, runtime, dbPath } = running;
+
+    const op = await post(origin, "/v1/operations", {
+      workspace_id: WORKSPACE,
+      definition_ref: null,
+      name: "Ref sweep",
+      roster_agent_ids: [RESEARCHER],
+      coordinator_agent_id: RESEARCHER,
+    });
+    expect(op.status).toBe(201);
+
+    await expect(
+      runtime.memory.proposeCandidate({
+        workspace_id: WORKSPACE,
+        proposed_by_agent_id: RESEARCHER,
+        scope: "operation",
+        operation_id: op.body["operation_id"] as string,
+        summary: "Learned from the export",
+        content: "The candidate body is clean.",
+        source_refs: [REF_NEEDLE_FILE],
+        confidence: 0.8,
+        sensitivity: "normal",
+      }),
+    ).rejects.toMatchObject({ code: "MEMORY_SECRET_REJECTED" });
+
+    // No entry, no event: the journal carries no proposal with the secret —
+    // the journal is where a ref secret would otherwise survive (G2/G3).
+    const candidates = runtime.memory.listCandidateEvents(WORKSPACE);
+    expect(candidates).toHaveLength(0);
+    expect(JSON.stringify(candidates)).not.toContain(REF_SECRET);
+    expect(databaseBytes(dbPath).includes(REF_SECRET)).toBe(false);
+
+    await running.close();
+  });
+});
+
 describe("S29 chunk 2: automatic learning with provenance (AC3, G2)", () => {
   it("mediates an automatic candidate through the typed MemoryCandidateProposed event and refuses provenance-less proposals", async () => {
     const running = await composeOn(join(makeTempDir("shera-s29-candidate-"), "runtime.db"));

@@ -21,7 +21,11 @@ import { fileURLToPath } from "node:url";
 
 import { afterAll, describe, expect, it } from "vitest";
 
-import { DEFAULT_WORKSPACE_ID, composeRuntime, type RuntimeHandle } from "../../transport/local-api/compose.ts";
+import {
+  DEFAULT_WORKSPACE_ID,
+  composeRuntime,
+  type RuntimeHandle,
+} from "../../transport/local-api/compose.ts";
 import {
   cleanupTempResources,
   makeTempDir,
@@ -129,8 +133,7 @@ const SECRET_FIXTURES: ReadonlyArray<{ label: string; content: string; needle: s
   },
   {
     label: "high-entropy client secret",
-    content:
-      "client_secret: Zx91vWq7Pp3LmKd8Rn5Tj2Yh6Bg4Fc0As1Ew9Xz7Qa3Nb5Mc1Vr",
+    content: "client_secret: Zx91vWq7Pp3LmKd8Rn5Tj2Yh6Bg4Fc0As1Ew9Xz7Qa3Nb5Mc1Vr",
     needle: "Zx91vWq7Pp3LmKd8Rn5Tj2Yh6Bg4Fc0As1Ew9Xz7Qa3Nb5Mc1Vr",
   },
   {
@@ -158,14 +161,18 @@ describe("S29 chunk 2: the write-time secret rejection (AC2)", () => {
     const { origin, dbPath } = running;
 
     for (const fixture of SECRET_FIXTURES) {
-      const rejected = await post(origin, "/v1/memory/commands", createCommand({
-        scope: "workspace",
-        summary: `Remember the ${fixture.label}`,
-        content: fixture.content,
-        sensitivity: "normal",
-        source_refs: ["conversation://direct/user_emon"],
-        confidence: 0.8,
-      }));
+      const rejected = await post(
+        origin,
+        "/v1/memory/commands",
+        createCommand({
+          scope: "workspace",
+          summary: `Remember the ${fixture.label}`,
+          content: fixture.content,
+          sensitivity: "normal",
+          source_refs: ["conversation://direct/user_emon"],
+          confidence: 0.8,
+        }),
+      );
       expect(rejected.status, fixture.label).toBe(400);
       expect(rejected.body, fixture.label).toMatchObject({ code: "MEMORY_SECRET_REJECTED" });
       // The rejection is HONEST: it names the reason class, never echoes the
@@ -187,14 +194,18 @@ describe("S29 chunk 2: the write-time secret rejection (AC2)", () => {
 
     // A clean memory created AFTER the rejections still works — the scanner
     // rejects secret shapes, not memory itself.
-    const clean = await post(origin, "/v1/memory/commands", createCommand({
-      scope: "workspace",
-      summary: "Team prefers concise summaries",
-      content: "Summaries should stay under two hundred words.",
-      sensitivity: "normal",
-      source_refs: ["conversation://direct/user_emon"],
-      confidence: 0.7,
-    }));
+    const clean = await post(
+      origin,
+      "/v1/memory/commands",
+      createCommand({
+        scope: "workspace",
+        summary: "Team prefers concise summaries",
+        content: "Summaries should stay under two hundred words.",
+        sensitivity: "normal",
+        source_refs: ["conversation://direct/user_emon"],
+        confidence: 0.7,
+      }),
+    );
     expect(clean.status).toBe(200);
 
     await running.close();
@@ -214,15 +225,19 @@ describe("S29 chunk 2: the write-time secret rejection (AC2)", () => {
     expect(op.status).toBe(201);
     const operationId = op.body["operation_id"] as string;
 
-    const created = await post(origin, "/v1/memory/commands", createCommand({
-      scope: "operation",
-      operation_id: operationId,
-      summary: "Medical-adjacent research context",
-      content: "The sweep touches participant health records; handle citations carefully.",
-      sensitivity: "sensitive",
-      source_refs: [`conversation://${operationId}/messages`],
-      confidence: 0.9,
-    }));
+    const created = await post(
+      origin,
+      "/v1/memory/commands",
+      createCommand({
+        scope: "operation",
+        operation_id: operationId,
+        summary: "Medical-adjacent research context",
+        content: "The sweep touches participant health records; handle citations carefully.",
+        sensitivity: "sensitive",
+        source_refs: [`conversation://${operationId}/messages`],
+        confidence: 0.9,
+      }),
+    );
     expect(created.status).toBe(200);
     const memoryId = (created.body["entry"] as { memory_id: string }).memory_id;
 
@@ -243,7 +258,7 @@ describe("S29 chunk 2: the write-time secret rejection (AC2)", () => {
     expect(directApprove.body).toMatchObject({ code: "MEMORY_PUBLICATION_APPROVAL_REQUIRED" });
 
     // The entry is invisible to the participant Agent while unapproved.
-    const hidden = await (await fetch(
+    const hidden = (await await fetch(
       `${origin}/v1/agents/${RESEARCHER}/memory/context?workspace_id=${WORKSPACE}&operation_id=${operationId}`,
     ).then((r) => r.json())) as { entries: { memory_id: string }[] };
     expect(hidden.entries.map((entry) => entry.memory_id)).not.toContain(memoryId);
@@ -266,9 +281,7 @@ describe("S29 chunk 2: the write-time secret rejection (AC2)", () => {
       publication_queue: { memory_id: string; status: string }[];
     };
     expect(
-      queue.publication_queue.some(
-        (row) => row.memory_id === memoryId && row.status === "pending",
-      ),
+      queue.publication_queue.some((row) => row.memory_id === memoryId && row.status === "pending"),
     ).toBe(true);
 
     const approve = await post(origin, "/v1/memory/commands", {
@@ -284,7 +297,7 @@ describe("S29 chunk 2: the write-time secret rejection (AC2)", () => {
     });
     expect(approve.status).toBe(200);
 
-    const visible = await (await fetch(
+    const visible = (await await fetch(
       `${origin}/v1/agents/${RESEARCHER}/memory/context?workspace_id=${WORKSPACE}&operation_id=${operationId}`,
     ).then((r) => r.json())) as { entries: { memory_id: string }[] };
     expect(visible.entries.map((entry) => entry.memory_id)).toContain(memoryId);
@@ -342,9 +355,9 @@ describe("S29 chunk 2: automatic learning with provenance (AC3, G2)", () => {
 
     // The event is REAL: the journal holds a memory.candidate_proposed
     // envelope whose payload matches the D37 field list.
-    const page = (await (await fetch(
+    const page = (await await fetch(
       `${origin}/v1/operations/${operationId}/events?workspace_id=${WORKSPACE}`,
-    ).then((r) => r.json())) as { events?: unknown[] });
+    ).then((r) => r.json())) as { events?: unknown[] };
     void page;
 
     const candidates = runtime.memory.listCandidateEvents(WORKSPACE);
@@ -385,7 +398,9 @@ describe("S29 chunk 2: automatic learning with provenance (AC3, G2)", () => {
   });
 
   it("holds a sensitive automatic candidate out of context until the user approves it", async () => {
-    const running = await composeOn(join(makeTempDir("shera-s29-candidate-sensitive-"), "runtime.db"));
+    const running = await composeOn(
+      join(makeTempDir("shera-s29-candidate-sensitive-"), "runtime.db"),
+    );
     const { origin, runtime } = running;
 
     const op = await post(origin, "/v1/operations", {
@@ -413,12 +428,10 @@ describe("S29 chunk 2: automatic learning with provenance (AC3, G2)", () => {
 
     // Invisible to the participant while unapproved, and PENDING in the
     // publication queue (the runtime surfaced it for the user).
-    const hidden = await (await fetch(
+    const hidden = (await await fetch(
       `${origin}/v1/agents/${RESEARCHER}/memory/context?workspace_id=${WORKSPACE}&operation_id=${operationId}`,
     ).then((r) => r.json())) as { entries: { memory_id: string }[] };
-    expect(hidden.entries.map((entry) => entry.memory_id)).not.toContain(
-      accepted.entry.memory_id,
-    );
+    expect(hidden.entries.map((entry) => entry.memory_id)).not.toContain(accepted.entry.memory_id);
 
     const queue = (await (await fetch(`${origin}/v1/memory?workspace_id=${WORKSPACE}`)).json()) as {
       publication_queue: { memory_id: string; status: string }[];

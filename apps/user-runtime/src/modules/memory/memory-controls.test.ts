@@ -11,13 +11,16 @@
  *   Agent (the sweep: every read shape, not just one route);
  * - AC8 a pack upgrade never rewrites existing memory rows.
  */
-import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { afterAll, describe, expect, it } from "vitest";
 
-import { DEFAULT_WORKSPACE_ID, composeRuntime, type RuntimeHandle } from "../../transport/local-api/compose.ts";
+import {
+  DEFAULT_WORKSPACE_ID,
+  composeRuntime,
+  type RuntimeHandle,
+} from "../../transport/local-api/compose.ts";
 import {
   cleanupTempResources,
   makeTempDir,
@@ -92,14 +95,18 @@ async function seedWorkspaceMemory(
   summary: string,
   content: string,
 ): Promise<string> {
-  const created = await post(origin, "/v1/memory/commands", createCommand({
-    scope,
-    summary,
-    content,
-    sensitivity: "normal",
-    source_refs: ["conversation://direct/user_emon"],
-    confidence: 0.7,
-  }));
+  const created = await post(
+    origin,
+    "/v1/memory/commands",
+    createCommand({
+      scope,
+      summary,
+      content,
+      sensitivity: "normal",
+      source_refs: ["conversation://direct/user_emon"],
+      confidence: 0.7,
+    }),
+  );
   expect(created.status).toBe(200);
   return (created.body["entry"] as { memory_id: string }).memory_id;
 }
@@ -120,41 +127,64 @@ describe("S29 chunk 3: the user controls", () => {
       "Version one: search the corpus with the broad query first.",
     );
 
-    const edited = await post(origin, "/v1/memory/commands", command("memory.edit", {
-      memory_id: memoryId,
-      summary: "Sweep methodology",
-      content: "Version two: narrow queries per section, then merge.",
-      sensitivity: "normal",
-      source_refs: ["conversation://direct/user_emon"],
-      confidence: 0.8,
-      expires_at: null,
-    }));
+    const edited = await post(
+      origin,
+      "/v1/memory/commands",
+      command("memory.edit", {
+        memory_id: memoryId,
+        summary: "Sweep methodology",
+        content: "Version two: narrow queries per section, then merge.",
+        sensitivity: "normal",
+        source_refs: ["conversation://direct/user_emon"],
+        confidence: 0.8,
+        expires_at: null,
+      }),
+    );
     expect(edited.status).toBe(200);
 
     // The current content is the edit.
-    const userView = (await (await fetch(`${origin}/v1/memory?workspace_id=${WORKSPACE}`)).json()) as {
-      scopes: Record<string, { memory_id: string; content: string; versions: { version: number; change_kind: string }[] }[]>;
+    const userView = (await (
+      await fetch(`${origin}/v1/memory?workspace_id=${WORKSPACE}`)
+    ).json()) as {
+      scopes: Record<
+        string,
+        {
+          memory_id: string;
+          content: string;
+          versions: { version: number; change_kind: string }[];
+        }[]
+      >;
     };
     const current = userView.scopes["workspace"]!.find((entry) => entry.memory_id === memoryId);
     expect(current!.content).toBe("Version two: narrow queries per section, then merge.");
-    expect(current!.versions.map((version) => version.change_kind)).toEqual([
-      "created",
-      "edited",
-    ]);
+    expect(current!.versions.map((version) => version.change_kind)).toEqual(["created", "edited"]);
 
     // Restore version 1: the content RETURNS, and the restore appends
     // (history is preserved — created, edited, restored).
-    const restored = await post(origin, "/v1/memory/commands", command("memory.restore", {
-      memory_id: memoryId,
-      version: 1,
-    }));
+    const restored = await post(
+      origin,
+      "/v1/memory/commands",
+      command("memory.restore", {
+        memory_id: memoryId,
+        version: 1,
+      }),
+    );
     expect(restored.status).toBe(200);
 
     const after = (await (await fetch(`${origin}/v1/memory?workspace_id=${WORKSPACE}`)).json()) as {
-      scopes: Record<string, { memory_id: string; content: string; versions: { version: number; change_kind: string; content: string }[] }[]>;
+      scopes: Record<
+        string,
+        {
+          memory_id: string;
+          content: string;
+          versions: { version: number; change_kind: string; content: string }[];
+        }[]
+      >;
     };
     const restoredEntry = after.scopes["workspace"]!.find((entry) => entry.memory_id === memoryId);
-    expect(restoredEntry!.content).toBe("Version one: search the corpus with the broad query first.");
+    expect(restoredEntry!.content).toBe(
+      "Version one: search the corpus with the broad query first.",
+    );
     expect(restoredEntry!.versions.map((version) => version.change_kind)).toEqual([
       "created",
       "edited",
@@ -202,9 +232,13 @@ describe("S29 chunk 3: the user controls", () => {
 
     // Disable GLOBALLY: the automatic write is refused; an explicit user
     // write still works.
-    const globalOff = await post(origin, "/v1/memory/commands", command("memory.set_auto_memory", {
-      enabled: false,
-    }));
+    const globalOff = await post(
+      origin,
+      "/v1/memory/commands",
+      command("memory.set_auto_memory", {
+        enabled: false,
+      }),
+    );
     expect(globalOff.status).toBe(200);
     await expect(candidate()).rejects.toMatchObject({ code: "MEMORY_AUTOMATIC_DISABLED" });
     const userWrite = await seedWorkspaceMemory(
@@ -217,11 +251,21 @@ describe("S29 chunk 3: the user controls", () => {
 
     // Re-enable globally, disable PER-AGENT: that Agent's automatic writes
     // are refused; ANOTHER Agent's automatic writes still work.
-    expect(await post(origin, "/v1/memory/commands", command("memory.set_auto_memory", { enabled: true })).then((r) => r.status)).toBe(200);
-    const agentOff = await post(origin, "/v1/memory/commands", command("memory.set_agent_auto_memory", {
-      agent_id: RESEARCHER,
-      enabled: false,
-    }));
+    expect(
+      await post(
+        origin,
+        "/v1/memory/commands",
+        command("memory.set_auto_memory", { enabled: true }),
+      ).then((r) => r.status),
+    ).toBe(200);
+    const agentOff = await post(
+      origin,
+      "/v1/memory/commands",
+      command("memory.set_agent_auto_memory", {
+        agent_id: RESEARCHER,
+        enabled: false,
+      }),
+    );
     expect(agentOff.status).toBe(200);
     await expect(candidate()).rejects.toMatchObject({ code: "MEMORY_AUTOMATIC_DISABLED" });
     const otherAgent = await runtime.memory.proposeCandidate({
@@ -257,19 +301,27 @@ describe("S29 chunk 3: the user controls", () => {
       "To be forgotten",
       "This note and its history are about to leave active storage.",
     );
-    await post(origin, "/v1/memory/commands", command("memory.edit", {
-      memory_id: memoryId,
-      summary: "To be forgotten",
-      content: "Edited once before the forget.",
-      sensitivity: "normal",
-      source_refs: ["conversation://direct/user_emon"],
-      confidence: 0.7,
-      expires_at: null,
-    }));
+    await post(
+      origin,
+      "/v1/memory/commands",
+      command("memory.edit", {
+        memory_id: memoryId,
+        summary: "To be forgotten",
+        content: "Edited once before the forget.",
+        sensitivity: "normal",
+        source_refs: ["conversation://direct/user_emon"],
+        confidence: 0.7,
+        expires_at: null,
+      }),
+    );
 
-    const forgotten = await post(origin, "/v1/memory/commands", command("memory.forget", {
-      memory_id: memoryId,
-    }));
+    const forgotten = await post(
+      origin,
+      "/v1/memory/commands",
+      command("memory.forget", {
+        memory_id: memoryId,
+      }),
+    );
     expect(forgotten.status).toBe(200);
 
     // Gone from the user's management read.
@@ -289,9 +341,13 @@ describe("S29 chunk 3: the user controls", () => {
     expect(preview.versions).toBe(0);
 
     // A second forget is the typed 404 — nothing lingers to double-delete.
-    const again = await post(origin, "/v1/memory/commands", command("memory.forget", {
-      memory_id: memoryId,
-    }));
+    const again = await post(
+      origin,
+      "/v1/memory/commands",
+      command("memory.forget", {
+        memory_id: memoryId,
+      }),
+    );
     expect(again.status).toBe(404);
 
     await running.close();
@@ -313,16 +369,20 @@ describe("S29 chunk 3: the user controls", () => {
 
     // The sweep fixture: the researcher's OWNED private memory (an
     // agent_private row without its owner is refused at the boundary).
-    const seeded = await post(origin, "/v1/memory/commands", createCommand({
-      scope: "agent_private",
-      owner_agent_id: RESEARCHER,
-      operation_id: operationId,
-      summary: "Researcher's private note",
-      content: "A private note only the researcher may read.",
-      sensitivity: "normal",
-      source_refs: [`conversation://${operationId}/messages`],
-      confidence: 0.7,
-    }));
+    const seeded = await post(
+      origin,
+      "/v1/memory/commands",
+      createCommand({
+        scope: "agent_private",
+        owner_agent_id: RESEARCHER,
+        operation_id: operationId,
+        summary: "Researcher's private note",
+        content: "A private note only the researcher may read.",
+        sensitivity: "normal",
+        source_refs: [`conversation://${operationId}/messages`],
+        confidence: 0.7,
+      }),
+    );
     expect(seeded.status).toBe(200);
     const privateId = (seeded.body["entry"] as { memory_id: string }).memory_id;
 
@@ -385,15 +445,29 @@ describe("S29 chunk 3: the user controls", () => {
     // the workspace re-pins, the Agents re-seed) — then prove the memory
     // row was not rewritten.
     const second = await composeOn(dbPath);
-    const view = (await (await fetch(`${second.origin}/v1/memory?workspace_id=${WORKSPACE}`)).json()) as {
-      scopes: Record<string, { memory_id: string; summary: string; content: string; confidence: number; created_at: string; updated_at: string }[]>;
+    const view = (await (
+      await fetch(`${second.origin}/v1/memory?workspace_id=${WORKSPACE}`)
+    ).json()) as {
+      scopes: Record<
+        string,
+        {
+          memory_id: string;
+          summary: string;
+          content: string;
+          confidence: number;
+          created_at: string;
+          updated_at: string;
+        }[]
+      >;
     };
     const row = Object.values(view.scopes)
       .flat()
       .find((entry) => entry.memory_id === memoryId);
     expect(row).toBeDefined();
     expect(row!.summary).toBe("Survives the upgrade");
-    expect(row!.content).toBe("This memory row must be byte-identical after the pack upgrade path runs.");
+    expect(row!.content).toBe(
+      "This memory row must be byte-identical after the pack upgrade path runs.",
+    );
     expect(row!.confidence).toBe(0.7);
 
     await second.close();

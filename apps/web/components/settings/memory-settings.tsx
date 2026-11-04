@@ -8,7 +8,12 @@ import { useOperationsList } from "@/lib/operation-data";
 
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/shell/states";
-import { memoryErrorCode, safeMemoryMessage, useMemoryActions, useMemoryView } from "@/lib/memory-data";
+import {
+  memoryErrorCode,
+  safeMemoryMessage,
+  useMemoryActions,
+  useMemoryView,
+} from "@/lib/memory-data";
 import {
   memoryScopeLabel,
   type MemoryEntryView,
@@ -45,7 +50,7 @@ const CHANGE_KIND_LABELS: Record<MemoryEntryView["versions"][number]["change_kin
   auto_updated: "Updated automatically",
 };
 
-function formatWhen(iso: string, empty: string): string {
+function formatWhen(iso: string): string {
   const parsed = Date.parse(iso);
   if (Number.isNaN(parsed)) return iso;
   return new Intl.DateTimeFormat("en-GB", {
@@ -120,7 +125,7 @@ function ProvenanceLine({ entry }: { entry: MemoryEntryView }) {
         {entry.origin === "automatic" ? "learned" : "added"} by {actorLabel(entry.created_by)}
       </span>
       <span aria-hidden>·</span>
-      <span>{formatWhen(entry.created_at, entry.created_at)}</span>
+      <span>{formatWhen(entry.created_at)}</span>
     </p>
   );
 }
@@ -173,8 +178,7 @@ function VersionHistory({
               <div className="min-w-0">
                 <p className="text-xs font-medium text-text">
                   v{version.version} · {CHANGE_KIND_LABELS[version.change_kind]} ·{" "}
-                  {formatWhen(version.created_at, version.created_at)} · by{" "}
-                  {actorLabel(version.changed_by)}
+                  {formatWhen(version.created_at)} · by {actorLabel(version.changed_by)}
                 </p>
                 <p className="mt-0.5 truncate text-xs text-muted">{version.content}</p>
               </div>
@@ -259,7 +263,11 @@ function EditForm({
         <RejectionBanner code={errorCode} safeMessage={safeError} />
       ) : null}
       <div className="flex gap-2">
-        <Button type="submit" size="sm" disabled={busy || summary.length === 0 || content.length === 0}>
+        <Button
+          type="submit"
+          size="sm"
+          disabled={busy || summary.length === 0 || content.length === 0}
+        >
           Save changes
         </Button>
         <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={busy}>
@@ -296,7 +304,10 @@ function PublicationControls({
   if (!isPrivate && !needsApproval) return null;
   if (operations.length === 0) return null;
   return (
-    <div className="mt-3 rounded-xl border border-line bg-surface-muted/60 px-3 py-2" data-testid="memory-publication-controls">
+    <div
+      className="mt-3 rounded-xl border border-line bg-surface-muted/60 px-3 py-2"
+      data-testid="memory-publication-controls"
+    >
       <p className="text-xs leading-relaxed text-muted">
         {isPrivate
           ? "This memory is private to its Agent. Sharing it into an Operation is your explicit decision — nothing copies it automatically."
@@ -304,7 +315,9 @@ function PublicationControls({
             ? "This memory is sensitive. Sharing it needs your approval before any Agent sees it in the Operation."
             : "Publish a copy of this memory's visibility into an Operation."}
       </p>
-      {safeError !== undefined ? <RejectionBanner code={errorCode} safeMessage={safeError} /> : null}
+      {safeError !== undefined ? (
+        <RejectionBanner code={errorCode} safeMessage={safeError} />
+      ) : null}
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <label className="sr-only" htmlFor={`memory-publish-target-${entry.memory_id}`}>
           Target Operation
@@ -340,9 +353,7 @@ function PublicationControls({
             variant="ghost"
             size="sm"
             disabled={busy}
-            onClick={() =>
-              onDecide(entry.publication.published_into_operation_id!, "dismiss")
-            }
+            onClick={() => onDecide(entry.publication.published_into_operation_id!, "dismiss")}
             data-testid="memory-withdraw-publication"
           >
             <EyeOff aria-hidden className="mr-1 h-3 w-3" />
@@ -371,7 +382,9 @@ function ForgetControls({
   if (!confirming) {
     return (
       <div className="mt-3">
-        {safeError !== undefined ? <RejectionBanner code={errorCode} safeMessage={safeError} /> : null}
+        {safeError !== undefined ? (
+          <RejectionBanner code={errorCode} safeMessage={safeError} />
+        ) : null}
         <Button
           type="button"
           variant="ghost"
@@ -450,7 +463,11 @@ function MemoryEntryCard({
   onEdit: (memoryId: string, body: { summary: string; content: string }) => void;
   onRestore: (memoryId: string, version: number) => void;
   onRequestPublication: (memoryId: string, operationId: string) => void;
-  onPublishDecision: (memoryId: string, operationId: string, decision: "approve" | "dismiss") => void;
+  onPublishDecision: (
+    memoryId: string,
+    operationId: string,
+    decision: "approve" | "dismiss",
+  ) => void;
   onForget: (memoryId: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -488,7 +505,9 @@ function MemoryEntryCard({
           onCancel={() => setEditing(false)}
         />
       ) : (
-        editSafeError !== undefined && <RejectionBanner code={editErrorCode} safeMessage={editSafeError} />
+        editSafeError !== undefined && (
+          <RejectionBanner code={editErrorCode} safeMessage={editSafeError} />
+        )
       )}
       <PublicationControls
         entry={entry}
@@ -497,9 +516,15 @@ function MemoryEntryCard({
         safeError={publishSafeError}
         errorCode={publishErrorCode}
         onRequest={(operationId) => onRequestPublication(entry.memory_id, operationId)}
-        onDecide={(operationId, decision) => onPublishDecision(entry.memory_id, operationId, decision)}
+        onDecide={(operationId, decision) =>
+          onPublishDecision(entry.memory_id, operationId, decision)
+        }
       />
-      <VersionHistory entry={entry} busy={busy} onRestore={(version) => onRestore(entry.memory_id, version)} />
+      <VersionHistory
+        entry={entry}
+        busy={busy}
+        onRestore={(version) => onRestore(entry.memory_id, version)}
+      />
       <ForgetControls
         entry={entry}
         busy={busy}
@@ -529,27 +554,36 @@ function PublicationQueueCard({
   onDecide: (memoryId: string, operationId: string, decision: "approve" | "dismiss") => void;
 }) {
   const operationName = (operationId: string): string =>
-    operations.find((operation) => operation.operation_id === operationId)?.name ?? "an unnamed Operation";
+    operations.find((operation) => operation.operation_id === operationId)?.name ??
+    "an unnamed Operation";
   if (queue.length === 0) {
     return (
-      <section className="rounded-2xl border border-line bg-surface px-4 py-3" data-testid="memory-publication-queue">
+      <section
+        className="rounded-2xl border border-line bg-surface px-4 py-3"
+        data-testid="memory-publication-queue"
+      >
         <h2 className="text-sm font-semibold text-text">Publication queue</h2>
         <p className="mt-1 text-xs leading-relaxed text-muted">
           Nothing is waiting for your decision. Private and sensitive memories land here when an
-          Agent proposes one or when you request a publication — nothing is shared until you
-          approve it.
+          Agent proposes one or when you request a publication — nothing is shared until you approve
+          it.
         </p>
       </section>
     );
   }
   return (
-    <section className="rounded-2xl border border-line bg-surface px-4 py-3" data-testid="memory-publication-queue">
+    <section
+      className="rounded-2xl border border-line bg-surface px-4 py-3"
+      data-testid="memory-publication-queue"
+    >
       <h2 className="text-sm font-semibold text-text">Publication queue</h2>
       <p className="mt-1 text-xs leading-relaxed text-muted">
         Memories waiting for your decision. Approving shares the entry into that Operation&apos;s
         context; dismissing keeps it private.
       </p>
-      {safeError !== undefined ? <RejectionBanner code={errorCode} safeMessage={safeError} /> : null}
+      {safeError !== undefined ? (
+        <RejectionBanner code={errorCode} safeMessage={safeError} />
+      ) : null}
       <ul className="mt-3 space-y-2">
         {queue.map((request) => {
           const entry = entries.find((candidate) => candidate.memory_id === request.memory_id);
@@ -563,9 +597,8 @@ function PublicationQueueCard({
                 {entry?.summary ?? "A memory that has since been removed"}
               </p>
               <p className="mt-0.5 text-xs text-muted">
-                Proposed by {actorLabel(request.requested_by)} ·{" "}
-                {formatWhen(request.created_at, request.created_at)} · into{" "}
-                {operationName(request.operation_id)}
+                Proposed by {actorLabel(request.requested_by)} · {formatWhen(request.created_at)} ·
+                into {operationName(request.operation_id)}
               </p>
               <div className="mt-2 flex gap-2">
                 <Button
@@ -612,7 +645,10 @@ function AutoMemoryCard({
   onSetAgent: (agentId: string, enabled: boolean) => void;
 }) {
   return (
-    <section className="rounded-2xl border border-line bg-surface px-4 py-3" data-testid="memory-auto-card">
+    <section
+      className="rounded-2xl border border-line bg-surface px-4 py-3"
+      data-testid="memory-auto-card"
+    >
       <h2 className="text-sm font-semibold text-text">Automatic memory</h2>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
@@ -659,10 +695,12 @@ function AutoMemoryCard({
           Per-Agent switches appear here once an Agent has proposed a memory.
         </p>
       )}
-      {safeError !== undefined ? <RejectionBanner code={errorCode} safeMessage={safeError} /> : null}
+      {safeError !== undefined ? (
+        <RejectionBanner code={errorCode} safeMessage={safeError} />
+      ) : null}
       <p className="mt-3 text-xs leading-relaxed text-muted">
-        Turning this off stops new automatic memories. You can still add, edit, and restore
-        memories yourself.
+        Turning this off stops new automatic memories. You can still add, edit, and restore memories
+        yourself.
       </p>
     </section>
   );
@@ -686,7 +724,11 @@ export interface MemorySettingsViewProps {
   onEdit: (memoryId: string, body: { summary: string; content: string }) => void;
   onRestore: (memoryId: string, version: number) => void;
   onRequestPublication: (memoryId: string, operationId: string) => void;
-  onPublishDecision: (memoryId: string, operationId: string, decision: "approve" | "dismiss") => void;
+  onPublishDecision: (
+    memoryId: string,
+    operationId: string,
+    decision: "approve" | "dismiss",
+  ) => void;
   onForget: (memoryId: string) => void;
   onSetGlobal: (enabled: boolean) => void;
   onSetAgent: (agentId: string, enabled: boolean) => void;
@@ -832,7 +874,10 @@ function RuntimeMemorySettings({ workspaceId }: { workspaceId: string }) {
   if (catalog.state !== "ready" || catalog.memory === null) {
     if (catalog.state === "error") {
       return (
-        <ErrorState safeMessage={catalog.safeErrorMessage ?? "Memory could not be loaded."} onRetry={catalog.refetch} />
+        <ErrorState
+          safeMessage={catalog.safeErrorMessage ?? "Memory could not be loaded."}
+          onRetry={catalog.refetch}
+        />
       );
     }
     return <LoadingState />;

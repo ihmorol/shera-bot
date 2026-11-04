@@ -22,10 +22,7 @@ import { EventJournalRepository } from "../../adapters/sqlite/event-journal-repo
 import { OperationsRepository } from "../../adapters/sqlite/operations-repository.ts";
 import { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import { EventsService } from "../events/events.service.ts";
-import {
-  MemoryService,
-  MemoryServiceError,
-} from "./memory.service.ts";
+import { MemoryService } from "./memory.service.ts";
 import type { MemoryCommand } from "@shera-bot/contracts";
 
 const WORKSPACE = "ws-local-default";
@@ -113,9 +110,9 @@ describe("memory service backstops (S29 chunk 1)", () => {
 
   it("refuses an agent-actor publication decision — agents never self-approve (G6)", async () => {
     const suite = makeSuite();
-    const created = (await suite.service.applyCommand(
-      createCommand({ scope: "workspace" }),
-    )) as { entry: { memory_id: string } };
+    const created = (await suite.service.applyCommand(createCommand({ scope: "workspace" }))) as {
+      entry: { memory_id: string };
+    };
     const decision = {
       command_id: `cmd_${randomUUID()}`,
       idempotency_key: `idem_${randomUUID()}`,

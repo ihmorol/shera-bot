@@ -174,9 +174,7 @@ export function registerMemoryRoutes(app: Express, deps: MemoryApiHandle): void 
     }
     res
       .status(200)
-      .json(
-        deps.memory.readEntryAsAgent(query.data.workspace_id, agentId.data, memoryId.data),
-      );
+      .json(deps.memory.readEntryAsAgent(query.data.workspace_id, agentId.data, memoryId.data));
   });
 
   // The Operation context projection — the read the AC27 boundary is proven

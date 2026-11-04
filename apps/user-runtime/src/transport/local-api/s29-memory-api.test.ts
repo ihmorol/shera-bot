@@ -22,7 +22,6 @@
  *   | Workspace    | Agents allowed by workspace policy      |
  *   | Account      | User and explicitly authorized services |
  */
-import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 

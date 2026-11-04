@@ -17,7 +17,13 @@ import { requestRuntime } from "@/lib/runtime-client";
  * nothing here can render one (G3).
  */
 
-export const MEMORY_SCOPES = ["account", "workspace", "operation", "task", "agent_private"] as const;
+export const MEMORY_SCOPES = [
+  "account",
+  "workspace",
+  "operation",
+  "task",
+  "agent_private",
+] as const;
 export type MemoryScope = (typeof MEMORY_SCOPES)[number];
 
 const VersionView = z.strictObject({
@@ -112,14 +118,10 @@ export async function submitMemoryCommand(
   workspaceId: string,
   body: MemoryCommandBody,
 ): Promise<unknown> {
-  return requestRuntime(
-    "/api/runtime/v1/memory/commands",
-    (payload) => payload,
-    {
-      method: "POST",
-      body: JSON.stringify({ workspace_id: workspaceId, actor: MEMORY_ACTOR, ...body }),
-    },
-  );
+  return requestRuntime("/api/runtime/v1/memory/commands", (payload) => payload, {
+    method: "POST",
+    body: JSON.stringify({ workspace_id: workspaceId, actor: MEMORY_ACTOR, ...body }),
+  });
 }
 
 export function memoryScopeLabel(scope: MemoryScope): string {

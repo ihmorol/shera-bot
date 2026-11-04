@@ -20,9 +20,7 @@
         },
         "origin": "user",
         "created_by": "capture-user",
-        "source_refs": [
-          "conversation://direct/capture-user"
-        ],
+        "source_refs": ["conversation://direct/capture-user"],
         "confidence": 0.7,
         "created_at": "2026-11-04T18:48:24.589Z",
         "updated_at": "2026-11-04T18:48:24.609Z",
@@ -33,9 +31,7 @@
             "summary": "Sweep methodology",
             "content": "Version one: search the corpus with the broad query first.",
             "sensitivity": "normal",
-            "source_refs": [
-              "conversation://direct/capture-user"
-            ],
+            "source_refs": ["conversation://direct/capture-user"],
             "confidence": 0.7,
             "change_kind": "created",
             "changed_by": "capture-user",
@@ -46,9 +42,7 @@
             "summary": "Sweep methodology",
             "content": "Version two: narrow queries per section, then merge.",
             "sensitivity": "normal",
-            "source_refs": [
-              "conversation://direct/capture-user"
-            ],
+            "source_refs": ["conversation://direct/capture-user"],
             "confidence": 0.7,
             "change_kind": "edited",
             "changed_by": "capture-user",
@@ -73,9 +67,7 @@
         },
         "origin": "automatic",
         "created_by": "agent_researcher",
-        "source_refs": [
-          "conversation://2379a686-b53d-4c8f-a2f0-bc8ca7db6f2a/messages"
-        ],
+        "source_refs": ["conversation://2379a686-b53d-4c8f-a2f0-bc8ca7db6f2a/messages"],
         "confidence": 0.85,
         "created_at": "2026-11-04T18:48:24.541Z",
         "updated_at": "2026-11-04T18:48:24.541Z",
@@ -86,9 +78,7 @@
             "summary": "The user prefers concise summaries",
             "content": "Learned from corrections: summaries stay under two hundred words.",
             "sensitivity": "normal",
-            "source_refs": [
-              "conversation://2379a686-b53d-4c8f-a2f0-bc8ca7db6f2a/messages"
-            ],
+            "source_refs": ["conversation://2379a686-b53d-4c8f-a2f0-bc8ca7db6f2a/messages"],
             "confidence": 0.85,
             "change_kind": "created",
             "changed_by": "agent_researcher",
@@ -115,9 +105,7 @@
         },
         "origin": "automatic",
         "created_by": "agent_researcher",
-        "source_refs": [
-          "conversation://2379a686-b53d-4c8f-a2f0-bc8ca7db6f2a/messages"
-        ],
+        "source_refs": ["conversation://2379a686-b53d-4c8f-a2f0-bc8ca7db6f2a/messages"],
         "confidence": 0.8,
         "created_at": "2026-11-04T18:48:24.567Z",
         "updated_at": "2026-11-04T18:48:24.567Z",
@@ -128,9 +116,7 @@
             "summary": "Participant health context",
             "content": "The cohort includes participant health records; citations need care.",
             "sensitivity": "sensitive",
-            "source_refs": [
-              "conversation://2379a686-b53d-4c8f-a2f0-bc8ca7db6f2a/messages"
-            ],
+            "source_refs": ["conversation://2379a686-b53d-4c8f-a2f0-bc8ca7db6f2a/messages"],
             "confidence": 0.8,
             "change_kind": "created",
             "changed_by": "agent_researcher",
@@ -158,9 +144,7 @@
         },
         "origin": "automatic",
         "created_by": "agent_researcher",
-        "source_refs": [
-          "conversation://2379a686-b53d-4c8f-a2f0-bc8ca7db6f2a/messages"
-        ],
+        "source_refs": ["conversation://2379a686-b53d-4c8f-a2f0-bc8ca7db6f2a/messages"],
         "confidence": 0.8,
         "created_at": "2026-11-04T18:48:24.559Z",
         "updated_at": "2026-11-04T18:48:24.559Z",
@@ -171,9 +155,7 @@
             "summary": "Failed extraction heuristic for corpus 3",
             "content": "The regex-based extraction heuristic loses table rows when the PDF uses spanned cells; use the layout parser instead.",
             "sensitivity": "normal",
-            "source_refs": [
-              "conversation://2379a686-b53d-4c8f-a2f0-bc8ca7db6f2a/messages"
-            ],
+            "source_refs": ["conversation://2379a686-b53d-4c8f-a2f0-bc8ca7db6f2a/messages"],
             "confidence": 0.8,
             "change_kind": "created",
             "changed_by": "agent_researcher",

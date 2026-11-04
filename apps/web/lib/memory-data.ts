@@ -23,10 +23,7 @@ import { presenceRefetchInterval } from "@/lib/session-presence";
 
 const GENERIC_MEMORY_ERROR_MESSAGE = "Memory could not be loaded.";
 
-export function safeMemoryMessage(
-  error: unknown,
-  fallback = GENERIC_MEMORY_ERROR_MESSAGE,
-): string {
+export function safeMemoryMessage(error: unknown, fallback = GENERIC_MEMORY_ERROR_MESSAGE): string {
   if (error instanceof RuntimeApiError) {
     return error.sheraError.safe_message;
   }
@@ -122,7 +119,7 @@ export function useMemoryActions(workspaceId: string): MemoryActions {
     void queryClient.invalidateQueries({ queryKey: ["memory", workspaceId] });
   };
 
-  const run = <TVariables,>(build: (variables: TVariables) => MemoryCommandBody) =>
+  const useMemoryMutation = <TVariables>(build: (variables: TVariables) => MemoryCommandBody) =>
     useMutation({
       mutationFn: async (variables: TVariables) =>
         submitMemoryCommand(workspaceId, build(variables)),
@@ -133,7 +130,7 @@ export function useMemoryActions(workspaceId: string): MemoryActions {
     });
 
   return {
-    edit: run<{ memoryId: string; body: MemoryEditBody }>(({ memoryId, body }) => ({
+    edit: useMemoryMutation<{ memoryId: string; body: MemoryEditBody }>(({ memoryId, body }) => ({
       ...envelope(),
       ...body,
       // The command type is authoritative — a caller-supplied body never
@@ -141,42 +138,48 @@ export function useMemoryActions(workspaceId: string): MemoryActions {
       type: "memory.edit",
       memory_id: memoryId,
     })),
-    restore: run<{ memoryId: string; version: number }>(({ memoryId, version }) => ({
+    restore: useMemoryMutation<{ memoryId: string; version: number }>(({ memoryId, version }) => ({
       ...envelope(),
       type: "memory.restore",
       memory_id: memoryId,
       version,
     })),
-    forget: run<{ memoryId: string }>(({ memoryId }) => ({
+    forget: useMemoryMutation<{ memoryId: string }>(({ memoryId }) => ({
       ...envelope(),
       type: "memory.forget",
       memory_id: memoryId,
     })),
-    requestPublication: run<{ memoryId: string; operationId: string }>(({ memoryId, operationId }) => ({
-      ...envelope(),
-      type: "memory.request_publication",
-      memory_id: memoryId,
-      operation_id: operationId,
-    })),
-    publishDecision: run<{ memoryId: string; operationId: string; decision: "approve" | "dismiss" }>(
-      ({ memoryId, operationId, decision }) => ({
+    requestPublication: useMemoryMutation<{ memoryId: string; operationId: string }>(
+      ({ memoryId, operationId }) => ({
         ...envelope(),
-        type: "memory.publish_decision",
+        type: "memory.request_publication",
         memory_id: memoryId,
         operation_id: operationId,
-        decision,
       }),
     ),
-    setAutoMemory: run<{ enabled: boolean }>(({ enabled }) => ({
+    publishDecision: useMemoryMutation<{
+      memoryId: string;
+      operationId: string;
+      decision: "approve" | "dismiss";
+    }>(({ memoryId, operationId, decision }) => ({
+      ...envelope(),
+      type: "memory.publish_decision",
+      memory_id: memoryId,
+      operation_id: operationId,
+      decision,
+    })),
+    setAutoMemory: useMemoryMutation<{ enabled: boolean }>(({ enabled }) => ({
       ...envelope(),
       type: "memory.set_auto_memory",
       enabled,
     })),
-    setAgentAutoMemory: run<{ agentId: string; enabled: boolean }>(({ agentId, enabled }) => ({
-      ...envelope(),
-      type: "memory.set_agent_auto_memory",
-      agent_id: agentId,
-      enabled,
-    })),
+    setAgentAutoMemory: useMemoryMutation<{ agentId: string; enabled: boolean }>(
+      ({ agentId, enabled }) => ({
+        ...envelope(),
+        type: "memory.set_agent_auto_memory",
+        agent_id: agentId,
+        enabled,
+      }),
+    ),
   };
 }

@@ -840,10 +840,7 @@ export function toSheraErrorResponse(error: unknown, correlationId?: string): Ht
   // Shape/provenance/absence failures are validation (400) or not-found
   // (404); the entry's own content is NEVER echoed into any message (G3).
   if (error instanceof MemoryServiceError) {
-    const mappings: Record<
-      MemoryServiceError["code"],
-      { status: number; safe_message: string }
-    > = {
+    const mappings: Record<MemoryServiceError["code"], { status: number; safe_message: string }> = {
       MEMORY_COMMAND_INVALID: {
         status: 400,
         safe_message: "The memory command's scope or owner shape is not valid.",
@@ -878,8 +875,7 @@ export function toSheraErrorResponse(error: unknown, correlationId?: string): Ht
       },
       MEMORY_PUBLICATION_APPROVAL_REQUIRED: {
         status: 400,
-        safe_message:
-          "A sensitive memory needs a publication request before it can be approved.",
+        safe_message: "A sensitive memory needs a publication request before it can be approved.",
       },
       MEMORY_SECRET_REJECTED: {
         status: 400,

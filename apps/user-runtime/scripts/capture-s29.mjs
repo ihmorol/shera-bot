@@ -38,6 +38,10 @@ import { createServer } from "node:http";
 
 import { chromium } from "playwright";
 
+// The page.evaluate closures below run INSIDE the browser context and
+// reference browser globals (document/window) by design.
+/* global document */
+
 import { composeRuntime, DEFAULT_WORKSPACE_ID } from "../src/transport/local-api/compose.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -142,7 +146,12 @@ const command = async (body) => {
   const response = await fetch(origin + "/v1/memory/commands", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ workspace_id: WS, actor: userActor, issued_at: new Date().toISOString(), ...body }),
+    body: JSON.stringify({
+      workspace_id: WS,
+      actor: userActor,
+      issued_at: new Date().toISOString(),
+      ...body,
+    }),
   });
   const payload = await response.json().catch(() => ({}));
   if (response.status >= 400) {
@@ -165,7 +174,8 @@ const userMemory = await command({
   confidence: 0.7,
   expires_at: null,
 });
-if (userMemory.status !== 200) throw new Error(`user memory create failed: ${JSON.stringify(userMemory)}`);
+if (userMemory.status !== 200)
+  throw new Error(`user memory create failed: ${JSON.stringify(userMemory)}`);
 const userMemoryId = userMemory.payload.entry.memory_id;
 const edited = await command({
   command_id: "cmd_capture_user_edit",
@@ -346,7 +356,8 @@ async function openMemory(viewport, opts = {}) {
 {
   const { context, page } = await openMemory({ width: 1440, height: 900 });
   const rendered = await page.evaluate(() => {
-    const pick = (testId) => document.querySelector(`[data-testid="${testId}"]`)?.textContent ?? null;
+    const pick = (testId) =>
+      document.querySelector(`[data-testid="${testId}"]`)?.textContent ?? null;
     return {
       scopeGroups: [...document.querySelectorAll('[data-testid="memory-scope-group"]')].map(
         (group) => ({
@@ -355,8 +366,8 @@ async function openMemory(viewport, opts = {}) {
           count: group.querySelector("span.font-mono")?.textContent ?? null,
         }),
       ),
-      entryCards: [...document.querySelectorAll('[data-testid="memory-entry-card"]')].map(
-        (card) => card.getAttribute("data-memory-id"),
+      entryCards: [...document.querySelectorAll('[data-testid="memory-entry-card"]')].map((card) =>
+        card.getAttribute("data-memory-id"),
       ),
       provenanceLines: [...document.querySelectorAll('[data-testid="memory-provenance"]')].map(
         (line) => line.textContent ?? "",
@@ -399,14 +410,23 @@ async function openMemory(viewport, opts = {}) {
   }
   writeFileSync(
     join(CAPTURE_OUT, "s29-truth-leg.json"),
-    JSON.stringify({ rendered: { scopeGroups: rendered.scopeGroups, queueCount: rendered.queue?.length }, mismatches }, null, 2),
+    JSON.stringify(
+      {
+        rendered: { scopeGroups: rendered.scopeGroups, queueCount: rendered.queue?.length },
+        mismatches,
+      },
+      null,
+      2,
+    ),
   );
   if (mismatches.length > 0) {
     console.error("TRUTH MISMATCH: the UI does not render the runtime's own memory record");
     for (const m of mismatches) console.error("  -", m);
     process.exit(1);
   }
-  console.log("truth leg passed: scope groups, entry cards, provenance, queue, and toggles render the runtime's record");
+  console.log(
+    "truth leg passed: scope groups, entry cards, provenance, queue, and toggles render the runtime's record",
+  );
   await page.screenshot({ path: join(CAPTURE_OUT, "s29-memory-1440.png") });
   await context.close();
 }
@@ -436,10 +456,16 @@ async function openMemory(viewport, opts = {}) {
   const visible = contextAfter.entries.some((entry) => entry.memory_id === expected.sensitiveId);
   writeFileSync(
     join(CAPTURE_OUT, "s29-approval-leg.json"),
-    JSON.stringify({ approvedMemoryId: expected.sensitiveId, visibleInOperationContext: visible }, null, 2),
+    JSON.stringify(
+      { approvedMemoryId: expected.sensitiveId, visibleInOperationContext: visible },
+      null,
+      2,
+    ),
   );
   if (!visible) {
-    console.error("APPROVAL LEG: the approval did not publish the entry into the operation context");
+    console.error(
+      "APPROVAL LEG: the approval did not publish the entry into the operation context",
+    );
     process.exit(1);
   }
   console.log("approval leg passed: the approved entry is visible in the operation context");
@@ -455,8 +481,11 @@ async function openMemory(viewport, opts = {}) {
   await page.waitForTimeout(1500);
   const viewAfter = memory.userView(WS);
   const restored = viewAfter.scopes.workspace.find((entry) => entry.memory_id === userMemoryId);
-  const contentRestored = restored?.content === "Version one: search the corpus with the broad query first.";
-  const historyKept = restored?.versions.map((version) => version.change_kind).join(",") === "created,edited,restored";
+  const contentRestored =
+    restored?.content === "Version one: search the corpus with the broad query first.";
+  const historyKept =
+    restored?.versions.map((version) => version.change_kind).join(",") ===
+    "created,edited,restored";
   writeFileSync(
     join(CAPTURE_OUT, "s29-restore-leg.json"),
     JSON.stringify(
@@ -473,7 +502,9 @@ async function openMemory(viewport, opts = {}) {
     console.error("RESTORE LEG: the restore did not return v1 or the history was not preserved");
     process.exit(1);
   }
-  console.log("restore leg passed: v1 content returned, history preserved (created, edited, restored)");
+  console.log(
+    "restore leg passed: v1 content returned, history preserved (created, edited, restored)",
+  );
   await page.screenshot({ path: join(CAPTURE_OUT, "s29-restore-1440.png") });
   await context.close();
 }
@@ -486,7 +517,11 @@ async function openMemory(viewport, opts = {}) {
   const { context, page } = await openMemory({ width: 1440, height: 900 });
   const card = page.locator(`[data-memory-id="${userMemoryId}"]`);
   await card.locator('[data-testid="memory-edit-toggle"]').click();
-  await card.locator("input").fill("Deployment note with OPENAI_API_KEY=sk-proj-4f9a2b8c1d3e5f7a9b1c3d5e7f9a1b3c5d7e9f1a3b5c7d9e");
+  await card
+    .locator("input")
+    .fill(
+      "Deployment note with OPENAI_API_KEY=sk-proj-4f9a2b8c1d3e5f7a9b1c3d5e7f9a1b3c5d7e9f1a3b5c7d9e",
+    );
   await card.locator("textarea").fill("The key above must never be stored in memory.");
   await card.locator('button[type="submit"]').click();
   await page.waitForSelector('[data-testid="memory-rejection"]', { timeout: 15000 });
@@ -602,7 +637,9 @@ await capture(
   );
   await page.screenshot({ path: join(CAPTURE_OUT, "s29-memory-keyboard-1440.png") });
   if (globalToggleIndex === -1 || editToggleIndex === -1) {
-    console.error("KEYBOARD GATE: the auto-memory toggle or an entry edit control is not reachable by Tab");
+    console.error(
+      "KEYBOARD GATE: the auto-memory toggle or an entry edit control is not reachable by Tab",
+    );
     process.exit(1);
   }
   if (visibleFocusCount < 2) {

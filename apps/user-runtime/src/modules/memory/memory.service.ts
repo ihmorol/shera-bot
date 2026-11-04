@@ -268,9 +268,11 @@ export class MemoryService {
         "the target Operation does not exist in this workspace",
       );
     }
-    const existing = this.deps.memory.listPublicationRequests(command.workspace_id).find(
-      (row) => row.memory_id === command.memory_id && row.operation_id === command.operation_id,
-    );
+    const existing = this.deps.memory
+      .listPublicationRequests(command.workspace_id)
+      .find(
+        (row) => row.memory_id === command.memory_id && row.operation_id === command.operation_id,
+      );
     if (existing) {
       return { request_id: existing.request_id, status: existing.status };
     }
@@ -340,7 +342,10 @@ export class MemoryService {
     }
 
     if (command.operation_id !== null) {
-      const operation = this.deps.operations.getOperation(command.workspace_id, command.operation_id);
+      const operation = this.deps.operations.getOperation(
+        command.workspace_id,
+        command.operation_id,
+      );
       if (!operation) {
         throw new MemoryServiceError(
           "MEMORY_OPERATION_NOT_FOUND",
@@ -412,9 +417,10 @@ export class MemoryService {
    * columns INTO the named Operation; dismiss withdraws an active
    * publication into that Operation or dismisses a pending request.
    */
-  private decidePublication(
-    command: Extract<MemoryCommand, { type: "memory.publish_decision" }>,
-  ): { entry: MemoryEntryView; decision: "approved" | "dismissed" } {
+  private decidePublication(command: Extract<MemoryCommand, { type: "memory.publish_decision" }>): {
+    entry: MemoryEntryView;
+    decision: "approved" | "dismissed";
+  } {
     if (command.actor.type !== "user") {
       throw new MemoryServiceError(
         "MEMORY_COMMAND_ACTOR_FORBIDDEN",
@@ -939,12 +945,7 @@ export class MemoryService {
     global_enabled: boolean;
   } {
     this.deps.tx.transaction((exec) => {
-      this.deps.memory.upsertSettings(
-        command.workspace_id,
-        command.enabled,
-        this.now(),
-        exec,
-      );
+      this.deps.memory.upsertSettings(command.workspace_id, command.enabled, this.now(), exec);
     });
     return { global_enabled: command.enabled };
   }
@@ -1171,19 +1172,17 @@ export class MemoryService {
 
   private toView(entry: MemoryEntryRow, includeVersions = false): MemoryEntryView {
     const versions: MemoryVersionView[] = includeVersions
-      ? this.deps.memory
-          .listVersions(entry.workspace_id, entry.memory_id)
-          .map((version) => ({
-            version: version.version,
-            summary: version.summary,
-            content: version.content,
-            sensitivity: version.sensitivity,
-            source_refs: parseSourceRefs(version.source_refs),
-            confidence: version.confidence,
-            change_kind: version.change_kind,
-            changed_by: version.changed_by,
-            created_at: version.created_at,
-          }))
+      ? this.deps.memory.listVersions(entry.workspace_id, entry.memory_id).map((version) => ({
+          version: version.version,
+          summary: version.summary,
+          content: version.content,
+          sensitivity: version.sensitivity,
+          source_refs: parseSourceRefs(version.source_refs),
+          confidence: version.confidence,
+          change_kind: version.change_kind,
+          changed_by: version.changed_by,
+          created_at: version.created_at,
+        }))
       : [];
     return {
       memory_id: entry.memory_id,

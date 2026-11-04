@@ -1,9 +1,5 @@
 {
   "contentRestored": true,
   "historyKept": true,
-  "changeKinds": [
-    "created",
-    "edited",
-    "restored"
-  ]
+  "changeKinds": ["created", "edited", "restored"]
 }

@@ -291,7 +291,9 @@ describe("S29 — the auto-memory controls (AC5)", () => {
     expect(html).toContain('data-testid="memory-auto-global-toggle"');
     expect(html).toContain('data-testid="memory-auto-agent-toggle"');
     expect(html).toContain("Automatic off");
-    expect(html).toContain("Turning this off stops new automatic memories. You can still add, edit, and restore memories yourself.");
+    expect(html).toContain(
+      "Turning this off stops new automatic memories. You can still add, edit, and restore memories yourself.",
+    );
   });
 
   it("the per-Agent roster appears once Agents have proposed memories", () => {
@@ -303,7 +305,8 @@ describe("S29 — the auto-memory controls (AC5)", () => {
 describe("S29 — the honest rejection (AC2's display leg)", () => {
   it("a refused write renders the typed refusal where the action happened", () => {
     const html = renderView(memoryView(), {
-      editSafeError: "This memory looks like a credential or secret. Secrets are never stored in memory.",
+      editSafeError:
+        "This memory looks like a credential or secret. Secrets are never stored in memory.",
       editErrorCode: "MEMORY_SECRET_REJECTED",
     });
     expect(html).toContain('data-testid="memory-rejection"');
@@ -317,7 +320,9 @@ describe("S29 — the honest rejection (AC2's display leg)", () => {
       publishSafeError: "A sensitive memory needs a publication request before it can be approved.",
       publishErrorCode: "MEMORY_PUBLICATION_APPROVAL_REQUIRED",
     });
-    expect(html).toContain("A sensitive memory needs a publication request before it can be approved.");
+    expect(html).toContain(
+      "A sensitive memory needs a publication request before it can be approved.",
+    );
     expect(html).not.toContain("Not saved — this looks like a credential");
   });
 });

@@ -57,7 +57,8 @@ export interface SecretScanResult {
  * PEM private key blocks: the whole block is the secret (the S18 rule,
  * verbatim family).
  */
-const PEM_PRIVATE_KEY = /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----/;
+const PEM_PRIVATE_KEY =
+  /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----/;
 
 /**
  * Bearer tokens in the Authorization scheme shape (the S18 rule family).

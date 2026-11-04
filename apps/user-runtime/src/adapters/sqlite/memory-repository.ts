@@ -20,12 +20,7 @@
 import type { SqliteExec, SqliteTransactions } from "./transactions.ts";
 
 /** The D37 scope vocabulary (the migration's CHECK set; the contract's enum). */
-export type MemoryScopeValue =
-  | "account"
-  | "workspace"
-  | "operation"
-  | "task"
-  | "agent_private";
+export type MemoryScopeValue = "account" | "workspace" | "operation" | "task" | "agent_private";
 
 export type MemorySensitivity = "normal" | "sensitive";
 
@@ -393,9 +388,7 @@ export class MemoryRepository {
     exec?: SqliteExec,
   ): MemoryPublicationRequestRow | null {
     const row = (exec ?? this.tx.connection())
-      .prepare(
-        "SELECT * FROM memory_publication_request WHERE workspace_id = ? AND request_id = ?",
-      )
+      .prepare("SELECT * FROM memory_publication_request WHERE workspace_id = ? AND request_id = ?")
       .get(workspaceId, requestId) as Record<string, unknown> | undefined;
     return row ? (row as unknown as MemoryPublicationRequestRow) : null;
   }
@@ -458,7 +451,12 @@ export class MemoryRepository {
     return row ? (row as unknown as MemorySettingsRow) : null;
   }
 
-  upsertSettings(workspaceId: string, enabled: boolean, updatedAt: string, exec?: SqliteExec): void {
+  upsertSettings(
+    workspaceId: string,
+    enabled: boolean,
+    updatedAt: string,
+    exec?: SqliteExec,
+  ): void {
     (exec ?? this.tx.connection())
       .prepare(
         `INSERT INTO memory_settings (workspace_id, auto_memory_enabled, updated_at)

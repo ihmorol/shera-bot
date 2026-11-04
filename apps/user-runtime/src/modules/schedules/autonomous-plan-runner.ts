@@ -357,19 +357,23 @@ export class AutonomousPlanRunner {
         if (isPlatform) {
           // SETTLE against the actual usage; the unused remainder releases
           // (the ledger's settleReservation owns the split). The zero-unit
-          // pre-flight consult closed itself at consult time.
+          // pre-flight consult closed itself at consult time. The usage
+          // record claims what the ledger ACTUALLY charged (review F8):
+          // only an `ok` settle charges — a typed refusal
+          // (RESERVATION_NOT_ACTIVE) records charged_units 0, never the
+          // pre-assigned actual.
           let settledUnits = 0;
           if (reservationId !== null && credits) {
             const actual = CreditLedgerService.usageUnits(
               { input_tokens: inputTokens, output_tokens: outputTokens },
               estimatedUnits,
             );
-            settledUnits = actual;
-            credits.settleReservation({
+            const settled = credits.settleReservation({
               workspace_id: workspaceId,
               reservation_id: reservationId,
               actual_units: actual,
             });
+            if (settled.ok) settledUnits = actual;
           }
           credits?.recordUsage({
             workspace_id: workspaceId,

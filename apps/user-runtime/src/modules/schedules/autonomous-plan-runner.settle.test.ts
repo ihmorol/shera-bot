@@ -193,11 +193,16 @@ describe("the model leg claims what the ledger charged (review F8)", () => {
     expect(usage[0]?.charged_units).toBe(0);
     expect(usage[0]?.provider_origin).toBe("platform");
     // The account moved NOTHING (the refusal means no charge landed) and
-    // the hold stands exactly as the refusal describes.
+    // the hold stands exactly as the refusal describes — the estimate hold
+    // is the runner's own bounded estimate (derived from the ledger's
+    // formula, NOT the 70-unit would-be charge of the metered usage).
     expect(repo.findAccount(WS)).toMatchObject({
       granted_units: 1000,
       charged_units: 0,
-      reserved_units: 70,
+      reserved_units: CreditLedgerService.estimateUnits({
+        prompt_chars: "Compile the sweep.".length,
+        max_output_tokens: 256,
+      }),
     });
   });
 });

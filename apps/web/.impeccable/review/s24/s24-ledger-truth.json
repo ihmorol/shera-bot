@@ -1,0 +1,109 @@
+{
+  "funded_account": {
+    "workspace_id": "ws-local-default",
+    "granted_units": 200,
+    "charged_units": 30,
+    "reserved_units": 25,
+    "available_units": 145,
+    "used_this_month_units": 30
+  },
+  "run_a_cost": {
+    "task_id": "run_3f8a2c_litreview",
+    "charged_units": 30,
+    "released_units": 20,
+    "active_reserved_units": 0,
+    "movements": [
+      {
+        "workspace_id": "ws-local-default",
+        "transaction_id": "ctx_098947f0-25a0-4efc-bf05-0e9baa02a94e",
+        "entry_type": "reservation_hold",
+        "amount_units": 50,
+        "task_id": "run_3f8a2c_litreview",
+        "reservation_id": "res_809181d9-42d0-459e-9ed5-ed1d4789a641",
+        "related_id": null,
+        "corrects_transaction_id": null,
+        "created_at": "2026-11-04T16:06:27.434Z"
+      },
+      {
+        "workspace_id": "ws-local-default",
+        "transaction_id": "ctx_9c27bd8c-0cfa-4ee5-aae5-a39545cd8ca8",
+        "entry_type": "settlement_charge",
+        "amount_units": 30,
+        "task_id": "run_3f8a2c_litreview",
+        "reservation_id": "res_809181d9-42d0-459e-9ed5-ed1d4789a641",
+        "related_id": null,
+        "corrects_transaction_id": null,
+        "created_at": "2026-11-04T16:06:27.442Z"
+      },
+      {
+        "workspace_id": "ws-local-default",
+        "transaction_id": "ctx_f6c32fc4-a7b4-4b1c-bf87-ed27e1c25b09",
+        "entry_type": "reservation_release",
+        "amount_units": 20,
+        "task_id": "run_3f8a2c_litreview",
+        "reservation_id": "res_809181d9-42d0-459e-9ed5-ed1d4789a641",
+        "related_id": null,
+        "corrects_transaction_id": null,
+        "created_at": "2026-11-04T16:06:27.442Z"
+      }
+    ],
+    "settlements": [
+      {
+        "workspace_id": "ws-local-default",
+        "settlement_id": "cst_9c718dfd-d43d-43d7-be34-e505a7cca3c2",
+        "reservation_id": "res_809181d9-42d0-459e-9ed5-ed1d4789a641",
+        "task_id": "run_3f8a2c_litreview",
+        "actual_units": 30,
+        "settled_at": "2026-11-04T16:06:27.442Z"
+      }
+    ],
+    "releases": [
+      {
+        "workspace_id": "ws-local-default",
+        "release_id": "rel_8552f3ec-d707-44f0-aeb3-1b91ba9fc979",
+        "reservation_id": "res_809181d9-42d0-459e-9ed5-ed1d4789a641",
+        "task_id": "run_3f8a2c_litreview",
+        "released_units": 20,
+        "reason": "unused_estimate",
+        "released_at": "2026-11-04T16:06:27.442Z"
+      }
+    ],
+    "usage": [
+      {
+        "workspace_id": "ws-local-default",
+        "usage_id": "usage_cap_a",
+        "task_id": "run_3f8a2c_litreview",
+        "provider_id": "prov_platform",
+        "model": "platform-model",
+        "provider_origin": "platform",
+        "input_tokens": 5000,
+        "output_tokens": 2000,
+        "latency_ms": 410,
+        "charged_units": 30,
+        "created_at": "2026-11-04T16:06:27.449Z"
+      }
+    ]
+  },
+  "run_b_cost": {
+    "task_id": "run_7b91ad_summary",
+    "charged_units": 0,
+    "released_units": 0,
+    "active_reserved_units": 25,
+    "movements": [
+      {
+        "workspace_id": "ws-local-default",
+        "transaction_id": "ctx_a0429d93-6f74-4f11-8582-02a670e70310",
+        "entry_type": "reservation_hold",
+        "amount_units": 25,
+        "task_id": "run_7b91ad_summary",
+        "reservation_id": "res_97288c2f-3296-4392-a60f-80f59b3456e9",
+        "related_id": null,
+        "corrects_transaction_id": null,
+        "created_at": "2026-11-04T16:06:27.454Z"
+      }
+    ],
+    "settlements": [],
+    "releases": [],
+    "usage": []
+  }
+}

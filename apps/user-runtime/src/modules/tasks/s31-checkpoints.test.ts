@@ -1,7 +1,7 @@
 /**
  * S31 chunk 1 — semantic checkpoints (D33, AC5; issue #32).
  *
- * The D33 field set is DURABLE STATE (the v20 run_checkpoints table) + the
+ * The D33 field set is DURABLE STATE (the v21 run_checkpoints table) + the
  * journal marker (the contract's checkpoint.taken envelope on the task
  * stream), written in ONE transaction by the runtime's CheckpointService.
  * Checkpoints are taken at SAFE SEMANTIC BOUNDARIES ONLY — a completed
@@ -13,7 +13,7 @@
  *
  * The pins:
  *
- *  1. Migration v20 (run-checkpoints): the chain head moves to v20 and the
+ *  1. Migration v21 (run-checkpoints): the chain head moves to v21 and the
  *     STRICT table exists with the full D33 column set.
  *  2. AC5 structural: the ONLY writer entry point validates the step kind
  *     against the closed semantic-boundary vocabulary — a stream/token-style
@@ -207,14 +207,17 @@ function streamEvents(rt: CheckpointRuntime, taskId: string): Array<{ type: stri
   return rows.map((row) => ({ type: row.event_type }));
 }
 
-describe("S31 migration v20 (run-checkpoints)", () => {
-  it("moves the chain head to v20 and creates the STRICT D33 table", () => {
+describe("S31 migration v21 (run-checkpoints)", () => {
+  it("moves the chain head to v21 and creates the STRICT D33 table", () => {
     const dir = track(mkdtempSync(join(tmpdir(), "shera-s31-mig-")));
     const conn = openDatabase(join(dir, "runtime.db"));
     applyMigrations(conn.db);
     const versions = appliedMigrationVersions(conn.db);
-    expect(versions[versions.length - 1]).toBe(20);
-    expect(versions).not.toContain(21);
+    expect(versions[versions.length - 1]).toBe(21);
+    // No duplicate of the head version anywhere in the chain (the hole
+    // guard moved with the head: authored v20, renumbered to v21 at the
+    // main integration where S24's landed v20 credit-ledger kept its slot).
+    expect(versions).not.toContain(22);
     expect(sqliteTableExists(conn.db, "run_checkpoints")).toBe(true);
     // The exact D33 column set (field-for-field, D33) — through the
     // adapter's column helper (the table introspection never leaves

@@ -66,6 +66,7 @@ import { registerProjectsRoutes, type ProjectsApiHandle } from "./s19-projects-a
 import { registerRunControlRoutes, type RunControlApiHandle } from "./s22-run-control-api.ts";
 import { registerRecoveryRoutes, type RecoveryApiHandle } from "./s31-recovery-api.ts";
 import { registerSchedulesRoutes, type SchedulesApiHandle } from "./s28-schedules-api.ts";
+import { registerCreditsRoutes, type CreditsApiHandle } from "./s24-credits-api.ts";
 
 export const SUBMIT_CONVERSATION_COMMAND_PATH = "/v1/conversations/commands" as const;
 export const LIST_CONVERSATION_EVENTS_PATH = "/v1/conversations/:conversation_id/events" as const;
@@ -502,6 +503,8 @@ export interface LocalApiDeps {
    * receiver. Present at every runtime composition.
    */
   schedules?: SchedulesApiHandle;
+  /** S24: the credits read surface (the ledger's own numbers). */
+  credits?: CreditsApiHandle;
   /**
    * S23: the provider registry seam — the masked catalog CRUD, credential
    * revoke/replace, enable/disable, the connection test, the AC11 override,
@@ -1293,6 +1296,12 @@ export function createLocalApi(deps: LocalApiDeps): Express {
   // must not silently lose the whole surface — G4's silent-drop class).
   if (deps.schedules !== undefined) {
     registerSchedulesRoutes(app, deps.schedules);
+  }
+
+  // S24: the credits read surface — the S9 section's and the pill's truth
+  // (the ledger's own numbers; no mutation route exists here, G4/G6).
+  if (deps.credits !== undefined) {
+    registerCreditsRoutes(app, deps.credits);
   }
 
   // Typed failures and unknown routes: the SheraError taxonomy, never an

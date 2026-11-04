@@ -1,0 +1,146 @@
+{
+  "steps": 23,
+  "pillFocusedAtStep": 22,
+  "revealOnFocus": "block",
+  "visibleFocusCount": 23,
+  "trail": [
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "Skip to conversation",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "SShera Bot",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "CCitation ManagerThe Citation Manager maintains source index",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "DDeveloperThe Developer inspects repositories, creates and m",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "GGeneral AssistantThe General Assistant handles general ques",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "PProgramming TutorThe Programming Tutor helps students under",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "RResearcherThe Researcher investigates questions and produce",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "SStudy PlannerThe Study Planner turns courses, deadlines, an",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "+ New",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "Research Paper",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "Programming Assignment",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "Exam Preparation",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "Research PaperAd-hocpack student v1.0.0",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "Research PaperPack-defined · 2 Agentswork in progress",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "Ad-hocAd-hoc · 2 Agentsfailed",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": "credits-pill",
+      "text": "145credits left25 reserved for running tasks145 Shera credit",
+      "visibleFocus": true
+    }
+  ]
+}

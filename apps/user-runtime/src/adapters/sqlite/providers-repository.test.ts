@@ -74,7 +74,11 @@ describe("provider catalog storage (S23 migration v18)", () => {
   it("appends the provider catalog as version 15 of the committed chain", () => {
     const v18 = MIGRATIONS.find((migration) => migration.version === 18);
     expect(v18?.name).toBe("provider-catalog");
-    expect(MIGRATIONS.at(-1)?.version).toBe(20);
+    // S24 appended the credit ledger after the trigger records, and S31 the
+    // run checkpoints after the credit ledger — the chain is append-only
+    // and the head moves with each slice.
+    expect(MIGRATIONS.at(-2)?.version).toBe(20);
+    expect(MIGRATIONS.at(-1)?.version).toBe(21);
   });
 
   it("creates the STRICT tables through the migration runner", () => {

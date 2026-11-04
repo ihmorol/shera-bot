@@ -12,7 +12,7 @@
  * not a convention. Between checkpoints, the lightweight progress vocabulary
  * (progress.reported frames) carries the fine grain.
  *
- * ONE transaction (D23 rule 5): the durable D33 row (the v20 run_checkpoints
+ * ONE transaction (D23 rule 5): the durable D33 row (the v21 run_checkpoints
  * table) and the task stream's `checkpoint.taken` contract envelope commit
  * together; the envelope is the journal marker the UI timeline renders, the
  * row is the recovery payload. Idempotency is the deterministic event id

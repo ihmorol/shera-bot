@@ -2,7 +2,7 @@
  * Run checkpoints repository (S31 chunk 1; PRD §13, D33) — the only place
  * run-checkpoint SQL lives.
  *
- * One row per taken semantic checkpoint (the v20 `run_checkpoints` table),
+ * One row per taken semantic checkpoint (the v21 `run_checkpoints` table),
  * keyed (workspace_id, task_id, step_id, checkpoint_version) — append-only;
  * retaking a step appends a NEW version rather than overwriting the taken
  * record (recovery evidence is never rewritten). The row is the durable D33

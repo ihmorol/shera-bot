@@ -86,13 +86,13 @@ describe("tool inventory storage (S21 migration v15)", () => {
     // orchestrator-owned renumber the slice's migration note anticipated).
     const v17 = MIGRATIONS.find((migration) => migration.version === 17);
     expect(v17?.name).toBe("tool-inventory");
-    // The S23 integration appended v18 (provider-catalog) and the S31
-    // integration appended v20 (run-checkpoints) after this migration; the
-    // S21 entry itself never moves once merged.
-    expect(MIGRATIONS.at(-1)?.version).toBe(20);
+    // The S23 integration appended v18 (provider-catalog), S24 appended v20
+    // (credit-ledger), and S31 appended v21 (run-checkpoints) after this
+    // migration; the S21 entry itself never moves once merged.
+    expect(MIGRATIONS.at(-1)?.version).toBe(21);
     const conn = openTempDatabase();
     expect(appliedMigrationVersions(conn.db)).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
     ]);
     expect(sqliteTableExists(conn.db, "tool_inventory")).toBe(true);
     expect(sqliteTableExists(conn.db, "tool_execution_history")).toBe(true);

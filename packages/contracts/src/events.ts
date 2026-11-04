@@ -26,6 +26,7 @@ import {
   Sha256Hex,
   SemVer,
 } from "./primitives.ts";
+import { MemoryScope } from "./memory.ts";
 import { RunState } from "./state-vocabulary.ts";
 import { OperationSnapshot, PackSnapshot, ProviderSnapshot } from "./snapshots.ts";
 
@@ -86,10 +87,19 @@ export const TASK_JOURNAL_EVENT_TYPES = [
 ] as const;
 export type TaskJournalEventType = (typeof TASK_JOURNAL_EVENT_TYPES)[number];
 
+/**
+ * S29 (D37, G2): the memory events — the runtime-mediated automatic-learning
+ * proposals. Not task-trigger, not task-lifecycle: their own family, riding
+ * the same typed envelope system (the proposal IS an event).
+ */
+export const MEMORY_EVENT_TYPES = ["memory.candidate_proposed"] as const;
+export type MemoryEventType = (typeof MEMORY_EVENT_TYPES)[number];
+
 export const EVENT_TYPES = [
   ...TASK_TRIGGER_EVENT_TYPES,
   ...TASK_LIFECYCLE_EVENT_TYPES,
   ...TASK_JOURNAL_EVENT_TYPES,
+  ...MEMORY_EVENT_TYPES,
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
@@ -224,6 +234,29 @@ export type ExternalEventPayload = z.infer<typeof ExternalEventPayload>;
 // Runtime-emitted payloads
 // ---------------------------------------------------------------------------
 
+/**
+ * S29 (D37, G2): `memory.candidate_proposed` — the runtime-mediated automatic
+ * learning proposal. An Agent proposes a memory candidate from conversations,
+ * tasks, files, outcomes, or corrections; the runtime validates it (the
+ * write-time secret scan and the provenance gate run BEFORE this event can
+ * exist) and journals the proposal. The payload is D37's field list verbatim:
+ * memory_id, scope, summary, source_refs, confidence, sensitivity,
+ * expires_at. The envelope's actor IS the proposing Agent — the proposal is
+ * an event, never an agent-side write (G2: the runtime validates and
+ * executes). The summary carries MEMORY content, so a secret-shaped proposal
+ * can never reach this envelope — the scan precedes the journal.
+ */
+export const MemoryCandidateProposedPayload = z.strictObject({
+  memory_id: Id,
+  scope: MemoryScope,
+  summary: z.string().min(1).max(500),
+  source_refs: z.array(z.string().min(1).max(256)).max(100),
+  confidence: z.number().min(0).max(1),
+  sensitivity: z.enum(["normal", "sensitive"]),
+  expires_at: IsoDateTime.nullable(),
+});
+export type MemoryCandidateProposedPayload = z.infer<typeof MemoryCandidateProposedPayload>;
+
 /** task.created — emitted by the G2 task-run creator alongside the new run. */
 export const TaskCreatedPayload = z.strictObject({
   trigger_event_type: z.enum(TASK_TRIGGER_EVENT_TYPES),
@@ -319,6 +352,10 @@ export const EVENT_ENVELOPES = {
   "trigger.condition_met": envelope("trigger.condition_met", ConditionMetPayload),
   "trigger.external_event": envelope("trigger.external_event", ExternalEventPayload),
   "task.created": envelope("task.created", TaskCreatedPayload),
+  "memory.candidate_proposed": envelope(
+    "memory.candidate_proposed",
+    MemoryCandidateProposedPayload,
+  ),
   "progress.reported": envelope("progress.reported", ProgressPayload),
   "artifact.published": envelope("artifact.published", ArtifactPublishedPayload),
   "checkpoint.taken": envelope("checkpoint.taken", CheckpointPayload),

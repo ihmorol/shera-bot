@@ -86,7 +86,7 @@ export function registerMemoryRoutes(app: Express, deps: MemoryApiHandle): void 
   // The ONE typed commands envelope (G2). The workspace_id travels in the
   // command body and must be THIS runtime's workspace; the actor is bound by
   // the caller (the proxy rebuilds it from the session for browser writes).
-  app.post(MEMORY_COMMANDS_PATH, (req, res) => {
+  app.post(MEMORY_COMMANDS_PATH, async (req, res) => {
     const parsed = MemoryCommand.safeParse(req.body);
     if (!parsed.success) {
       const { status, body } = contractValidationResponse(
@@ -107,7 +107,7 @@ export function registerMemoryRoutes(app: Express, deps: MemoryApiHandle): void 
       });
       return;
     }
-    res.status(200).json(deps.memory.applyCommand(parsed.data));
+    res.status(200).json(await deps.memory.applyCommand(parsed.data));
   });
 
   // ONE Agent's visible set — the acting Agent is the PATH identity (the S11

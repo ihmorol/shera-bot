@@ -34,6 +34,9 @@ const ROUND_TRIP_CASES: ReadonlyArray<{ schema: ContractName; fixture: string }>
   { schema: "TypedExecutionEvent", fixture: "event-trigger-condition.json" },
   { schema: "TypedExecutionEvent", fixture: "event-trigger-external.json" },
   { schema: "TypedExecutionEvent", fixture: "event-task-started.json" },
+  // S29 (D37, G2): the automatic-learning proposal — the runtime-mediated
+  // candidate event (the proposal IS an event; the actor is the Agent).
+  { schema: "TypedExecutionEvent", fixture: "event-memory-candidate-proposed.json" },
   { schema: "ApprovalRequest", fixture: "approval-request.json" },
   { schema: "ApprovalGrant", fixture: "approval-grant.json" },
   { schema: "ArtifactRef", fixture: "artifact-ref.json" },

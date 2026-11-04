@@ -25,7 +25,11 @@
  */
 import { randomUUID } from "node:crypto";
 
-import type { MemoryCommand } from "@shera-bot/contracts";
+import type {
+  MemoryCommand,
+  MemoryCandidateProposedPayload,
+  TypedExecutionEvent,
+} from "@shera-bot/contracts";
 
 import type {
   MemoryEntryRow,
@@ -34,31 +38,43 @@ import type {
 } from "../../adapters/sqlite/memory-repository.ts";
 import { MemoryRepositoryError } from "../../adapters/sqlite/memory-repository.ts";
 import type { CommandReceiptsRepository } from "../../adapters/sqlite/command-receipts-repository.ts";
+import type { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
 import type { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import type { OperationsRepository } from "../../adapters/sqlite/operations-repository.ts";
+import type { EventsService } from "../events/events.service.ts";
+import { scanForSecrets } from "./secret-scanner.ts";
 
 export type MemoryFailureCode =
   | "MEMORY_COMMAND_INVALID"
   | "MEMORY_PROVENANCE_REQUIRED"
+  | "MEMORY_SECRET_REJECTED"
   | "MEMORY_NOT_FOUND"
   | "MEMORY_OPERATION_NOT_FOUND"
   | "AGENT_MEMORY_ACCESS_DENIED"
   | "MEMORY_PUBLICATION_NOT_REQUESTED"
+  | "MEMORY_PUBLICATION_APPROVAL_REQUIRED"
   | "MEMORY_COMMAND_ACTOR_FORBIDDEN";
 
 export class MemoryServiceError extends Error {
   readonly code: MemoryFailureCode;
   readonly category: "validation" | "policy" | "state" | "conflict";
+  /**
+   * Structured detail for the REDACTED fault log and typed responses — the
+   * rejection's RULE classes, never the matched content (G3).
+   */
+  readonly details: Record<string, unknown> | null;
 
   constructor(
     code: MemoryFailureCode,
     category: "validation" | "policy" | "state" | "conflict",
     message: string,
+    details: Record<string, unknown> | null = null,
   ) {
     super(`${code}: ${message}`);
     this.name = "MemoryServiceError";
     this.code = code;
     this.category = category;
+    this.details = details;
   }
 }
 
@@ -67,6 +83,10 @@ export interface MemoryServiceDeps {
   operations: Pick<OperationsRepository, "getOperation" | "listRoster">;
   receipts: CommandReceiptsRepository;
   tx: SqliteTransactions;
+  /** The journal (per-stream sequence allocation for the candidate events). */
+  journal: Pick<EventJournalRepository, "nextSequence" | "listStream">;
+  /** The typed journal-append authority (G2 — the proposal IS an event). */
+  events: Pick<EventsService, "appendEvent">;
   now?: (() => string) | undefined;
 }
 
@@ -147,7 +167,22 @@ export class MemoryService {
    * the caller. Returns the command's recorded result; a replayed
    * idempotency_key replays the recorded result (D23 rule 6).
    */
-  applyCommand(command: MemoryCommand): unknown {
+  async applyCommand(command: MemoryCommand): Promise<unknown> {
+    // The write-time secret scan (AC2) runs BEFORE anything is validated
+    // into storage: the scan sees the summary and the content; a rejection
+    // leaves no receipt, no row, no version, no event — and the response
+    // names the RULE classes, never the matched content (G3).
+    if (command.type === "memory.create") {
+      const scan = await scanForSecrets(command.summary, command.content);
+      if (scan.rejected) {
+        throw new MemoryServiceError(
+          "MEMORY_SECRET_REJECTED",
+          "validation",
+          "this memory looks like a credential or secret; secrets are never stored in memory",
+          { rules: scan.rejections.map((rejection) => rejection.rule) },
+        );
+      }
+    }
     const existing = this.deps.receipts.findById(command.workspace_id, command.idempotency_key);
     if (existing) {
       return JSON.parse(existing.result_json) as unknown;
@@ -158,10 +193,13 @@ export class MemoryService {
     // receipt without its effect.
     let result: unknown;
     this.deps.tx.transaction((exec) => {
-      result =
-        command.type === "memory.create"
-          ? this.createEntry(command)
-          : this.decidePublication(command);
+      if (command.type === "memory.create") {
+        result = this.createEntry(command);
+      } else if (command.type === "memory.request_publication") {
+        result = this.requestPublication(command);
+      } else {
+        result = this.decidePublication(command);
+      }
       this.deps.receipts.create(
         {
           workspace_id: command.workspace_id,
@@ -174,6 +212,54 @@ export class MemoryService {
       );
     });
     return result;
+  }
+
+  /**
+   * Open one publication request for the queue (the S9 surface's pending
+   * rows). Idempotent per (memory, operation): an existing PENDING request
+   * for the pair is returned unchanged, never duplicated.
+   */
+  private requestPublication(
+    command: Extract<MemoryCommand, { type: "memory.request_publication" }>,
+  ): { request_id: string; status: "pending" | "approved" | "dismissed" } {
+    const entry = this.deps.memory.findEntry(command.workspace_id, command.memory_id);
+    if (!entry) {
+      throw new MemoryServiceError(
+        "MEMORY_NOT_FOUND",
+        "state",
+        "the memory does not exist in this workspace",
+      );
+    }
+    const operation = this.deps.operations.getOperation(command.workspace_id, command.operation_id);
+    if (!operation) {
+      throw new MemoryServiceError(
+        "MEMORY_OPERATION_NOT_FOUND",
+        "state",
+        "the target Operation does not exist in this workspace",
+      );
+    }
+    const existing = this.deps.memory.listPublicationRequests(command.workspace_id).find(
+      (row) => row.memory_id === command.memory_id && row.operation_id === command.operation_id,
+    );
+    if (existing) {
+      return { request_id: existing.request_id, status: existing.status };
+    }
+    const requestId = `pubreq_${randomUUID()}`;
+    this.deps.tx.transaction((exec) => {
+      this.deps.memory.insertPublicationRequest(
+        {
+          workspace_id: command.workspace_id,
+          request_id: requestId,
+          memory_id: command.memory_id,
+          operation_id: command.operation_id,
+          requested_by: command.actor.id,
+          status: "pending",
+          created_at: this.now(),
+        },
+        exec,
+      );
+    });
+    return { request_id: requestId, status: "pending" };
   }
 
   /**
@@ -326,6 +412,23 @@ export class MemoryService {
     const now = this.now();
     const approving = command.decision === "approve";
 
+    // The sensitive-approval gate (AC2): a SENSITIVE entry's publication
+    // always carries the approval record — a direct approve without a
+    // pending request is the typed refusal, no matter who asks.
+    if (approving && entry.sensitivity === "sensitive") {
+      const pending = this.deps.memory.findPendingPublicationRequest(
+        command.workspace_id,
+        command.memory_id,
+      );
+      if (!pending) {
+        throw new MemoryServiceError(
+          "MEMORY_PUBLICATION_APPROVAL_REQUIRED",
+          "policy",
+          "a sensitive memory needs a publication request before it can be approved",
+        );
+      }
+    }
+
     if (approving) {
       const requestId = `pubreq_${randomUUID()}`;
       this.deps.tx.transaction((exec) => {
@@ -411,6 +514,209 @@ export class MemoryService {
     };
   }
 
+  // ── Automatic learning (the runtime-mediated candidate path, G2) ──────────
+
+  /**
+   * Propose one memory candidate from an Agent's automatic learning
+   * (conversations, tasks, files, outcomes, corrections). The RUNTIME
+   * mediates the whole path (G2 — the event is the proposal, never an
+   * agent-side write):
+   *
+   *   1. provenance first (AC3): zero source refs is the typed refusal —
+   *      no entry, no event, nothing stored;
+   *   2. the write-time secret scan (AC2/D22): a credential-shaped candidate
+   *      is refused before anything exists — the automatic path never
+   *      becomes the leak path;
+   *   3. the entry lands (origin 'automatic') with version 1;
+   *   4. a SENSITIVE candidate surfaces in the publication queue as PENDING
+   *      (the user's approval is required before any Agent sees it); private
+   *      candidates are never copied automatically (D37) — publication is
+   *      the user's explicit decision;
+   *   5. the typed `memory.candidate_proposed` journal event carries the
+   *      D37 payload; the envelope's actor IS the proposing Agent.
+   */
+  async proposeCandidate(input: {
+    workspace_id: string;
+    proposed_by_agent_id: string;
+    scope: MemoryScopeValue;
+    summary: string;
+    content: string;
+    source_refs: string[];
+    confidence: number;
+    sensitivity: "normal" | "sensitive";
+    operation_id?: string | null;
+    task_id?: string | null;
+    expires_at?: string | null;
+  }): Promise<{ entry: MemoryEntryView; publication_requested: boolean }> {
+    // 1. Provenance (AC3) — before anything else.
+    if (input.source_refs.length === 0) {
+      throw new MemoryServiceError(
+        "MEMORY_PROVENANCE_REQUIRED",
+        "validation",
+        "an automatic memory candidate requires at least one source reference",
+      );
+    }
+    // 2. The write-time secret scan (AC2/D22) — the automatic path never
+    //    becomes the leak path.
+    const scan = await scanForSecrets(input.summary, input.content);
+    if (scan.rejected) {
+      throw new MemoryServiceError(
+        "MEMORY_SECRET_REJECTED",
+        "validation",
+        "this memory candidate looks like a credential or secret; secrets are never stored in memory",
+        { rules: scan.rejections.map((rejection) => rejection.rule) },
+      );
+    }
+    if (input.operation_id) {
+      const operation = this.deps.operations.getOperation(input.workspace_id, input.operation_id);
+      if (!operation) {
+        throw new MemoryServiceError(
+          "MEMORY_OPERATION_NOT_FOUND",
+          "state",
+          "the referenced Operation does not exist in this workspace",
+        );
+      }
+    }
+
+    const now = this.now();
+    const memoryId = `mem_${randomUUID()}`;
+    const sourceRefs = JSON.stringify(input.source_refs);
+
+    this.deps.tx.transaction((exec) => {
+      // 3. The entry + its creation version.
+      this.deps.memory.insertEntry(
+        {
+          workspace_id: input.workspace_id,
+          memory_id: memoryId,
+          scope: input.scope,
+          owner_agent_id: input.scope === "agent_private" ? input.proposed_by_agent_id : null,
+          operation_id: input.operation_id ?? null,
+          task_id: input.task_id ?? null,
+          summary: input.summary,
+          content: input.content,
+          sensitivity: input.sensitivity,
+          source_refs: sourceRefs,
+          confidence: input.confidence,
+          created_by: input.proposed_by_agent_id,
+          origin: "automatic",
+          created_at: now,
+          expires_at: input.expires_at ?? null,
+        },
+        exec,
+      );
+      this.deps.memory.insertVersion(
+        {
+          workspace_id: input.workspace_id,
+          memory_id: memoryId,
+          version: 1,
+          summary: input.summary,
+          content: input.content,
+          sensitivity: input.sensitivity,
+          source_refs: sourceRefs,
+          confidence: input.confidence,
+          change_kind: "created",
+          changed_by: input.proposed_by_agent_id,
+          created_at: now,
+        },
+        exec,
+      );
+
+      // 4. A sensitive candidate surfaces in the publication queue — the
+      //    user's approval gate before ANY Agent sees it.
+      if (input.sensitivity === "sensitive" && input.operation_id) {
+        this.deps.memory.insertPublicationRequest(
+          {
+            workspace_id: input.workspace_id,
+            request_id: `pubreq_${randomUUID()}`,
+            memory_id: memoryId,
+            operation_id: input.operation_id,
+            requested_by: input.proposed_by_agent_id,
+            status: "pending",
+            created_at: now,
+          },
+          exec,
+        );
+      }
+
+      // 5. The typed proposal event (G2): D37's payload, the proposing
+      //    Agent as the envelope's actor, the scan already passed — the
+      //    journal never receives a secret-shaped summary.
+      const streamId = `memory:${input.workspace_id}`;
+      const sequence = this.deps.journal.nextSequence(streamId, input.workspace_id, exec);
+      const event: TypedExecutionEvent = {
+        event_id: `evt_memory_candidate_${randomUUID()}`,
+        stream_id: streamId,
+        sequence,
+        event_version: 1,
+        actor: { type: "agent", id: input.proposed_by_agent_id },
+        task_id: input.task_id ?? "memory",
+        conversation_id: input.operation_id ?? "memory",
+        occurred_at: now,
+        redaction_class: "internal",
+        event_type: "memory.candidate_proposed",
+        payload: {
+          memory_id: memoryId,
+          scope: input.scope,
+          summary: input.summary,
+          source_refs: input.source_refs,
+          confidence: input.confidence,
+          sensitivity: input.sensitivity,
+          expires_at: input.expires_at ?? null,
+        } satisfies MemoryCandidateProposedPayload,
+      };
+      this.deps.events.appendEvent({
+        event_id: event.event_id,
+        stream_id: event.stream_id,
+        type: event.event_type,
+        payload: event,
+        workspace_id: input.workspace_id,
+        correlation_id: memoryId,
+      });
+    });
+
+    const entry = this.deps.memory.findEntry(input.workspace_id, memoryId);
+    if (!entry) {
+      throw new MemoryServiceError(
+        "MEMORY_NOT_FOUND",
+        "state",
+        "the created memory row could not be read back",
+      );
+    }
+    return {
+      entry: this.toView(entry),
+      publication_requested:
+        input.sensitivity === "sensitive" &&
+        input.operation_id !== undefined &&
+        input.operation_id !== null,
+    };
+  }
+
+  /**
+   * The candidate proposals' journal rows for one workspace (the memory
+   * stream) — the read the tests and the S9 provenance display consult.
+   */
+  listCandidateEvents(workspaceId: string): {
+    event_id: string;
+    event_type: "memory.candidate_proposed";
+    actor: { type: string; id: string };
+    payload: MemoryCandidateProposedPayload;
+    occurred_at: string;
+  }[] {
+    const rows = this.deps.journal.listStream(`memory:${workspaceId}`, workspaceId);
+    return rows
+      .filter((row) => row.event_type === "memory.candidate_proposed")
+      .map((row) => {
+        const envelope = JSON.parse(row.payload) as TypedExecutionEvent;
+        return {
+          event_id: envelope.event_id,
+          event_type: "memory.candidate_proposed" as const,
+          actor: envelope.actor,
+          payload: envelope.payload as MemoryCandidateProposedPayload,
+          occurred_at: envelope.occurred_at,
+        };
+      });
+  }
+
   // ── Reads (the D37 visibility table) ──────────────────────────────────────
 
   /**
@@ -480,6 +786,11 @@ export class MemoryService {
       .listEntries(workspaceId)
       .filter((entry) => !this.isExpired(entry, now))
       .filter((entry) => {
+        // The sensitive gate: a SENSITIVE entry enters the Operation context
+        // only through the user's approval (published into THIS operation).
+        if (entry.sensitivity === "sensitive") {
+          return entry.published === 1 && entry.published_into_operation_id === operationId;
+        }
         if (
           entry.scope === "agent_private" &&
           entry.published === 1 &&
@@ -562,6 +873,16 @@ export class MemoryService {
       .listEntries(workspaceId)
       .filter((entry) => !this.isExpired(entry, now))
       .filter((entry) => {
+        // The sensitive gate (D37: sensitive memories require user
+        // approval): a SENSITIVE entry never reaches an Agent's context
+        // until the user's approval published it — the owner's own private
+        // rows excepted (they are theirs).
+        if (entry.sensitivity === "sensitive") {
+          if (entry.scope === "agent_private" && entry.owner_agent_id === agentId) {
+            return true;
+          }
+          return entry.published === 1 && entry.published_into_operation_id === operationId;
+        }
         switch (entry.scope) {
           case "agent_private":
             // The owner always sees it. Another Agent sees it ONLY through

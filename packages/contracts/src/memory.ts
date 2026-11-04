@@ -95,10 +95,25 @@ export const MemoryCommand = z.discriminatedUnion("type", [
     operation_id: Id,
     decision: z.enum(["approve", "dismiss"]),
   }),
+  z.strictObject({
+    command_id: Id,
+    idempotency_key: Id,
+    workspace_id: WorkspaceId,
+    actor: Actor,
+    issued_at: IsoDateTime,
+    type: z.literal("memory.request_publication"),
+    memory_id: Id,
+    /** The Operation the publication is requested into. */
+    operation_id: Id,
+  }),
 ]);
 export type MemoryCommand = z.infer<typeof MemoryCommand>;
 export type MemoryCreateCommand = Extract<MemoryCommand, { type: "memory.create" }>;
 export type MemoryPublishDecisionCommand = Extract<
   MemoryCommand,
   { type: "memory.publish_decision" }
+>;
+export type MemoryRequestPublicationCommand = Extract<
+  MemoryCommand,
+  { type: "memory.request_publication" }
 >;

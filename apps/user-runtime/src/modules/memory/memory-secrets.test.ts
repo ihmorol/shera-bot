@@ -21,7 +21,7 @@ import { fileURLToPath } from "node:url";
 
 import { afterAll, describe, expect, it } from "vitest";
 
-import { DEFAULT_WORKSPACE_ID, composeRuntime, type RuntimeHandle } from "../transport/local-api/compose.ts";
+import { DEFAULT_WORKSPACE_ID, composeRuntime, type RuntimeHandle } from "../../transport/local-api/compose.ts";
 import {
   cleanupTempResources,
   makeTempDir,
@@ -132,6 +132,19 @@ const SECRET_FIXTURES: ReadonlyArray<{ label: string; content: string; needle: s
     content:
       "client_secret: Zx91vWq7Pp3LmKd8Rn5Tj2Yh6Bg4Fc0As1Ew9Xz7Qa3Nb5Mc1Vr",
     needle: "Zx91vWq7Pp3LmKd8Rn5Tj2Yh6Bg4Fc0As1Ew9Xz7Qa3Nb5Mc1Vr",
+  },
+  {
+    // NO key name names this one — only the embedded secretlint preset's
+    // GitHub rule sees it. The embed must contribute, not decorate.
+    label: "bare GitHub token (no key name)",
+    content: "The release pipeline pushes with ghp_Z9y8x7W6v5U4t3S2r1Q0p9O8n7M6l5K4j3H",
+    needle: "ghp_Z9y8x7W6v5U4t3S2r1Q0p9O8n7M6l5K4j3H",
+  },
+  {
+    // Same for the AWS access-key id shape (the preset's AWS rule).
+    label: "bare AWS access key id",
+    content: "The exporter reads with AKIAQ2W3E4R5T6Y7U8I0",
+    needle: "AKIAQ2W3E4R5T6Y7U8I0",
   },
 ];
 
@@ -336,7 +349,8 @@ describe("S29 chunk 2: automatic learning with provenance (AC3, G2)", () => {
 
     const candidates = runtime.memory.listCandidateEvents(WORKSPACE);
     const mine = candidates.filter(
-      (event) => (event.payload as { memory_id: string }).memory_id === accepted.entry.memory_id,
+      (event: { payload: { memory_id: string } }) =>
+        event.payload.memory_id === accepted.entry.memory_id,
     );
     expect(mine).toHaveLength(1);
     expect(mine[0]!.event_type).toBe("memory.candidate_proposed");

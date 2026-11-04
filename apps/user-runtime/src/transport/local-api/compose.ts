@@ -1456,6 +1456,8 @@ function wire(
     operations: operationsRepository,
     receipts,
     tx,
+    journal,
+    events,
     ...(options.now ? { now: options.now } : {}),
   });
   const schedulerWatcherSources: SchedulerWatcherSources = {

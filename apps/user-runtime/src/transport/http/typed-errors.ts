@@ -868,6 +868,16 @@ export function toSheraErrorResponse(error: unknown, correlationId?: string): Ht
         status: 400,
         safe_message: "There is no pending publication request or active publication to dismiss.",
       },
+      MEMORY_PUBLICATION_APPROVAL_REQUIRED: {
+        status: 400,
+        safe_message:
+          "A sensitive memory needs a publication request before it can be approved.",
+      },
+      MEMORY_SECRET_REJECTED: {
+        status: 400,
+        safe_message:
+          "This memory looks like a credential or secret. Secrets are never stored in memory.",
+      },
       MEMORY_COMMAND_ACTOR_FORBIDDEN: {
         status: 403,
         safe_message: "Publication is an explicit user decision.",
@@ -882,7 +892,10 @@ export function toSheraErrorResponse(error: unknown, correlationId?: string): Ht
         safe_message: mapping.safe_message,
         retryable: false,
         user_action: null,
-        internal_details: null,
+        // The rejection's structured detail — for the secret rejection this
+        // is the RULE classes only (the service never puts matched content
+        // here, G3).
+        internal_details: error.details,
         correlation_id,
       },
     };

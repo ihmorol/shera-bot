@@ -18,8 +18,10 @@ import { openDatabase, type SqliteConnection } from "../../adapters/sqlite/conne
 import { applyMigrations } from "../../adapters/sqlite/migrations.ts";
 import { MemoryRepository } from "../../adapters/sqlite/memory-repository.ts";
 import { CommandReceiptsRepository } from "../../adapters/sqlite/command-receipts-repository.ts";
+import { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
 import { OperationsRepository } from "../../adapters/sqlite/operations-repository.ts";
 import { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
+import { EventsService } from "../events/events.service.ts";
 import {
   MemoryService,
   MemoryServiceError,
@@ -44,11 +46,14 @@ function makeSuite(): Suite {
   applyMigrations(conn.db);
   const tx = new SqliteTransactions(conn.db);
   const memory = new MemoryRepository(tx);
+  const journal = new EventJournalRepository(tx);
   const service = new MemoryService({
     memory,
     operations: new OperationsRepository(tx),
     receipts: new CommandReceiptsRepository(tx),
     tx,
+    journal,
+    events: new EventsService(journal, tx),
   });
   const suite: Suite = {
     service,
@@ -90,33 +95,27 @@ function createCommand(extra: Partial<Extract<MemoryCommand, { type: "memory.cre
 }
 
 describe("memory service backstops (S29 chunk 1)", () => {
-  it("refuses an agent_private create without its owner — the shape rule a programmatic caller cannot bypass", () => {
+  it("refuses an agent_private create without its owner — the shape rule a programmatic caller cannot bypass", async () => {
     const suite = makeSuite();
     const command = createCommand({ scope: "agent_private", owner_agent_id: null });
-    expect(() => suite.service.applyCommand(command)).toThrowError(MemoryServiceError);
-    try {
-      suite.service.applyCommand(command);
-    } catch (error) {
-      expect((error as MemoryServiceError).code).toBe("MEMORY_COMMAND_INVALID");
-    }
+    await expect(suite.service.applyCommand(command)).rejects.toMatchObject({
+      code: "MEMORY_COMMAND_INVALID",
+    });
   });
 
-  it("refuses a create without provenance — AC3's boundary holds for user and automatic writes alike", () => {
+  it("refuses a create without provenance — AC3's boundary holds for user and automatic writes alike", async () => {
     const suite = makeSuite();
     const command = createCommand({ source_refs: [] });
-    expect(() => suite.service.applyCommand(command)).toThrowError(MemoryServiceError);
-    try {
-      suite.service.applyCommand(command);
-    } catch (error) {
-      expect((error as MemoryServiceError).code).toBe("MEMORY_PROVENANCE_REQUIRED");
-    }
+    await expect(suite.service.applyCommand(command)).rejects.toMatchObject({
+      code: "MEMORY_PROVENANCE_REQUIRED",
+    });
   });
 
   it("refuses an agent-actor publication decision — agents never self-approve (G6)", async () => {
     const suite = makeSuite();
-    const created = suite.service.applyCommand(
+    const created = (await suite.service.applyCommand(
       createCommand({ scope: "workspace" }),
-    ) as { entry: { memory_id: string } };
+    )) as { entry: { memory_id: string } };
     const decision = {
       command_id: `cmd_${randomUUID()}`,
       idempotency_key: `idem_${randomUUID()}`,
@@ -128,17 +127,14 @@ describe("memory service backstops (S29 chunk 1)", () => {
       operation_id: "op_missing",
       decision: "approve",
     } as Extract<MemoryCommand, { type: "memory.publish_decision" }>;
-    expect(() => suite.service.applyCommand(decision)).toThrowError(MemoryServiceError);
-    try {
-      suite.service.applyCommand(decision);
-    } catch (error) {
-      expect((error as MemoryServiceError).code).toBe("MEMORY_COMMAND_ACTOR_FORBIDDEN");
-    }
+    await expect(suite.service.applyCommand(decision)).rejects.toMatchObject({
+      code: "MEMORY_COMMAND_ACTOR_FORBIDDEN",
+    });
   });
 
-  it("records version 1 at creation and keeps history append-only across an edit", () => {
+  it("records version 1 at creation and keeps history append-only across an edit", async () => {
     const suite = makeSuite();
-    const created = suite.service.applyCommand(createCommand()) as {
+    const created = (await suite.service.applyCommand(createCommand())) as {
       entry: { memory_id: string };
     };
     const memoryId = created.entry.memory_id;
@@ -186,11 +182,15 @@ describe("memory service backstops (S29 chunk 1)", () => {
     expect(after[1]!.content).toBe("The workspace note's amended content.");
   });
 
-  it("replays a command's recorded result on a repeated idempotency key (D23 rule 6)", () => {
+  it("replays a command's recorded result on a repeated idempotency key (D23 rule 6)", async () => {
     const suite = makeSuite();
     const command = createCommand();
-    const first = suite.service.applyCommand(command) as { entry: { memory_id: string } };
-    const replay = suite.service.applyCommand(command) as { entry: { memory_id: string } };
+    const first = (await suite.service.applyCommand(command)) as {
+      entry: { memory_id: string };
+    };
+    const replay = (await suite.service.applyCommand(command)) as {
+      entry: { memory_id: string };
+    };
     expect(replay.entry.memory_id).toBe(first.entry.memory_id);
     expect(suite.memory.listEntries(WORKSPACE)).toHaveLength(1);
   });

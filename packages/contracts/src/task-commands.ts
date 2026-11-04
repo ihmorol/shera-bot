@@ -63,6 +63,16 @@ export const PAUSE_RETRY_EXHAUSTED = command("pause_retry_exhausted");
 export const RESUME_TASK = command("resume_task");
 export const RECOVERY_REQUIRED = command("recovery_required");
 export const RECOVERY_RESUME = command("recovery_resume");
+/**
+ * S31 (D32/D33, E13): the runtime-actor AUTO-resume the 2026-09-19 review
+ * note reserved for this layer. Legal ONLY where the recorded E13 recovery
+ * class on the checkpoint's pending action permits it (replayable, or
+ * idempotent_retry with its recorded key) — the CheckpointService record is
+ * the authorization data, the RecoveryDriver is the only caller. A separate
+ * command + reason so the journal never mistakes a class-driven resume for a
+ * human approval.
+ */
+export const RECOVERY_AUTO_RESUME = command("recovery_auto_resume");
 export const COMPLETE_TASK = command("complete_task");
 export const FAIL_TASK = command("fail_task");
 export const CANCEL_TASK = command("cancel_task");
@@ -87,6 +97,7 @@ export const TASK_COMMAND_TYPES = [
   "resume_task",
   "recovery_required",
   "recovery_resume",
+  "recovery_auto_resume",
   "complete_task",
   "fail_task",
   "cancel_task",
@@ -113,6 +124,7 @@ export const TaskCommand = z.discriminatedUnion("type", [
   RESUME_TASK,
   RECOVERY_REQUIRED,
   RECOVERY_RESUME,
+  RECOVERY_AUTO_RESUME,
   COMPLETE_TASK,
   FAIL_TASK,
   CANCEL_TASK,

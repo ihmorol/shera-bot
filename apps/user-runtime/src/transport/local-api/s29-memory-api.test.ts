@@ -335,6 +335,131 @@ describe("S29 memory: the AC27 publication boundary (integration)", () => {
     await running.close();
   });
 
+  it("routes the detail read through the D37 visibility gate — the four leak probes are typed denials (fix-round F1)", async () => {
+    // The detail read must answer through the SAME predicate the context
+    // projection uses (expiry + the sensitive gate + participation + the D37
+    // table) — a hand-rolled ownership check is how a NON-participant Agent
+    // could read an unpublished sensitive entry, an expired entry, another
+    // Operation's entry, or a sensitive workspace entry. Every probe below
+    // expects the typed runtime denial (403 AGENT_MEMORY_ACCESS_DENIED).
+    const running = await composeOn(join(makeTempDir("shera-s29-f1gate-"), "runtime.db"));
+    const { origin } = running;
+
+    // opA holds the researcher only; the general assistant is rostered
+    // elsewhere, so any opA-entry read as the general assistant is a
+    // non-participant read.
+    const opA = await post(origin, "/v1/operations", {
+      workspace_id: WORKSPACE,
+      definition_ref: null,
+      name: "Roster A",
+      roster_agent_ids: [RESEARCHER],
+      coordinator_agent_id: RESEARCHER,
+    });
+    expect(opA.status).toBe(201);
+    const opAId = opA.body["operation_id"] as string;
+
+    const detail = async (agentId: string, memoryId: string) =>
+      get(origin, `/v1/agents/${agentId}/memory/entries/${memoryId}?workspace_id=${WORKSPACE}`);
+
+    // Probe (a): an UNPUBLISHED SENSITIVE operation-scope entry — no
+    // publication ever happened, so no Agent may read it, participant or not.
+    const sensitive = await post(
+      origin,
+      "/v1/memory/commands",
+      createCommand({
+        scope: "operation",
+        operation_id: opAId,
+        summary: "Unpublished sensitive context",
+        content: "The sensitive sweep touches participant records and is not approved yet.",
+        sensitivity: "sensitive",
+        source_refs: [`conversation://${opAId}/messages`],
+        confidence: 0.8,
+      }),
+    );
+    expect(sensitive.status).toBe(200);
+    const sensitiveId = (sensitive.body["entry"] as MemoryEntryView).memory_id;
+    for (const viewer of [GENERAL, RESEARCHER]) {
+      const denied = await detail(viewer, sensitiveId);
+      expect(denied.status, `unpublished sensitive entry read as ${viewer}`).toBe(403);
+      expect(denied.body).toMatchObject({ code: "AGENT_MEMORY_ACCESS_DENIED" });
+      expect(JSON.stringify(denied.body)).not.toContain("participant records");
+    }
+
+    // Probe (b): an EXPIRED entry — expiry is a visibleEntries dimension, so
+    // the detail read denies it even to a workspace viewer.
+    const expired = await post(
+      origin,
+      "/v1/memory/commands",
+      createCommand({
+        scope: "workspace",
+        summary: "A note that expired",
+        content: "This workspace note expired before anyone read it.",
+        sensitivity: "normal",
+        source_refs: ["conversation://direct/user_emon"],
+        confidence: 0.6,
+        expires_at: "2026-11-01T00:00:00.000Z",
+      }),
+    );
+    expect(expired.status).toBe(200);
+    const expiredId = (expired.body["entry"] as MemoryEntryView).memory_id;
+    const expiredRead = await detail(RESEARCHER, expiredId);
+    expect(expiredRead.status).toBe(403);
+    expect(expiredRead.body).toMatchObject({ code: "AGENT_MEMORY_ACCESS_DENIED" });
+    expect(JSON.stringify(expiredRead.body)).not.toContain("expired before anyone");
+
+    // Probe (c): an Operation-scope entry of an Operation the viewer is NOT
+    // rostered on — participation is the D37 operation row's gate.
+    const opMemory = await post(
+      origin,
+      "/v1/memory/commands",
+      createCommand({
+        scope: "operation",
+        operation_id: opAId,
+        summary: "Roster A decision",
+        content: "Only roster A participants may read this operation decision.",
+        sensitivity: "normal",
+        source_refs: [`conversation://${opAId}/messages`],
+        confidence: 0.7,
+      }),
+    );
+    expect(opMemory.status).toBe(200);
+    const opMemoryId = (opMemory.body["entry"] as MemoryEntryView).memory_id;
+    const nonParticipant = await detail(GENERAL, opMemoryId);
+    expect(nonParticipant.status).toBe(403);
+    expect(nonParticipant.body).toMatchObject({ code: "AGENT_MEMORY_ACCESS_DENIED" });
+    expect(JSON.stringify(nonParticipant.body)).not.toContain("roster A participants");
+    // The participant still reads it — the gate denies the NON-participant,
+    // never the D37-granted viewer.
+    const participant = await detail(RESEARCHER, opMemoryId);
+    expect(participant.status).toBe(200);
+    expect((participant.body as MemoryEntryView).memory_id).toBe(opMemoryId);
+
+    // Probe (d): a WORKSPACE-scope SENSITIVE entry — the sensitive gate holds
+    // it from every Agent until the user's approval publishes it.
+    const sensitiveWorkspace = await post(
+      origin,
+      "/v1/memory/commands",
+      createCommand({
+        scope: "workspace",
+        summary: "Sensitive workspace note",
+        content: "A workspace-scoped sensitive note no Agent may read yet.",
+        sensitivity: "sensitive",
+        source_refs: ["conversation://direct/user_emon"],
+        confidence: 0.7,
+      }),
+    );
+    expect(sensitiveWorkspace.status).toBe(200);
+    const sensitiveWorkspaceId = (sensitiveWorkspace.body["entry"] as MemoryEntryView).memory_id;
+    for (const viewer of [GENERAL, RESEARCHER]) {
+      const denied = await detail(viewer, sensitiveWorkspaceId);
+      expect(denied.status, `workspace sensitive entry read as ${viewer}`).toBe(403);
+      expect(denied.body).toMatchObject({ code: "AGENT_MEMORY_ACCESS_DENIED" });
+      expect(JSON.stringify(denied.body)).not.toContain("no Agent may read yet");
+    }
+
+    await running.close();
+  });
+
   it("requires provenance and a scope owner shape: an agent_private create without its owner is the typed 400; provenance rides every entry", async () => {
     const running = await composeOn(join(makeTempDir("shera-s29-shape-"), "runtime.db"));
     const { origin } = running;

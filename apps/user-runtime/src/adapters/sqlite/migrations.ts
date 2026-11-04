@@ -1314,6 +1314,59 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
         ON trigger_firings (workspace_id, trigger_id, fired_at);
     `,
   },
+  /**
+   * v20 — semantic run checkpoints (S31 chunk 1; PRD §13, D32, D33, E13,
+   * AC19/AC25): the durable D33 field set behind restart recovery. One row
+   * per taken checkpoint, keyed (workspace_id, task_id, step_id,
+   * checkpoint_version) — append-only, the step's history preserved. Rows are
+   * written by the runtime's CheckpointService at SAFE SEMANTIC BOUNDARIES
+   * ONLY (the closed step_kind vocabulary enforced at the column AND in the
+   * writer — a stream/token step is unrepresentable, AC5's structural
+   * guarantee); the task stream's checkpoint.taken envelope is the journal
+   * marker the UI timeline renders, and this table is the recovery payload.
+   *
+   * completed_actions / pending_action / artifact_refs / provider_usage /
+   * lease_state / approval_state / external_effect_state are the D33 record
+   * fields as typed JSON (the schemas live in the checkpoint service, the
+   * column guarantees object/array shape only — the provider-catalog
+   * headers_json discipline). lease_state and approval_state CAPTURE the
+   * recorded S16 lease and S20 approval states at the boundary — never a new
+   * mechanism. resume_instructions is the bounded human-readable plan the
+   * recovery surfaces render honestly ("resumed from last safe step").
+   *
+   * No FOREIGN KEY on (workspace_id, task_id): the run row is owned by the
+   * operations repositories and validated by the writers — the v4/v5/v6
+   * discipline.
+   */
+  {
+    version: 20,
+    name: "run-checkpoints",
+    sql: `
+      CREATE TABLE IF NOT EXISTS run_checkpoints (
+        workspace_id         TEXT    NOT NULL,
+        task_id              TEXT    NOT NULL,
+        step_id              TEXT    NOT NULL CHECK (length(step_id) BETWEEN 1 AND 128),
+        checkpoint_version   INTEGER NOT NULL CHECK (checkpoint_version >= 1),
+        step_kind            TEXT    NOT NULL CHECK (step_kind IN (
+          'completed_search', 'downloaded_document', 'saved_artifact',
+          'applied_patch', 'completed_test_run', 'received_approval',
+          'confirmed_external_request', 'tool_execution')),
+        completed_actions_json TEXT  NOT NULL CHECK (json_type(completed_actions_json) = 'array'),
+        pending_action_json  TEXT    CHECK (pending_action_json IS NULL OR json_type(pending_action_json) = 'object'),
+        artifact_refs_json   TEXT    NOT NULL CHECK (json_type(artifact_refs_json) = 'array'),
+        provider_usage_json  TEXT    CHECK (provider_usage_json IS NULL OR json_type(provider_usage_json) = 'object'),
+        lease_state_json     TEXT    CHECK (lease_state_json IS NULL OR json_type(lease_state_json) = 'object'),
+        approval_state_json  TEXT    CHECK (approval_state_json IS NULL OR json_type(approval_state_json) = 'object'),
+        external_effect_state_json TEXT CHECK (external_effect_state_json IS NULL OR json_type(external_effect_state_json) = 'object'),
+        resume_instructions  TEXT    NOT NULL CHECK (length(resume_instructions) BETWEEN 1 AND 2000),
+        created_at           TEXT    NOT NULL,
+        PRIMARY KEY (workspace_id, task_id, step_id, checkpoint_version)
+      ) STRICT;
+
+      CREATE INDEX IF NOT EXISTS run_checkpoints_by_task_idx
+        ON run_checkpoints (workspace_id, task_id, checkpoint_version);
+    `,
+  },
 ];
 
 /**

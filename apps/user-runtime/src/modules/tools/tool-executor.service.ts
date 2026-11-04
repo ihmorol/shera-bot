@@ -48,7 +48,7 @@
  */
 import { createHash, randomUUID } from "node:crypto";
 
-import type { ResourceLimits, TaskRun, TaskRejection } from "@shera-bot/contracts";
+import type { RecoveryClass, ResourceLimits, TaskRun, TaskRejection } from "@shera-bot/contracts";
 
 import type {
   ApprovalPauseResult,
@@ -108,6 +108,25 @@ export interface ExecutorApprovalsPort {
   checkExecutionAllowed(input: ExecutionRecheckInput): ExecutionRecheckResult;
   createRequestFromTypedProposal(input: CreateRequestFromTypedProposalInput): ApprovalPauseResult;
   consumeOneTimeGrant(workspaceId: string, grantId: string): boolean;
+}
+
+/**
+ * S31 (D33): the semantic checkpoint port. A SUCCEEDED tool execution IS a
+ * recorded semantic boundary — the executor OFFERS it, the CheckpointService
+ * validates and writes it (the closed boundary vocabulary lives there, not
+ * here). Contained: the port is called inside the settle path but its own
+ * failures never change the execution outcome.
+ */
+export interface ToolCheckpointPort {
+  recordFromToolExecution(input: {
+    workspaceId: string;
+    taskId: string;
+    conversationId: string;
+    executionId: string;
+    toolId: string;
+    capability: string;
+    recovery: RecoveryClass;
+  }): void;
 }
 
 export class ToolExecutorError extends Error {
@@ -214,6 +233,11 @@ export interface ToolExecutorDeps {
   tx: SqliteTransactions;
   /** The S20 approval machinery (chunk 3 wires the composed service). */
   approvals?: ExecutorApprovalsPort;
+  /**
+   * S31 (D33): the semantic checkpoint writer. Absent = no checkpoints are
+   * taken (G4 — the executor behaves exactly as before S31).
+   */
+  checkpoints?: ToolCheckpointPort;
   /** Injected millisecond clock (deterministic in tests). */
   nowMs?: () => number;
   /** Injected ISO clock for history rows. */
@@ -864,7 +888,36 @@ export class ToolExecutor {
       },
       this.exec(),
     );
+    this.checkpointSucceededExecution(input, execution_id, resolved);
     return { outcome: "executed", execution_id, result_summary: resultSummary, run };
+  }
+
+  /**
+   * S31 (D33): offer the succeeded execution to the checkpoint writer — a
+   * completed tool step IS a semantic boundary. Contained twice over: the
+   * writer validates the record and its failures never change the (already
+   * settled) execution outcome.
+   */
+  private checkpointSucceededExecution(
+    input: ToolProposalInput,
+    executionId: string,
+    resolved: NonNullable<ReturnType<ToolRegistry["resolve"]>>,
+  ): void {
+    const port = this.deps.checkpoints;
+    if (port === undefined) return;
+    try {
+      port.recordFromToolExecution({
+        workspaceId: input.proposal.workspace_id,
+        taskId: input.proposal.task_id,
+        conversationId: input.proposal.conversation_id,
+        executionId,
+        toolId: resolved.definition.tool_id,
+        capability: input.proposal.capability,
+        recovery: resolved.definition.recovery,
+      });
+    } catch {
+      // A checkpoint gap is honest; a crashed executor is not.
+    }
   }
 
   /**
@@ -971,6 +1024,7 @@ export class ToolExecutor {
         exec,
       );
     });
+    this.checkpointSucceededExecution(input, execution_id, args.resolved);
     return { outcome: "executed", execution_id, result_summary: resultSummary, run };
   }
 

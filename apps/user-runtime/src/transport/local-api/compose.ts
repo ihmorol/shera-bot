@@ -146,6 +146,8 @@ import {
 } from "../../modules/workers/worker-reconciliation.ts";
 import { RetryCoordinator } from "../../modules/tasks/retry-coordinator.service.ts";
 import { RunCancellationService } from "../../modules/tasks/run-cancellation.service.ts";
+import { CheckpointService } from "../../modules/tasks/checkpoint.service.ts";
+import { RunCheckpointsRepository } from "../../adapters/sqlite/run-checkpoints-repository.ts";
 import { buildRunControlApiHandle, type RunControlApiHandle } from "./s22-run-control-api.ts";
 import { TriggersRepository } from "../../adapters/sqlite/triggers-repository.ts";
 import { SchedulesService } from "../../modules/schedules/schedules.service.ts";
@@ -496,6 +498,12 @@ export interface RuntimeHandle {
    */
   retryCoordinator: RetryCoordinator;
   /**
+   * S31 (D33): the semantic checkpoint writer — the v20 run_checkpoints
+   * table + the checkpoint.taken journal markers, taken at safe semantic
+   * boundaries only (the recovery slice's restart input).
+   */
+  checkpoints: CheckpointService;
+  /**
    * S22: the run-control HTTP surface (the user cancel command + the run
    * journal read). The routes live on the app; the handle is the test and
    * operator seam.
@@ -557,6 +565,7 @@ interface Wired {
   browser: BrowserService | undefined;
   projects: ProjectsApiHandle;
   retryCoordinator: RetryCoordinator;
+  checkpoints: CheckpointService;
   runCancellation: RunCancellationService;
   runControl: RunControlApiHandle;
   adminCommands: RuntimeAdminCommandsHandle;
@@ -566,6 +575,8 @@ interface Wired {
   wakeManager: SchedulerWakeManager;
   noteStore: Map<string, string>;
   setPublisher(publisher: ConversationPublisher): void;
+  /** S31: late-bound checkpoint marker fanout (the same post-commit cell). */
+  setCheckpointPublisher(publisher: ((event: EventEnvelope) => void) | undefined): void;
 }
 
 /**
@@ -689,6 +700,21 @@ function wire(
   const journal = new EventJournalRepository(tx);
   const receipts = new CommandReceiptsRepository(tx);
   const events = new EventsService(journal, tx);
+
+  // S31 (D33): the semantic checkpoint writer — the v20 run_checkpoints table
+  // and the ONE journal in the same transaction; the task stream's
+  // checkpoint.taken envelope fans out post-commit through the SAME
+  // late-bound cell every other service uses (B4).
+  const runCheckpoints = new RunCheckpointsRepository(tx);
+  let checkpointPublisher: ((event: EventEnvelope) => void) | undefined = undefined;
+  const checkpointService = new CheckpointService({
+    tx,
+    journal,
+    events,
+    checkpoints: runCheckpoints,
+    ...(options.now ? { now: options.now } : {}),
+    publish: (event) => checkpointPublisher?.(event),
+  });
 
   // Late-bound fanout: subscribers bind after construction (the WS gateway
   // mounts later); the post-commit discipline lives in the service, and the
@@ -1243,6 +1269,12 @@ function wire(
     tools: toolsRepository,
     tx,
     approvals,
+    // S31 (D33): a succeeded tool execution IS a semantic boundary — the
+    // executor offers it, the CheckpointService validates the record against
+    // the closed boundary vocabulary (the AC5 gate lives there, not here).
+    checkpoints: {
+      recordFromToolExecution: (input) => checkpointService.recordFromToolExecution(input),
+    },
     ...(options.now ? { now: options.now } : {}),
   });
   if (options.scriptedToolProposal) {
@@ -1582,6 +1614,7 @@ function wire(
     browser,
     projects: projectsApi,
     retryCoordinator,
+    checkpoints: checkpointService,
     runCancellation,
     runControl: runControlApi,
     adminCommands,
@@ -1592,6 +1625,9 @@ function wire(
     noteStore: noteBindings.notes,
     setPublisher(next) {
       publisher = next;
+    },
+    setCheckpointPublisher(next: ((event: EventEnvelope) => void) | undefined) {
+      checkpointPublisher = next;
     },
   };
 }
@@ -1703,6 +1739,10 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     wired.scheduler.handleCommittedEvent(event);
   }, logFault);
   wired.setPublisher(broadcast);
+  // S31: the checkpoint markers ride the SAME post-commit fanout (contained
+  // twice over — the service contains its own publish failures, and this
+  // wrapper would contain any remaining one, B4).
+  wired.setCheckpointPublisher(broadcast);
 
   // D51 seam wiring: adapters propose through the sink; the service validates
   // and executes into the journal; committed envelopes fan out on the WS task
@@ -1838,6 +1878,7 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     browser: wired.browser,
     projects: wired.projects,
     retryCoordinator: wired.retryCoordinator,
+    checkpoints: wired.checkpoints,
     runControl: wired.runControl,
     providers: wired.providers,
     schedules: wired.schedules,

@@ -92,12 +92,13 @@ describe("agent identities (S11 migration v4)", () => {
     const v5 = MIGRATIONS.find((migration) => migration.version === 5);
     expect(v4?.name).toBe("agent-identities");
     expect(v5?.name).toBe("agent-direct-chat-binding");
-    // S23 appended the provider catalog after S21's tool inventory, and S28
-    // appended the trigger records after the provider catalog — the chain is
+    // S23 appended the provider catalog after S21's tool inventory, S28
+    // appended the trigger records after the provider catalog, and S31
+    // appended the run checkpoints after the trigger records — the chain is
     // append-only and the head moves with each slice; the orchestrator
     // renumbers at integration.
-    expect(MIGRATIONS.at(-1)?.version).toBe(19);
-    expect(MIGRATIONS.at(-1)?.name).toBe("trigger-records");
+    expect(MIGRATIONS.at(-1)?.version).toBe(20);
+    expect(MIGRATIONS.at(-1)?.name).toBe("run-checkpoints");
     expect(MIGRATIONS.find((migration) => migration.version === 14)?.name).toBe("terminal-events");
   });
 

@@ -85,9 +85,9 @@ function firingInput(overrides: Partial<TriggerFiringInsert> = {}): TriggerFirin
 }
 
 describe("v19 migration (trigger records)", () => {
-  it("is the chain head with the trigger-records tables STRICT and workspace-scoped", () => {
-    expect(MIGRATIONS.at(-1)?.version).toBe(19);
-    expect(MIGRATIONS.at(-1)?.name).toBe("trigger-records");
+  it("keeps the trigger-records tables STRICT and workspace-scoped (S31's v20 run-checkpoints is now the chain head)", () => {
+    expect(MIGRATIONS.at(-1)?.version).toBe(20);
+    expect(MIGRATIONS.at(-1)?.name).toBe("run-checkpoints");
     expect(appliedMigrationVersions(newDb().conn.db)).toContain(19);
   });
 

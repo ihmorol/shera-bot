@@ -90,8 +90,9 @@ describe("v19 migration (trigger records)", () => {
     // itself never moves once merged.
     const v19 = MIGRATIONS.find((migration) => migration.version === 19);
     expect(v19?.name).toBe("trigger-records");
-    expect(MIGRATIONS.at(-1)?.version).toBe(20);
-    expect(MIGRATIONS.at(-1)?.name).toBe("credit-ledger");
+    // S29 appended the v21 memory tables (issue #30) — the pin tracks the head.
+    expect(MIGRATIONS.at(-1)?.version).toBe(21);
+    expect(MIGRATIONS.at(-1)?.name).toBe("memory");
     expect(appliedMigrationVersions(newDb().conn.db)).toContain(19);
   });
 

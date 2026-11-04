@@ -7,7 +7,7 @@
  */
 import { z } from "zod";
 
-import { Id, IsoDateTime, WorkspaceId } from "./primitives.ts";
+import { Actor, Id, IsoDateTime, WorkspaceId } from "./primitives.ts";
 
 /** D37 scopes. */
 export const MEMORY_SCOPES = [
@@ -49,3 +49,56 @@ export const MemoryEntry = z.strictObject({
   expires_at: IsoDateTime.nullable(),
 });
 export type MemoryEntry = z.infer<typeof MemoryEntry>;
+
+/**
+ * S29 (issue #30; D37, G2/G6): the typed user commands the memory surface
+ * accepts. One commands envelope, one discriminated union — the runtime
+ * validates every command against its schema (G2) and every acting actor is
+ * bound SERVER-SIDE by the proxy's session binding (the browser client sends
+ * no actor of its own choosing; the S20/S23/S28 convention).
+ *
+ * The command union grows with the user controls (edit/restore/forget/auto
+ * toggles ride the same envelope); publication is its own decision command —
+ * the D37 explicit publication step (AC27) is a USER action, never an
+ * agent-side write.
+ */
+export const MemoryCommand = z.discriminatedUnion("type", [
+  z.strictObject({
+    command_id: Id,
+    idempotency_key: Id,
+    workspace_id: WorkspaceId,
+    actor: Actor,
+    issued_at: IsoDateTime,
+    type: z.literal("memory.create"),
+    scope: MemoryScope,
+    /** Owner Agent for agent_private memories; required exactly there. */
+    owner_agent_id: Id.nullable(),
+    operation_id: Id.nullable(),
+    task_id: Id.nullable(),
+    summary: z.string().min(1).max(500),
+    content: z.string().min(1).max(20000),
+    sensitivity: z.enum(["normal", "sensitive"]),
+    /** D37: source references are preserved — provenance is never optional. */
+    source_refs: z.array(z.string().min(1).max(256)).max(100),
+    confidence: z.number().min(0).max(1),
+    expires_at: IsoDateTime.nullable(),
+  }),
+  z.strictObject({
+    command_id: Id,
+    idempotency_key: Id,
+    workspace_id: WorkspaceId,
+    actor: Actor,
+    issued_at: IsoDateTime,
+    type: z.literal("memory.publish_decision"),
+    memory_id: Id,
+    /** The Operation the entry is published into (or withdrawn from). */
+    operation_id: Id,
+    decision: z.enum(["approve", "dismiss"]),
+  }),
+]);
+export type MemoryCommand = z.infer<typeof MemoryCommand>;
+export type MemoryCreateCommand = Extract<MemoryCommand, { type: "memory.create" }>;
+export type MemoryPublishDecisionCommand = Extract<
+  MemoryCommand,
+  { type: "memory.publish_decision" }
+>;

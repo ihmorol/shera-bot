@@ -60,6 +60,7 @@ import { ConversationsServiceError } from "../../modules/conversations/conversat
 import { ProviderGateError } from "../../modules/providers/provider-gate.ts";
 import { EventsServiceError } from "../../modules/events/events.service.ts";
 import { OperationsServiceError } from "../../modules/operations/operations.service.ts";
+import { MemoryServiceError } from "../../modules/memory/memory.service.ts";
 import { GitServiceError } from "../../modules/git/git.service.ts";
 
 interface HttpErrorMapping {
@@ -832,6 +833,61 @@ export function toSheraErrorResponse(error: unknown, correlationId?: string): Ht
     };
   }
 
+  // S29 — the memory boundary rejections (issue #30; PRD §11, D37, AC27).
+  // A cross-Agent private read is forbidden (403): the actor was identified
+  // but the D37 table does not grant it — the AC7 runtime denial. The
+  // publication actor rule is policy (403): agents never self-approve (G6).
+  // Shape/provenance/absence failures are validation (400) or not-found
+  // (404); the entry's own content is NEVER echoed into any message (G3).
+  if (error instanceof MemoryServiceError) {
+    const mappings: Record<
+      MemoryServiceError["code"],
+      { status: number; safe_message: string }
+    > = {
+      MEMORY_COMMAND_INVALID: {
+        status: 400,
+        safe_message: "The memory command's scope or owner shape is not valid.",
+      },
+      MEMORY_PROVENANCE_REQUIRED: {
+        status: 400,
+        safe_message: "Memory requires at least one source reference.",
+      },
+      MEMORY_NOT_FOUND: {
+        status: 404,
+        safe_message: "The memory does not exist in this workspace.",
+      },
+      MEMORY_OPERATION_NOT_FOUND: {
+        status: 404,
+        safe_message: "The referenced Operation does not exist in this workspace.",
+      },
+      AGENT_MEMORY_ACCESS_DENIED: {
+        status: 403,
+        safe_message: "This private memory belongs to another Agent.",
+      },
+      MEMORY_PUBLICATION_NOT_REQUESTED: {
+        status: 400,
+        safe_message: "There is no pending publication request or active publication to dismiss.",
+      },
+      MEMORY_COMMAND_ACTOR_FORBIDDEN: {
+        status: 403,
+        safe_message: "Publication is an explicit user decision.",
+      },
+    };
+    const mapping = mappings[error.code];
+    return {
+      status: mapping.status,
+      body: {
+        code: error.code,
+        category: error.category,
+        safe_message: mapping.safe_message,
+        retryable: false,
+        user_action: null,
+        internal_details: null,
+        correlation_id,
+      },
+    };
+  }
+
   // Body-parser failures (invalid JSON, oversized body) are client errors
   // with well-known types; answer with the contract's validation failure
   // instead of the generic 500 fallback.
@@ -897,6 +953,7 @@ function isUntypedFault(error: unknown): boolean {
     !(error instanceof ApprovalsServiceError) &&
     !(error instanceof GitServiceError) &&
     !(error instanceof OperationsServiceError) &&
+    !(error instanceof MemoryServiceError) &&
     !(error instanceof TerminalEventsRepositoryError) &&
     !(error instanceof AgentNotFoundError) &&
     !(error instanceof AgentSettingsValidationError) &&

@@ -49,6 +49,8 @@ import { EventJournalRepository } from "../../adapters/sqlite/event-journal-repo
 import { OperationsRepository } from "../../adapters/sqlite/operations-repository.ts";
 import { CreditLedgerRepository } from "../../adapters/sqlite/credit-ledger-repository.ts";
 import { CreditLedgerService } from "../../modules/credits/credit-ledger.service.ts";
+import { MemoryRepository } from "../../adapters/sqlite/memory-repository.ts";
+import { MemoryService } from "../../modules/memory/memory.service.ts";
 import { TaskWorkersRepository } from "../../adapters/sqlite/task-workers-repository.ts";
 import { TerminalEventsRepository } from "../../adapters/sqlite/terminal-events-repository.ts";
 import { WorkspaceFilesRepository } from "../../adapters/sqlite/workspace-files-repository.ts";
@@ -304,6 +306,9 @@ export interface LocalApiHandle {
   /** S24: the credit ledger seam — the ONE account-level balance and its
    * reserve→settle→release machinery (the tests consult it directly). */
   credits: CreditLedgerService;
+  /** S29: the memory seam — the D37-scoped entries, the publication boundary
+   * (AC27), and the provenance/version machinery (the tests consult it). */
+  memory: MemoryService;
   /**
    * S18 chunk 2: the shared browser profile service seam when configured;
    * undefined otherwise (G4 — no browser process ever spawns without it).
@@ -532,6 +537,8 @@ export interface RuntimeHandle {
    */
   schedules: SchedulesService;
   scheduler: SchedulerService;
+  /** S29: the memory seam (the AC27 publication boundary; the tests consult it). */
+  memory: MemoryService;
   /**
    * S28: the demo note store the built-in note tools read/write — exposed
    * so tests and capture harnesses can seed real state (the tools' storage
@@ -578,6 +585,7 @@ interface Wired {
   credits: CreditLedgerService;
   schedules: SchedulesService;
   scheduler: SchedulerService;
+  memory: MemoryService;
   wakeManager: SchedulerWakeManager;
   noteStore: Map<string, string>;
   setPublisher(publisher: ConversationPublisher): void;
@@ -1435,6 +1443,21 @@ function wire(
     tx,
     ...(options.now ? { now: options.now } : {}),
   });
+
+  // S29: the memory service (issue #30; PRD §11, D37, AC27, G2/G6) — the
+  // runtime's validation point for memory. Every write is a typed command
+  // through this service with a command receipt (D23 rule 6); every read is
+  // filtered through the D37 visibility table; the publication boundary is
+  // the entry's own publication columns set only by the user's explicit
+  // decision (G6).
+  const memoryRepository = new MemoryRepository(tx);
+  const memory = new MemoryService({
+    memory: memoryRepository,
+    operations: operationsRepository,
+    receipts,
+    tx,
+    ...(options.now ? { now: options.now } : {}),
+  });
   const schedulerWatcherSources: SchedulerWatcherSources = {
     files: workspaceFiles,
     artifacts: workspaceArtifacts,
@@ -1627,6 +1650,12 @@ function wire(
       ledger: creditLedger,
       workspaceId: wireWorkspaceId,
     },
+    // S29: the memory surface (the user's management read, the ONE typed
+    // commands envelope, the Agent context/detail reads).
+    memory: {
+      memory,
+      workspaceId: wireWorkspaceId,
+    },
     ...(options.logUntypedFault ? { logUntypedFault: options.logUntypedFault } : {}),
   });
   return {
@@ -1659,6 +1688,7 @@ function wire(
     credits: creditLedger,
     schedules,
     scheduler,
+    memory,
     wakeManager,
     noteStore: noteBindings.notes,
     setPublisher(next) {
@@ -1677,6 +1707,7 @@ export function composeLocalApi(options: ComposeLocalApiOptions): LocalApiHandle
     toolsApi: wired.toolsApi,
     providers: wired.providers,
     credits: wired.credits,
+    memory: wired.memory,
     browser: wired.browser,
     close: () => wired.conn.close(),
   };
@@ -1915,6 +1946,7 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     credits: wired.credits,
     schedules: wired.schedules,
     scheduler: wired.scheduler,
+    memory: wired.memory,
     noteStore: wired.noteStore,
     tx: wired.tx,
     close: async () => {

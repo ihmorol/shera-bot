@@ -96,8 +96,9 @@ describe("agent identities (S11 migration v4)", () => {
     // trigger records after the provider catalog, and S24 the credit ledger
     // after the trigger records — the chain is append-only and the head
     // moves with each slice.
-    expect(MIGRATIONS.at(-1)?.version).toBe(20);
-    expect(MIGRATIONS.at(-1)?.name).toBe("credit-ledger");
+    // S29 appended the v21 memory tables (issue #30) — the pin tracks the head.
+    expect(MIGRATIONS.at(-1)?.version).toBe(21);
+    expect(MIGRATIONS.at(-1)?.name).toBe("memory");
     expect(MIGRATIONS.find((migration) => migration.version === 14)?.name).toBe("terminal-events");
   });
 

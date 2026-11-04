@@ -1,0 +1,11 @@
+{
+  "type": "memory.publish_decision",
+  "command_id": "cmd_mem_002",
+  "idempotency_key": "idem_mem_002",
+  "workspace_id": "ws_default_01",
+  "actor": { "type": "user", "id": "user_emon" },
+  "issued_at": "2026-11-04T10:05:00.000Z",
+  "memory_id": "mem_001",
+  "operation_id": "op_001",
+  "decision": "approve"
+}

@@ -73,8 +73,9 @@ describe("terminal_events storage (S18 migration v14)", () => {
     // The S19/S21/S23/S28 integrations appended v15-v19 after this
     // migration, and S24 appended v20 (credit-ledger); v14 itself stays in
     // place (each slice's own entries never move once merged).
-    expect(MIGRATIONS.at(-1)?.version).toBe(20);
-    expect(MIGRATIONS.at(-6)?.version).toBe(15);
+    // S29 appended the v21 memory tables (issue #30) — the pin tracks the head.
+    expect(MIGRATIONS.at(-1)?.version).toBe(21);
+    expect(MIGRATIONS.at(-7)?.version).toBe(15);
   });
 
   it("creates the STRICT terminal_events table through the migration runner", () => {

@@ -85,6 +85,10 @@ function createCommand(extra: Record<string, unknown>) {
     actor: { type: "user", id: "user_emon" },
     issued_at: "2026-11-04T10:00:00.000Z",
     type: "memory.create",
+    owner_agent_id: null,
+    operation_id: null,
+    task_id: null,
+    expires_at: null,
     ...extra,
   };
 }
@@ -110,7 +114,7 @@ afterAll(async () => {
 
 describe("S29 memory: the AC27 publication boundary (integration)", () => {
   it("keeps an Agent-private memory invisible to other Agents and the Operation context until the user publishes it", async () => {
-    const running = await composeOn(makeTempDir("shera-s29-ac27-"));
+    const running = await composeOn(join(makeTempDir("shera-s29-ac27-"), "runtime.db"));
     const { origin } = running;
 
     // A real Operation whose roster holds BOTH Agents: any of them may read
@@ -241,7 +245,7 @@ describe("S29 memory: the AC27 publication boundary (integration)", () => {
   });
 
   it("enforces the D37 scope table: Operation memory is for participants and the user; account memory never reaches Agents", async () => {
-    const running = await composeOn(makeTempDir("shera-s29-scopes-"));
+    const running = await composeOn(join(makeTempDir("shera-s29-scopes-"), "runtime.db"));
     const { origin } = running;
 
     const created = await post(origin, "/v1/operations", {
@@ -333,23 +337,25 @@ describe("S29 memory: the AC27 publication boundary (integration)", () => {
   });
 
   it("requires provenance and a scope owner shape: an agent_private create without its owner is the typed 400; provenance rides every entry", async () => {
-    const running = await composeOn(makeTempDir("shera-s29-shape-"));
+    const running = await composeOn(join(makeTempDir("shera-s29-shape-"), "runtime.db"));
     const { origin } = running;
 
-    const missingOwner = await post(
-      origin,
-      "/v1/memory/commands",
-      createCommand({
-        scope: "agent_private",
-        summary: "Ownerless private memory",
-        content: "This private memory names no owner Agent.",
-        sensitivity: "normal",
-        source_refs: ["conversation://x"],
-        confidence: 0.5,
-      }),
-    );
+    // The envelope omits owner_agent_id entirely: the contracts command
+    // schema refuses the ownerless private create at the boundary (typed
+    // 400). The service's own MEMORY_COMMAND_INVALID backstop is pinned in
+    // the memory service suite (a programmatic caller cannot bypass it).
+    const { owner_agent_id: _omitted, ...ownerlessEnvelope } = createCommand({
+      scope: "agent_private",
+      summary: "Ownerless private memory",
+      content: "This private memory names no owner Agent.",
+      sensitivity: "normal",
+      source_refs: ["conversation://x"],
+      confidence: 0.5,
+    });
+    void _omitted;
+    const missingOwner = await post(origin, "/v1/memory/commands", ownerlessEnvelope);
     expect(missingOwner.status).toBe(400);
-    expect(missingOwner.body).toMatchObject({ code: "MEMORY_COMMAND_INVALID" });
+    expect(missingOwner.body).toMatchObject({ code: "CONTRACT_VALIDATION_FAILED" });
 
     const noProvenance = await post(
       origin,

@@ -66,6 +66,7 @@ import { registerProjectsRoutes, type ProjectsApiHandle } from "./s19-projects-a
 import { registerRunControlRoutes, type RunControlApiHandle } from "./s22-run-control-api.ts";
 import { registerSchedulesRoutes, type SchedulesApiHandle } from "./s28-schedules-api.ts";
 import { registerCreditsRoutes, type CreditsApiHandle } from "./s24-credits-api.ts";
+import { registerMemoryRoutes, type MemoryApiHandle } from "./s29-memory-api.ts";
 
 export const SUBMIT_CONVERSATION_COMMAND_PATH = "/v1/conversations/commands" as const;
 export const LIST_CONVERSATION_EVENTS_PATH = "/v1/conversations/:conversation_id/events" as const;
@@ -496,6 +497,13 @@ export interface LocalApiDeps {
   schedules?: SchedulesApiHandle;
   /** S24: the credits read surface (the ledger's own numbers). */
   credits?: CreditsApiHandle;
+  /**
+   * S29: the memory surface — the user's management read (the per-scope
+   * breakdown + publication queue + auto-memory settings), the ONE typed
+   * commands envelope, and the Agent context/detail reads the AC27 boundary
+   * is proven against. Every rule lives in the memory service (G2/G6).
+   */
+  memory?: MemoryApiHandle;
   /**
    * S23: the provider registry seam — the masked catalog CRUD, credential
    * revoke/replace, enable/disable, the connection test, the AC11 override,
@@ -1285,6 +1293,15 @@ export function createLocalApi(deps: LocalApiDeps): Express {
   // (the ledger's own numbers; no mutation route exists here, G4/G6).
   if (deps.credits !== undefined) {
     registerCreditsRoutes(app, deps.credits);
+  }
+
+  // S29: the memory surface — the user's management read, the ONE typed
+  // commands envelope, and the Agent context/detail reads the AC27
+  // publication boundary is proven against. Registered INDEPENDENTLY of the
+  // credits option (a composition passing memory without credits must not
+  // silently lose the surface — the G4 silent-drop class).
+  if (deps.memory !== undefined) {
+    registerMemoryRoutes(app, deps.memory);
   }
 
   // Typed failures and unknown routes: the SheraError taxonomy, never an

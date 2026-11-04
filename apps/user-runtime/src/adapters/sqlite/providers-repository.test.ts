@@ -76,7 +76,8 @@ describe("provider catalog storage (S23 migration v18)", () => {
     expect(v18?.name).toBe("provider-catalog");
     // S24 appended the credit ledger after the trigger records — the chain
     // is append-only and the head moves with each slice.
-    expect(MIGRATIONS.at(-1)?.version).toBe(20);
+    // S29 appended the v21 memory tables (issue #30) — the pin tracks the head.
+    expect(MIGRATIONS.at(-1)?.version).toBe(21);
   });
 
   it("creates the STRICT tables through the migration runner", () => {

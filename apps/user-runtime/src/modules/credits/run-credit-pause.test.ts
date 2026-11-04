@@ -154,6 +154,8 @@ describe("D48 run-level credit pause (S24 AC1)", () => {
     const harness = makeHarness();
     expect(appliedMigrationVersions(harness.conn.db)).toEqual([
       1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+      // S29 appended the v21 memory tables (issue #30) — the pin tracks the head.
+      21,
     ]);
   });
 

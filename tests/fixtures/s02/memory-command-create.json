@@ -1,0 +1,18 @@
+{
+  "type": "memory.create",
+  "command_id": "cmd_mem_001",
+  "idempotency_key": "idem_mem_001",
+  "workspace_id": "ws_default_01",
+  "actor": { "type": "user", "id": "user_emon" },
+  "issued_at": "2026-11-04T10:00:00.000Z",
+  "scope": "agent_private",
+  "owner_agent_id": "agent_researcher",
+  "operation_id": "op_001",
+  "task_id": null,
+  "summary": "Failed extraction heuristic for corpus 3",
+  "content": "The regex-based extraction heuristic loses table rows when the PDF uses spanned cells.",
+  "sensitivity": "normal",
+  "source_refs": ["conversation://op_001/messages"],
+  "confidence": 0.8,
+  "expires_at": null
+}

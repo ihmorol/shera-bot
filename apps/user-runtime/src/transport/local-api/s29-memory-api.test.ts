@@ -432,7 +432,7 @@ describe("S29 memory: the AC27 publication boundary (integration)", () => {
     // never the D37-granted viewer.
     const participant = await detail(RESEARCHER, opMemoryId);
     expect(participant.status).toBe(200);
-    expect((participant.body as MemoryEntryView).memory_id).toBe(opMemoryId);
+    expect((participant.body as unknown as MemoryEntryView).memory_id).toBe(opMemoryId);
 
     // Probe (d): a WORKSPACE-scope SENSITIVE entry — the sensitive gate holds
     // it from every Agent until the user's approval publishes it.

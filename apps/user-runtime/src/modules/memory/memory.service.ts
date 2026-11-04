@@ -13,6 +13,14 @@
  *   | Workspace     | Agents allowed by workspace policy         |
  *   | Account       | User and explicitly authorized services    |
  *
+ * (Citation note, fix-round F16: the five-scope set above is the PRD-backed
+ * STORAGE vocabulary — the migration's CHECK set and this service's switch.
+ * The recorded D37 table carries a sixth row, Direct-chat ("that expert and
+ * the user"), which has no separate storage scope in this prototype:
+ * direct-chat memory lands in the workspace / Agent-private scopes. The
+ * omission is recorded here rather than silently absorbed into "the D37
+ * table".)
+ *
  * The publication boundary (AC27) is structural: a private entry's
  * Operation-context visibility is a COLUMN on the row
  * (published_into_operation_id), set only by the user's explicit
@@ -1060,10 +1068,17 @@ export class MemoryService {
 
   /**
    * One entry's detail AS AN AGENT viewer — the boundary the denial test
-   * drives. Another Agent's private entry is the typed
-   * AGENT_MEMORY_ACCESS_DENIED (403 through the transport); account-scope
-   * entries never answer an Agent viewer (the D37 account row's visibility
-   * set is the user and explicitly authorized services).
+   * drives. The read resolves through the SAME predicate the context
+   * projection uses (fix-round F1): the entry must sit in the viewer's own
+   * visible set — expiry, the sensitive gate, Operation participation, and
+   * the D37 table all apply — never a hand-rolled per-scope check that the
+   * projection's dimensions can outrun. Account-scope entries never answer an
+   * Agent viewer (the D37 account row's visibility set is the user and
+   * explicitly authorized services). The resolution is the viewer's PLAIN
+   * context (no operation binding): an entry shared into one Operation is
+   * readable in that Operation's context read, and the cross-Agent detail
+   * read stays the typed denial (publication shares into the Operation, it
+   * never opens the entry at large).
    */
   readEntryAsAgent(workspaceId: string, agentId: string, memoryId: string): MemoryEntryView {
     const entry = this.deps.memory.findEntry(workspaceId, memoryId);
@@ -1074,18 +1089,24 @@ export class MemoryService {
         "the memory does not exist in this workspace",
       );
     }
-    if (entry.scope === "agent_private" && entry.owner_agent_id !== agentId) {
-      throw new MemoryServiceError(
-        "AGENT_MEMORY_ACCESS_DENIED",
-        "policy",
-        "this private memory belongs to another Agent",
-      );
-    }
     if (entry.scope === "account") {
       throw new MemoryServiceError(
         "AGENT_MEMORY_ACCESS_DENIED",
         "policy",
         "account memory is not visible to Agents",
+      );
+    }
+    const visible = this.visibleEntries(workspaceId, agentId, null).some(
+      (candidate) => candidate.memory_id === memoryId,
+    );
+    if (!visible) {
+      const anotherPrivate = entry.scope === "agent_private" && entry.owner_agent_id !== agentId;
+      throw new MemoryServiceError(
+        "AGENT_MEMORY_ACCESS_DENIED",
+        "policy",
+        anotherPrivate
+          ? "this private memory belongs to another Agent"
+          : "this memory is not visible to this Agent",
       );
     }
     return this.toView(entry);

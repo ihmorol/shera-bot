@@ -64,6 +64,10 @@ import {
 import { registerWorkspaceApiRoutes, type WorkspaceApiDeps } from "./s17-workspace-api.ts";
 import { registerProjectsRoutes, type ProjectsApiHandle } from "./s19-projects-api.ts";
 import { registerRunControlRoutes, type RunControlApiHandle } from "./s22-run-control-api.ts";
+import {
+  registerRecoveryRoutes,
+  type RecoveryApiHandle,
+} from "./s31-recovery-api.ts";
 import { registerSchedulesRoutes, type SchedulesApiHandle } from "./s28-schedules-api.ts";
 
 export const SUBMIT_CONVERSATION_COMMAND_PATH = "/v1/conversations/commands" as const;
@@ -487,6 +491,14 @@ export interface LocalApiDeps {
    * attempt-count source). Present at every runtime composition.
    */
   runControl?: RunControlApiHandle;
+  /**
+   * S31: the recovery status surface — the honest read the recovery banner
+   * and the run timelines render from (the runtime's own records, never
+   * invented state).
+   */
+  recovery?: RecoveryApiHandle;
+  /** S31: the workspace the recovery surface scopes to (the composed one). */
+  recoveryWorkspaceId?: string;
   /**
    * S28: the schedules + webhook surface — the typed trigger CRUD (G2), the
    * AC10 pause/resume controls, the firings ledger read, and the webhook
@@ -1270,6 +1282,14 @@ export function createLocalApi(deps: LocalApiDeps): Express {
   // journal read. Registered BEFORE the error handlers.
   if (deps.runControl) {
     registerRunControlRoutes(app, deps.runControl);
+  }
+  // S31: the recovery status surface (a read; the workspace is the composed
+  // one). Registered BEFORE the error handlers like every module surface.
+  if (deps.recovery && deps.recoveryWorkspaceId) {
+    registerRecoveryRoutes(app, {
+      recovery: deps.recovery,
+      workspaceId: deps.recoveryWorkspaceId,
+    });
   }
   // S28: the schedules + webhook surface — registered INDEPENDENTLY of the
   // run-control option (a composition passing schedules without runControl

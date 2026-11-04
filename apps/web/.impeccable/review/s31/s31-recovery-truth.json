@@ -1,0 +1,77 @@
+{
+  "workspace_state": "review_needed",
+  "review_needed": [
+    {
+      "run_id": "run_s31_cap_ambiguous",
+      "operation_id": "a249b075-232c-4113-bc98-6f11f3b30a13",
+      "conversation_id": "a249b075-232c-4113-bc98-6f11f3b30a13",
+      "pending_summary": "post the draft to the external board",
+      "resume_instructions": "A review decides whether the external post re-runs.",
+      "since": "2026-11-04T17:03:36.215Z"
+    }
+  ],
+  "resumed": [
+    {
+      "run_id": "run_s31_cap_replayable",
+      "basis": "replayable",
+      "checkpoint_version": 1,
+      "step_id": "step_parse_papers_1",
+      "replayed": true
+    }
+  ],
+  "timelines": {
+    "run_s31_cap_ambiguous": {
+      "run_id": "run_s31_cap_ambiguous",
+      "markers": [
+        {
+          "kind": "checkpoint",
+          "at": "2026-11-04T17:03:35.776Z",
+          "checkpoint_version": 1,
+          "step_id": "step_submit_board_1"
+        },
+        {
+          "kind": "restart",
+          "at": "2026-11-04T17:03:35.860Z"
+        },
+        {
+          "kind": "pause",
+          "at": "2026-11-04T17:03:36.210Z",
+          "pending_summary": "post the draft to the external board"
+        }
+      ]
+    },
+    "run_s31_cap_replayable": {
+      "run_id": "run_s31_cap_replayable",
+      "markers": [
+        {
+          "kind": "checkpoint",
+          "at": "2026-11-04T17:03:35.753Z",
+          "checkpoint_version": 1,
+          "step_id": "step_parse_papers_1"
+        },
+        {
+          "kind": "restart",
+          "at": "2026-11-04T17:03:35.870Z"
+        },
+        {
+          "kind": "resume",
+          "at": "2026-11-04T17:03:36.199Z",
+          "basis": "replayable",
+          "checkpoint_version": 1,
+          "step_id": "step_parse_papers_1"
+        }
+      ]
+    }
+  },
+  "boot_outcomes": [
+    {
+      "run_id": "run_s31_cap_replayable",
+      "outcome": "resumed",
+      "basis": "replayable"
+    },
+    {
+      "run_id": "run_s31_cap_ambiguous",
+      "outcome": "paused_for_review"
+    }
+  ]
+}

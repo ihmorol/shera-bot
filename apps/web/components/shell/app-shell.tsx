@@ -28,7 +28,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { panelRef, handlePanelResize } = useWorkspacePanelRegionWiring();
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-canvas text-text">
+    <div className="flex min-h-0 flex-1 overflow-hidden bg-canvas text-text">
       <a
         href="#conversation"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-60 focus:rounded-lg focus:bg-surface-elevated focus:px-3 focus:py-2 focus:text-sm"

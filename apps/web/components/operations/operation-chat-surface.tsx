@@ -9,6 +9,7 @@ import { OperationChatHeader } from "@/components/operations/operation-chat-head
 import { OperationPackSummary } from "@/components/operations/operation-pack-summary";
 import { OperationRosterPanel } from "@/components/operations/operation-roster-panel";
 import { OperationRunsPanel } from "@/components/operations/operation-runs-panel";
+import { timelinesFromStatus, useRecoveryStatus } from "@/lib/recovery-data";
 import { OperationThreadView } from "@/components/operations/operation-thread";
 import { OperationPackLauncher } from "@/components/operations/launch-preview";
 import { PendingApprovals } from "@/components/chat/pending-approvals";
@@ -171,6 +172,14 @@ function RuntimeOperationChat({
     [runs],
   );
   const retryAttempts = useRunRetryAttempts(workspaceId, operationId, retryAttemptRunIds);
+  // S31 (S11): the recovery timelines — the run cards' checkpoint → restart
+  // → resume/pause markers from the runtime's recovery status read. A failed
+  // read renders no markers, never a guessed story (G4).
+  const recovery = useRecoveryStatus(workspaceId);
+  const recoveryTimelines = useMemo(
+    () => (recovery.data ? timelinesFromStatus(recovery.data) : undefined),
+    [recovery.data],
+  );
   // S19 chunk 2: the task→git join that makes coding run cards git-aware.
   const gitLinkage = useGitLinkage(workspaceId);
   const pending =
@@ -381,6 +390,7 @@ function RuntimeOperationChat({
             onCreateRun={() => createRun.mutate()}
             gitLinkage={gitLinkage.linkage}
             retryAttempts={retryAttempts.data ?? undefined}
+            recoveryTimelines={recoveryTimelines}
             onCancelRun={(runId) => {
               setCancelSafeError(null);
               cancelRun.mutate(

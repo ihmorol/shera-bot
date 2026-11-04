@@ -1,0 +1,9 @@
+[
+  {
+    "step": 1,
+    "tag": "a",
+    "testid": "recovery-banner-review-link",
+    "text": "Review the task",
+    "visibleFocus": true
+  }
+]

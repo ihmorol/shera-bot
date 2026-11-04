@@ -151,6 +151,11 @@ import {
   RecoveryDriver,
   type RecoveryScanReport,
 } from "../../modules/recovery/recovery-driver.service.ts";
+import {
+  buildRecoveryApiHandle,
+  registerRecoveryRoutes,
+  type RecoveryApiHandle,
+} from "./s31-recovery-api.ts";
 import { RunCheckpointsRepository } from "../../adapters/sqlite/run-checkpoints-repository.ts";
 import { buildRunControlApiHandle, type RunControlApiHandle } from "./s22-run-control-api.ts";
 import { TriggersRepository } from "../../adapters/sqlite/triggers-repository.ts";
@@ -433,6 +438,10 @@ export interface RuntimeRecoveryHandle {
   driver: RecoveryDriver;
   bootPass: Promise<RecoveryScanReport | null>;
   recoverInterruptedRuns(): Promise<RecoveryScanReport>;
+  /** The last full scan's report (null before the first pass). */
+  lastReport(): RecoveryScanReport | null;
+  /** False between composition and the boot pass's settlement (S11 RECOVERING). */
+  bootSettled(): boolean;
 }
 
 export interface RuntimeHandle {
@@ -1448,7 +1457,6 @@ function wire(
     runCancellation,
     journal,
   });
-
   // S31 (D32/D33, E13): the recovery driver — the interrupted-run decision
   // layer the S16 reconciliation explicitly leaves runs for. The decision
   // input is the latest semantic checkpoint's recorded E13 class (the
@@ -1489,6 +1497,36 @@ function wire(
     ...(options.now ? { now: options.now } : {}),
     publish: (event) => recoveryPublisher?.(event),
     logFault: (event, fields) => logFault(event, fields),
+  });
+
+  // S31: the recovery handle — the boot-pass state (the S11 RECOVERING
+  // window is exactly the unsettled span) and the scan report the status
+  // read serves.
+  const recoveryHandle: RuntimeRecoveryHandle = (() => {
+    let bootSettled = false;
+    return {
+      driver: recoveryDriver,
+      bootPass: Promise.resolve(null) as Promise<RecoveryScanReport | null>,
+      recoverInterruptedRuns: async () => {
+        const report = await recoveryDriver.recoverInterruptedRuns();
+        bootSettled = true;
+        return report;
+      },
+      lastReport: () => recoveryDriver.lastReport(),
+      bootSettled: () => bootSettled,
+    };
+  })();
+  // S31: the recovery status read — the banner + timeline surfaces' data
+  // source (the runtime's own records; the routes relay, G2).
+  const recoveryApi = buildRecoveryApiHandle({
+    recovery: {
+      lastReport: () => recoveryHandle.lastReport(),
+      bootSettled: () => recoveryHandle.bootSettled(),
+    },
+    operations: operationsRepository,
+    checkpoints: runCheckpoints,
+    journal,
+    ...(options.now ? { now: options.now } : {}),
   });
 
   // S28: the runtime-owned scheduler stack (PRD §8, §13, E5, D11) — the
@@ -1650,6 +1688,8 @@ function wire(
     ...(browserHandle ? { browser: browserHandle } : {}),
     projects: projectsApi,
     runControl: runControlApi,
+    recovery: recoveryApi,
+    recoveryWorkspaceId: wireWorkspaceId,
     schedules: {
       schedules,
       scheduler,
@@ -1683,11 +1723,7 @@ function wire(
     projects: projectsApi,
     retryCoordinator,
     checkpoints: checkpointService,
-    recovery: {
-      driver: recoveryDriver,
-      bootPass: Promise.resolve(null),
-      recoverInterruptedRuns: () => recoveryDriver.recoverInterruptedRuns(),
-    },
+    recovery: recoveryHandle,
     runCancellation,
     runControl: runControlApi,
     adminCommands,
@@ -1944,6 +1980,8 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
       });
       return null;
     });
+  // The in-flight promise is visible IMMEDIATELY (a consumer composing over a
+  // crashed store awaits the REAL pass, never a pre-resolved null).
   wired.recovery.bootPass = recoveryBootPass;
   void recoveryBootPass;
 

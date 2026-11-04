@@ -207,7 +207,12 @@ export function isBrowserRuntimePath(method: string, path: string): boolean {
       // workspace-scoped (E12); the webhook receiver has no browser path at
       // all.
       path === "/v1/schedules" ||
-      /^\/v1\/schedules\/[a-zA-Z0-9_-]+\/firings$/.test(path))
+      /^\/v1\/schedules\/[a-zA-Z0-9_-]+\/firings$/.test(path) ||
+      // S31 (PRD §13, UI_DESIGN S11): the recovery status read — the honest
+      // recovery banner + run-timeline markers' data source. Strictly GET
+      // (recovery decisions are the RUNTIME's; the browser only renders
+      // them), workspace-scoped (E12) via the workspace_id query binding.
+      path === "/v1/recovery/status")
   );
 }
 

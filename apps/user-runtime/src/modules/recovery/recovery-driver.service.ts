@@ -156,7 +156,15 @@ export interface RecoveryDriverDeps {
 }
 
 export class RecoveryDriver {
+  /** The most recent full pass's report (the composed status surface reads it). */
+  private lastScanReport: RecoveryScanReport | null = null;
+
   constructor(private readonly deps: RecoveryDriverDeps) {}
+
+  /** The last boot scan's report; null before the first pass. */
+  lastReport(): RecoveryScanReport | null {
+    return this.lastScanReport;
+  }
 
   private lifecycleDeps(): RowLifecycleDeps {
     return {
@@ -322,6 +330,7 @@ export class RecoveryDriver {
         visited.push({ workspaceId: run.workspace_id, runId: run.run_id, outcome });
       }
     }
+    this.lastScanReport = { visited };
     return { visited };
   }
 

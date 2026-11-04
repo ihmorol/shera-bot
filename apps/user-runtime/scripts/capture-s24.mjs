@@ -507,7 +507,10 @@ await capture(
         pillFocusedAtStep: pillIndex,
         revealOnFocus,
         visibleFocusCount,
-        trail: trail.slice(0, 12),
+        // The FULL trail — every focused step the walk took (review F10: a
+        // truncated trail hides the walk's own evidence; the gate scalars
+        // above stay the judged numbers, the trail is the raw record).
+        trail,
       },
       null,
       2,

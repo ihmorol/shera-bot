@@ -75,6 +75,72 @@
       "testId": null,
       "text": "RResearcherThe Researcher investigates questions and produce",
       "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "SStudy PlannerThe Study Planner turns courses, deadlines, an",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "+ New",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "Research Paper",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "Programming Assignment",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "Exam Preparation",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "Research PaperAd-hocpack student v1.0.0",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "Research PaperPack-defined · 2 Agentswork in progress",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": null,
+      "text": "Ad-hocAd-hoc · 2 Agentsfailed",
+      "visibleFocus": true
+    },
+    {
+      "tag": "A",
+      "testId": "credits-pill",
+      "text": "145credits left25 reserved for running tasks145 Shera credit",
+      "visibleFocus": true
     }
   ]
 }

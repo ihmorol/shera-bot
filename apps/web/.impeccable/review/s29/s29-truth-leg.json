@@ -1,0 +1,33 @@
+{
+  "rendered": {
+    "scopeGroups": [
+      {
+        "scope": "workspace",
+        "label": "Workspace memory",
+        "count": "2 entries"
+      },
+      {
+        "scope": "account",
+        "label": "Account memory",
+        "count": "0 entries"
+      },
+      {
+        "scope": "operation",
+        "label": "Operation memory",
+        "count": "1 entry"
+      },
+      {
+        "scope": "task",
+        "label": "Task memory",
+        "count": "0 entries"
+      },
+      {
+        "scope": "agent_private",
+        "label": "Agent-private memory",
+        "count": "1 entry"
+      }
+    ],
+    "queueCount": 243
+  },
+  "mismatches": []
+}

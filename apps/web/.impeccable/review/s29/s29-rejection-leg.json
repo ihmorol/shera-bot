@@ -1,0 +1,5 @@
+{
+  "bannerText": "Not saved — this looks like a credential or secret. Secrets are never stored in memory.",
+  "bannerNamesSecretRule": true,
+  "contentUnchangedAfterRejection": true
+}

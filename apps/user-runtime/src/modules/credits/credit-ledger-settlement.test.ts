@@ -584,29 +584,11 @@ describe("settlement property (S24 AC3, seeded random distributions)", () => {
   });
 });
 
-describe("append-only is storage-enforced (review F5, AC9)", () => {
-  it("a direct raw UPDATE on credit_transaction via the connection RAISEs — no in-place edit is representable", () => {
-    const harness = makeHarness();
-    harness.ledger.ensureAccount(WS);
-    harness.ledger.grant({ workspace_id: WS, amount_units: 50, related_id: null });
-    expect(() =>
-      harness.conn.db.exec(
-        "UPDATE credit_transaction SET amount_units = 999 WHERE workspace_id = 'ws-credit-settle'",
-      ),
-    ).toThrowError(/append_only/i);
-  });
-
-  it("a direct raw DELETE on credit_transaction via the connection RAISEs — no row removal is representable", () => {
-    const harness = makeHarness();
-    harness.ledger.ensureAccount(WS);
-    harness.ledger.grant({ workspace_id: WS, amount_units: 50, related_id: null });
-    expect(() =>
-      harness.conn.db.exec(
-        "DELETE FROM credit_transaction WHERE workspace_id = 'ws-credit-settle'",
-      ),
-    ).toThrowError(/append_only/i);
-  });
-});
+// The storage-enforced append-only pins (the v20 no-update/no-delete
+// triggers) live in the adapter suite —
+// `src/adapters/sqlite/credit-ledger-append-only.test.ts` — beside the
+// schema they enforce: the proof is a direct raw exec, and the SQL boundary
+// contract keeps every SQL statement inside adapters/sqlite (D23 rule 2).
 
 describe("grant idempotency — the replayed top-up (review F2, security)", () => {
   it("a replayed grant with the same related_id is a recorded no-op — one grant movement, the account credited once", () => {

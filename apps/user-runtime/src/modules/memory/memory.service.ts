@@ -49,10 +49,12 @@ export type MemoryFailureCode =
   | "MEMORY_PROVENANCE_REQUIRED"
   | "MEMORY_SECRET_REJECTED"
   | "MEMORY_NOT_FOUND"
+  | "MEMORY_VERSION_NOT_FOUND"
   | "MEMORY_OPERATION_NOT_FOUND"
   | "AGENT_MEMORY_ACCESS_DENIED"
   | "MEMORY_PUBLICATION_NOT_REQUESTED"
   | "MEMORY_PUBLICATION_APPROVAL_REQUIRED"
+  | "MEMORY_AUTOMATIC_DISABLED"
   | "MEMORY_COMMAND_ACTOR_FORBIDDEN";
 
 export class MemoryServiceError extends Error {
@@ -99,6 +101,18 @@ export interface MemoryProvenance {
 }
 
 /** The read model one entry serializes to (the contract shape + provenance). */
+export interface MemoryVersionView {
+  version: number;
+  summary: string;
+  content: string;
+  sensitivity: "normal" | "sensitive";
+  source_refs: string[];
+  confidence: number;
+  change_kind: "created" | "edited" | "published" | "restored" | "auto_updated";
+  changed_by: string;
+  created_at: string;
+}
+
 export interface MemoryEntryView extends MemoryProvenance {
   memory_id: string;
   workspace_id: string;
@@ -117,6 +131,8 @@ export interface MemoryEntryView extends MemoryProvenance {
   created_at: string;
   updated_at: string;
   expires_at: string | null;
+  /** The version history (the restore surface's data; empty for context reads). */
+  versions: MemoryVersionView[];
 }
 
 export interface MemoryPublicationRequestView {
@@ -172,7 +188,11 @@ export class MemoryService {
     // into storage: the scan sees the summary and the content; a rejection
     // leaves no receipt, no row, no version, no event — and the response
     // names the RULE classes, never the matched content (G3).
-    if (command.type === "memory.create") {
+    if (command.type === "memory.create" || command.type === "memory.edit") {
+      // The write-time secret scan (AC2) covers CREATES and EDITS alike —
+      // an edit is exactly as much a write as a create is. A rejection
+      // leaves no receipt, no row, no version, no event — and the response
+      // names the RULE classes, never the matched content (G3).
       const scan = await scanForSecrets(command.summary, command.content);
       if (scan.rejected) {
         throw new MemoryServiceError(
@@ -197,8 +217,18 @@ export class MemoryService {
         result = this.createEntry(command);
       } else if (command.type === "memory.request_publication") {
         result = this.requestPublication(command);
-      } else {
+      } else if (command.type === "memory.publish_decision") {
         result = this.decidePublication(command);
+      } else if (command.type === "memory.edit") {
+        result = this.editEntry(command);
+      } else if (command.type === "memory.restore") {
+        result = this.restoreVersion(command);
+      } else if (command.type === "memory.forget") {
+        result = this.forgetEntry(command);
+      } else if (command.type === "memory.set_auto_memory") {
+        result = this.setAutoMemory(command);
+      } else {
+        result = this.setAgentAutoMemory(command);
       }
       this.deps.receipts.create(
         {
@@ -548,6 +578,29 @@ export class MemoryService {
     task_id?: string | null;
     expires_at?: string | null;
   }): Promise<{ entry: MemoryEntryView; publication_requested: boolean }> {
+    // 0. The AC5 gate: automatic memory disabled GLOBALLY, or for THIS
+    //    Agent, stops the automatic write here — before provenance, before
+    //    the scan, before anything exists. Explicit user writes never
+    //    consult these switches.
+    const settings = this.deps.memory.findSettings(input.workspace_id);
+    if (settings && settings.auto_memory_enabled === 0) {
+      throw new MemoryServiceError(
+        "MEMORY_AUTOMATIC_DISABLED",
+        "policy",
+        "automatic memory is disabled for this workspace",
+      );
+    }
+    const agentSettings = this.deps.memory.findAgentSettings(
+      input.workspace_id,
+      input.proposed_by_agent_id,
+    );
+    if (agentSettings && agentSettings.auto_memory_enabled === 0) {
+      throw new MemoryServiceError(
+        "MEMORY_AUTOMATIC_DISABLED",
+        "policy",
+        "automatic memory is disabled for this Agent",
+      );
+    }
     // 1. Provenance (AC3) — before anything else.
     if (input.source_refs.length === 0) {
       throw new MemoryServiceError(
@@ -717,6 +770,201 @@ export class MemoryService {
       });
   }
 
+  // ── The user controls (PRD §11; AC4–AC6) ─────────────────────────────────
+
+  /**
+   * Edit one entry's content (AC4's first half): the CURRENT state changes,
+   * the history APPENDS — the pre-edit content stays exactly where it was.
+   * The write-time secret scan already ran for this command.
+   */
+  private editEntry(command: Extract<MemoryCommand, { type: "memory.edit" }>): {
+    entry: MemoryEntryView;
+  } {
+    const entry = this.deps.memory.findEntry(command.workspace_id, command.memory_id);
+    if (!entry) {
+      throw new MemoryServiceError(
+        "MEMORY_NOT_FOUND",
+        "state",
+        "the memory does not exist in this workspace",
+      );
+    }
+    const now = this.now();
+    const sourceRefs = JSON.stringify(command.source_refs);
+    this.deps.tx.transaction((exec) => {
+      this.deps.memory.updateEntry(
+        command.workspace_id,
+        command.memory_id,
+        {
+          summary: command.summary,
+          content: command.content,
+          sensitivity: command.sensitivity,
+          source_refs: sourceRefs,
+          confidence: command.confidence,
+          updated_at: now,
+          expires_at: command.expires_at,
+        },
+        exec,
+      );
+      this.deps.memory.insertVersion(
+        {
+          workspace_id: command.workspace_id,
+          memory_id: command.memory_id,
+          version: this.deps.memory.nextVersion(command.workspace_id, command.memory_id, exec),
+          summary: command.summary,
+          content: command.content,
+          sensitivity: command.sensitivity,
+          source_refs: sourceRefs,
+          confidence: command.confidence,
+          change_kind: "edited",
+          changed_by: command.actor.id,
+          created_at: now,
+        },
+        exec,
+      );
+    });
+    const updated = this.deps.memory.findEntry(command.workspace_id, command.memory_id);
+    if (!updated) {
+      throw new MemoryServiceError("MEMORY_NOT_FOUND", "state", "the memory disappeared");
+    }
+    return { entry: this.toView(updated) };
+  }
+
+  /**
+   * Restore one earlier version (AC4): the entry's CURRENT content becomes
+   * the version's content and the restore APPENDS a version row — the
+   * history is preserved in full (the restored-from rows stay untouched,
+   * including the edited one being discarded).
+   */
+  private restoreVersion(command: Extract<MemoryCommand, { type: "memory.restore" }>): {
+    entry: MemoryEntryView;
+  } {
+    const entry = this.deps.memory.findEntry(command.workspace_id, command.memory_id);
+    if (!entry) {
+      throw new MemoryServiceError(
+        "MEMORY_NOT_FOUND",
+        "state",
+        "the memory does not exist in this workspace",
+      );
+    }
+    const version = this.deps.memory.findVersion(
+      command.workspace_id,
+      command.memory_id,
+      command.version,
+    );
+    if (!version) {
+      throw new MemoryServiceError(
+        "MEMORY_VERSION_NOT_FOUND",
+        "state",
+        "that version does not exist in this memory's history",
+      );
+    }
+    const now = this.now();
+    this.deps.tx.transaction((exec) => {
+      this.deps.memory.updateEntry(
+        command.workspace_id,
+        command.memory_id,
+        {
+          summary: version.summary,
+          content: version.content,
+          sensitivity: version.sensitivity,
+          source_refs: version.source_refs,
+          confidence: version.confidence,
+          updated_at: now,
+          expires_at: entry.expires_at,
+        },
+        exec,
+      );
+      this.deps.memory.insertVersion(
+        {
+          workspace_id: command.workspace_id,
+          memory_id: command.memory_id,
+          version: this.deps.memory.nextVersion(command.workspace_id, command.memory_id, exec),
+          summary: version.summary,
+          content: version.content,
+          sensitivity: version.sensitivity,
+          source_refs: version.source_refs,
+          confidence: version.confidence,
+          change_kind: "restored",
+          changed_by: command.actor.id,
+          created_at: now,
+        },
+        exec,
+      );
+    });
+    const updated = this.deps.memory.findEntry(command.workspace_id, command.memory_id);
+    if (!updated) {
+      throw new MemoryServiceError("MEMORY_NOT_FOUND", "state", "the memory disappeared");
+    }
+    return { entry: this.toView(updated) };
+  }
+
+  /**
+   * Permanently forget (AC6): the entry, its versions, and its publication
+   * requests leave ACTIVE storage — deleted rows, not a soft flag. The
+   * honest copy says exactly that: there is nothing left to restore.
+   */
+  private forgetEntry(command: Extract<MemoryCommand, { type: "memory.forget" }>): {
+    forgotten: true;
+    memory_id: string;
+  } {
+    const entry = this.deps.memory.findEntry(command.workspace_id, command.memory_id);
+    if (!entry) {
+      throw new MemoryServiceError(
+        "MEMORY_NOT_FOUND",
+        "state",
+        "the memory does not exist in this workspace",
+      );
+    }
+    this.deps.tx.transaction((exec) => {
+      this.deps.memory.forgetEntry(command.workspace_id, command.memory_id, exec);
+    });
+    return { forgotten: true, memory_id: command.memory_id };
+  }
+
+  /**
+   * The forget preview (the S9 surface's honest confirmation copy): what a
+   * permanent forget would remove — the entry AND how many version rows go
+   * with it. Nothing here implies restorability.
+   */
+  forgetPreview(workspaceId: string, memoryId: string): { entries: number; versions: number } {
+    const entry = this.deps.memory.findEntry(workspaceId, memoryId);
+    return {
+      entries: entry ? 1 : 0,
+      versions: this.deps.memory.listVersions(workspaceId, memoryId).length,
+    };
+  }
+
+  /** The global auto-memory switch (AC5): off stops EVERY automatic write. */
+  private setAutoMemory(command: Extract<MemoryCommand, { type: "memory.set_auto_memory" }>): {
+    global_enabled: boolean;
+  } {
+    this.deps.tx.transaction((exec) => {
+      this.deps.memory.upsertSettings(
+        command.workspace_id,
+        command.enabled,
+        this.now(),
+        exec,
+      );
+    });
+    return { global_enabled: command.enabled };
+  }
+
+  /** One Agent's auto-memory switch (AC5): off stops THAT Agent's automatic writes. */
+  private setAgentAutoMemory(
+    command: Extract<MemoryCommand, { type: "memory.set_agent_auto_memory" }>,
+  ): { agent_id: string; enabled: boolean } {
+    this.deps.tx.transaction((exec) => {
+      this.deps.memory.upsertAgentSettings(
+        command.workspace_id,
+        command.agent_id,
+        command.enabled,
+        this.now(),
+        exec,
+      );
+    });
+    return { agent_id: command.agent_id, enabled: command.enabled };
+  }
+
   // ── Reads (the D37 visibility table) ──────────────────────────────────────
 
   /**
@@ -725,7 +973,7 @@ export class MemoryService {
    */
   userView(workspaceId: string): MemoryUserView {
     const entries = this.deps.memory.listEntries(workspaceId);
-    const views = entries.map((entry) => this.toView(entry));
+    const views = entries.map((entry) => this.toView(entry, true));
     const scopes = Object.fromEntries(
       SCOPES.map((scope) => [scope, views.filter((view) => view.scope === scope)]),
     ) as Record<MemoryScopeValue, MemoryEntryView[]>;
@@ -921,7 +1169,22 @@ export class MemoryService {
     return entry.expires_at !== null && entry.expires_at <= now;
   }
 
-  private toView(entry: MemoryEntryRow): MemoryEntryView {
+  private toView(entry: MemoryEntryRow, includeVersions = false): MemoryEntryView {
+    const versions: MemoryVersionView[] = includeVersions
+      ? this.deps.memory
+          .listVersions(entry.workspace_id, entry.memory_id)
+          .map((version) => ({
+            version: version.version,
+            summary: version.summary,
+            content: version.content,
+            sensitivity: version.sensitivity,
+            source_refs: parseSourceRefs(version.source_refs),
+            confidence: version.confidence,
+            change_kind: version.change_kind,
+            changed_by: version.changed_by,
+            created_at: version.created_at,
+          }))
+      : [];
     return {
       memory_id: entry.memory_id,
       workspace_id: entry.workspace_id,
@@ -944,6 +1207,7 @@ export class MemoryService {
       created_at: entry.created_at,
       updated_at: entry.updated_at,
       expires_at: entry.expires_at,
+      versions,
     };
   }
 }

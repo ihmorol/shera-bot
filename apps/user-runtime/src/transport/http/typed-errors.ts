@@ -856,6 +856,14 @@ export function toSheraErrorResponse(error: unknown, correlationId?: string): Ht
         status: 404,
         safe_message: "The memory does not exist in this workspace.",
       },
+      MEMORY_VERSION_NOT_FOUND: {
+        status: 404,
+        safe_message: "That version does not exist in this memory's history.",
+      },
+      MEMORY_AUTOMATIC_DISABLED: {
+        status: 403,
+        safe_message: "Automatic memory is disabled.",
+      },
       MEMORY_OPERATION_NOT_FOUND: {
         status: 404,
         safe_message: "The referenced Operation does not exist in this workspace.",

@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 
 import { afterAll, describe, expect, it } from "vitest";
 
-import { DEFAULT_WORKSPACE_ID, composeRuntime, type RuntimeHandle } from "../transport/local-api/compose.ts";
+import { DEFAULT_WORKSPACE_ID, composeRuntime, type RuntimeHandle } from "../../transport/local-api/compose.ts";
 import {
   cleanupTempResources,
   makeTempDir,
@@ -280,12 +280,13 @@ describe("S29 chunk 3: the user controls", () => {
       expect(rows.map((entry) => entry.memory_id)).not.toContain(memoryId);
     }
 
-    // Gone from storage through the runtime's own repository — the entry
-    // AND its version history (no "permanently forget but restorable"
-    // contradiction: there is no version row left to restore).
-    const versions = running.runtime.memory.forgetProbe(WORKSPACE, memoryId);
-    expect(versions.entries).toBe(0);
-    expect(versions.versions).toBe(0);
+    // Gone from storage — the forget preview (the honest-confirmation
+    // read) counts NOTHING left: no entry, no version rows (no
+    // "permanently forget but restorable" contradiction: there is nothing
+    // left to restore).
+    const preview = running.runtime.memory.forgetPreview(WORKSPACE, memoryId);
+    expect(preview.entries).toBe(0);
+    expect(preview.versions).toBe(0);
 
     // A second forget is the typed 404 — nothing lingers to double-delete.
     const again = await post(origin, "/v1/memory/commands", command("memory.forget", {
@@ -310,25 +311,20 @@ describe("S29 chunk 3: the user controls", () => {
     expect(op.status).toBe(201);
     const operationId = op.body["operation_id"] as string;
 
-    const privateId = await seedWorkspaceMemory(
-      origin,
-      "agent_private",
-      "Researcher's private note",
-      "A private note only the researcher may read.",
-    );
-    // The sweep fixtures: agent_private rows are owned; scope it explicitly.
+    // The sweep fixture: the researcher's OWNED private memory (an
+    // agent_private row without its owner is refused at the boundary).
     const seeded = await post(origin, "/v1/memory/commands", createCommand({
       scope: "agent_private",
       owner_agent_id: RESEARCHER,
       operation_id: operationId,
-      summary: "Researcher's operation-private note",
-      content: "Private within the operation too.",
+      summary: "Researcher's private note",
+      content: "A private note only the researcher may read.",
       sensitivity: "normal",
       source_refs: [`conversation://${operationId}/messages`],
       confidence: 0.7,
     }));
     expect(seeded.status).toBe(200);
-    void privateId;
+    const privateId = (seeded.body["entry"] as { memory_id: string }).memory_id;
 
     // Shape 1: the OTHER Agent's context reads — with and without the
     // operation binding, and the user-management read of ANOTHER AGENT's
@@ -361,14 +357,15 @@ describe("S29 chunk 3: the user controls", () => {
 
     // Shape 4: there is no query parameter that retargets an Agent's own
     // context read at another Agent's private rows — the acting Agent is
-    // the PATH identity; a spoofed query shape is not a read.
+    // the PATH identity, and the strict query schema REFUSES the spoofed
+    // parameter outright (the D25 unknown-field rejection; a retargeting
+    // query is not a read, it is a 400).
     const spoofed = await get(
       origin,
       `/v1/agents/${GENERAL}/memory/context?workspace_id=${WORKSPACE}&owner_agent_id=${RESEARCHER}`,
     );
-    expect(spoofed.status).toBe(200);
-    const spoofedView = spoofed.body as { entries: { memory_id: string }[] };
-    expect(spoofedView.entries.map((entry) => entry.memory_id)).not.toContain(privateId);
+    expect(spoofed.status).toBe(400);
+    expect(spoofed.body).toMatchObject({ code: "CONTRACT_VALIDATION_FAILED" });
 
     await running.close();
   });

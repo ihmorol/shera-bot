@@ -97,7 +97,7 @@ describe("S31 recovery banner — the S11 states", () => {
     );
     expect(html).toContain("Restoring your workspace…");
     expect(html).toContain('role="status"');
-    expect(html).toContain("data-recovery-banner=\"recovering\"");
+    expect(html).toContain('data-recovery-banner="recovering"');
     expect(html).toMatch(/<svg/); // the icon rides with the text (§2.3)
   });
 

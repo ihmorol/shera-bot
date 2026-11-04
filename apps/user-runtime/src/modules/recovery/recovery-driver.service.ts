@@ -77,7 +77,9 @@ export type RecoveryDecision =
  * input the record does not explicitly vouch for pauses — the runtime never
  * guesses an effect safe to replay.
  */
-export function decideRecovery(pending: RecoveryPendingAction | null | undefined): RecoveryDecision {
+export function decideRecovery(
+  pending: RecoveryPendingAction | null | undefined,
+): RecoveryDecision {
   const declared = pending?.recovery_class;
   if (declared === "replayable") {
     return { action: "resume", basis: "replayable", idempotencyKey: null };
@@ -341,11 +343,7 @@ export class RecoveryDriver {
    * rule 6); contained — a failed marker is a fault record, never a crashed
    * driver.
    */
-  private appendDecided(
-    workspaceId: string,
-    runId: string,
-    payload: RecoveryDecidedPayload,
-  ): void {
+  private appendDecided(workspaceId: string, runId: string, payload: RecoveryDecidedPayload): void {
     try {
       const priorCount = this.deps.journal
         .readFrom(workspaceId, taskStreamId(runId), 0, 10_000)

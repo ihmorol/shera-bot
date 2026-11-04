@@ -64,10 +64,7 @@ import {
 import { registerWorkspaceApiRoutes, type WorkspaceApiDeps } from "./s17-workspace-api.ts";
 import { registerProjectsRoutes, type ProjectsApiHandle } from "./s19-projects-api.ts";
 import { registerRunControlRoutes, type RunControlApiHandle } from "./s22-run-control-api.ts";
-import {
-  registerRecoveryRoutes,
-  type RecoveryApiHandle,
-} from "./s31-recovery-api.ts";
+import { registerRecoveryRoutes, type RecoveryApiHandle } from "./s31-recovery-api.ts";
 import { registerSchedulesRoutes, type SchedulesApiHandle } from "./s28-schedules-api.ts";
 
 export const SUBMIT_CONVERSATION_COMMAND_PATH = "/v1/conversations/commands" as const;

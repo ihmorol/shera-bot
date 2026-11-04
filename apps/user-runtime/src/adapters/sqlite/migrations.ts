@@ -1389,6 +1389,14 @@ export function appliedMigrationVersions(db: DatabaseSync): number[] {
  * rows (schema metadata only, like the schema_migrations bookkeeping), so the
  * E12 workspace predicate does not apply to it.
  */
+/** One table's column names, in declared order (the D33 field-set pins read
+ * through this helper — the PRAGMA stays inside the adapter, AC7/D23 rule 2). */
+export function sqliteTableColumns(db: DatabaseSync, tableName: string): string[] {
+  return (db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>).map(
+    (column) => column.name,
+  );
+}
+
 export function sqliteTableExists(db: DatabaseSync, tableName: string): boolean {
   const rows = db.prepare("PRAGMA table_list").all() as Array<
     Record<string, string | number | bigint | null>

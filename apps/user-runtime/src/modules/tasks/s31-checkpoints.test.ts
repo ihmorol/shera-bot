@@ -40,6 +40,7 @@ import { openDatabase } from "../../adapters/sqlite/connection.ts";
 import {
   appliedMigrationVersions,
   applyMigrations,
+  sqliteTableColumns,
   sqliteTableExists,
 } from "../../adapters/sqlite/migrations.ts";
 import {
@@ -215,10 +216,10 @@ describe("S31 migration v20 (run-checkpoints)", () => {
     expect(versions[versions.length - 1]).toBe(20);
     expect(versions).not.toContain(21);
     expect(sqliteTableExists(conn.db, "run_checkpoints")).toBe(true);
-    // The exact D33 column set (field-for-field, D33).
-    const columns = (
-      conn.db.prepare("PRAGMA table_info(run_checkpoints)").all() as Array<{ name: string }>
-    ).map((column) => column.name);
+    // The exact D33 column set (field-for-field, D33) — through the
+    // adapter's column helper (the table introspection never leaves
+    // adapters/sqlite, AC7/D23 rule 2).
+    const columns = sqliteTableColumns(conn.db, "run_checkpoints");
     for (const column of CHECKPOINT_COLUMNS) {
       expect(columns).toContain(column);
     }
@@ -500,8 +501,7 @@ describe("S31 executor hook — a succeeded tool execution is a semantic boundar
       agent_id: AGENT,
       rawArgs,
     });
-    const settled =
-      outcome.outcome === "dispatched" ? await outcome.completion : outcome;
+    const settled = outcome.outcome === "dispatched" ? await outcome.completion : outcome;
     expect(settled.outcome).toBe("executed");
 
     // One semantic checkpoint for the settled execution.
@@ -536,8 +536,7 @@ describe("S31 executor hook — a succeeded tool execution is a semantic boundar
       agent_id: AGENT,
       rawArgs: rawArgs2,
     });
-    const settled2 =
-      outcome2.outcome === "dispatched" ? await outcome2.completion : outcome2;
+    const settled2 = outcome2.outcome === "dispatched" ? await outcome2.completion : outcome2;
     expect(settled2.outcome).toBe("executed");
     expect(rt.checkpoints.listForTask(WS, TASK)).toHaveLength(2);
     expect(rt.checkpoints.latestForTask(WS, TASK)?.checkpoint_version).toBe(2);

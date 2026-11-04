@@ -87,9 +87,7 @@ export class RunCheckpointsRepository {
   countForTask(workspaceId: string, taskId: string, exec?: DatabaseSync): number {
     const db = exec ?? this.tx.connection();
     const row = db
-      .prepare(
-        `SELECT COUNT(*) AS n FROM run_checkpoints WHERE workspace_id = ? AND task_id = ?`,
-      )
+      .prepare(`SELECT COUNT(*) AS n FROM run_checkpoints WHERE workspace_id = ? AND task_id = ?`)
       .get(workspaceId, taskId) as { n: number | bigint };
     return typeof row.n === "bigint" ? Number(row.n) : row.n;
   }

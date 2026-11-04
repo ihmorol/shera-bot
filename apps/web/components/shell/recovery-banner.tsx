@@ -78,7 +78,8 @@ export function RecoveryBanner({
     );
   }
 
-  const count = typeof resumedCount === "number" && resumedCount > 0 ? ` (${resumedCount} resumed)` : "";
+  const count =
+    typeof resumedCount === "number" && resumedCount > 0 ? ` (${resumedCount} resumed)` : "";
   return (
     <div
       role="status"

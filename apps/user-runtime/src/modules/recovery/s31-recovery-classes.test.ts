@@ -40,7 +40,10 @@ import {
   type RunCheckpointRow,
 } from "../../adapters/sqlite/run-checkpoints-repository.ts";
 import { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
-import { EventJournalRepository, type EventJournalRow } from "../../adapters/sqlite/event-journal-repository.ts";
+import {
+  EventJournalRepository,
+  type EventJournalRow,
+} from "../../adapters/sqlite/event-journal-repository.ts";
 import { EventsService } from "../events/events.service.ts";
 import { OperationsService } from "../operations/operations.service.ts";
 import { TASK_TRANSITIONS } from "../tasks/task-transitions.ts";
@@ -181,14 +184,12 @@ function makeHarness(): RecoveryHarness {
     now: () => NOW,
   });
 
-  const operationId = ops
-    .createOperation(WS, {
-      definition_ref: null,
-      name: "Recovery Operation",
-      roster_agent_ids: [AGENT],
-      coordinator_agent_id: AGENT,
-    })
-    .operation_id;
+  const operationId = ops.createOperation(WS, {
+    definition_ref: null,
+    name: "Recovery Operation",
+    roster_agent_ids: [AGENT],
+    coordinator_agent_id: AGENT,
+  }).operation_id;
 
   const harness: RecoveryHarness = {
     conn,
@@ -241,9 +242,7 @@ function takeCheckpoint(
     conversationId: harness.operationId,
     stepId: `step_boundary_${runId}`,
     stepKind: "completed_search",
-    completedActions: [
-      { kind: "tool_execution", summary: "the boundary search completed" },
-    ],
+    completedActions: [{ kind: "tool_execution", summary: "the boundary search completed" }],
     pendingAction: pendingAction as never,
     artifactRefs: [],
     resumeInstructions: "Resume from the recorded boundary.",
@@ -261,7 +260,10 @@ function runEvents(
   return harness.journal
     .readFrom(WS, taskStreamId(runId), 0, 1_000)
     .filter((row: EventJournalRow) => row.event_type !== "task.created")
-    .map((row) => ({ type: row.event_type, payload: JSON.parse(row.payload) as Record<string, unknown> }));
+    .map((row) => ({
+      type: row.event_type,
+      payload: JSON.parse(row.payload) as Record<string, unknown>,
+    }));
 }
 
 function runState(harness: RecoveryHarness, runId: string): string {

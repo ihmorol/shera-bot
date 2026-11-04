@@ -151,11 +151,7 @@ import {
   RecoveryDriver,
   type RecoveryScanReport,
 } from "../../modules/recovery/recovery-driver.service.ts";
-import {
-  buildRecoveryApiHandle,
-  registerRecoveryRoutes,
-  type RecoveryApiHandle,
-} from "./s31-recovery-api.ts";
+import { buildRecoveryApiHandle } from "./s31-recovery-api.ts";
 import { RunCheckpointsRepository } from "../../adapters/sqlite/run-checkpoints-repository.ts";
 import { buildRunControlApiHandle, type RunControlApiHandle } from "./s22-run-control-api.ts";
 import { TriggersRepository } from "../../adapters/sqlite/triggers-repository.ts";

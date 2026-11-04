@@ -35,7 +35,7 @@ import { chromium } from "playwright";
 
 // The page.evaluate closures below run INSIDE the browser context and
 // reference browser globals (document/window) by design.
-/* global document */
+/* global document, getComputedStyle */
 
 import { composeRuntime, DEFAULT_WORKSPACE_ID } from "../src/transport/local-api/compose.ts";
 import { openDatabase } from "../src/adapters/sqlite/connection.ts";
@@ -78,7 +78,13 @@ function seedCrashed(dbPath, { withAmbiguous }) {
   const operationsRepo = new OperationsRepository(tx);
   const taskWorkers = new TaskWorkersRepository(tx);
   const checkpoints = new RunCheckpointsRepository(tx);
-  const checkpointService = new CheckpointService({ tx, journal, events, checkpoints, now: () => NOW });
+  const checkpointService = new CheckpointService({
+    tx,
+    journal,
+    events,
+    checkpoints,
+    now: () => NOW,
+  });
   const ops = new OperationsService({
     operations: operationsRepo,
     tx,
@@ -238,15 +244,26 @@ const bootReport = await runtimeA.recovery.bootPass;
 if (bootReport === null) throw new Error("the boot pass fault-logged — nothing to capture");
 
 const visitedA = new Map(bootReport.visited.map((entry) => [entry.runId, entry.outcome]));
-console.log("boot A:", JSON.stringify([...visitedA.entries()].map(([k, v]) => ({ run: k, outcome: v.outcome }))));
+console.log(
+  "boot A:",
+  JSON.stringify([...visitedA.entries()].map(([k, v]) => ({ run: k, outcome: v.outcome }))),
+);
 
 // ---------------------------------------------------------------------------
 // 3. The AC truth leg: the rendered status IS the runtime's record
 // ---------------------------------------------------------------------------
 
-const recoveryStatusA = await fetch(originA + `/v1/recovery/status?workspace_id=${WS}`).then((r) => r.json());
-console.log("status A state:", recoveryStatusA.workspace_state,
-  "review:", recoveryStatusA.review_needed.length, "resumed:", recoveryStatusA.resumed.length);
+const recoveryStatusA = await fetch(originA + `/v1/recovery/status?workspace_id=${WS}`).then((r) =>
+  r.json(),
+);
+console.log(
+  "status A state:",
+  recoveryStatusA.workspace_state,
+  "review:",
+  recoveryStatusA.review_needed.length,
+  "resumed:",
+  recoveryStatusA.resumed.length,
+);
 
 if (recoveryStatusA.workspace_state !== "review_needed") {
   throw new Error(`expected review_needed, got ${recoveryStatusA.workspace_state}`);
@@ -274,7 +291,9 @@ if (resumeMarker.checkpoint_version !== 1 || resumeMarker.step_id !== "step_pars
 const ambiguousTimeline = recoveryStatusA.timelines[seededA.ambiguous];
 const ambiguousKinds = ambiguousTimeline ? ambiguousTimeline.markers.map((m) => m.kind) : [];
 if (!ambiguousKinds.includes("pause")) {
-  throw new Error(`the ambiguous run's timeline lacks the pause marker: ${ambiguousKinds.join(",")}`);
+  throw new Error(
+    `the ambiguous run's timeline lacks the pause marker: ${ambiguousKinds.join(",")}`,
+  );
 }
 
 const truthA = {
@@ -289,7 +308,10 @@ const truthA = {
   })),
 };
 writeFileSync(join(CAPTURE_OUT, "s31-recovery-truth.json"), JSON.stringify(truthA, null, 2));
-console.log("truth A written: review 1, resumed 1, timelines", Object.keys(recoveryStatusA.timelines).length);
+console.log(
+  "truth A written: review 1, resumed 1, timelines",
+  Object.keys(recoveryStatusA.timelines).length,
+);
 
 // ---------------------------------------------------------------------------
 // 4. Phase B runtime: the RESUMED-only leg (no review — the transient banner)
@@ -312,18 +334,24 @@ const originB = `http://127.0.0.1:${runtimeB.httpServer.address().port}`;
 console.log("runtime B on", originB);
 await runtimeB.recovery.bootPass;
 
-const recoveryStatusB = await fetch(originB + `/v1/recovery/status?workspace_id=${WS}`).then((r) => r.json());
+const recoveryStatusB = await fetch(originB + `/v1/recovery/status?workspace_id=${WS}`).then((r) =>
+  r.json(),
+);
 console.log("status B state:", recoveryStatusB.workspace_state);
 if (recoveryStatusB.workspace_state !== "resumed") {
   throw new Error(`expected resumed, got ${recoveryStatusB.workspace_state}`);
 }
 writeFileSync(
   join(CAPTURE_OUT, "s31-resumed-truth.json"),
-  JSON.stringify({
-    workspace_state: recoveryStatusB.workspace_state,
-    resumed: recoveryStatusB.resumed,
-    timelines: recoveryStatusB.timelines,
-  }, null, 2),
+  JSON.stringify(
+    {
+      workspace_state: recoveryStatusB.workspace_state,
+      resumed: recoveryStatusB.resumed,
+      timelines: recoveryStatusB.timelines,
+    },
+    null,
+    2,
+  ),
 );
 
 // ---------------------------------------------------------------------------
@@ -456,7 +484,6 @@ process.on("unhandledRejection", (error) => {
 const browser = await chromium.launch();
 
 const operationPath = `/app/operation/${seededA.operationId}`;
-const reviewHref = `/app/operation/${reviewEntry.operation_id}`;
 
 async function openPage(viewport, path, opts = {}) {
   const context = await browser.newContext({
@@ -477,21 +504,30 @@ async function openPage(viewport, path, opts = {}) {
 
 {
   const { context, page } = await openPage({ width: 1440, height: 900 }, operationPath);
-  await page.screenshot({ path: join(CAPTURE_OUT, "s31-recovery-review-1440.png"), fullPage: false });
+  await page.screenshot({
+    path: join(CAPTURE_OUT, "s31-recovery-review-1440.png"),
+    fullPage: false,
+  });
   await page.close();
   await context.close();
   console.log("captured s31-recovery-review-1440");
 }
 {
   const { context, page } = await openPage({ width: 768, height: 900 }, operationPath);
-  await page.screenshot({ path: join(CAPTURE_OUT, "s31-recovery-review-768.png"), fullPage: false });
+  await page.screenshot({
+    path: join(CAPTURE_OUT, "s31-recovery-review-768.png"),
+    fullPage: false,
+  });
   await page.close();
   await context.close();
   console.log("captured s31-recovery-review-768");
 }
 {
   const { context, page } = await openPage({ width: 360, height: 800 }, operationPath);
-  await page.screenshot({ path: join(CAPTURE_OUT, "s31-recovery-review-360.png"), fullPage: false });
+  await page.screenshot({
+    path: join(CAPTURE_OUT, "s31-recovery-review-360.png"),
+    fullPage: false,
+  });
   await page.close();
   await context.close();
   console.log("captured s31-recovery-review-360");
@@ -509,7 +545,8 @@ async function openPage(viewport, path, opts = {}) {
       return el
         ? {
             tag: el.tagName.toLowerCase(),
-            testid: el.getAttribute("data-testid") ?? el.getAttribute("data-recovery-banner") ?? null,
+            testid:
+              el.getAttribute("data-testid") ?? el.getAttribute("data-recovery-banner") ?? null,
             text: (el.textContent ?? "").trim().slice(0, 60),
             visibleFocus: el.matches(":focus-visible") || el.matches(":focus"),
           }
@@ -532,11 +569,9 @@ async function openPage(viewport, path, opts = {}) {
 
 // prefers-reduced-motion: the banner renders identically with motion reduced.
 {
-  const { context, page } = await openPage(
-    { width: 1440, height: 900 },
-    operationPath,
-    { reducedMotion: true },
-  );
+  const { context, page } = await openPage({ width: 1440, height: 900 }, operationPath, {
+    reducedMotion: true,
+  });
   const spin = await page.evaluate(() => {
     const el = document.querySelector('[data-recovery-banner="review_needed"] svg');
     if (!el) return null;
@@ -571,7 +606,9 @@ await startNext(controlB.address().port);
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
   page.on("pageerror", (error) => console.log("[pageerror]", String(error).slice(0, 220)));
-  await page.goto(webOrigin + `/app/operation/${seededB.operationId}`, { waitUntil: "domcontentloaded" });
+  await page.goto(webOrigin + `/app/operation/${seededB.operationId}`, {
+    waitUntil: "domcontentloaded",
+  });
   await page.waitForSelector('[data-recovery-banner="resumed"]', { timeout: 30_000 });
   await page.waitForTimeout(1200);
   await page.screenshot({ path: join(CAPTURE_OUT, "s31-recovery-resumed-1440.png") });

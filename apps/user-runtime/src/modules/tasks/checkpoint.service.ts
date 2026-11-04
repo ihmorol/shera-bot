@@ -30,12 +30,8 @@
  */
 import { EVENT_ENVELOPES } from "@shera-bot/contracts";
 
-import type {
-  EventJournalRepository,
-} from "../../adapters/sqlite/event-journal-repository.ts";
-import type {
-  RunCheckpointsRepository,
-} from "../../adapters/sqlite/run-checkpoints-repository.ts";
+import type { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
+import type { RunCheckpointsRepository } from "../../adapters/sqlite/run-checkpoints-repository.ts";
 import type { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import type { EventEnvelope } from "../events/events.types.ts";
 import type { EventsService } from "../events/events.service.ts";

@@ -32,7 +32,6 @@
  *
  * Governing records: PRD §13, D8, D32, D33, E13, E2/E10; AC19/AC25.
  */
-import { spawn } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -43,7 +42,10 @@ import type { Actor, TaskLifecyclePayload } from "@shera-bot/contracts";
 import { openDatabase, type SqliteConnection } from "../../adapters/sqlite/connection.ts";
 import { applyMigrations } from "../../adapters/sqlite/migrations.ts";
 import { ApprovalsRepository } from "../../adapters/sqlite/approvals-repository.ts";
-import { EventJournalRepository, type EventJournalRow } from "../../adapters/sqlite/event-journal-repository.ts";
+import {
+  EventJournalRepository,
+  type EventJournalRow,
+} from "../../adapters/sqlite/event-journal-repository.ts";
 import { OperationsRepository } from "../../adapters/sqlite/operations-repository.ts";
 import { RunCheckpointsRepository } from "../../adapters/sqlite/run-checkpoints-repository.ts";
 import { TaskWorkersRepository } from "../../adapters/sqlite/task-workers-repository.ts";
@@ -55,11 +57,9 @@ import { SchedulesService } from "../schedules/schedules.service.ts";
 import { SchedulerService, type ReservationPort } from "../schedules/scheduler.service.ts";
 import { CheckpointService } from "../tasks/checkpoint.service.ts";
 import { taskStreamId } from "../tasks/task-events.ts";
-import {
-  RecoveryDriver,
-  type RecoveryScanReport,
-} from "./recovery-driver.service.ts";
+import { RecoveryDriver, type RecoveryScanReport } from "./recovery-driver.service.ts";
 import { reconcileTaskWorkersAfterRestart } from "../workers/worker-reconciliation.ts";
+import { spawnFakeTaskWorker } from "../workers/fake-task-worker.ts";
 
 const WS = "ws_s31_matrix";
 const AGENT = "agent_matrix_test";
@@ -120,7 +120,13 @@ function buildRuntime(dbPath: string, now: string): MatrixRuntime {
   const ops = new OperationsService({ operations: operationsRepo, tx, packCatalog: PACK_CATALOG });
   const taskWorkers = new TaskWorkersRepository(tx);
   const checkpoints = new RunCheckpointsRepository(tx);
-  const checkpointService = new CheckpointService({ tx, journal, events, checkpoints, now: () => now });
+  const checkpointService = new CheckpointService({
+    tx,
+    journal,
+    events,
+    checkpoints,
+    now: () => now,
+  });
   const approvals = new ApprovalsRepository(tx);
   const triggers = new TriggersRepository(tx);
   const schedules = new SchedulesService({
@@ -182,9 +188,7 @@ function buildRuntime(dbPath: string, now: string): MatrixRuntime {
     // (the matrix pins the DECISION composition; the composed re-drive through
     // the real supervisor is the boot test's concern).
     hasLiveWorker: (workspaceId, runId) =>
-      taskWorkers
-        .listLive(workspaceId)
-        .some((row) => row.run_id === runId),
+      taskWorkers.listLive(workspaceId).some((row) => row.run_id === runId),
     resume: (input) => {
       reDriveCalls.push({ workspaceId: input.workspaceId, runId: input.runId });
     },
@@ -238,9 +242,12 @@ function trackConn(rt: MatrixRuntime): MatrixRuntime {
 }
 
 async function collectDeadPid(): Promise<number> {
-  const child = spawn(process.execPath, ["-e", "process.exit(0)"]);
-  await new Promise<void>((resolve) => child.on("exit", () => resolve()));
-  return child.pid!;
+  // The EXCEPTED fake task worker (zero steps — it exits right after the
+  // handshake): a real, certainly-dead pid through the named adapters (the
+  // AC7 boundary contract — process spawning stays there).
+  const handle = spawnFakeTaskWorker({ steps: 0 });
+  await handle.waitForExit();
+  return handle.child.pid!;
 }
 
 /** The boot walk: the recorded S16 reconciliation, then the S31 scan. */
@@ -288,10 +295,7 @@ function lifecyclePayload(rt: MatrixRuntime, runId: string, type: string): TaskL
   return envelope.payload;
 }
 
-function decidedPayload(
-  rt: MatrixRuntime,
-  runId: string,
-): Record<string, unknown> {
+function decidedPayload(rt: MatrixRuntime, runId: string): Record<string, unknown> {
   const row = rt.journal
     .readFrom(WS, taskStreamId(runId), 0, 1_000)
     .find((candidate: EventJournalRow) => candidate.event_type === "recovery.decided");
@@ -537,15 +541,15 @@ describe("S31 restart matrix (AC19/AC25 — one case per restart property)", () 
     const seeded = await seed();
     const after = restart(seeded);
     const walk = await bootWalk(after);
-    const decision = walk.scan.visited.find(
-      (entry) => entry.runId === seeded.interruptedAmbiguous,
-    );
+    const decision = walk.scan.visited.find((entry) => entry.runId === seeded.interruptedAmbiguous);
     expect(decision?.outcome).toMatchObject({ outcome: "paused_for_review" });
     expect(after.ops.getRun(WS, seeded.operationId, seeded.interruptedAmbiguous).state).toBe(
       "RECOVERY_REQUIRED",
     );
     // The pause walked the D8 table with the runtime actor.
-    expect(lifecyclePayload(after, seeded.interruptedAmbiguous, "task.recovery_required")).toMatchObject({
+    expect(
+      lifecyclePayload(after, seeded.interruptedAmbiguous, "task.recovery_required"),
+    ).toMatchObject({
       from_state: "RUNNING",
       to_state: "RECOVERY_REQUIRED",
     });
@@ -597,8 +601,11 @@ describe("S31 restart matrix (AC19/AC25 — one case per restart property)", () 
       .readFrom(WS, `conversation:${chatId}`, 0, 100)
       .filter((row: EventJournalRow) => row.event_type === "message.appended");
     expect(messagesAfter).toHaveLength(messagesBefore.length);
-    expect(messagesAfter.map((row: EventJournalRow) => (JSON.parse(row.payload) as { message_id: string }).message_id))
-      .toEqual(["msg_matrix_0", "msg_matrix_1"]);
+    expect(
+      messagesAfter.map(
+        (row: EventJournalRow) => (JSON.parse(row.payload) as { message_id: string }).message_id,
+      ),
+    ).toEqual(["msg_matrix_0", "msg_matrix_1"]);
   });
 
   it("a pending approval survives unchanged — same request, same reminder slots, still pending, run untouched", async () => {

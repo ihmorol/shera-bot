@@ -20,7 +20,6 @@
  *
  * Governing records: PRD §13, D8, D32, D33, E13; AC19/AC25.
  */
-import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -37,6 +36,7 @@ import { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import { TaskWorkersRepository } from "../../adapters/sqlite/task-workers-repository.ts";
 import { CheckpointService } from "../../modules/tasks/checkpoint.service.ts";
 import { taskStreamId } from "../../modules/tasks/task-events.ts";
+import { spawnFakeTaskWorker } from "../../modules/workers/fake-task-worker.ts";
 import { EventsService } from "../../modules/events/events.service.ts";
 import { OperationsService } from "../../modules/operations/operations.service.ts";
 import { composeRuntime, type RuntimeHandle } from "./compose.ts";
@@ -70,12 +70,12 @@ function track(runtime: RuntimeHandle): RuntimeHandle {
 
 /** Pre-seed the crashed state through the raw repositories (the previous
  * gateway's rows), BEFORE the new gateway composes over the same file. */
-function seedCrashedState(dbPath: string): {
+async function seedCrashedState(dbPath: string): Promise<{
   operationId: string;
   replayable: string;
   ambiguous: string;
   approvalRun: string;
-} {
+}> {
   const conn = openDatabase(dbPath);
   applyMigrations(conn.db);
   const tx = new SqliteTransactions(conn.db);
@@ -84,7 +84,13 @@ function seedCrashedState(dbPath: string): {
   const operationsRepo = new OperationsRepository(tx);
   const taskWorkers = new TaskWorkersRepository(tx);
   const checkpoints = new RunCheckpointsRepository(tx);
-  const checkpointService = new CheckpointService({ tx, journal, events, checkpoints, now: () => NOW });
+  const checkpointService = new CheckpointService({
+    tx,
+    journal,
+    events,
+    checkpoints,
+    now: () => NOW,
+  });
   const ops = new OperationsService({
     operations: operationsRepo,
     tx,
@@ -154,10 +160,13 @@ function seedCrashedState(dbPath: string): {
     recovery_class: "needs_human",
   });
 
-  // The dead worker rows the crash left behind — a real dead pid (a process
-  // that already exited), so the reaper's probe is honest.
-  const dead = spawnSync(process.execPath, ["-e", "process.exit(0)"]);
-  const deadPid = dead.pid ?? 1;
+  // The dead worker rows the crash left behind — a real dead pid via the
+  // EXCEPTED fake task worker (zero steps: it exits right after the
+  // handshake), so the reaper's probe is honest and process spawning stays
+  // inside the named adapters (the AC7 boundary contract).
+  const deadHandle = spawnFakeTaskWorker({ steps: 0 });
+  await deadHandle.waitForExit();
+  const deadPid = deadHandle.child.pid ?? 1;
   const stamp = NOW;
   for (const runId of [replayable, ambiguous]) {
     taskWorkers.insertWorker({
@@ -181,7 +190,7 @@ describe("S31 composed boot walk — recovery decisions at gateway start", () =>
     const dir = mkdtempSync(join(tmpdir(), "shera-s31-boot-"));
     tempDirs.push(dir);
     const dbPath = join(dir, "runtime.db");
-    const seeded = seedCrashedState(dbPath);
+    const seeded = await seedCrashedState(dbPath);
 
     // The NEW gateway composes over the crashed store — the fake worker
     // harness configured, exactly as the S16 wiring tests compose it. No WS
@@ -224,7 +233,10 @@ describe("S31 composed boot walk — recovery decisions at gateway start", () =>
     const report = await runtime.recovery.bootPass;
     expect(report).not.toBeNull();
     const visited = new Map(
-      report!.visited.map((entry: { runId: string; outcome: unknown }) => [entry.runId, entry.outcome]),
+      report!.visited.map((entry: { runId: string; outcome: unknown }) => [
+        entry.runId,
+        entry.outcome,
+      ]),
     );
     expect(visited.get(seeded.replayable)).toMatchObject({ outcome: "resumed" });
     expect(visited.get(seeded.ambiguous)).toMatchObject({ outcome: "paused_for_review" });
@@ -238,9 +250,7 @@ describe("S31 composed boot walk — recovery decisions at gateway start", () =>
     const conn = openDatabase(dbPath);
     const journal = new EventJournalRepository(new SqliteTransactions(conn.db));
     const taskStreamOf = (runId: string): string[] =>
-      journal
-        .readFrom(WS, taskStreamId(runId), 0, 1_000)
-        .map((row) => row.event_type);
+      journal.readFrom(WS, taskStreamId(runId), 0, 1_000).map((row) => row.event_type);
     const workerStreamOf = (runId: string): string[] =>
       journal.readFrom(WS, runId, 0, 1_000).map((row) => row.event_type);
     const replayableTask = taskStreamOf(seeded.replayable);

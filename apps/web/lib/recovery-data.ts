@@ -4,10 +4,7 @@ import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { z } from "zod";
 
 import { requestRuntime } from "@/lib/runtime-client";
-import type {
-  RunRecoveryMarkerData,
-  RunRecoveryTimelineData,
-} from "@/lib/recovery-copy";
+import type { RunRecoveryMarkerData, RunRecoveryTimelineData } from "@/lib/recovery-copy";
 
 /**
  * The typed browser client for the S31 recovery status surface
@@ -67,7 +64,10 @@ export const RecoveryStatus = z.strictObject({
   workspace_state: z.enum(["recovering", "resumed", "review_needed", "idle"]),
   review_needed: z.array(ReviewEntry),
   resumed: z.array(ResumedEntry),
-  timelines: z.record(z.string(), z.strictObject({ run_id: z.string(), markers: z.array(TimelineMarker) })),
+  timelines: z.record(
+    z.string(),
+    z.strictObject({ run_id: z.string(), markers: z.array(TimelineMarker) }),
+  ),
   generated_at: z.string(),
 });
 export type RecoveryStatus = z.infer<typeof RecoveryStatus>;
@@ -100,7 +100,10 @@ function markerFromApi(marker: z.infer<typeof TimelineMarker>): RunRecoveryMarke
 }
 
 /** The per-run timeline read the run cards render. */
-export function timelineFromStatus(status: RecoveryStatus, runId: string): RunRecoveryTimelineData | undefined {
+export function timelineFromStatus(
+  status: RecoveryStatus,
+  runId: string,
+): RunRecoveryTimelineData | undefined {
   const entry = status.timelines[runId];
   if (!entry) return undefined;
   return {
@@ -133,9 +136,7 @@ export function fetchRecoveryStatus(workspaceId: string): Promise<RecoveryStatus
  * states are boot-scale events, not per-second telemetry); a failure is NO
  * banner — never a fabricated state (G4).
  */
-export function useRecoveryStatus(
-  workspaceId: string | undefined,
-): UseQueryResult<RecoveryStatus> {
+export function useRecoveryStatus(workspaceId: string | undefined): UseQueryResult<RecoveryStatus> {
   return useQuery({
     queryKey: ["recovery-status", workspaceId],
     queryFn: () => fetchRecoveryStatus(workspaceId!),

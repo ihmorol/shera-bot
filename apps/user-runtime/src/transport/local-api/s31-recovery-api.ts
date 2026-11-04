@@ -143,7 +143,12 @@ export function buildRecoveryApiHandle(deps: {
           const stepId = envelope.payload?.step_id;
           const version = envelope.payload?.checkpoint_version;
           if (typeof stepId === "string" && typeof version === "number") {
-            markers.push({ kind: "checkpoint", at: row.occurred_at, checkpoint_version: version, step_id: stepId });
+            markers.push({
+              kind: "checkpoint",
+              at: row.occurred_at,
+              checkpoint_version: version,
+              step_id: stepId,
+            });
           }
         } catch {
           // A corrupt row never breaks the timeline (bounded, skipped).
@@ -227,7 +232,10 @@ export function buildRecoveryApiHandle(deps: {
         .filter((entry) => entry.outcome.outcome === "resumed")
         .filter((entry) => entry.workspaceId === workspaceId)
         .map((entry) => {
-          const outcome = entry.outcome as { outcome: "resumed"; basis: "replayable" | "idempotent_retry" };
+          const outcome = entry.outcome as {
+            outcome: "resumed";
+            basis: "replayable" | "idempotent_retry";
+          };
           const latest = deps.checkpoints.latestForTask(workspaceId, entry.runId);
           return {
             run_id: entry.runId,
@@ -292,7 +300,11 @@ export function registerRecoveryRoutes(
     if (!query.success) {
       res
         .status(400)
-        .json(validationFailure("The recovery status request is not valid: a workspace_id is required."));
+        .json(
+          validationFailure(
+            "The recovery status request is not valid: a workspace_id is required.",
+          ),
+        );
       return;
     }
     res.status(200).json(deps.recovery.status(query.data.workspace_id));

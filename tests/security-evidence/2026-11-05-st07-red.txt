@@ -1,0 +1,42 @@
+# S27 ST-07 RED-without-control proof (2026-11-05)
+#
+# The D14/D22 redaction boundary was TEMPORARILY DISABLED (reverted before commit):
+# apps/user-runtime/src/modules/terminals/secret-redaction.ts \xe2\x80\x94 redactSecrets returns its
+# input unchanged (the single redaction authority for the terminal boundary off).
+#
+# Command: SHERA_PG_BIN=/usr/lib/postgresql/16/bin pnpm vitest run tests/security/s27-st07-credential-leakage.test.ts
+
+# [The raw red-run output below is BOUNDED \xe2\x80\x94 vitest's failure diff for the byte-scan
+# assertions printed the ENTIRE SQLite database's bytes as the received string; the
+# excerpts keep the proof (the raw fixtures present in the persisted bytes) without a
+# multi-megabyte binary dump in committed evidence (G3).]
+
+\xe2\x9d\xaf tests/security/s27-st07-credential-leakage.test.ts (3 tests | 3 failed) 1524ms
+   \xe2\x9d\xaf S27 ST-07 \xe2\x80\x94 the terminal boundary redacts hostile output before persistence (2)
+     \xc3\x97 stdout chunks carrying every ST-07 fixture land redacted: rows + journal carry [REDACTED], never the raw values 596ms
+     \xc3\x97 the recorded command/workdir fields pass the same boundary (a credential on a command line never reaches storage) 595ms
+   \xe2\x9d\xaf S27 ST-07 \xe2\x80\x94 child output entering through the REAL execution binding (1)
+     \xc3\x97 a payload echoing an Authorization header and a credentialed URL leaks neither into the capture nor the bytes 329ms
+
+\xe2\x8e\xaf\xe2\x8e\xaf\xe2\x8e\xaf\xe2\x8e\xaf\xe2\x8e\xaf\xe2\x8e\xaf\xe2\x8e\xaf 
+Failed Tests 3 \xe2\x80\x94 the failure records:
+
+FAIL  tests/security/s27-st07-credential-leakage.test.ts > S27 ST-07 \xe2\x80\x94 the terminal boundary redacts hostile output before persistence > stdout chunks carrying every ST-07 fixture land redacted: rows + journal carry [REDACTED], never the raw values
+    Received (excerpt \xe2\x80\x94 the FULL received string was the whole SQLite database's bytes; bounded here, G3):
+      \xe2\x80\xa6 \xe2\x8f\x8e - Authorization: Bearer s27-SYNTHETIC-provider-token-NOT-REAL \xe2\x8f\x8e + SQLite format 3 \xe2\x8f\x8e \x10 \xe2\x8f\x8e \x02\x02 \xe2\x8f\x8e @   \xe2\x8f\x8e  \xe2\x8f\x8e  \xe2\x8f\x8e \x02 \xe2\x8f\x8e  \xe2\x8f\x8e  \xe2\x8f\x8e \xc2\x94 \xe2\x8f\x8e  \xe2\x8f\x8e  \xe2\x8f\x8e  \xe2\x8f\x8e  \xe2\x8f\x8e  \xe2\x8f\x8e  \xe2\x8f\x8e  \xe2\x8f\x8e \xe2\x80\xa6
+      \xe2\x80\xa620:50:30.002Z\xc2\x81A\x03\x11\x19_\x1f \xe2\x8f\x8e \x19\x01 \xe2\x8f\x8e  \xe2\x8f\x8e  \xe2\x8f\x8e  \xe2\x8f\x8e \x19\xc2\x813 \xe2\x8f\x8e  \xe2\x8f\x8e =ws_s27term-e68615d1-fba1-477d-8506-d45659d7c2a6agent_devoutput\x03stderrhttps://shera-bot:s27-SYNTHETIC-repo-credential-NOT-REAL@example.com/owner/repo.git2026-11-04T20:5\xe2\x80\xa6
+      \xe2\x80\xa6T20:50:30.007Z\xc2\x81\x1f\x04\x10\x19_\x1f \xe2\x8f\x8e \x19\x01 \xe2\x8f\x8e  \xe2\x8f\x8e  \xe2\x8f\x8e  \xe2\x8f\x8e \x19q \xe2\x8f\x8e  \xe2\x8f\x8e =ws_s27term-e68615d1-fba1-477d-8506-d45659d7c2a6agent_devoutput\x04stderrSHERA_S27_API_KEY=s27-SYNTHETIC-key-value-NOT-REAL2026-11-04T20:50:30.002Z\xc2\x81A\x03\x11\x19_\x1f \xe2\x8f\x8e \x19\x01 \xe2\x8f\x8e  \xe2\x8f\x8e  \xe2\x8f\x8e  \xe2\x8f\x8e \x19\xc2\x813 \xe2\x8f\x8e  \xe2\x8f\x8e =ws_s\xe2\x80\xa6
+
+FAIL  tests/security/s27-st07-credential-leakage.test.ts > S27 ST-07 \xe2\x80\x94 the terminal boundary redacts hostile output before persistence > the recorded command/workdir fields pass the same boundary (a credential on a command line never reaches storage)
+    Received (excerpt \xe2\x80\x94 the FULL received string was the whole SQLite database's bytes; bounded here, G3):
+      \xe2\x80\xa6 \xe2\x8f\x8e - s27-SYNTHETIC-repo-credential-NOT-REAL \xe2\x8f\x8e + SQLite format 3 \xe2\x8f\x8e \x10 \xe2\x8f\x8e \x02\x02 \xe2\x8f\x8e @   \xe2\x8f\x8e  \xe2\x8f\x8e  \xe2\x8f\x8e \x02 \xe2\x8f\x8e  \xe2\x8f\x8e  \xe2\x8f\x8e \xc2\x94 \xe2\x8f\x8e  \xe2\x8f\x8e  \xe2\x8f\x8e  \xe2\x8f\x8e  \xe2\x8f\x8e  \xe2\x8f\x8e  \xe2\x8f\x8e \xe2\x80\xa6
+
+FAIL  tests/security/s27-st07-credential-leakage.test.ts > S27 ST-07 \xe2\x80\x94 child output entering through the REAL execution binding > a payload echoing an Authorization header and a credentialed URL leaks neither into the capture nor the bytes
+    Received (excerpt \xe2\x80\x94 the FULL received string was the whole SQLite database's bytes; bounded here, G3):
+      \xe2\x80\xa6 \xe2\x8f\x8e - s27-SYNTHETIC-provider-token-NOT-REAL \xe2\x8f\x8e + exit=0 duration_ms=142 \xe2\x8f\x8e + limits verified\xe2\x80\xa6
+      \xe2\x80\xa6u=20 nproc=64 fsize=67108864 \xe2\x8f\x8e + AUTH Authorization: Bearer s27-SYNTHETIC-provider-token-NOT-REAL \xe2\x8f\x8e + GIT https://shera-bot:s27-SYNTHETIC-repo-credential-NOT-REAL@example.com/owner/repo.git \xe2\x8f\x8e + ENV SHERA_S2\xe2\x80\xa6
+      \xe2\x80\xa6-REAL \xe2\x8f\x8e + GIT https://shera-bot:s27-SYNTHETIC-repo-credential-NOT-REAL@example.com/owner/repo.git \xe2\x8f\x8e + ENV SHERA_S27_API_KEY=s27-SYNTHETIC-key-value-NOT-REAL \xe2\x8f\x8e + set-cookie: shera_session=s27-SYNTHETIC-cooki\xe2\x80\xa6
+
+Test Files  1 failed (1)
+      Tests  3 failed (3)
+exit=1

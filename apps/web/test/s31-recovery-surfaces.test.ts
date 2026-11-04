@@ -31,6 +31,7 @@ import {
   RESUMED_BANNER_COPY,
   pauseMarkerCopy,
   resumeMarkerCopy,
+  resumeMarkerCopyUnanchored,
 } from "../lib/recovery-copy";
 import { RecoveryBanner } from "../components/shell/recovery-banner";
 import { RunRecoveryTimeline } from "../components/operations/run-recovery-timeline";
@@ -39,7 +40,7 @@ import type { RunRecoveryTimelineData } from "../lib/recovery-copy";
 const here = join(import.meta.dirname, "..");
 
 describe("S31 recovery copy — the basis-anchored builders", () => {
-  it("the resume marker names the checkpoint version and step the basis actually is", () => {
+  it("the resume marker names the checkpoint version the basis actually is — the step id stays data", () => {
     const copy = resumeMarkerCopy({
       basis: "replayable",
       checkpointVersion: 2,
@@ -47,16 +48,34 @@ describe("S31 recovery copy — the basis-anchored builders", () => {
     });
     expect(copy.toLowerCase()).toContain("resumed from last safe step");
     expect(copy).toContain("checkpoint v2");
-    expect(copy).toContain("step_fetch_1");
+    // The step id is mechanism data — it renders ONLY in the marker's
+    // data-step-id attribute, never in product copy (the G1 bar).
+    expect(copy).not.toContain("step_fetch_1");
   });
 
-  it("the resume marker discloses the class that authorized the auto-resume", () => {
-    expect(
-      resumeMarkerCopy({ basis: "idempotent_retry", checkpointVersion: 3, stepId: "step_post_1" }),
-    ).toContain("idempotent_retry");
-    expect(
-      resumeMarkerCopy({ basis: "replayable", checkpointVersion: 1, stepId: "step_parse_1" }),
-    ).toContain("replayable");
+  it("the resume marker maps the E13 class token to product language — the raw token never renders", () => {
+    const replayable = resumeMarkerCopy({
+      basis: "replayable",
+      checkpointVersion: 1,
+      stepId: "step_parse_1",
+    });
+    expect(replayable).toContain("safe to re-run");
+    expect(replayable).not.toContain("replayable");
+    const idempotent = resumeMarkerCopy({
+      basis: "idempotent_retry",
+      checkpointVersion: 3,
+      stepId: "step_post_1",
+    });
+    expect(idempotent).toContain("safe to retry without repeating its effect");
+    expect(idempotent).not.toContain("idempotent_retry");
+  });
+
+  it("the unanchored variant keeps the product-language class disclosure and claims no version", () => {
+    const copy = resumeMarkerCopyUnanchored("idempotent_retry");
+    expect(copy.toLowerCase()).toContain("resumed from last safe step");
+    expect(copy).toContain("safe to retry without repeating its effect");
+    expect(copy).not.toContain("checkpoint v");
+    expect(copy).not.toContain("idempotent_retry");
   });
 
   it("the pause marker names what could not be proven safe and asks for review — no outcome promise", () => {
@@ -169,13 +188,20 @@ describe("S31 run recovery timeline — checkpoint → restart → resume marker
     ],
   };
 
-  it("renders the three markers in order with the honest resume copy", () => {
+  it("renders the three markers in order with the honest resume copy and the ids as data", () => {
     const html = renderToStaticMarkup(createElement(RunRecoveryTimeline, { timeline: resumed }));
     expect(html).toContain("Checkpoint taken");
-    expect(html).toContain("step_parse_1");
     expect(html).toContain("Runtime restarted");
     expect(html.toLowerCase()).toContain("resumed from last safe step");
     expect(html).toContain("checkpoint v1");
+    // The mechanism ids ride the data attributes, never product copy.
+    expect(html).toContain('data-step-id="step_parse_1"');
+    expect(html).toContain('data-recovery-basis="replayable"');
+    // The step id appears ONLY as attribute data — not rendered as copy
+    // (the copy text carries the version anchor, the attribute carries the id).
+    const copyText = html.replace(/data-[a-z-]+="[^"]*"/g, "");
+    expect(copyText).not.toContain("step_parse_1");
+    expect(copyText).not.toContain("replayable");
     // The DOM order carries the story: checkpoint → restart → resume.
     const checkpointAt = html.indexOf("Checkpoint taken");
     const restartAt = html.indexOf("Runtime restarted");

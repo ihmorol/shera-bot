@@ -41,7 +41,7 @@ Pinned over a close-and-reopen restart (the same SQLite file, every service rebu
 
 The composed boot test re-drives through **REAL fake-worker children** end-to-end: the interrupted replayable run's stream shows checkpoint → worker.reaped → recovery.decided → worker.started; the ambiguous run's shows the pause and NO worker spawn. No WS client (no browser) is attached for any of it.
 
-### Honest surfaces (UI_DESIGN S11, AC8)
+### Honest surfaces (UI_DESIGN S11; issue #32's recovery-surfaces bullet)
 
 The web reads the REAL `GET /v1/recovery/status` (the runtime's own records — the journal and the D8 rows; the browser allowlist grows by exactly that one workspace-scoped GET):
 

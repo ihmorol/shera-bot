@@ -3,9 +3,11 @@
  * run-checkpoint SQL lives.
  *
  * One row per taken semantic checkpoint (the v21 `run_checkpoints` table),
- * keyed (workspace_id, task_id, step_id, checkpoint_version) — append-only;
- * retaking a step appends a NEW version rather than overwriting the taken
- * record (recovery evidence is never rewritten). The row is the durable D33
+ * keyed (workspace_id, task_id, step_id, checkpoint_version) — append-only,
+ * aligned with the writer: the SAME step_id deduplicates (the winner's row is
+ * the contract, D23 rule 6) and a NEW version arises for a NEW step id — the
+ * taken record is never overwritten (recovery evidence is never rewritten).
+ * The row is the durable D33
  * field set; the task stream's `checkpoint.taken` envelope (journalled by the
  * CheckpointService in the SAME transaction) is the marker the UI timeline
  * renders. The run's existence is validated by the writer, so no FOREIGN KEY

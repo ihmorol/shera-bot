@@ -1506,7 +1506,9 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
    * v21 — semantic run checkpoints (S31 chunk 1; PRD §13, D32, D33, E13,
    * AC19/AC25): the durable D33 field set behind restart recovery. One row
    * per taken checkpoint, keyed (workspace_id, task_id, step_id,
-   * checkpoint_version) — append-only, the step's history preserved. Rows are
+   * checkpoint_version) — append-only, aligned with the writer: the SAME
+   * step_id deduplicates (D23 rule 6) and a NEW version arises for a NEW
+   * step id, so taken evidence is never rewritten. Rows are
    * written by the runtime's CheckpointService at SAFE SEMANTIC BOUNDARIES
    * ONLY (the closed step_kind vocabulary enforced at the column AND in the
    * writer — a stream/token step is unrepresentable, AC5's structural
@@ -1577,20 +1579,22 @@ export function appliedMigrationVersions(db: DatabaseSync): number[] {
  * rows (schema metadata only, like the schema_migrations bookkeeping), so the
  * E12 workspace predicate does not apply to it.
  */
-/** One table's column names, in declared order (the D33 field-set pins read
- * through this helper — the PRAGMA stays inside the adapter, AC7/D23 rule 2). */
-export function sqliteTableColumns(db: DatabaseSync, tableName: string): string[] {
-  return (db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>).map(
-    (column) => column.name,
-  );
-}
-
 export function sqliteTableExists(db: DatabaseSync, tableName: string): boolean {
   const rows = db.prepare("PRAGMA table_list").all() as Array<
     Record<string, string | number | bigint | null>
   >;
   return rows.some(
     (row) => row.schema === "main" && row.type === "table" && row.name === tableName,
+  );
+}
+
+/**
+ * One table's column names, in declared order (the D33 field-set pins read
+ * through this helper — the PRAGMA stays inside the adapter, AC7/D23 rule 2).
+ */
+export function sqliteTableColumns(db: DatabaseSync, tableName: string): string[] {
+  return (db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>).map(
+    (column) => column.name,
   );
 }
 

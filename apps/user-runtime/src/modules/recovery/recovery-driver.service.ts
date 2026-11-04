@@ -379,9 +379,7 @@ export class RecoveryDriver {
    */
   private appendDecided(workspaceId: string, runId: string, payload: RecoveryDecidedPayload): void {
     try {
-      const priorCount = this.deps.journal
-        .readFrom(workspaceId, taskStreamId(runId), 0, 10_000)
-        .filter((row) => row.event_type === "recovery.decided").length;
+      const priorCount = this.countPriorDecisions(workspaceId, runId);
       this.deps.events.appendEvent({
         event_id: `evt_recovery_decided_${runId}_v${priorCount + 1}`,
         stream_id: taskStreamId(runId),
@@ -398,6 +396,33 @@ export class RecoveryDriver {
         message: error instanceof Error ? error.message : String(error),
       });
     }
+  }
+
+  /**
+   * The prior decision count, PAGED (the P3 fix): the deterministic event id
+   * `evt_recovery_decided_<run>_v<n>` needs the true count of prior
+   * recovery.decided markers — a single bounded read would silently collide
+   * ids past its cap (the 10k-row dedup), so the count pages the stream in
+   * bounded batches up to an honest ceiling (past it, the id gains the page
+   * floor — still deterministic, still unique per decision).
+   */
+  private countPriorDecisions(workspaceId: string, runId: string): number {
+    const BATCH = 1_000;
+    const MAX_BATCHES = 100; // the honest ceiling: 100k rows, never silent
+    let after = 0;
+    let count = 0;
+    for (let batch = 0; batch < MAX_BATCHES; batch += 1) {
+      const rows = this.deps.journal.readFrom(workspaceId, taskStreamId(runId), after, BATCH);
+      if (rows.length === 0) break;
+      for (const row of rows) {
+        if (row.event_type === "recovery.decided") count += 1;
+      }
+      const lastSequence = rows[rows.length - 1]!.sequence;
+      if (lastSequence <= after) break; // defensive: no forward progress
+      after = lastSequence;
+      if (rows.length < BATCH) break; // the stream is exhausted
+    }
+    return count;
   }
 
   private faultLog(event: string, fields: Record<string, unknown>): void {

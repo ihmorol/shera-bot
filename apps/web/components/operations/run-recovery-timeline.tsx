@@ -5,6 +5,7 @@ import {
   RESTART_MARKER_COPY,
   pauseMarkerCopy,
   resumeMarkerCopy,
+  resumeMarkerCopyUnanchored,
   type RunRecoveryMarkerData,
   type RunRecoveryTimelineData,
 } from "@/lib/recovery-copy";
@@ -18,10 +19,12 @@ import { cn } from "@/lib/utils";
  * mirrors the same shapes).
  *
  * The copy is the basis-anchored builders' output ONLY: the resume marker
- * says "resumed from last safe step" and names the checkpoint version + step
- * the basis actually is; the pause marker names what could not be proven
- * safe. No marker ever claims exact resume — the module-level test holds
- * that line against the source itself.
+ * says "resumed from last safe step" and names the checkpoint version the
+ * basis actually is (the step id and the raw E13 class token ride data
+ * attributes — `data-step-id` / `data-recovery-basis` — never product copy);
+ * the pause marker names what could not be proven safe. No marker ever
+ * claims exact resume — the module-level test holds that line against the
+ * source itself.
  *
  * §2.3: each marker pairs an icon with its text (color never the only
  * signal); the rail is 1px — the line, not a colored border, is the
@@ -32,13 +35,16 @@ function markerPresentation(marker: RunRecoveryMarkerData): {
   icon: React.ReactNode;
   text: string;
   className: string;
+  /** The mechanism ids ride data attributes, never product copy (the G1 bar). */
+  dataAttributes?: Record<string, string>;
 } {
   switch (marker.kind) {
     case "checkpoint":
       return {
         icon: <BookmarkCheck className="size-3.5 shrink-0 text-sky" aria-hidden="true" />,
-        text: `${CHECKPOINT_MARKER_COPY} — ${marker.stepId} (v${marker.checkpointVersion})`,
+        text: `${CHECKPOINT_MARKER_COPY} (v${marker.checkpointVersion})`,
         className: "text-muted",
+        dataAttributes: { "data-step-id": marker.stepId },
       };
     case "restart":
       return {
@@ -52,14 +58,18 @@ function markerPresentation(marker: RunRecoveryMarkerData): {
         // An unanchored version renders the class disclosure only — the
         // claim shrinks to what the runtime actually recorded.
         text:
-          marker.checkpointVersion !== null && marker.stepId !== null
+          marker.checkpointVersion !== null
             ? resumeMarkerCopy({
                 basis: marker.basis,
                 checkpointVersion: marker.checkpointVersion,
-                stepId: marker.stepId,
+                stepId: marker.stepId ?? "",
               })
-            : `Resumed from last safe step; auto-resumed by the ${marker.basis} recovery class.`,
+            : resumeMarkerCopyUnanchored(marker.basis),
         className: "text-live",
+        dataAttributes: {
+          "data-recovery-basis": marker.basis,
+          ...(marker.stepId !== null ? { "data-step-id": marker.stepId } : {}),
+        },
       };
     case "pause":
       return {
@@ -86,6 +96,7 @@ export function RunRecoveryTimeline({ timeline }: { timeline: RunRecoveryTimelin
             <li
               key={`${marker.kind}-${index}`}
               data-marker-kind={marker.kind}
+              {...presentation.dataAttributes}
               className={cn("flex items-start gap-1.5 text-[11px]", presentation.className)}
             >
               <span className="mt-0.5">{presentation.icon}</span>

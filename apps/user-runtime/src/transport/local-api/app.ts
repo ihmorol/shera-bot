@@ -1286,10 +1286,10 @@ export function createLocalApi(deps: LocalApiDeps): Express {
   // S31: the recovery status surface (a read; the workspace is the composed
   // one). Registered BEFORE the error handlers like every module surface.
   if (deps.recovery && deps.recoveryWorkspaceId) {
-    registerRecoveryRoutes(app, {
-      recovery: deps.recovery,
-      workspaceId: deps.recoveryWorkspaceId,
-    });
+    // The workspace_id gate is the composition condition (a composed
+    // workspace exists); the route itself is workspace-scoped by its query
+    // parameter — no workspace id travels into the route deps.
+    registerRecoveryRoutes(app, { recovery: deps.recovery });
   }
   // S28: the schedules + webhook surface — registered INDEPENDENTLY of the
   // run-control option (a composition passing schedules without runControl

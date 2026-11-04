@@ -2,10 +2,11 @@
  * Recovery copy (S31 chunk 4; UI_DESIGN S11, PRD §13, D32/D33) — the SINGLE
  * source for every recovery string the surfaces render. The copy is asserted
  * by test against the ACTUAL resume basis: a resume marker always names the
- * checkpoint version + step id the basis is, and NEVER claims exact resume
- * (the runtime cannot prove the harness replayed every intermediate token —
- * it can prove the last safe semantic boundary, so that is all the copy
- * says).
+ * checkpoint version the basis is (the step id and the raw E13 class token
+ * ride data attributes, never product copy — the G1 bar), and NEVER claims
+ * exact resume (the runtime cannot prove the harness replayed every
+ * intermediate token — it can prove the last safe semantic boundary, so that
+ * is all the copy says).
  *
  * The builders are pure: they take the runtime's recorded data (the
  * recovery.decided payload fields) and return the strings — no surface
@@ -28,18 +29,39 @@ export const RESUMED_BANNER_COPY =
 /** The E13 basis vocabulary, rendered as data (never paraphrased). */
 export type RecoveryBasis = "replayable" | "idempotent_retry";
 
+/**
+ * The E13 class token → product language (the G1 bar: the mechanism token
+ * never renders in copy — the raw token rides the marker's
+ * `data-recovery-basis` attribute for the tests and the tooling).
+ */
+export const RECOVERY_BASIS_COPY: Record<RecoveryBasis, string> = {
+  replayable: "the step was verified safe to re-run",
+  idempotent_retry: "the step was verified safe to retry without repeating its effect",
+};
+
 export interface ResumeBasis {
   basis: RecoveryBasis;
   checkpointVersion: number;
+  /**
+   * The step id the basis is — rendered ONLY as data (the `data-step-id`
+   * attribute), never in product copy.
+   */
   stepId: string;
 }
 
 /**
- * The resume marker's copy: the honest claim IS the anchor. Rendered in the
- * run timeline (and reused anywhere a resume is reported).
+ * The resume marker's copy: the honest claim IS the anchor — the checkpoint
+ * version names the last safe step IN WORDS, the class is product language,
+ * and the step id stays data. Rendered in the run timeline (and reused
+ * anywhere a resume is reported).
  */
 export function resumeMarkerCopy(basis: ResumeBasis): string {
-  return `Resumed from last safe step — checkpoint v${basis.checkpointVersion} (${basis.stepId}); auto-resumed by the ${basis.basis} recovery class.`;
+  return `Resumed from last safe step — checkpoint v${basis.checkpointVersion}; ${RECOVERY_BASIS_COPY[basis.basis]}.`;
+}
+
+/** The unanchored variant (the runtime recorded no version to name). */
+export function resumeMarkerCopyUnanchored(basis: RecoveryBasis): string {
+  return `Resumed from last safe step; ${RECOVERY_BASIS_COPY[basis]}.`;
 }
 
 /** What the pause marker names: the pending action that could not be proven safe. */

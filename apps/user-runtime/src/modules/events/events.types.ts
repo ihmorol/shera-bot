@@ -322,7 +322,7 @@ export const RecoveryDecidedPayload = z.strictObject({
   run_id: z.string().min(1),
   /** The E13 class that authorized the auto-resume; null when paused. */
   basis: z.enum(["replayable", "idempotent_retry"]).nullable(),
-  /** Why: recovery_class_permits | recovery_class_needs_human | no_idempotency_key. */
+  /** Why: recovery_class_permits | recovery_class_needs_human | no_idempotency_key | risk_class_caps_recovery. */
   reason: z.string().min(1).max(80),
   /** The recorded idempotency key the re-drive re-executes under; null when none. */
   idempotency_key: z.string().min(1).max(200).nullable(),

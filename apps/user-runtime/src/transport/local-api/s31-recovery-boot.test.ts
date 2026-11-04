@@ -94,8 +94,14 @@ function runProjection(taskId: string): TaskRun {
 
 /** The first gateway: create the operation, the runs, the two agent tools,
  * and drive BOTH tool executions through the real executor — the
- * succeeded-execution hook writes the production checkpoints. */
-async function executeCrashedWorkload(dbPath: string): Promise<{
+ * succeeded-execution hook writes the production checkpoints. The dead
+ * worker rows are the full-crash variant; `withDeadWorkerRows: false` is the
+ * narrower crash window (the gateway died AFTER the checkpoint but BEFORE
+ * the run's worker row existed — a RUNNING run with no worker row at all). */
+async function executeCrashedWorkload(
+  dbPath: string,
+  opts: { withDeadWorkerRows?: boolean } = { withDeadWorkerRows: true },
+): Promise<{
   operationId: string;
   replayable: string;
   capped: string;
@@ -135,7 +141,7 @@ async function executeCrashedWorkload(dbPath: string): Promise<{
   await deadHandle.waitForExit();
   const deadPid = deadHandle.child.pid ?? 1;
   const taskWorkers = new TaskWorkersRepository(firstGateway.tx);
-  for (const runId of [replayable, capped]) {
+  for (const runId of opts.withDeadWorkerRows ? [replayable, capped] : []) {
     taskWorkers.insertWorker({
       workspace_id: WS,
       run_id: runId,
@@ -364,5 +370,53 @@ describe("S31 composed boot walk — recovery decisions at gateway start", () =>
     expect(cappedTask).toContain("recovery.decided");
     expect(cappedTask).toContain("task.recovery_required");
     expect(cappedWorkers).not.toContain("worker.started");
+  }, 30_000);
+
+  it("a runtime without a worker harness refuses the re-drive typed — resume_failed, never a fake resumed (P2 fix)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "shera-s31-boot-"));
+    tempDirs.push(dir);
+    const dbPath = join(dir, "runtime.db");
+    // The same REAL workload (the production writer wrote the checkpoints),
+    // in the crash-window variant: NO worker row was ever written, so the
+    // live-worker conservative rule has nothing to skip on.
+    const seeded = await executeCrashedWorkload(dbPath, { withDeadWorkerRows: false });
+
+    // NO workerHarness: the re-drive seam does not exist — the compose's
+    // resume closure refuses typed and the driver records the honest outcome.
+    const runtime = track(
+      composeRuntime({ dbPath, packsRoot: PACKS_ROOT, workspaceId: WS, now: () => NOW }),
+    );
+    const report = await runtime.recovery.bootPass;
+    expect(report).not.toBeNull();
+    const visited = new Map(
+      report!.visited.map((entry: { runId: string; outcome: unknown }) => [
+        entry.runId,
+        entry.outcome,
+      ]),
+    );
+    // The resume-authorized run FAILED its re-drive honestly: the outcome says
+    // resume_failed (the run stayed RUNNING with no worker), never "resumed".
+    expect(visited.get(seeded.replayable)).toMatchObject({
+      outcome: "resume_failed",
+      reason: "resume_port_failed",
+      state: "RUNNING",
+    });
+    // The capped run still pauses (the refusal never turns a pause into a
+    // re-drive either).
+    expect(visited.get(seeded.capped)).toMatchObject({ outcome: "paused_for_review" });
+
+    // The marker records the honest no-replay accounting; the run row stayed
+    // RUNNING (the interrupted state the next boot owns again).
+    const conn: SqliteConnection = openDatabase(dbPath);
+    const journal = new EventJournalRepository(new SqliteTransactions(conn.db));
+    const decided = journal
+      .readFrom(WS, taskStreamId(seeded.replayable), 0, 1_000)
+      .filter((row) => row.event_type === "recovery.decided");
+    expect(decided.length).toBeGreaterThan(0);
+    const lastPayload = JSON.parse(decided[decided.length - 1]!.payload) as Record<string, unknown>;
+    expect(lastPayload).toMatchObject({ basis: "replayable", replayed: false });
+    const runState = runtime.operations.getRun(WS, seeded.operationId, seeded.replayable).state;
+    expect(runState).toBe("RUNNING");
+    conn.close();
   }, 30_000);
 });

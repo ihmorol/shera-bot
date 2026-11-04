@@ -108,6 +108,14 @@ export function buildRecoveryApiHandle(deps: {
   journal: Pick<EventJournalRepository, "readFrom">;
   now?: (() => string) | undefined;
 }): RecoveryApiHandle {
+  /**
+   * The RESUMED banner state's decay window (UI_DESIGN S11: RESUMED is
+   * transient): the workspace_state decays to idle when the newest resume
+   * decision is older than this. The run cards' timelines keep their markers
+   * — the history is durable; only the top-of-app confirmation decays.
+   */
+  const RESUMED_DECAY_MS = 60_000;
+
   const stepIdForVersion = (
     workspaceId: string,
     runId: string,
@@ -129,6 +137,54 @@ export function buildRecoveryApiHandle(deps: {
     } catch {
       return null;
     }
+  };
+
+  /**
+   * The LAST resume decision's recorded basis for one run (the drift fix):
+   * the entry's version/replayed come from the journal's own
+   * `recovery.decided` marker — NEVER re-derived from the latest checkpoint,
+   * which a post-resume boundary would move (the basis must stay the step
+   * the decision actually named).
+   */
+  const lastResumeMarkerFor = (
+    workspaceId: string,
+    runId: string,
+  ): {
+    basis: "replayable" | "idempotent_retry";
+    version: number | null;
+    replayed: boolean;
+    at: string;
+  } | null => {
+    let last: {
+      basis: "replayable" | "idempotent_retry";
+      version: number | null;
+      replayed: boolean;
+      at: string;
+    } | null = null;
+    for (const row of deps.journal.readFrom(workspaceId, taskStreamId(runId), 0, 10_000)) {
+      if (row.event_type !== "recovery.decided") continue;
+      try {
+        const payload = JSON.parse(row.payload) as {
+          basis?: unknown;
+          resume_from_checkpoint_version?: unknown;
+          replayed?: unknown;
+        };
+        const basis = payload.basis;
+        if (basis !== "replayable" && basis !== "idempotent_retry") continue;
+        last = {
+          basis,
+          version:
+            typeof payload.resume_from_checkpoint_version === "number"
+              ? payload.resume_from_checkpoint_version
+              : null,
+          replayed: payload.replayed === true,
+          at: row.occurred_at,
+        };
+      } catch {
+        // A corrupt row never breaks the read (bounded, skipped).
+      }
+    }
+    return last;
   };
 
   const timelineFor = (workspaceId: string, runId: string): RecoveryTimeline | null => {
@@ -228,23 +284,29 @@ export function buildRecoveryApiHandle(deps: {
         });
 
       const lastReport = deps.recovery.lastReport();
-      const resumed: RecoveryResumedEntry[] = (lastReport?.visited ?? [])
-        .filter((entry) => entry.outcome.outcome === "resumed")
-        .filter((entry) => entry.workspaceId === workspaceId)
-        .map((entry) => {
-          const outcome = entry.outcome as {
-            outcome: "resumed";
-            basis: "replayable" | "idempotent_retry";
-          };
-          const latest = deps.checkpoints.latestForTask(workspaceId, entry.runId);
-          return {
-            run_id: entry.runId,
-            basis: outcome.basis,
-            checkpoint_version: latest?.checkpoint_version ?? null,
-            step_id: latest?.step_id ?? null,
-            replayed: true,
-          };
+      const resumed: RecoveryResumedEntry[] = [];
+      /** The decision moments (the decay window's input; not serialized). */
+      const resumedDecidedAt: Array<string | null> = [];
+      for (const entry of lastReport?.visited ?? []) {
+        if (entry.outcome.outcome !== "resumed") continue;
+        if (entry.workspaceId !== workspaceId) continue;
+        const outcome = entry.outcome as {
+          outcome: "resumed";
+          basis: "replayable" | "idempotent_retry";
+        };
+        // The basis is the journal's own decision marker (see
+        // lastResumeMarkerFor) — the latest checkpoint would drift the
+        // anchor the moment a newer boundary lands.
+        const marker = lastResumeMarkerFor(workspaceId, entry.runId);
+        resumed.push({
+          run_id: entry.runId,
+          basis: marker?.basis ?? outcome.basis,
+          checkpoint_version: marker?.version ?? null,
+          step_id: stepIdForVersion(workspaceId, entry.runId, marker?.version ?? null),
+          replayed: marker?.replayed ?? true,
         });
+        resumedDecidedAt.push(marker?.at ?? null);
+      }
 
       const timelines: Record<string, RecoveryTimeline> = {};
       for (const runId of new Set([
@@ -255,12 +317,26 @@ export function buildRecoveryApiHandle(deps: {
         if (timeline !== null) timelines[runId] = timeline;
       }
 
+      // The RESUMED state DECAYS (UI_DESIGN S11): the banner's confirmation
+      // is transient — when every resume decision is older than the window,
+      // the workspace reads idle (the run cards keep their durable markers).
+      const nowMs = Date.parse(now);
+      const newestResumeMs = Math.max(
+        -1,
+        ...resumedDecidedAt.map((at) => (at === null ? -1 : Date.parse(at))),
+      );
+      const resumedFresh =
+        resumed.length > 0 &&
+        newestResumeMs >= 0 &&
+        Number.isFinite(nowMs) &&
+        nowMs - newestResumeMs <= RESUMED_DECAY_MS;
+
       const workspaceState: RecoveryStatusReadModel["workspace_state"] =
         reviewNeeded.length > 0
           ? "review_needed"
           : !deps.recovery.bootSettled()
             ? "recovering"
-            : resumed.length > 0
+            : resumedFresh
               ? "resumed"
               : "idle";
 
@@ -291,10 +367,7 @@ function validationFailure(safeMessage: string) {
   };
 }
 
-export function registerRecoveryRoutes(
-  app: Express,
-  deps: { recovery: RecoveryApiHandle; workspaceId: string },
-): void {
+export function registerRecoveryRoutes(app: Express, deps: { recovery: RecoveryApiHandle }): void {
   app.get(RECOVERY_STATUS_PATH, (req, res) => {
     const query = RecoveryStatusQuery.safeParse(req.query);
     if (!query.success) {

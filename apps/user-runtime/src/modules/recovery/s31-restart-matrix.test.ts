@@ -658,10 +658,12 @@ describe("S31 restart matrix (AC19/AC25 — one case per restart property)", () 
       (total, decision) => total + decision.caught_up_count,
       0,
     );
-    if (caughtUpFirst > 0) {
-      expect(caughtUpSecond).toBe(0);
-      expect(runsAfterSecond - runsAfterFirst).toBe(0);
-    }
+    // Unconditional (the P3 fix): the S28 leg must not pass vacuously — the
+    // missed window is real (the seed clock vs the boot clock), so the first
+    // boot MUST have caught up at least one occurrence.
+    expect(caughtUpFirst).toBeGreaterThanOrEqual(1);
+    expect(caughtUpSecond).toBe(0);
+    expect(runsAfterSecond - runsAfterFirst).toBe(0);
   });
 
   it("a healthy worker is kept — no reap, no re-drive (the AC25 keep-alive leg)", async () => {

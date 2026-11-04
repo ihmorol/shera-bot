@@ -93,7 +93,9 @@ class EffectLedger {
 
 interface RecoveryHarness {
   conn: SqliteConnection;
+  tx: SqliteTransactions;
   journal: EventJournalRepository;
+  events: EventsService;
   ops: OperationsService;
   operationsRepo: OperationsRepository;
   checkpoints: RunCheckpointsRepository;
@@ -193,7 +195,9 @@ function makeHarness(): RecoveryHarness {
 
   const harness: RecoveryHarness = {
     conn,
+    tx,
     journal,
+    events,
     ops,
     operationsRepo,
     checkpoints,
@@ -618,6 +622,81 @@ describe("S31 recovery driver — the class matrix (issue #32)", () => {
     const decided = runEvents(harness, runId).filter((e) => e.type === "recovery.decided");
     expect(decided).toHaveLength(1);
     expect(decided[0]!.payload).toMatchObject({ basis: null, replayed: false });
+  });
+});
+
+describe("S31 recovery driver — the honest resume_failed outcome (P2 fix)", () => {
+  it("a failed re-drive leaves the run RUNNING with the no-replay marker — never a fake resumed", async () => {
+    const harness = makeHarness();
+    const runId = createRun(harness, "RUNNING");
+    takeCheckpoint(harness, runId, {
+      kind: "tool_execution",
+      summary: "parse the downloaded document",
+      tool_id: "tool_document_parse",
+      recovery_class: "replayable",
+      risk_class: "READ_ONLY",
+    });
+    // A second driver over the SAME stores whose resume port THROWS (the
+    // supervisor seam failed after the legal transition).
+    const driver = new RecoveryDriver({
+      tx: harness.tx,
+      journal: harness.journal,
+      events: harness.events,
+      operations: harness.operationsRepo,
+      runControl: {
+        runState: (_workspaceId, runId_) => {
+          const opId = harness.operationsRepo.findRunOperation(WS, runId_);
+          if (opId === null) return null;
+          try {
+            return harness.ops.getRun(WS, opId, runId_).state;
+          } catch {
+            return null;
+          }
+        },
+        applyRunState: (_workspaceId, runId_, state) => {
+          const opId = harness.operationsRepo.findRunOperation(WS, runId_);
+          if (opId === null) throw new Error(`run ${runId_} not found`);
+          harness.ops.applyRunState(WS, opId, runId_, state);
+        },
+      },
+      latestRecoveryBasis: (workspaceId, taskId) => {
+        const latest = harness.checkpoints.latestForTask(workspaceId, taskId);
+        if (latest === null) return null;
+        const parsed: unknown = latest.pending_action_json
+          ? JSON.parse(latest.pending_action_json)
+          : null;
+        return {
+          pendingAction: (parsed ?? null) as Record<string, unknown> | null,
+          checkpointVersion: latest.checkpoint_version,
+        };
+      },
+      runs: { listRunsByState: (state) => harness.operationsRepo.listRunsByState(state) },
+      hasLiveWorker: () => false,
+      resume: () => {
+        throw new Error("the supervisor seam exploded after the transition");
+      },
+      now: () => NOW,
+    });
+
+    const outcome = await driver.recoverRun(WS, runId);
+
+    // The honest outcome: the run did NOT get its re-drive.
+    expect(outcome).toMatchObject({
+      outcome: "resume_failed",
+      reason: "resume_port_failed",
+      state: "RUNNING",
+    });
+    // The run stays RUNNING (the interrupted state) — never a fake resumed.
+    expect(runState(harness, runId)).toBe("RUNNING");
+    expect(harness.ledger.effects).toHaveLength(0);
+    // The marker records the honest no-replay accounting.
+    const decided = runEvents(harness, runId).filter((e) => e.type === "recovery.decided");
+    expect(decided).toHaveLength(1);
+    expect(decided[0]!.payload).toMatchObject({
+      basis: "replayable",
+      reason: "recovery_class_permits",
+      replayed: false,
+    });
   });
 });
 

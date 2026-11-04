@@ -1932,6 +1932,10 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
   // twice over — the service contains its own publish failures, and this
   // wrapper would contain any remaining one, B4).
   wired.setCheckpointPublisher(broadcast);
+  // S31: the recovery decisions ride the SAME post-commit fanout — a decided
+  // resume/pause reaches the WS gateway live instead of waiting for the
+  // surface's poll cadence (the symmetric late-bound cell, B4).
+  wired.setRecoveryPublisher(broadcast);
 
   // D51 seam wiring: adapters propose through the sink; the service validates
   // and executes into the journal; committed envelopes fan out on the WS task

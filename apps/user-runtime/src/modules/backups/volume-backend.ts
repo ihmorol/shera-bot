@@ -21,7 +21,7 @@
  * always a SIBLING of the data dir, but the exclusion keeps the walk safe
  * even if a deployment configures it inside.
  */
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 
 /** The names a volume snapshot NEVER captures (D22/E9 key exclusion; the
@@ -103,6 +103,7 @@ export class CopyVolumeBackend implements VolumeSnapshotBackend {
     let bytes = 0;
     request.roots.forEach((root, rootIndex) => {
       const rootTarget = join(request.targetDir, "roots", String(rootIndex));
+      mkdirSync(rootTarget, { recursive: true });
       if (!existsSync(root)) {
         // An absent root is captured as empty (an honest empty volume), and
         // the manifest records it so the restore recreates nothing silently.
@@ -115,7 +116,13 @@ export class CopyVolumeBackend implements VolumeSnapshotBackend {
         }
         const source = join(root, entry.name);
         const target = join(rootTarget, entry.name);
-        cpSync(source, target, { recursive: true, force: false, errorOnExist: true });
+        // The walk NEVER descends into an excluded name, and the exclusion
+        // holds at EVERY directory level: an excluded file inside a captured
+        // directory (projects/provider-credentials.key) is skipped here —
+        // not copied wholesale by a recursive cpSync (the D22/E9 inspection
+        // caught exactly that hole; the recorded names are excluded by name
+        // at every depth).
+        copyExcluding(source, target, request.excludeNames);
         entries.push(`${rootIndex}:${entry.name}`);
         bytes += entry.isDirectory() ? directoryBytes(source) : statSync(source).size;
       }
@@ -162,6 +169,29 @@ export class CopyVolumeBackend implements VolumeSnapshotBackend {
       }
     });
     return { entries };
+  }
+}
+
+/** The exclusion-honoring recursive copy: every directory level is walked
+ * (never a wholesale cpSync — an excluded name inside a captured directory
+ * must be skipped, not swept in), and an excluded name is never created in
+ * the target (D22/E9 at every depth). */
+function copyExcluding(
+  source: string,
+  target: string,
+  excludeNames: ReadonlySet<string>,
+): void {
+  const stat = statSync(source);
+  if (!stat.isDirectory()) {
+    copyFileSync(source, target);
+    return;
+  }
+  mkdirSync(target, { recursive: true });
+  for (const entry of readdirSync(source, { withFileTypes: true })) {
+    if (excludeNames.has(entry.name)) {
+      continue;
+    }
+    copyExcluding(join(source, entry.name), join(target, entry.name), excludeNames);
   }
 }
 

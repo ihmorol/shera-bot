@@ -87,6 +87,10 @@ function makeFixture(): Fixture {
   writeFileSync(join(dataDir, "projects", "repo.txt"), "worktree state\n");
   writeFileSync(join(dataDir, "provider-credentials.key"), SECRET_FIXTURE);
   writeFileSync(join(dataDir, "project-credentials.key"), SECRET_FIXTURE);
+  // The recorded EXACT name at DEPTH: the exclusion must hold at every
+  // directory level of the walk (the inspection caught the wholesale-cpSync
+  // hole — a nested key file rode the projects/ copy).
+  writeFileSync(join(dataDir, "projects", "provider-credentials.key"), SECRET_FIXTURE);
   const dbPath = join(dataDir, "runtime.db");
   const conn = openDatabase(dbPath);
   openConnections.push(conn);

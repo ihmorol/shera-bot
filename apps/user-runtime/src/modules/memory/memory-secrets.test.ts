@@ -137,14 +137,20 @@ const SECRET_FIXTURES: ReadonlyArray<{ label: string; content: string; needle: s
     needle: "Zx91vWq7Pp3LmKd8Rn5Tj2Yh6Bg4Fc0As1Ew9Xz7Qa3Nb5Mc1Vr",
   },
   {
-    // NO key name names this one — only the embedded secretlint preset's
-    // GitHub rule sees it. The embed must contribute, not decorate.
+    // NO key name names this one. Correction from the fresh-context review
+    // (G5 honesty fix): the layer that catches this fixture is the ENTROPY
+    // pass (a 40-char mixed-charset literal) — the review DISPROVED the
+    // earlier "only the preset sees it" claim. The embed's proven
+    // contribution is the NEXT fixture: the bare AWS access-key id is 20
+    // chars (under the entropy pass's 32 floor) and all-upper/digits (no
+    // mixed classes), so ONLY the preset's AWS rule (enableIDScanRule)
+    // sees it. The embed must contribute, not decorate.
     label: "bare GitHub token (no key name)",
     content: "The release pipeline pushes with ghp_Z9y8x7W6v5U4t3S2r1Q0p9O8n7M6l5K4j3H",
     needle: "ghp_Z9y8x7W6v5U4t3S2r1Q0p9O8n7M6l5K4j3H",
   },
   {
-    // Same for the AWS access-key id shape (the preset's AWS rule).
+    // The embed-contribution proof (see above): caught by the preset alone.
     label: "bare AWS access key id",
     content: "The exporter reads with AKIAQ2W3E4R5T6Y7U8I0",
     needle: "AKIAQ2W3E4R5T6Y7U8I0",
@@ -963,14 +969,18 @@ describe("S29 review round: the scanner sees FIELD BOUNDARIES, not just whole fi
     expect(total).toBe(0);
 
     // The scanner still accepts ordinary prose AFTER the rejections — the
-    // boundary pass rejects credential shapes, not memory itself.
+    // boundary pass rejects credential shapes, not memory itself. (The
+    // prose deliberately avoids the recorded vocabulary words entirely:
+    // the key-assignment sweep's space separator treats "credential <any
+    // word>" as an assignment even within ONE field — the recorded AC21
+    // over-rejection posture the review queued as a follow-up.)
     const clean = await post(
       origin,
       "/v1/memory/commands",
       createCommand({
         scope: "workspace",
         summary: "A perfectly ordinary note",
-        content: "Nothing here resembles a credential in any field or across them.",
+        content: "Nothing here looks like one of those.",
         sensitivity: "normal",
         source_refs: ["conversation://direct/user_emon"],
         confidence: 0.7,

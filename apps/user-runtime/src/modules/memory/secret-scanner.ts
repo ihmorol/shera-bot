@@ -121,42 +121,57 @@ function highEntropyLiteral(text: string): string | null {
 
 /** Scan one memory write's text for secret shapes. Async: the secretlint layer is. */
 export async function scanForSecrets(...texts: string[]): Promise<SecretScanResult> {
+  // TWO views of the SAME write (review C5): the newline-joined text (the
+  // per-field view the layers were tuned on) and the DELIMITER-FREE
+  // concatenation (the boundary view — a key-assignment split across the
+  // summary/content boundary, "pa" + "ssword=…", exists only when the
+  // fields are read together; the newline join stops every layer from
+  // spanning it). Every layer runs over BOTH views; a rejection in either
+  // rejects the write — the scanner errs toward OVER-rejection (AC21).
+  const views = [texts.join("\n"), texts.join("")];
+  const seen = new Set<string>();
   const rejections: SecretScanRejection[] = [];
-  const combined = texts.join("\n");
+  const addRejection = (rule: string) => {
+    if (seen.has(rule)) return;
+    seen.add(rule);
+    rejections.push({ rule });
+  };
 
-  // Layer 2 first (the recorded vocabulary — deterministic, sync).
-  if (PEM_PRIVATE_KEY.test(combined)) rejections.push({ rule: "pem-private-key" });
-  if (BEARER_TOKEN.test(combined)) rejections.push({ rule: "bearer-token" });
-  if (AUTHORIZATION_HEADER.test(combined)) rejections.push({ rule: "authorization-header" });
-  if (CONNECTION_STRING_USERINFO.test(combined)) {
-    rejections.push({ rule: "connection-string-credential" });
-  }
-  if (SECRET_KEY_ASSIGNMENT.test(combined)) rejections.push({ rule: "secret-assignment" });
-  if (highEntropyLiteral(combined) !== null) rejections.push({ rule: "high-entropy-literal" });
-
-  // Layer 1: the embedded secretlint preset (its rules see the same text;
-  // maskSecrets keeps any message data out of what we read back).
-  try {
-    const result = await lintSource({
-      source: {
-        filePath: "memory-write.txt",
-        content: combined,
-        contentType: "text",
-      },
-      options: {
-        locale: "en",
-        maskSecrets: true,
-        config: { rules: PRESET_RULES },
-      },
-    });
-    for (const message of result.messages) {
-      rejections.push({ rule: `secretlint:${message.ruleId ?? "unknown"}` });
+  for (const combined of views) {
+    // Layer 2 first (the recorded vocabulary — deterministic, sync).
+    if (PEM_PRIVATE_KEY.test(combined)) addRejection("pem-private-key");
+    if (BEARER_TOKEN.test(combined)) addRejection("bearer-token");
+    if (AUTHORIZATION_HEADER.test(combined)) addRejection("authorization-header");
+    if (CONNECTION_STRING_USERINFO.test(combined)) {
+      addRejection("connection-string-credential");
     }
-  } catch {
-    // The scanner itself failing is a fault, not an allow: treat it as the
-    // most conservative rejection (the write is refused; the fault is
-    // recorded by the caller through the redacted sink).
-    rejections.push({ rule: "scanner-unavailable" });
+    if (SECRET_KEY_ASSIGNMENT.test(combined)) addRejection("secret-assignment");
+    if (highEntropyLiteral(combined) !== null) addRejection("high-entropy-literal");
+
+    // Layer 1: the embedded secretlint preset (its rules see the same
+    // text; maskSecrets keeps any message data out of what we read back).
+    try {
+      const result = await lintSource({
+        source: {
+          filePath: "memory-write.txt",
+          content: combined,
+          contentType: "text",
+        },
+        options: {
+          locale: "en",
+          maskSecrets: true,
+          config: { rules: PRESET_RULES },
+        },
+      });
+      for (const message of result.messages) {
+        addRejection(`secretlint:${message.ruleId ?? "unknown"}`);
+      }
+    } catch {
+      // The scanner itself failing is a fault, not an allow: treat it as the
+      // most conservative rejection (the write is refused; the fault is
+      // recorded by the caller through the redacted sink).
+      addRejection("scanner-unavailable");
+    }
   }
 
   return { rejected: rejections.length > 0, rejections };

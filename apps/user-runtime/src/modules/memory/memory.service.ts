@@ -194,6 +194,31 @@ export class MemoryService {
    * idempotency_key replays the recorded result (D23 rule 6).
    */
   async applyCommand(command: MemoryCommand): Promise<unknown> {
+    // The user-only commands are the USER's writes and controls (fix-round
+    // F17): the contracts union is the typed USER command surface, and an
+    // agent actor here would be an agent-side write the recorded gates never
+    // see — an agent-actor memory.create would land origin "automatic"
+    // WITHOUT consulting the auto-memory switches (their gate lives only at
+    // the top of proposeCandidate). The agent's path is the typed proposal
+    // seam (proposeCandidate — G2: agents propose, the runtime executes) and
+    // memory.request_publication (the D37 "an expert may propose" request;
+    // only the DECISION is user-only). The same typed refusal
+    // publish_decision already answers with.
+    if (
+      command.actor.type !== "user" &&
+      (command.type === "memory.create" ||
+        command.type === "memory.edit" ||
+        command.type === "memory.restore" ||
+        command.type === "memory.forget" ||
+        command.type === "memory.set_auto_memory" ||
+        command.type === "memory.set_agent_auto_memory")
+    ) {
+      throw new MemoryServiceError(
+        "MEMORY_COMMAND_ACTOR_FORBIDDEN",
+        "policy",
+        "memory writes and controls are user actions; an Agent proposes through the candidate path",
+      );
+    }
     // The write-time secret scan (AC2) runs BEFORE anything is validated
     // into storage: the scan sees every write field (summary, content, and
     // the provenance references — fix-round F2); a rejection

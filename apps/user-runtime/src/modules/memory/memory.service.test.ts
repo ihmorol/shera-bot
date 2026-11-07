@@ -184,8 +184,8 @@ describe("memory service backstops (S29 chunk 1)", () => {
     expect(entries).toHaveLength(1);
     expect(entries[0]!.content).toBe("The workspace note's content.");
     expect(suite.memory.listVersions(WORKSPACE, memoryId).map((v) => v.version)).toEqual([1]);
-    expect(suite.memory.findSettings(WORKSPACE)).toBeUndefined();
-    expect(suite.memory.findAgentSettings(WORKSPACE, "agent_researcher")).toBeUndefined();
+    expect(suite.memory.findSettings(WORKSPACE)).toBeNull();
+    expect(suite.memory.findAgentSettings(WORKSPACE, "agent_researcher")).toBeNull();
   });
 
   it("refuses an agent-actor publication decision — agents never self-approve (G6)", async () => {

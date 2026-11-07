@@ -884,7 +884,7 @@ export function toSheraErrorResponse(error: unknown, correlationId?: string): Ht
       },
       MEMORY_COMMAND_ACTOR_FORBIDDEN: {
         status: 403,
-        safe_message: "Publication is an explicit user decision.",
+        safe_message: "Memory writes, controls, and publication decisions are user actions.",
       },
     };
     const mapping = mappings[error.code];

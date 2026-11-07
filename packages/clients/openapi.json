@@ -7389,7 +7389,8 @@
                 "items": {
                   "type": "string",
                   "minLength": 1,
-                  "maxLength": 256
+                  "maxLength": 256,
+                  "pattern": "^(?:conversation|task|operation|workspace|agent|file|run):\\/\\/\\S+$"
                 },
                 "maxItems": 100
               },
@@ -7666,7 +7667,8 @@
                 "items": {
                   "type": "string",
                   "minLength": 1,
-                  "maxLength": 256
+                  "maxLength": 256,
+                  "pattern": "^(?:conversation|task|operation|workspace|agent|file|run):\\/\\/\\S+$"
                 },
                 "maxItems": 100
               },

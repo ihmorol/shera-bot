@@ -280,7 +280,11 @@ interface AgentSummaryPayload {
   session: { presence: AgentSessionPresence };
 }
 
-function agentSummary(row: AgentRow, presence: AgentSessionPresence): AgentSummaryPayload {
+function agentSummary(
+  row: AgentRow,
+  presence: AgentSessionPresence,
+  lastActivity: { at: string; preview: string } | null = null,
+): AgentSummaryPayload {
   return {
     agent_id: row.agent_id,
     display_name: row.display_name,
@@ -289,6 +293,9 @@ function agentSummary(row: AgentRow, presence: AgentSessionPresence): AgentSumma
     initial_glyph: row.initial_glyph,
     has_user_instructions: row.user_instructions !== null,
     session: { presence },
+    // S30 (E43 idea 4): what the Agent last did + when, from the journal —
+    // null when the history is quiet (never an invented line, G4).
+    last_activity: lastActivity,
   };
 }
 
@@ -396,6 +403,16 @@ export interface LocalApiDeps {
    * reports "none" (G4 — the transport never guesses a presence).
    */
   sessionPresence?: (workspaceId: string, agentId: string) => AgentSessionPresence;
+  /**
+   * S30 (E43 idea 4): the roster activity preview — the Agent's LAST durable
+   * direct-chat event, derived by the composition from the journal (the
+   * transport never touches SQL). Null where the history is quiet: the UI
+   * renders the honest quiet line, never an invented activity.
+   */
+  rosterActivity?: (
+    workspaceId: string,
+    agentId: string,
+  ) => { at: string; preview: string } | null;
   /**
    * S13: the operations seam — the whole Operation chat surface goes through
    * the operations module's service (records, roster commands, coordinator,
@@ -616,7 +633,14 @@ export function createLocalApi(deps: LocalApiDeps): Express {
     res.status(200).json({
       agents: deps.agents
         .listAgents(query.data.workspace_id)
-        .map((row) => agentSummary(row, presenceOf(query.data.workspace_id, row.agent_id))),
+        .map(
+          (row) =>
+            agentSummary(
+              row,
+              presenceOf(query.data.workspace_id, row.agent_id),
+              deps.rosterActivity?.(query.data.workspace_id, row.agent_id) ?? null,
+            ),
+        ),
     });
   });
 

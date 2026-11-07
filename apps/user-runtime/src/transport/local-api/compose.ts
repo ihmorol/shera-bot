@@ -1860,6 +1860,22 @@ function wire(
       onboarding,
       workspaceId: wireWorkspaceId,
     },
+    // S30 (E43 idea 4): the roster activity preview — the Agent's LAST
+    // durable direct-chat message, derived here from the journal (the
+    // transport stays SQL-free). Bounded to 120 chars; null when quiet.
+    rosterActivity: (workspaceId: string, agentId: string) => {
+      const chatId = agentsRepository.findDirectChat(workspaceId, agentId);
+      if (!chatId) return null;
+      const last = journal.lastStreamEvent(`conversation:${chatId}`, workspaceId);
+      if (!last || last.event_type !== "message.appended") return null;
+      try {
+        const payload = JSON.parse(last.payload) as { text?: unknown };
+        if (typeof payload.text !== "string" || payload.text.length === 0) return null;
+        return { at: last.occurred_at, preview: payload.text.slice(0, 120) };
+      } catch {
+        return null;
+      }
+    },
     ...(options.logUntypedFault ? { logUntypedFault: options.logUntypedFault } : {}),
   });
   return {

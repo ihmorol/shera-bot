@@ -169,6 +169,26 @@ export class EventJournalRepository {
   }
 
   /**
+   * The highest-sequence event of one stream (S30: the roster activity
+   * preview derives from the LAST durable event — the runtime's own record,
+   * never a client-side copy). Null when the stream has no events.
+   */
+  lastStreamEvent(streamId: string, workspaceId: string, exec?: DatabaseSync): EventJournalRow | null {
+    const db = exec ?? this.tx.connection();
+    const row = db
+      .prepare(
+        `SELECT stream_id, sequence, event_id, event_type, schema_version,
+                payload, workspace_id, occurred_at, correlation_id
+         FROM event_journal
+         WHERE stream_id = ? AND workspace_id = ?
+         ORDER BY sequence DESC
+         LIMIT 1`,
+      )
+      .get(streamId, workspaceId) as EventJournalRow | undefined;
+    return row ?? null;
+  }
+
+  /**
    * Replay read (AC4): the durable events of one stream strictly after
    * `afterSequence`, in order, workspace-scoped. `limit` bounds a single
    * replay batch; the caller pages by advancing its cursor.

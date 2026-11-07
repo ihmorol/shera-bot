@@ -34,6 +34,12 @@ export interface AgentRosterEntry {
   avatar_hue: number;
   initial_glyph: string;
   has_user_instructions: boolean;
+  /**
+   * S30 (E43 idea 4): the Agent's last durable direct-chat line + when —
+   * derived by the RUNTIME from its own journal. Null when the history is
+   * quiet: the row renders the honest quiet line, never an invention (G4).
+   */
+  last_activity: { at: string; preview: string } | null;
 }
 
 export type AgentRosterState = "loading" | "ready" | "error" | "empty";
@@ -135,9 +141,19 @@ export function AgentRosterSection({
                     />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-text">{agent.display_name}</span>
-                      <span className="block truncate text-xs text-muted">
-                        {agent.role_description}
-                      </span>
+                      {agent.last_activity ? (
+                        <span
+                          className="block truncate text-xs text-muted"
+                          data-testid="roster-activity-line"
+                          title={agent.last_activity.preview}
+                        >
+                          {agent.last_activity.preview}
+                        </span>
+                      ) : (
+                        <span className="block truncate text-xs text-muted">
+                          {agent.role_description}
+                        </span>
+                      )}
                     </span>
                   </Link>
                   {/* §3.2: the Agents section is fixed — the gear opens the

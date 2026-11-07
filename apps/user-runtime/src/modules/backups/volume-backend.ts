@@ -21,7 +21,15 @@
  * always a SIBLING of the data dir, but the exclusion keeps the walk safe
  * even if a deployment configures it inside.
  */
-import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
+import {
+  copyFileSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  statSync,
+} from "node:fs";
 import { basename, join } from "node:path";
 
 /** The names a volume snapshot NEVER captures (D22/E9 key exclusion; the
@@ -176,11 +184,7 @@ export class CopyVolumeBackend implements VolumeSnapshotBackend {
  * (never a wholesale cpSync — an excluded name inside a captured directory
  * must be skipped, not swept in), and an excluded name is never created in
  * the target (D22/E9 at every depth). */
-function copyExcluding(
-  source: string,
-  target: string,
-  excludeNames: ReadonlySet<string>,
-): void {
+function copyExcluding(source: string, target: string, excludeNames: ReadonlySet<string>): void {
   const stat = statSync(source);
   if (!stat.isDirectory()) {
     copyFileSync(source, target);

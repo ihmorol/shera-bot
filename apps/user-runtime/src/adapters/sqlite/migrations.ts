@@ -1622,6 +1622,18 @@ export function sqliteTableColumns(db: DatabaseSync, tableName: string): string[
 }
 
 export function applyMigrations(db: DatabaseSync): void {
+  applyMigrationsUpTo(db, Number.MAX_SAFE_INTEGER);
+}
+
+/**
+ * The migration run bounded at a version (the D24 restore-older-snapshot
+ * verification's recorded helper): the SAME discipline as applyMigrations —
+ * the schema_migrations bootstrap, the BEGIN IMMEDIATE walk, the recorded
+ * version row — over the chain PREFIX `version <= maxVersion`. A database
+ * built with this helper is exactly what a runtime that far behind the head
+ * holds, and the post-restore applyMigrations lands it at the real head.
+ */
+export function applyMigrationsUpTo(db: DatabaseSync, maxVersion: number): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       version    INTEGER PRIMARY KEY,
@@ -1637,6 +1649,9 @@ export function applyMigrations(db: DatabaseSync): void {
   );
 
   for (const migration of MIGRATIONS) {
+    if (migration.version > maxVersion) {
+      continue;
+    }
     if (applied.has(migration.version)) {
       continue;
     }

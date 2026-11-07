@@ -12,7 +12,6 @@
  */
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import type { DatabaseSync } from "node:sqlite";
 import { join } from "node:path";
 
 import { afterAll, describe, expect, it } from "vitest";
@@ -25,6 +24,7 @@ import {
 } from "../../adapters/sqlite/connection.ts";
 import {
   appliedMigrationVersions,
+  applyMigrationsUpTo,
   MIGRATIONS,
   sqliteTableExists,
 } from "../../adapters/sqlite/migrations.ts";
@@ -52,33 +52,14 @@ afterAll(() => {
   }
 });
 
-/** The recorded migration run, limited to a prefix of the chain — the exact
- * steps applyMigrations runs (BEGIN IMMEDIATE → sql → recorded version →
- * COMMIT), for a database whose snapshot predates the head. */
-function applyMigrationPrefix(db: DatabaseSync, upToVersion: number): void {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS schema_migrations (
-      version    INTEGER PRIMARY KEY,
-      name       TEXT NOT NULL,
-      applied_at TEXT NOT NULL
-    ) STRICT;
-  `);
-  for (const migration of MIGRATIONS) {
-    if (migration.version > upToVersion) continue;
-    db.exec("BEGIN IMMEDIATE");
-    try {
-      db.exec(migration.sql);
-      db.prepare("INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)").run(
-        migration.version,
-        migration.name,
-        NOW,
-      );
-      db.exec("COMMIT");
-    } catch (error) {
-      db.exec("ROLLBACK");
-      throw error;
-    }
-  }
+/** The recorded migration run, limited to a chain prefix — the ADAPTER's own
+ * bounded walk (all migration SQL stays inside adapters/sqlite; the test
+ * drives it, never re-implements it). */
+function applyMigrationPrefix(
+  db: Parameters<typeof applyMigrationsUpTo>[0],
+  upToVersion: number,
+): void {
+  applyMigrationsUpTo(db, upToVersion);
 }
 
 describe("S33 migration after restore (D24)", () => {

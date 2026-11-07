@@ -57,9 +57,13 @@ const PACK_CATALOG = {
       skills: [],
       tools: [],
       connectors: [],
+      ui_identity: { avatar_hue: 7, initial_glyph: "R" },
+      home_operation_id: null,
     },
   ],
   locateAgentPack: (agentId: string) => (agentId === AGENT ? "pack_restore_resume_test" : null),
+  skills: [],
+  connectors: [],
 } as const;
 
 const tempDirs: string[] = [];

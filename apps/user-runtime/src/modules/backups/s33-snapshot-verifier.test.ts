@@ -158,7 +158,7 @@ describe("the S33 snapshot verifier (the scheduled check + the alert path)", () 
     expect(fixture.service.snapshots.require(WS, taken.snapshot_id).alert).not.toBeNull();
 
     // The file is replaced with a healthy copy (the repair scenario) — the
-    // corrupt file is removed first (VACUUM INTO refuses a non-empty
+    // corrupt file is removed first (the recorded export refuses a non-empty
     // target), then the next scheduled verification clears the alert.
     const repairedDbPath = join(taken.snapshot_dir, "runtime.db");
     rmSync(repairedDbPath);

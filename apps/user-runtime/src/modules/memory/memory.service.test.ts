@@ -177,7 +177,11 @@ describe("memory service backstops (S29 chunk 1)", () => {
     ).rejects.toMatchObject({ code: "MEMORY_COMMAND_ACTOR_FORBIDDEN" });
     await expect(
       suite.service.applyCommand(
-        agentCommand({ type: "memory.set_agent_auto_memory", agent_id: "agent_researcher", enabled: false }),
+        agentCommand({
+          type: "memory.set_agent_auto_memory",
+          agent_id: "agent_researcher",
+          enabled: false,
+        }),
       ),
     ).rejects.toMatchObject({ code: "MEMORY_COMMAND_ACTOR_FORBIDDEN" });
 
@@ -255,15 +259,10 @@ describe("memory service backstops (S29 chunk 1)", () => {
     expect(decided!.requested_by).toBe("agent_researcher");
     expect(decided!.decided_by).toBe("user_emon");
     // NO duplicate trail row was inserted beside it: the table holds exactly
-    // one row for this memory (the raw read — listPublicationRequests is the
-    // PENDING queue and nothing is pending anymore).
-    const allRows = suite.tx
-      .connection()
-      .prepare(
-        "SELECT * FROM memory_publication_request WHERE workspace_id = ? AND memory_id = ?",
-      )
-      .all(WORKSPACE, memoryId) as unknown[];
-    expect(allRows).toHaveLength(1);
+    // one row for this memory (the all-status repository read —
+    // listPublicationRequests is the PENDING queue and nothing is pending
+    // anymore).
+    expect(suite.memory.listPublicationRequestsForMemory(WORKSPACE, memoryId)).toHaveLength(1);
     // Nothing stays pending.
     expect(suite.memory.listPublicationRequests(WORKSPACE)).toHaveLength(0);
   });

@@ -418,6 +418,25 @@ export class MemoryRepository {
       .all(workspaceId) as unknown as MemoryPublicationRequestRow[];
   }
 
+  /**
+   * Every publication request for one memory, ANY status — the audit-trail
+   * reads (the fix-round F18 no-duplicate pin consults it; the pending-only
+   * list above is the management queue).
+   */
+  listPublicationRequestsForMemory(
+    workspaceId: string,
+    memoryId: string,
+    exec?: SqliteExec,
+  ): MemoryPublicationRequestRow[] {
+    return (exec ?? this.tx.connection())
+      .prepare(
+        `SELECT * FROM memory_publication_request
+         WHERE workspace_id = ? AND memory_id = ?
+         ORDER BY created_at ASC`,
+      )
+      .all(workspaceId, memoryId) as unknown as MemoryPublicationRequestRow[];
+  }
+
   /** Decide one publication request (pending → approved | dismissed). */
   decidePublicationRequest(
     workspaceId: string,

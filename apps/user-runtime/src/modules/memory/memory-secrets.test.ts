@@ -571,3 +571,91 @@ describe("S29 chunk 2: automatic learning with provenance (AC3, G2)", () => {
     await running.close();
   });
 });
+
+describe("S29 chunk 2: the approval decision settles the request it approves (fix-round F18)", () => {
+  it("approving a sensitive candidate decides the Agent's pending request — the queue carries no pending row afterwards", async () => {
+    const running = await composeOn(join(makeTempDir("shera-s29-f18-approve-"), "runtime.db"));
+    const { origin, runtime } = running;
+
+    const op = await post(origin, "/v1/operations", {
+      workspace_id: WORKSPACE,
+      definition_ref: null,
+      name: "Approval settle sweep",
+      roster_agent_ids: [RESEARCHER],
+      coordinator_agent_id: RESEARCHER,
+    });
+    expect(op.status).toBe(201);
+    const operationId = op.body["operation_id"] as string;
+
+    const accepted = await runtime.memory.proposeCandidate({
+      workspace_id: WORKSPACE,
+      proposed_by_agent_id: RESEARCHER,
+      scope: "operation",
+      operation_id: operationId,
+      summary: "Participant health context",
+      content: "The cohort includes participant health records; citations need care.",
+      source_refs: [`conversation://${operationId}/messages`],
+      confidence: 0.8,
+      sensitivity: "sensitive",
+    });
+    expect(accepted.entry.memory_id).toBeTruthy();
+
+    const before = (await (await fetch(`${origin}/v1/memory?workspace_id=${WORKSPACE}`)).json()) as {
+      publication_queue: {
+        request_id: string;
+        memory_id: string;
+        status: string;
+        requested_by: string;
+        decided_by: string | null;
+      }[];
+    };
+    const pendingRow = before.publication_queue.find(
+      (row) => row.memory_id === accepted.entry.memory_id && row.status === "pending",
+    );
+    expect(pendingRow).toBeDefined();
+    expect(pendingRow!.requested_by).toBe(RESEARCHER);
+
+    // The user approves FROM the queue (the S9 surface's Approve).
+    const approve = await post(origin, "/v1/memory/commands", {
+      command_id: "cmd_f18_approve",
+      idempotency_key: "idem_f18_approve",
+      workspace_id: WORKSPACE,
+      actor: { type: "user", id: "user_emon" },
+      issued_at: "2026-11-04T10:07:00.000Z",
+      type: "memory.publish_decision",
+      memory_id: accepted.entry.memory_id,
+      operation_id: operationId,
+      decision: "approve",
+    });
+    expect(approve.status).toBe(200);
+
+    // The request the Agent made is DECIDED — not left pending beside a
+    // duplicate approved row: the queue carries NO pending row for this
+    // memory, and the decided row keeps its proposer while naming the
+    // deciding user (the audit trail, G6).
+    const after = (await (await fetch(`${origin}/v1/memory?workspace_id=${WORKSPACE}`)).json()) as {
+      publication_queue: {
+        request_id: string;
+        memory_id: string;
+        status: string;
+        requested_by: string;
+        decided_by: string | null;
+      }[];
+    };
+    const rows = after.publication_queue.filter((row) => row.memory_id === accepted.entry.memory_id);
+    expect(rows.every((row) => row.status !== "pending")).toBe(true);
+    const decided = rows.find((row) => row.request_id === pendingRow!.request_id);
+    expect(decided).toBeDefined();
+    expect(decided!.status).toBe("approved");
+    expect(decided!.requested_by).toBe(RESEARCHER);
+    expect(decided!.decided_by).toBe("user_emon");
+
+    // The boundary still flips: the entry is visible in the Operation context.
+    const visible = (await await fetch(
+      `${origin}/v1/agents/${RESEARCHER}/memory/context?workspace_id=${WORKSPACE}&operation_id=${operationId}`,
+    ).then((r) => r.json())) as { entries: { memory_id: string }[] };
+    expect(visible.entries.map((entry) => entry.memory_id)).toContain(accepted.entry.memory_id);
+
+    await running.close();
+  });
+});

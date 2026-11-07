@@ -100,12 +100,12 @@ describe("agent identities (S11 migration v4)", () => {
     // append-only and the head moves with each slice. The S29 integration
     // renumbered the memory tables (authored v21) to v22 — main's landed
     // v21 run-checkpoints keeps its slot.
-    expect(MIGRATIONS.at(-3)?.version).toBe(20);
-    expect(MIGRATIONS.at(-3)?.name).toBe("credit-ledger");
-    expect(MIGRATIONS.at(-2)?.version).toBe(21);
-    expect(MIGRATIONS.at(-2)?.name).toBe("run-checkpoints");
-    expect(MIGRATIONS.at(-1)?.version).toBe(22);
-    expect(MIGRATIONS.at(-1)?.name).toBe("memory");
+    expect(MIGRATIONS.at(-5)?.version).toBe(20);
+    expect(MIGRATIONS.at(-5)?.name).toBe("credit-ledger");
+    expect(MIGRATIONS.at(-4)?.version).toBe(21);
+    expect(MIGRATIONS.at(-4)?.name).toBe("run-checkpoints");
+    expect(MIGRATIONS.at(-3)?.version).toBe(22);
+    expect(MIGRATIONS.at(-3)?.name).toBe("memory");
     expect(MIGRATIONS.find((migration) => migration.version === 14)?.name).toBe("terminal-events");
   });
 

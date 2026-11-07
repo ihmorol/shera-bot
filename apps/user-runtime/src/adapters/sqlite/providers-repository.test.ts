@@ -79,8 +79,8 @@ describe("provider catalog storage (S23 migration v18)", () => {
     // and the head moves with each slice. The S29 integration renumbered
     // the memory tables (authored v21) to v22 — main's landed v21
     // run-checkpoints keeps its slot.
-    expect(MIGRATIONS.at(-3)?.version).toBe(20);
-    expect(MIGRATIONS.at(-1)?.version).toBe(22);
+    expect(MIGRATIONS.at(-5)?.version).toBe(20);
+    expect(MIGRATIONS.at(-3)?.version).toBe(22);
   });
 
   it("creates the STRICT tables through the migration runner", () => {

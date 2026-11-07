@@ -91,18 +91,18 @@ describe("S19 v15 migration (projects-and-git)", () => {
     // The S29 integration renumbered the memory tables (authored v21) to
     // v22 — main's landed v21 run-checkpoints keeps its slot — and the pin
     // tracks the head.
-    expect(MIGRATIONS.at(-3)?.version).toBe(20);
-    expect(MIGRATIONS.at(-3)?.name).toBe("credit-ledger");
-    expect(MIGRATIONS.at(-2)?.version).toBe(21);
-    expect(MIGRATIONS.at(-2)?.name).toBe("run-checkpoints");
-    expect(MIGRATIONS.at(-1)?.version).toBe(22);
-    expect(MIGRATIONS.at(-1)?.name).toBe("memory");
-    expect(MIGRATIONS.at(-4)?.name).toBe("trigger-records");
-    expect(MIGRATIONS.at(-5)?.name).toBe("provider-catalog");
-    expect(MIGRATIONS.at(-6)?.name).toBe("tool-inventory");
-    expect(MIGRATIONS.at(-7)?.name).toBe("projects-archive-source");
+    expect(MIGRATIONS.at(-5)?.version).toBe(20);
+    expect(MIGRATIONS.at(-5)?.name).toBe("credit-ledger");
+    expect(MIGRATIONS.at(-4)?.version).toBe(21);
+    expect(MIGRATIONS.at(-4)?.name).toBe("run-checkpoints");
+    expect(MIGRATIONS.at(-3)?.version).toBe(22);
+    expect(MIGRATIONS.at(-3)?.name).toBe("memory");
+    expect(MIGRATIONS.at(-6)?.name).toBe("trigger-records");
+    expect(MIGRATIONS.at(-7)?.name).toBe("provider-catalog");
+    expect(MIGRATIONS.at(-8)?.name).toBe("tool-inventory");
+    expect(MIGRATIONS.at(-9)?.name).toBe("projects-archive-source");
     const applied = appliedMigrationVersions(conn.db);
-    expect(applied.at(-1)).toBe(22);
+    expect(applied.at(-1)).toBe(24);
   });
 
   it("v16 widens projects.source_kind to admit archives while keeping the strict enum", () => {

@@ -1730,6 +1730,33 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
         ON notification_state (workspace_id, read_at);
     `,
   },
+
+  /**
+   * S30 (issue #31; D16, E43) — the onboarding state. Resumable, dismissible,
+   * reopenable progress for the D16 interview: one row per workspace with
+   * the status (pending → completed | dismissed), the current step, and the
+   * recorded answers JSON (typed option ids + optional free text — answers
+   * are DATA the runtime validates, never prose it interprets). Zero-config
+   * start needs NO row: an absent row IS the pending fresh account whose
+   * recommended defaults are already active.
+   *
+   * No FOREIGN KEY (the v4/v5/v6 discipline); workspace-scoped (E12); no
+   * secret ever enters a row (G3 — the answers are UI-vocabulary choices).
+   */
+  {
+    version: 24,
+    name: "onboarding",
+    sql: `
+      CREATE TABLE IF NOT EXISTS onboarding_state (
+        workspace_id        TEXT    NOT NULL,
+        status              TEXT    NOT NULL CHECK (status IN ('pending', 'completed', 'dismissed')),
+        current_step        TEXT,
+        answers_json        TEXT    NOT NULL CHECK (json_valid(answers_json)),
+        updated_at          TEXT    NOT NULL,
+        PRIMARY KEY (workspace_id)
+      ) STRICT;
+    `,
+  },
 ];
 
 /**

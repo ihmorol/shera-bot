@@ -76,8 +76,8 @@ describe("terminal_events storage (S18 migration v14)", () => {
     // entries never move once merged). The S29 integration renumbered the
     // memory tables (authored v21) to v22 — main's landed v21
     // run-checkpoints keeps its slot.
-    expect(MIGRATIONS.at(-1)?.version).toBe(22);
-    expect(MIGRATIONS.at(-8)?.version).toBe(15);
+    expect(MIGRATIONS.at(-3)?.version).toBe(22);
+    expect(MIGRATIONS.at(-10)?.version).toBe(15);
   });
 
   it("creates the STRICT terminal_events table through the migration runner", () => {

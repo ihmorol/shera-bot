@@ -65,6 +65,10 @@ const SESSION_ACTOR_BINDINGS: ReadonlyArray<{ pathPattern: RegExp; bodyField: st
   // one mute record family, E3), and the delivery toggles are USER actions.
   { pathPattern: /^\/v1\/notifications\/commands$/, bodyField: "actor" },
   { pathPattern: /^\/v1\/notifications\/settings\/commands$/, bodyField: "actor" },
+  // S30 (D16, E43, G6): every onboarding command binds the acting user
+  // server-side — the interview answers, dismiss, and reopen are USER
+  // actions; the memory step's effect rides the memory commands surface.
+  { pathPattern: /^\/v1\/onboarding\/commands$/, bodyField: "actor" },
 ];
 
 /** The 401 failure shape for a request whose session carries no usable identity. */

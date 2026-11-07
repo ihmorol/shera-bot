@@ -72,6 +72,10 @@ import {
   registerNotificationsRoutes,
   type NotificationsApiHandle,
 } from "./s30-notifications-api.ts";
+import {
+  registerOnboardingRoutes,
+  type OnboardingApiHandle,
+} from "./s30-onboarding-api.ts";
 
 export const SUBMIT_CONVERSATION_COMMAND_PATH = "/v1/conversations/commands" as const;
 export const LIST_CONVERSATION_EVENTS_PATH = "/v1/conversations/:conversation_id/events" as const;
@@ -523,6 +527,11 @@ export interface LocalApiDeps {
    * (PRD §14, D16, E3).
    */
   notifications?: NotificationsApiHandle;
+  /**
+   * S30: the onboarding surface — the resumable D16 interview snapshot and
+   * the ONE typed commands envelope (answer / dismiss / reopen).
+   */
+  onboarding?: OnboardingApiHandle;
   /**
    * S23: the provider registry seam — the masked catalog CRUD, credential
    * revoke/replace, enable/disable, the connection test, the AC11 override,
@@ -1336,6 +1345,13 @@ export function createLocalApi(deps: LocalApiDeps): Express {
   // INDEPENDENTLY of the memory option (the G4 silent-drop class).
   if (deps.notifications !== undefined) {
     registerNotificationsRoutes(app, deps.notifications);
+  }
+
+  // S30: the onboarding surface — the resumable D16 interview (E43 chat
+  // cards client-side). Registered INDEPENDENTLY of the notifications option
+  // (the G4 silent-drop class).
+  if (deps.onboarding !== undefined) {
+    registerOnboardingRoutes(app, deps.onboarding);
   }
 
   // Typed failures and unknown routes: the SheraError taxonomy, never an

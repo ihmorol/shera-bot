@@ -53,6 +53,8 @@ import { MemoryRepository } from "../../adapters/sqlite/memory-repository.ts";
 import { MemoryService } from "../../modules/memory/memory.service.ts";
 import { NotificationsRepository } from "../../adapters/sqlite/notifications-repository.ts";
 import { NotificationsService } from "../../modules/notifications/notifications.service.ts";
+import { OnboardingRepository } from "../../adapters/sqlite/onboarding-repository.ts";
+import { OnboardingService } from "../../modules/onboarding/onboarding.service.ts";
 import { TaskWorkersRepository } from "../../adapters/sqlite/task-workers-repository.ts";
 import { TerminalEventsRepository } from "../../adapters/sqlite/terminal-events-repository.ts";
 import { WorkspaceFilesRepository } from "../../adapters/sqlite/workspace-files-repository.ts";
@@ -322,6 +324,9 @@ export interface LocalApiHandle {
   /** S30: the notification center seam — the runtime-derived rows, the read/
    * mute state, and the delivery toggles (the tests consult it). */
   notifications: NotificationsService;
+  /** S30: the D16 onboarding seam — the resumable interview state whose
+   * effects ride the shared settings command surfaces. */
+  onboarding: OnboardingService;
   /**
    * S18 chunk 2: the shared browser profile service seam when configured;
    * undefined otherwise (G4 — no browser process ever spawns without it).
@@ -584,6 +589,9 @@ export interface RuntimeHandle {
   /** S30: the notification center seam — the runtime-derived rows, the read/
    * mute state, and the delivery toggles (PRD §14; the tests consult it). */
   notifications: NotificationsService;
+  /** S30: the D16 onboarding seam — the resumable interview state whose
+   * effects ride the shared settings command surfaces (the tests consult it). */
+  onboarding: OnboardingService;
   /**
    * S28: the demo note store the built-in note tools read/write — exposed
    * so tests and capture harnesses can seed real state (the tools' storage
@@ -634,6 +642,7 @@ interface Wired {
   scheduler: SchedulerService;
   memory: MemoryService;
   notifications: NotificationsService;
+  onboarding: OnboardingService;
   wakeManager: SchedulerWakeManager;
   noteStore: Map<string, string>;
   setPublisher(publisher: ConversationPublisher): void;
@@ -1627,6 +1636,20 @@ function wire(
     tx,
     ...(options.now ? { now: options.now } : {}),
   });
+  // S30: the D16 onboarding service — the resumable interview whose ONLY
+  // configuration effect rides the shared settings command surfaces (the
+  // memory briefing issues the memory.set_auto_memory contract command; the
+  // provider check reads the registry's rows).
+  const onboardingRepository = new OnboardingRepository(tx);
+  const onboarding = new OnboardingService({
+    onboarding: onboardingRepository,
+    memory,
+    providers,
+    receipts,
+    tx,
+    workspaceId: wireWorkspaceId,
+    ...(options.now ? { now: options.now } : {}),
+  });
   const schedulerWatcherSources: SchedulerWatcherSources = {
     files: workspaceFiles,
     artifacts: workspaceArtifacts,
@@ -1833,6 +1856,10 @@ function wire(
       notifications,
       workspaceId: wireWorkspaceId,
     },
+    onboarding: {
+      onboarding,
+      workspaceId: wireWorkspaceId,
+    },
     ...(options.logUntypedFault ? { logUntypedFault: options.logUntypedFault } : {}),
   });
   return {
@@ -1869,6 +1896,7 @@ function wire(
     scheduler,
     memory,
     notifications,
+    onboarding,
     wakeManager,
     noteStore: noteBindings.notes,
     setPublisher(next) {
@@ -1895,6 +1923,7 @@ export function composeLocalApi(options: ComposeLocalApiOptions): LocalApiHandle
     credits: wired.credits,
     memory: wired.memory,
     notifications: wired.notifications,
+    onboarding: wired.onboarding,
     browser: wired.browser,
     close: () => wired.conn.close(),
   };
@@ -2163,6 +2192,7 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     scheduler: wired.scheduler,
     memory: wired.memory,
     notifications: wired.notifications,
+    onboarding: wired.onboarding,
     noteStore: wired.noteStore,
     tx: wired.tx,
     close: async () => {

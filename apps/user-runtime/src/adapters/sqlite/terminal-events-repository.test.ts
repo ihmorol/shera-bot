@@ -73,11 +73,14 @@ describe("terminal_events storage (S18 migration v14)", () => {
     // The S19/S21/S23/S28 integrations appended v15-v19 after this
     // migration, S24 appended v20 (credit-ledger), and S31 appended v21
     // (run-checkpoints); v14 itself stays in place (each slice's own
-    // entries never move once merged).
-    // S33 appended v22 (backup-snapshots) after S31's run-checkpoints; the
-    // S18 entry itself never moves once merged.
-    expect(MIGRATIONS.at(-1)?.version).toBe(22);
-    expect(MIGRATIONS.at(-8)?.version).toBe(15);
+    // entries never move once merged). The S29 integration renumbered the
+    // memory tables (authored v21) to v22 — main's landed v21
+    // run-checkpoints keeps its slot — and the S33 integration renumbered
+    // backup-snapshots (authored v22) to v23 the same way; the pin tracks
+    // the head.
+    expect(MIGRATIONS.at(-2)?.version).toBe(22);
+    expect(MIGRATIONS.at(-1)?.version).toBe(23);
+    expect(MIGRATIONS.at(-9)?.version).toBe(15);
   });
 
   it("creates the STRICT terminal_events table through the migration runner", () => {

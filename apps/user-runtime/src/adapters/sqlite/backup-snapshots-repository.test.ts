@@ -76,9 +76,9 @@ describe("the v22 backup_snapshots migration (chain head)", () => {
     const { conn } = newDb();
     const versions = appliedMigrationVersions(conn.db);
     expect(versions).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
     ]);
-    expect(versions.at(-1)).toBe(22);
+    expect(versions.at(-1)).toBe(23);
     expect(MIGRATIONS.at(-1)?.name).toBe("backup-snapshots");
     expect(sqliteTableExists(conn.db, "backup_snapshots")).toBe(true);
   });

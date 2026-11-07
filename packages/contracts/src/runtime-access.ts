@@ -106,7 +106,15 @@ export function isBrowserRuntimePath(method: string, path: string): boolean {
       // from external senders to the runtime's loopback surface, never
       // through the browser proxy.
       path === "/v1/schedules" ||
-      /^\/v1\/schedules\/[a-zA-Z0-9_-]+\/(?:pause|resume|edit)$/.test(path)
+      /^\/v1\/schedules\/[a-zA-Z0-9_-]+\/(?:pause|resume|edit)$/.test(path) ||
+      // S29 (PRD §11, D37, AC27, G6): the memory surface's ONE typed commands
+      // envelope — create/edit/restore/forget/publication decisions/auto-memory
+      // toggles ride the contracts MemoryCommand union. The acting user is
+      // bound SERVER-SIDE by the proxy's session-actor binding; publication
+      // is an explicit user decision the runtime enforces (agents never
+      // self-approve), and secret-shaped content is refused at the write
+      // boundary BEFORE anything is stored.
+      path === "/v1/memory/commands"
     );
   }
   if (method === "PUT") {
@@ -122,6 +130,13 @@ export function isBrowserRuntimePath(method: string, path: string): boolean {
   return (
     method === "GET" &&
     (path === "/v1/agents" ||
+      // S29: the user's memory management read — the per-scope breakdown, the
+      // publication queue, and the auto-memory settings (the S9 Memory
+      // surface's data source). The AGENT context/detail reads
+      // (/v1/agents/:agent_id/memory/...) are deliberately ABSENT: they are
+      // runtime-internal acting-Agent reads (the S11 folder-route posture),
+      // and no browser path may select another Agent's private memory.
+      path === "/v1/memory" ||
       // S23: the masked provider list and the AC11 effective readout (the
       // chat header's data source). Both answer masked views only (G3).
       path === "/v1/providers" ||

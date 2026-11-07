@@ -190,17 +190,22 @@ function streamEvents(rt: CheckpointRuntime, taskId: string): Array<{ type: stri
 }
 
 describe("S31 migration v21 (run-checkpoints)", () => {
-  it("keeps the S31 v21 run-checkpoints entry (S33's v22 backup-snapshots is the head) and creates the STRICT D33 table", () => {
+  it("keeps the S31 v21 run-checkpoints entry (v22 memory and v23 backup-snapshots follow; the head moves with each integration) and creates the STRICT D33 table", () => {
     const dir = track(mkdtempSync(join(tmpdir(), "shera-s31-mig-")));
     const conn = openDatabase(join(dir, "runtime.db"));
     applyMigrations(conn.db);
     const versions = appliedMigrationVersions(conn.db);
     expect(versions).toContain(21);
-    // No duplicate of any version anywhere in the chain (the hole guard:
-    // authored v20, renumbered to v21 at the main integration where S24's
-    // landed v20 credit-ledger kept its slot; S33 appended v22 after it).
-    expect(versions[versions.length - 1]).toBe(22);
+    // No duplicate of any version anywhere in the chain (the hole guard
+    // moved with the head: authored v20, renumbered to v21 at the main
+    // integration where S24's landed v20 credit-ledger kept its slot; the
+    // S29 integration renumbered the memory tables, authored v21, to v22
+    // the same way — run-checkpoints keeps its landed v21 slot; the S33
+    // integration renumbered backup-snapshots, authored v22, to v23 —
+    // memory keeps its landed v22 slot).
+    expect(versions[versions.length - 1]).toBe(23);
     expect(new Set(versions).size).toBe(versions.length);
+    expect(versions).not.toContain(24);
     expect(sqliteTableExists(conn.db, "run_checkpoints")).toBe(true);
     // The exact D33 column set (field-for-field, D33) — through the
     // adapter's column helper (the table introspection never leaves

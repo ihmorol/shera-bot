@@ -60,6 +60,7 @@ import { ConversationsServiceError } from "../../modules/conversations/conversat
 import { ProviderGateError } from "../../modules/providers/provider-gate.ts";
 import { EventsServiceError } from "../../modules/events/events.service.ts";
 import { OperationsServiceError } from "../../modules/operations/operations.service.ts";
+import { MemoryServiceError } from "../../modules/memory/memory.service.ts";
 import { GitServiceError } from "../../modules/git/git.service.ts";
 
 interface HttpErrorMapping {
@@ -832,6 +833,83 @@ export function toSheraErrorResponse(error: unknown, correlationId?: string): Ht
     };
   }
 
+  // S29 — the memory boundary rejections (issue #30; PRD §11, D37, AC27).
+  // A cross-Agent private read is forbidden (403): the actor was identified
+  // but the D37 table does not grant it — the AC7 runtime denial. The
+  // publication actor rule is policy (403): agents never self-approve (G6).
+  // Shape/provenance/absence failures are validation (400) or not-found
+  // (404); the entry's own content is NEVER echoed into any message (G3).
+  if (error instanceof MemoryServiceError) {
+    const mappings: Record<MemoryServiceError["code"], { status: number; safe_message: string }> = {
+      MEMORY_COMMAND_INVALID: {
+        status: 400,
+        safe_message: "The memory command's scope or owner shape is not valid.",
+      },
+      MEMORY_PROVENANCE_REQUIRED: {
+        status: 400,
+        safe_message: "Memory requires at least one source reference.",
+      },
+      MEMORY_NOT_FOUND: {
+        status: 404,
+        safe_message: "The memory does not exist in this workspace.",
+      },
+      MEMORY_VERSION_NOT_FOUND: {
+        status: 404,
+        safe_message: "That version does not exist in this memory's history.",
+      },
+      MEMORY_AUTOMATIC_DISABLED: {
+        status: 403,
+        safe_message: "Automatic memory is disabled.",
+      },
+      MEMORY_OPERATION_NOT_FOUND: {
+        status: 404,
+        safe_message: "The referenced Operation does not exist in this workspace.",
+      },
+      AGENT_MEMORY_ACCESS_DENIED: {
+        status: 403,
+        safe_message: "This private memory belongs to another Agent.",
+      },
+      MEMORY_PUBLICATION_NOT_REQUESTED: {
+        status: 400,
+        safe_message: "There is no pending publication request or active publication to dismiss.",
+      },
+      MEMORY_PUBLICATION_APPROVAL_REQUIRED: {
+        status: 400,
+        safe_message: "A sensitive memory needs a publication request before it can be approved.",
+      },
+      MEMORY_PUBLICATION_SCOPE_FORBIDDEN: {
+        status: 403,
+        safe_message:
+          "This memory's scope does not allow publication into that Operation. Account memory never reaches an Agent, and an operation- or task-scoped memory publishes only into its own Operation.",
+      },
+      MEMORY_SECRET_REJECTED: {
+        status: 400,
+        safe_message:
+          "This memory looks like a credential or secret. Secrets are never stored in memory.",
+      },
+      MEMORY_COMMAND_ACTOR_FORBIDDEN: {
+        status: 403,
+        safe_message: "Memory writes, controls, and publication decisions are user actions.",
+      },
+    };
+    const mapping = mappings[error.code];
+    return {
+      status: mapping.status,
+      body: {
+        code: error.code,
+        category: error.category,
+        safe_message: mapping.safe_message,
+        retryable: false,
+        user_action: null,
+        // The rejection's structured detail — for the secret rejection this
+        // is the RULE classes only (the service never puts matched content
+        // here, G3).
+        internal_details: error.details,
+        correlation_id,
+      },
+    };
+  }
+
   // Body-parser failures (invalid JSON, oversized body) are client errors
   // with well-known types; answer with the contract's validation failure
   // instead of the generic 500 fallback.
@@ -897,6 +975,7 @@ function isUntypedFault(error: unknown): boolean {
     !(error instanceof ApprovalsServiceError) &&
     !(error instanceof GitServiceError) &&
     !(error instanceof OperationsServiceError) &&
+    !(error instanceof MemoryServiceError) &&
     !(error instanceof TerminalEventsRepositoryError) &&
     !(error instanceof AgentNotFoundError) &&
     !(error instanceof AgentSettingsValidationError) &&

@@ -52,6 +52,13 @@ const SESSION_ACTOR_BINDINGS: ReadonlyArray<{ pathPattern: RegExp; bodyField: st
   // schedules-api.ts) deliberately sends NO actor; the runtime's create
   // contract requires one and the binding is what satisfies it.
   { pathPattern: /^\/v1\/schedules$/, bodyField: "actor" },
+  // S29 (PRD §11, D37, AC27, G6): every memory command binds the acting
+  // user server-side — creates, edits, restores, forgets, publication
+  // requests and decisions, and the auto-memory switches are USER actions
+  // (publication is never an agent decision; the runtime refuses agent
+  // actors on the decision paths). The browser client names the actor
+  // shape only; the audit trail is the session identity.
+  { pathPattern: /^\/v1\/memory\/commands$/, bodyField: "actor" },
 ];
 
 /** The 401 failure shape for a request whose session carries no usable identity. */

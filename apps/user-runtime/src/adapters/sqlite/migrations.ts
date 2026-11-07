@@ -1557,9 +1557,139 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
         ON run_checkpoints (workspace_id, task_id, checkpoint_version);
     `,
   },
+
+  /**
+   * v22 — memory with scopes, provenance, versioning, and the publication
+   * boundary (S29, issue #30; PRD §11, D37, AC27, D22/E9, G3).
+   *
+   * Authored as v21 on the s29-memory branch; the integration merge with
+   * main-with-S31 renumbered it to v22 — main's landed v21 run-checkpoints
+   * keeps its slot (the S31 integration precedent: the chain is
+   * append-only and each slice's entries never move once merged).
+   *
+   * memory_entry: one row per memory (D37's five scopes, enforced by the
+   * scope CHECK set — the contract's MEMORY_SCOPES vocabulary). agent_private
+   * rows carry owner_agent_id; operation rows carry operation_id; task rows
+   * carry task_id — the visibility keys the D37 table reads. sensitivity is
+   * the D37 normal/sensitive set (sensitive publication requires user
+   * approval); the publication columns are the AC27 boundary state: a private
+   * entry is visible in an Operation's context ONLY when published into THAT
+   * operation_id (publication shares into one Operation, it never opens the
+   * private scope). source_refs (JSON array) and confidence are the D37
+   * provenance pair — an auto-created entry without provenance is
+   * unrepresentable (the service refuses; AC3).
+   *
+   * memory_version: the append-only version history (PRD §11 "restore
+   * earlier versions") — version 1 is the creation, every edit/publish/
+   * restore appends. History rows are immutable: corrections are NEW
+   * versions, never in-place edits of history.
+   *
+   * memory_publication_request: the publication queue (the S9 surface's
+   * approve/dismiss rows) — status pending → approved | dismissed; the
+   * decision record names WHO decided (always a user, G6) and when.
+   *
+   * memory_settings / memory_agent_settings: the auto-memory controls (PRD
+   * §11 "disable automatic memory globally or per agent") — the global row
+   * and the per-Agent rows the service checks before ANY automatic write.
+   *
+   * No FOREIGN KEY is declared (the v4/v5/v6 discipline): writers validate
+   * referenced rows in the same transaction. Every table is workspace-scoped
+   * at the storage layer (E12). No secret ever enters a memory row (G3,
+   * D22/E9): the write-time scan REJECTS secret-shaped content before any
+   * INSERT runs.
+   */
   {
     version: 22,
+    name: "memory",
+    sql: `
+      CREATE TABLE IF NOT EXISTS memory_entry (
+        workspace_id        TEXT    NOT NULL,
+        memory_id           TEXT    NOT NULL,
+        scope               TEXT    NOT NULL CHECK (scope IN (
+          'account', 'workspace', 'operation', 'task', 'agent_private')),
+        owner_agent_id      TEXT,
+        operation_id        TEXT,
+        task_id             TEXT,
+        summary             TEXT    NOT NULL,
+        content             TEXT    NOT NULL,
+        sensitivity         TEXT    NOT NULL CHECK (sensitivity IN ('normal', 'sensitive')),
+        published           INTEGER NOT NULL CHECK (published IN (0, 1)),
+        published_into_operation_id TEXT,
+        published_at        TEXT,
+        source_refs         TEXT    NOT NULL,
+        confidence          REAL    NOT NULL CHECK (confidence >= 0 AND confidence <= 1),
+        created_by          TEXT    NOT NULL,
+        origin              TEXT    NOT NULL CHECK (origin IN ('user', 'automatic')),
+        created_at          TEXT    NOT NULL,
+        updated_at          TEXT    NOT NULL,
+        expires_at          TEXT,
+        forgotten_at        TEXT,
+        PRIMARY KEY (workspace_id, memory_id)
+      ) STRICT;
+
+      CREATE INDEX IF NOT EXISTS memory_entries_by_scope_idx
+        ON memory_entry (workspace_id, scope, updated_at);
+
+      CREATE INDEX IF NOT EXISTS memory_entries_by_owner_idx
+        ON memory_entry (workspace_id, owner_agent_id, scope);
+
+      CREATE INDEX IF NOT EXISTS memory_entries_by_operation_idx
+        ON memory_entry (workspace_id, operation_id);
+
+      CREATE TABLE IF NOT EXISTS memory_version (
+        workspace_id   TEXT    NOT NULL,
+        memory_id      TEXT    NOT NULL,
+        version        INTEGER NOT NULL CHECK (version >= 1),
+        summary        TEXT    NOT NULL,
+        content        TEXT    NOT NULL,
+        sensitivity    TEXT    NOT NULL CHECK (sensitivity IN ('normal', 'sensitive')),
+        source_refs    TEXT    NOT NULL,
+        confidence     REAL    NOT NULL CHECK (confidence >= 0 AND confidence <= 1),
+        change_kind    TEXT    NOT NULL CHECK (change_kind IN (
+          'created', 'edited', 'published', 'restored', 'auto_updated')),
+        changed_by     TEXT    NOT NULL,
+        created_at     TEXT    NOT NULL,
+        PRIMARY KEY (workspace_id, memory_id, version)
+      ) STRICT;
+
+      CREATE TABLE IF NOT EXISTS memory_publication_request (
+        workspace_id       TEXT    NOT NULL,
+        request_id         TEXT    NOT NULL,
+        memory_id          TEXT    NOT NULL,
+        operation_id       TEXT    NOT NULL,
+        requested_by       TEXT    NOT NULL,
+        status             TEXT    NOT NULL CHECK (status IN ('pending', 'approved', 'dismissed')),
+        created_at         TEXT    NOT NULL,
+        decided_by         TEXT,
+        decided_at         TEXT,
+        PRIMARY KEY (workspace_id, request_id)
+      ) STRICT;
+
+      CREATE INDEX IF NOT EXISTS memory_publication_pending_idx
+        ON memory_publication_request (workspace_id, status, created_at);
+
+      CREATE TABLE IF NOT EXISTS memory_settings (
+        workspace_id        TEXT    NOT NULL,
+        auto_memory_enabled INTEGER NOT NULL CHECK (auto_memory_enabled IN (0, 1)),
+        updated_at          TEXT    NOT NULL,
+        PRIMARY KEY (workspace_id)
+      ) STRICT;
+
+      CREATE TABLE IF NOT EXISTS memory_agent_settings (
+        workspace_id        TEXT    NOT NULL,
+        agent_id            TEXT    NOT NULL,
+        auto_memory_enabled INTEGER NOT NULL CHECK (auto_memory_enabled IN (0, 1)),
+        updated_at          TEXT    NOT NULL,
+        PRIMARY KEY (workspace_id, agent_id)
+      ) STRICT;    `,
+  },
+  {
+    version: 23,
     name: "backup-snapshots",
+    // Authored as v22 on the s33-backups branch; the integration merge with
+    // main-with-S29 renumbered it to v23 — main's landed v22 memory keeps its
+    // slot (the S31 integration precedent: the chain is append-only and each
+    // slice's entries never move once merged).
     sql: `
       CREATE TABLE IF NOT EXISTS backup_snapshots (
         workspace_id     TEXT    NOT NULL,

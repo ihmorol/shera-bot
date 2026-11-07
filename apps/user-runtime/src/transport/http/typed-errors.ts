@@ -877,6 +877,11 @@ export function toSheraErrorResponse(error: unknown, correlationId?: string): Ht
         status: 400,
         safe_message: "A sensitive memory needs a publication request before it can be approved.",
       },
+      MEMORY_PUBLICATION_SCOPE_FORBIDDEN: {
+        status: 403,
+        safe_message:
+          "This memory's scope does not allow publication into that Operation. Account memory never reaches an Agent, and an operation- or task-scoped memory publishes only into its own Operation.",
+      },
       MEMORY_SECRET_REJECTED: {
         status: 400,
         safe_message:

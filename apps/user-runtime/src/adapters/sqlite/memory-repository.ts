@@ -396,15 +396,16 @@ export class MemoryRepository {
   findPendingPublicationRequest(
     workspaceId: string,
     memoryId: string,
+    operationId: string,
     exec?: SqliteExec,
   ): MemoryPublicationRequestRow | null {
     const row = (exec ?? this.tx.connection())
       .prepare(
         `SELECT * FROM memory_publication_request
-         WHERE workspace_id = ? AND memory_id = ? AND status = 'pending'
+         WHERE workspace_id = ? AND memory_id = ? AND operation_id = ? AND status = 'pending'
          ORDER BY created_at DESC LIMIT 1`,
       )
-      .get(workspaceId, memoryId) as Record<string, unknown> | undefined;
+      .get(workspaceId, memoryId, operationId) as Record<string, unknown> | undefined;
     return row ? (row as unknown as MemoryPublicationRequestRow) : null;
   }
 

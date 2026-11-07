@@ -64,6 +64,7 @@ export type MemoryFailureCode =
   | "AGENT_MEMORY_ACCESS_DENIED"
   | "MEMORY_PUBLICATION_NOT_REQUESTED"
   | "MEMORY_PUBLICATION_APPROVAL_REQUIRED"
+  | "MEMORY_PUBLICATION_SCOPE_FORBIDDEN"
   | "MEMORY_AUTOMATIC_DISABLED"
   | "MEMORY_COMMAND_ACTOR_FORBIDDEN";
 
@@ -289,6 +290,36 @@ export class MemoryService {
    * rows). Idempotent per (memory, operation): an existing PENDING request
    * for the pair is returned unchanged, never duplicated.
    */
+  /**
+   * The publication scope rules (review C1/C3): an ACCOUNT memory never
+   * reaches an Agent (D37's account row — the user and explicitly authorized
+   * runtime services alone), so it can never be published into an Operation;
+   * an operation- or task-scoped memory is bound to ITS Operation and
+   * publishes only there (publishing its content into another Operation
+   * would leak it past the scope binding the write enforced). Workspace and
+   * agent_private memories may be published into any existing Operation —
+   * publication shares into ONE Operation and never opens the wider scope.
+   */
+  private assertPublishableScope(entry: MemoryEntryRow, targetOperationId: string): void {
+    if (entry.scope === "account") {
+      throw new MemoryServiceError(
+        "MEMORY_PUBLICATION_SCOPE_FORBIDDEN",
+        "policy",
+        "account memory never reaches an Agent, so it cannot be published into an Operation",
+      );
+    }
+    if (
+      (entry.scope === "operation" || entry.scope === "task") &&
+      entry.operation_id !== targetOperationId
+    ) {
+      throw new MemoryServiceError(
+        "MEMORY_PUBLICATION_SCOPE_FORBIDDEN",
+        "policy",
+        "an operation- or task-scoped memory publishes only into its own Operation",
+      );
+    }
+  }
+
   private requestPublication(
     command: Extract<MemoryCommand, { type: "memory.request_publication" }>,
   ): { request_id: string; status: "pending" | "approved" | "dismissed" } {
@@ -308,6 +339,7 @@ export class MemoryService {
         "the target Operation does not exist in this workspace",
       );
     }
+    this.assertPublishableScope(entry, command.operation_id);
     const existing = this.deps.memory
       .listPublicationRequests(command.workspace_id)
       .find(
@@ -484,6 +516,10 @@ export class MemoryService {
         "the target Operation does not exist in this workspace",
       );
     }
+    // The decision obeys the SAME scope rules the request does (review C1):
+    // an account memory can never be approved into an Operation, and an
+    // operation/task memory publishes only into its own.
+    this.assertPublishableScope(entry, command.operation_id);
 
     const now = this.now();
     const approving = command.decision === "approve";
@@ -491,9 +527,16 @@ export class MemoryService {
     // The ONE pending-request lookup for this decision (fix-round F18 reads
     // it too): the sensitive-approval gate (AC2) refuses a direct approve
     // without a pending request — a SENSITIVE entry's publication always
-    // carries the approval record, no matter who asks.
+    // carries the approval record, no matter who asks. The lookup is
+    // (memory, operation)-scoped (review C4): with two pending requests for
+    // one memory across Operations, the decision settles the row for the
+    // Operation it actually approves — never the newest row regardless.
     const existingPending = approving
-      ? this.deps.memory.findPendingPublicationRequest(command.workspace_id, command.memory_id)
+      ? this.deps.memory.findPendingPublicationRequest(
+          command.workspace_id,
+          command.memory_id,
+          command.operation_id,
+        )
       : null;
     if (approving && entry.sensitivity === "sensitive" && !existingPending) {
       throw new MemoryServiceError(
@@ -560,6 +603,7 @@ export class MemoryService {
       const pending = this.deps.memory.findPendingPublicationRequest(
         command.workspace_id,
         command.memory_id,
+        command.operation_id,
       );
       const activelyPublishedHere =
         entry.published === 1 && entry.published_into_operation_id === command.operation_id;
@@ -1208,12 +1252,24 @@ export class MemoryService {
         // The sensitive gate (D37: sensitive memories require user
         // approval): a SENSITIVE entry never reaches an Agent's context
         // until the user's approval published it — the owner's own private
-        // rows excepted (they are theirs).
+        // rows excepted (they are theirs). Even AFTER publication the row
+        // obeys the SAME scope table every non-sensitive row obeys (review
+        // C1/C2): an ACCOUNT entry still never reaches an Agent (the
+        // reviewer's live-proven P1 — this branch used to pre-empt the
+        // scope switch, leaving `case "account": return false` unreachable
+        // for sensitive rows), and the shared-into Operation's context is
+        // gated on PARTICIPATION (the F1 fix class — a published sensitive
+        // row used to reach ANY agent naming that Operation).
         if (entry.sensitivity === "sensitive") {
           if (entry.scope === "agent_private" && entry.owner_agent_id === agentId) {
             return true;
           }
-          return entry.published === 1 && entry.published_into_operation_id === operationId;
+          if (entry.published !== 1) return false;
+          if (operationId === null || entry.published_into_operation_id !== operationId) {
+            return false;
+          }
+          if (entry.scope === "account") return false;
+          return participates(operationId);
         }
         switch (entry.scope) {
           case "agent_private":

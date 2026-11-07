@@ -221,6 +221,45 @@ describe("S29 — the publication queue (AC27)", () => {
     expect(html).toContain("Approve");
     expect(html).toContain("Dismiss");
   });
+
+  it("a queue row renders the entry's scope AND sensitivity — the reviewer's transparency condition (review C3)", () => {
+    const html = renderView(
+      memoryView({
+        scopes: {
+          account: [],
+          workspace: [
+            entry({
+              memory_id: "mem_s29_sensitive",
+              scope: "workspace",
+              sensitivity: "sensitive",
+              summary: "The sensitive workspace note",
+            }),
+          ],
+          operation: [],
+          task: [],
+          agent_private: [],
+        },
+        publication_queue: [
+          {
+            request_id: "pubreq_s29_scope",
+            memory_id: "mem_s29_sensitive",
+            operation_id: "op_s29",
+            requested_by: "agent_researcher",
+            status: "pending",
+            created_at: "2026-11-04T11:00:00.000Z",
+            decided_by: null,
+            decided_at: null,
+          },
+        ],
+      }),
+    );
+    // The queue row names WHAT is waiting: its scope (the D37 vocabulary)
+    // and its sensitivity — a user deciding a publication blind to either
+    // is the gap the review closed.
+    expect(html).toContain('data-testid="memory-queue-item-scope"');
+    expect(html).toContain("Workspace");
+    expect(html).toContain("sensitive");
+  });
 });
 
 describe("S29 — version restore and the honest forget (AC4/AC6)", () => {

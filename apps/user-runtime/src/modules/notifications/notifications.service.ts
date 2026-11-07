@@ -116,6 +116,10 @@ export class NotificationsService {
     for (const request of this.deps.approvals.listRequestsByStatus(workspaceId, "pending")) {
       const notificationId = `note-apr-${request.approval_id}`;
       const state = stateRows.get(notificationId);
+      // The deep link resolves through the run's Operation chat binding —
+      // the same resolution the journal-derived rows use; an unbound run
+      // keeps the honest /app fallback.
+      const operationId = this.deps.operations.findRunOperation(workspaceId, request.task_id);
       rows.push({
         notification_id: notificationId,
         workspace_id: workspaceId,
@@ -131,7 +135,7 @@ export class NotificationsService {
         occurred_at: request.requested_at,
         read_at: state?.read_at ?? null,
         muted: approvalMutedFor(approvalMutes, request.approval_id, request.task_id),
-        deep_link: `/app/operation/${request.conversation_id}`,
+        deep_link: operationId ? `/app/operation/${operationId}` : "/app",
       });
     }
 

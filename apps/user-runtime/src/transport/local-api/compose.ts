@@ -150,6 +150,14 @@ import {
 } from "../../modules/workers/worker-reconciliation.ts";
 import { RetryCoordinator } from "../../modules/tasks/retry-coordinator.service.ts";
 import { RunCancellationService } from "../../modules/tasks/run-cancellation.service.ts";
+import { CheckpointService } from "../../modules/tasks/checkpoint.service.ts";
+import {
+  RecoveryDriver,
+  recoveryRedriveSpec,
+  type RecoveryScanReport,
+} from "../../modules/recovery/recovery-driver.service.ts";
+import { buildRecoveryApiHandle } from "./s31-recovery-api.ts";
+import { RunCheckpointsRepository } from "../../adapters/sqlite/run-checkpoints-repository.ts";
 import { buildRunControlApiHandle, type RunControlApiHandle } from "./s22-run-control-api.ts";
 import { TriggersRepository } from "../../adapters/sqlite/triggers-repository.ts";
 import { SchedulesService } from "../../modules/schedules/schedules.service.ts";
@@ -433,6 +441,22 @@ export interface TaskWorkerSystem {
   reconcile(): Promise<WorkerReconciliationReport>;
 }
 
+/**
+ * S31 (D32/D33): the recovery surface (the RecoveryDriver's composed handle).
+ * `bootPass` resolves to the boot scan's report — or null when the pass
+ * fault-logged — and is the awaited boot entry for tests and operators; the
+ * composition assigns it once, after the S16 worker reconciliation.
+ */
+export interface RuntimeRecoveryHandle {
+  driver: RecoveryDriver;
+  bootPass: Promise<RecoveryScanReport | null>;
+  recoverInterruptedRuns(): Promise<RecoveryScanReport>;
+  /** The last full scan's report (null before the first pass). */
+  lastReport(): RecoveryScanReport | null;
+  /** False between composition and the boot pass's settlement (S11 RECOVERING). */
+  bootSettled(): boolean;
+}
+
 export interface RuntimeHandle {
   app: Express;
   /** The one HTTP server serving BOTH the local API and the WS gateway. */
@@ -512,6 +536,19 @@ export interface RuntimeHandle {
    */
   retryCoordinator: RetryCoordinator;
   /**
+   * S31 (D33): the semantic checkpoint writer — the v21 run_checkpoints
+   * table + the checkpoint.taken journal markers, taken at safe semantic
+   * boundaries only (the recovery slice's restart input).
+   */
+  checkpoints: CheckpointService;
+  /**
+   * S31 (D32/D33): the recovery surface — the interrupted-run scan (the
+   * explicit awaited entry) and the boot pass (the composition runs it once,
+   * AFTER the S16 worker reconciliation; resolves null on a fault-logged
+   * failure).
+   */
+  recovery: RuntimeRecoveryHandle;
+  /**
    * S22: the run-control HTTP surface (the user cancel command + the run
    * journal read). The routes live on the app; the handle is the test and
    * operator seam.
@@ -578,6 +615,8 @@ interface Wired {
   browser: BrowserService | undefined;
   projects: ProjectsApiHandle;
   retryCoordinator: RetryCoordinator;
+  checkpoints: CheckpointService;
+  recovery: RuntimeRecoveryHandle;
   runCancellation: RunCancellationService;
   runControl: RunControlApiHandle;
   adminCommands: RuntimeAdminCommandsHandle;
@@ -589,6 +628,10 @@ interface Wired {
   wakeManager: SchedulerWakeManager;
   noteStore: Map<string, string>;
   setPublisher(publisher: ConversationPublisher): void;
+  /** S31: late-bound checkpoint marker fanout (the same post-commit cell). */
+  setCheckpointPublisher(publisher: ((event: EventEnvelope) => void) | undefined): void;
+  /** S31: late-bound recovery decision fanout (the same post-commit cell). */
+  setRecoveryPublisher(publisher: ((event: EventEnvelope) => void) | undefined): void;
 }
 
 /**
@@ -712,6 +755,21 @@ function wire(
   const journal = new EventJournalRepository(tx);
   const receipts = new CommandReceiptsRepository(tx);
   const events = new EventsService(journal, tx);
+
+  // S31 (D33): the semantic checkpoint writer — the v21 run_checkpoints table
+  // and the ONE journal in the same transaction; the task stream's
+  // checkpoint.taken envelope fans out post-commit through the SAME
+  // late-bound cell every other service uses (B4).
+  const runCheckpoints = new RunCheckpointsRepository(tx);
+  let checkpointPublisher: ((event: EventEnvelope) => void) | undefined = undefined;
+  const checkpointService = new CheckpointService({
+    tx,
+    journal,
+    events,
+    checkpoints: runCheckpoints,
+    ...(options.now ? { now: options.now } : {}),
+    publish: (event) => checkpointPublisher?.(event),
+  });
 
   // Late-bound fanout: subscribers bind after construction (the WS gateway
   // mounts later); the post-commit discipline lives in the service, and the
@@ -1278,6 +1336,12 @@ function wire(
     tools: toolsRepository,
     tx,
     approvals,
+    // S31 (D33): a succeeded tool execution IS a semantic boundary — the
+    // executor offers it, the CheckpointService validates the record against
+    // the closed boundary vocabulary (the AC5 gate lives there, not here).
+    checkpoints: {
+      recordFromToolExecution: (input) => checkpointService.recordFromToolExecution(input),
+    },
     ...(options.now ? { now: options.now } : {}),
   });
   if (options.scriptedToolProposal) {
@@ -1427,6 +1491,85 @@ function wire(
   const runControlApi = buildRunControlApiHandle({
     runCancellation,
     journal,
+  });
+  // S31 (D32/D33, E13): the recovery driver — the interrupted-run decision
+  // layer the S16 reconciliation explicitly leaves runs for. The decision
+  // input is the latest semantic checkpoint's recorded E13 class (the
+  // chunk-1 rows); the re-drive seam is the SAME supervisor the QUEUED
+  // re-drive uses — no worker system means the re-drive refuses typed and
+  // the outcome says resume_failed (G4: never a silent fake re-drive).
+  // Late-bound live fanout (the same post-commit cell discipline as the S31
+  // checkpoint markers — B4).
+  let recoveryPublisher: ((event: EventEnvelope) => void) | undefined = undefined;
+  const recoveryTaskWorkers = new TaskWorkersRepository(tx);
+  const recoveryDriver = new RecoveryDriver({
+    tx,
+    journal,
+    events,
+    operations: operationsRepository,
+    runControl: new OperationsRunSeam(operations),
+    runs: { listRunsByState: (state) => operationsRepository.listRunsByState(state) },
+    hasLiveWorker: (workspaceId, runId) =>
+      recoveryTaskWorkers.listLive(workspaceId).some((row) => row.run_id === runId),
+    latestRecoveryBasis: (workspaceId, taskId) => {
+      const latest = runCheckpoints.latestForTask(workspaceId, taskId);
+      if (latest === null) return null;
+      return {
+        pendingAction: latest.pending_action_json
+          ? (JSON.parse(latest.pending_action_json) as Record<string, unknown>)
+          : null,
+        checkpointVersion: latest.checkpoint_version,
+      };
+    },
+    resume: async (input) => {
+      if (!workers) {
+        // G4: no worker system is configured — the re-drive seam does not
+        // exist. The driver records the honest resume_failed outcome.
+        throw new Error("no worker system is configured for this runtime");
+      }
+      // The recorded idempotency key rides the worker spec (the re-drive
+      // lands under the SAME key the original consumed — the collapse's
+      // mechanism; the residual gap for a real harness re-deriving different
+      // args is recorded in E41).
+      await workers.supervisor.startWorker(
+        input.workspaceId,
+        input.runId,
+        recoveryRedriveSpec(input.idempotencyKey),
+      );
+    },
+    ...(options.now ? { now: options.now } : {}),
+    publish: (event) => recoveryPublisher?.(event),
+    logFault: (event, fields) => logFault(event, fields),
+  });
+
+  // S31: the recovery handle — the boot-pass state (the S11 RECOVERING
+  // window is exactly the unsettled span) and the scan report the status
+  // read serves.
+  const recoveryHandle: RuntimeRecoveryHandle = (() => {
+    let bootSettled = false;
+    return {
+      driver: recoveryDriver,
+      bootPass: Promise.resolve(null) as Promise<RecoveryScanReport | null>,
+      recoverInterruptedRuns: async () => {
+        const report = await recoveryDriver.recoverInterruptedRuns();
+        bootSettled = true;
+        return report;
+      },
+      lastReport: () => recoveryDriver.lastReport(),
+      bootSettled: () => bootSettled,
+    };
+  })();
+  // S31: the recovery status read — the banner + timeline surfaces' data
+  // source (the runtime's own records; the routes relay, G2).
+  const recoveryApi = buildRecoveryApiHandle({
+    recovery: {
+      lastReport: () => recoveryHandle.lastReport(),
+      bootSettled: () => recoveryHandle.bootSettled(),
+    },
+    operations: operationsRepository,
+    checkpoints: runCheckpoints,
+    journal,
+    ...(options.now ? { now: options.now } : {}),
   });
 
   // S28: the runtime-owned scheduler stack (PRD §8, §13, E5, D11) — the
@@ -1640,6 +1783,8 @@ function wire(
     ...(browserHandle ? { browser: browserHandle } : {}),
     projects: projectsApi,
     runControl: runControlApi,
+    recovery: recoveryApi,
+    recoveryWorkspaceId: wireWorkspaceId,
     schedules: {
       schedules,
       scheduler,
@@ -1683,6 +1828,8 @@ function wire(
     browser,
     projects: projectsApi,
     retryCoordinator,
+    checkpoints: checkpointService,
+    recovery: recoveryHandle,
     runCancellation,
     runControl: runControlApi,
     adminCommands,
@@ -1695,6 +1842,12 @@ function wire(
     noteStore: noteBindings.notes,
     setPublisher(next) {
       publisher = next;
+    },
+    setCheckpointPublisher(next: ((event: EventEnvelope) => void) | undefined) {
+      checkpointPublisher = next;
+    },
+    setRecoveryPublisher(next: ((event: EventEnvelope) => void) | undefined) {
+      recoveryPublisher = next;
     },
   };
 }
@@ -1808,6 +1961,14 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     wired.scheduler.handleCommittedEvent(event);
   }, logFault);
   wired.setPublisher(broadcast);
+  // S31: the checkpoint markers ride the SAME post-commit fanout (contained
+  // twice over — the service contains its own publish failures, and this
+  // wrapper would contain any remaining one, B4).
+  wired.setCheckpointPublisher(broadcast);
+  // S31: the recovery decisions ride the SAME post-commit fanout — a decided
+  // resume/pause reaches the WS gateway live instead of waiting for the
+  // surface's poll cadence (the symmetric late-bound cell, B4).
+  wired.setRecoveryPublisher(broadcast);
 
   // D51 seam wiring: adapters propose through the sink; the service validates
   // and executes into the journal; committed envelopes fan out on the WS task
@@ -1918,7 +2079,25 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
         })
         .catch(() => {})
     : undefined;
-  void reconciliation;
+
+  // S31 (D32/D33): the recovery scan runs AFTER the S16 reconciliation (the
+  // reaper closes the worker-row truth first; the driver decides what it
+  // left). Fire-and-forget with the same containment posture; the handle's
+  // bootPass is the awaited entry (tests/operators), and the report resolves
+  // null when the pass fault-logged.
+  const recoveryBootPass: Promise<RecoveryScanReport | null> = (reconciliation ?? Promise.resolve())
+    .then(() => wired.recovery.recoverInterruptedRuns())
+    .catch((error: unknown) => {
+      logFault("recovery_scan_boot_failed", {
+        name: error instanceof Error ? error.name : "Error",
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    });
+  // The in-flight promise is visible IMMEDIATELY (a consumer composing over a
+  // crashed store awaits the REAL pass, never a pre-resolved null).
+  wired.recovery.bootPass = recoveryBootPass;
+  void recoveryBootPass;
 
   return {
     app: wired.app,
@@ -1943,6 +2122,8 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     browser: wired.browser,
     projects: wired.projects,
     retryCoordinator: wired.retryCoordinator,
+    checkpoints: wired.checkpoints,
+    recovery: wired.recovery,
     runControl: wired.runControl,
     providers: wired.providers,
     credits: wired.credits,

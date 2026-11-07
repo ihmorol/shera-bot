@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 
 import { ErrorState } from "@/components/shell/states";
 import { Button } from "@/components/ui/button";
+import { RunRecoveryTimeline } from "@/components/operations/run-recovery-timeline";
+import type { RunRecoveryTimelineData } from "@/lib/recovery-copy";
 import type { GitRunLinkage } from "@/lib/projects-api";
 import type { OperationRun as OperationRunType } from "@shera-bot/contracts";
 import { cn } from "@/lib/utils";
@@ -179,6 +181,7 @@ export function OperationRunsPanel({
   onCancelRun,
   cancelPendingRunId,
   cancelSafeError,
+  recoveryTimelines,
   className,
 }: {
   runs: OperationRunType[];
@@ -198,6 +201,13 @@ export function OperationRunsPanel({
   onCancelRun?: (runId: string) => void;
   cancelPendingRunId?: string | null;
   cancelSafeError?: string | undefined;
+  /**
+   * S31 (S11): the recovery timelines from the runtime's recovery status
+   * read, keyed by run id. A run with recovery journal history renders its
+   * checkpoint → restart → resume/pause markers — the honest story, never
+   * an exact-resume claim.
+   */
+  recoveryTimelines?: Record<string, RunRecoveryTimelineData> | undefined;
   className?: string;
 }) {
   // The inline confirmation is panel-local state: one run confirms at a
@@ -357,6 +367,9 @@ export function OperationRunsPanel({
                     <Play className="size-3" aria-hidden="true" />
                     Delegated subrun of {run.parent_task_id}
                   </p>
+                ) : null}
+                {recoveryTimelines?.[run.run_id] ? (
+                  <RunRecoveryTimeline timeline={recoveryTimelines[run.run_id]!} />
                 ) : null}
                 {linkage ? <GitLinkageLine linkage={linkage} /> : null}
                 {confirming && confirmVisible && onCancelRun !== undefined ? (

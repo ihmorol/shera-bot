@@ -231,7 +231,12 @@ export function isBrowserRuntimePath(method: string, path: string): boolean {
       // exists here by construction (G6). Every read is workspace-scoped
       // (E12) via the workspace_id query binding above.
       path === "/v1/credits" ||
-      /^\/v1\/credits\/runs\/[a-zA-Z0-9_-]+$/.test(path))
+      /^\/v1\/credits\/runs\/[a-zA-Z0-9_-]+$/.test(path) ||
+      // S31 (PRD §13, UI_DESIGN S11): the recovery status read — the honest
+      // recovery banner + run-timeline markers' data source. Strictly GET
+      // (recovery decisions are the RUNTIME's; the browser only renders
+      // them), workspace-scoped (E12) via the workspace_id query binding.
+      path === "/v1/recovery/status")
   );
 }
 

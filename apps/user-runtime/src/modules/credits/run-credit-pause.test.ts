@@ -150,12 +150,14 @@ function streamEvents(harness: PauseHarness, runId: string) {
 }
 
 describe("D48 run-level credit pause (S24 AC1)", () => {
-  it("appends the credit ledger as version 20 of the committed chain", () => {
+  it("appends the credit ledger as version 20 of the committed chain (the head is S29's renumbered v22 memory; S31's landed v21 run-checkpoints keeps its slot)", () => {
     const harness = makeHarness();
     expect(appliedMigrationVersions(harness.conn.db)).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
-      // S29 appended the v21 memory tables (issue #30) — the pin tracks the head.
-      21,
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+      // The S29 integration renumbered the memory tables (authored v21) to
+      // v22 — main's landed v21 run-checkpoints keeps its slot — and the pin
+      // tracks the head.
+      22,
     ]);
   });
 

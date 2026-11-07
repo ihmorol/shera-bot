@@ -12574,6 +12574,81 @@
               "type": {
                 "type": "string",
                 "enum": [
+                  "recovery_auto_resume"
+                ]
+              }
+            },
+            "required": [
+              "command_id",
+              "idempotency_key",
+              "workspace_id",
+              "task_id",
+              "actor",
+              "expected_version",
+              "issued_at",
+              "type"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "command_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "idempotency_key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "workspace_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "task_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "actor": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "user",
+                      "agent",
+                      "runtime",
+                      "admin",
+                      "system"
+                    ]
+                  },
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                },
+                "required": [
+                  "type",
+                  "id"
+                ],
+                "additionalProperties": false
+              },
+              "expected_version": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
                   "complete_task"
                 ]
               }
@@ -27355,6 +27430,172 @@
                             "def": {
                               "type": "literal",
                               "values": [
+                                "recovery_auto_resume"
+                              ]
+                            },
+                            "type": "literal",
+                            "values": {}
+                          }
+                        },
+                        "catchall": {
+                          "def": {
+                            "type": "never"
+                          },
+                          "type": "never"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    {
+                      "def": {
+                        "type": "object",
+                        "shape": {
+                          "command_id": {
+                            "def": {
+                              "type": "string",
+                              "checks": [
+                                {},
+                                {}
+                              ]
+                            },
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256,
+                            "format": null
+                          },
+                          "idempotency_key": {
+                            "def": {
+                              "type": "string",
+                              "checks": [
+                                {},
+                                {}
+                              ]
+                            },
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256,
+                            "format": null
+                          },
+                          "workspace_id": {
+                            "def": {
+                              "type": "string",
+                              "checks": [
+                                {},
+                                {}
+                              ]
+                            },
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 128,
+                            "format": null
+                          },
+                          "task_id": {
+                            "def": {
+                              "type": "string",
+                              "checks": [
+                                {},
+                                {}
+                              ]
+                            },
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256,
+                            "format": null
+                          },
+                          "actor": {
+                            "def": {
+                              "type": "object",
+                              "shape": {
+                                "type": {
+                                  "def": {
+                                    "type": "enum",
+                                    "entries": {
+                                      "user": "user",
+                                      "agent": "agent",
+                                      "runtime": "runtime",
+                                      "admin": "admin",
+                                      "system": "system"
+                                    }
+                                  },
+                                  "type": "enum",
+                                  "enum": {
+                                    "user": "user",
+                                    "agent": "agent",
+                                    "runtime": "runtime",
+                                    "admin": "admin",
+                                    "system": "system"
+                                  },
+                                  "options": [
+                                    "user",
+                                    "agent",
+                                    "runtime",
+                                    "admin",
+                                    "system"
+                                  ]
+                                },
+                                "id": {
+                                  "def": {
+                                    "type": "string",
+                                    "checks": [
+                                      {},
+                                      {}
+                                    ]
+                                  },
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 256,
+                                  "format": null
+                                }
+                              },
+                              "catchall": {
+                                "def": {
+                                  "type": "never"
+                                },
+                                "type": "never"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "expected_version": {
+                            "def": {
+                              "type": "number",
+                              "checks": [
+                                {
+                                  "def": {
+                                    "type": "number",
+                                    "check": "number_format",
+                                    "abort": false,
+                                    "format": "safeint"
+                                  },
+                                  "type": "number",
+                                  "isFinite": true
+                                },
+                                {}
+                              ]
+                            },
+                            "type": "number",
+                            "isFinite": true,
+                            "format": "safeint"
+                          },
+                          "issued_at": {
+                            "def": {
+                              "type": "string",
+                              "format": "datetime",
+                              "check": "string_format",
+                              "offset": true,
+                              "local": false,
+                              "precision": null,
+                              "pattern": {}
+                            },
+                            "type": "string",
+                            "minLength": null,
+                            "maxLength": null,
+                            "format": "datetime"
+                          },
+                          "type": {
+                            "def": {
+                              "type": "literal",
+                              "values": [
                                 "complete_task"
                               ]
                             },
@@ -30993,6 +31234,172 @@
                             "type": "literal",
                             "values": [
                               "recovery_resume"
+                            ]
+                          },
+                          "type": "literal",
+                          "values": {}
+                        }
+                      },
+                      "catchall": {
+                        "def": {
+                          "type": "never"
+                        },
+                        "type": "never"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "def": {
+                      "type": "object",
+                      "shape": {
+                        "command_id": {
+                          "def": {
+                            "type": "string",
+                            "checks": [
+                              {},
+                              {}
+                            ]
+                          },
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256,
+                          "format": null
+                        },
+                        "idempotency_key": {
+                          "def": {
+                            "type": "string",
+                            "checks": [
+                              {},
+                              {}
+                            ]
+                          },
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256,
+                          "format": null
+                        },
+                        "workspace_id": {
+                          "def": {
+                            "type": "string",
+                            "checks": [
+                              {},
+                              {}
+                            ]
+                          },
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128,
+                          "format": null
+                        },
+                        "task_id": {
+                          "def": {
+                            "type": "string",
+                            "checks": [
+                              {},
+                              {}
+                            ]
+                          },
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256,
+                          "format": null
+                        },
+                        "actor": {
+                          "def": {
+                            "type": "object",
+                            "shape": {
+                              "type": {
+                                "def": {
+                                  "type": "enum",
+                                  "entries": {
+                                    "user": "user",
+                                    "agent": "agent",
+                                    "runtime": "runtime",
+                                    "admin": "admin",
+                                    "system": "system"
+                                  }
+                                },
+                                "type": "enum",
+                                "enum": {
+                                  "user": "user",
+                                  "agent": "agent",
+                                  "runtime": "runtime",
+                                  "admin": "admin",
+                                  "system": "system"
+                                },
+                                "options": [
+                                  "user",
+                                  "agent",
+                                  "runtime",
+                                  "admin",
+                                  "system"
+                                ]
+                              },
+                              "id": {
+                                "def": {
+                                  "type": "string",
+                                  "checks": [
+                                    {},
+                                    {}
+                                  ]
+                                },
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 256,
+                                "format": null
+                              }
+                            },
+                            "catchall": {
+                              "def": {
+                                "type": "never"
+                              },
+                              "type": "never"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "expected_version": {
+                          "def": {
+                            "type": "number",
+                            "checks": [
+                              {
+                                "def": {
+                                  "type": "number",
+                                  "check": "number_format",
+                                  "abort": false,
+                                  "format": "safeint"
+                                },
+                                "type": "number",
+                                "isFinite": true
+                              },
+                              {}
+                            ]
+                          },
+                          "type": "number",
+                          "isFinite": true,
+                          "format": "safeint"
+                        },
+                        "issued_at": {
+                          "def": {
+                            "type": "string",
+                            "format": "datetime",
+                            "check": "string_format",
+                            "offset": true,
+                            "local": false,
+                            "precision": null,
+                            "pattern": {}
+                          },
+                          "type": "string",
+                          "minLength": null,
+                          "maxLength": null,
+                          "format": "datetime"
+                        },
+                        "type": {
+                          "def": {
+                            "type": "literal",
+                            "values": [
+                              "recovery_auto_resume"
                             ]
                           },
                           "type": "literal",

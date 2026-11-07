@@ -307,6 +307,33 @@ export const RunFailureDecisionPayload = z.strictObject({
 export type RunFailureDecisionPayload = z.infer<typeof RunFailureDecisionPayload>;
 
 /**
+ * Recovery decision record (S31 chunk 2; D32, D33, E13, G3) — journaled on
+ * the RUN's task stream by the RecoveryDriver, the machine-readable companion
+ * the run timeline renders (checkpoint → restart → resume markers): WHAT the
+ * restart recovery decided for one interrupted run and on WHAT basis. `basis`
+ * names the E13 class that authorized an auto-resume (null when the run
+ * paused); `resume_from_checkpoint_version` points at the last SAFE step the
+ * resume claims — the honest "resumed from last safe step" anchor, never an
+ * exact-resume claim. `idempotency_key` is the recorded re-drive token (the
+ * same token the worker's re-execution collapses under), never a secret (G3).
+ */
+export const RecoveryDecidedPayload = z.strictObject({
+  workspace_id: z.string().min(1),
+  run_id: z.string().min(1),
+  /** The E13 class that authorized the auto-resume; null when paused. */
+  basis: z.enum(["replayable", "idempotent_retry"]).nullable(),
+  /** Why: recovery_class_permits | recovery_class_needs_human | no_idempotency_key | risk_class_caps_recovery. */
+  reason: z.string().min(1).max(80),
+  /** The recorded idempotency key the re-drive re-executes under; null when none. */
+  idempotency_key: z.string().min(1).max(200).nullable(),
+  /** The checkpoint version the resume basis is the last safe step of. */
+  resume_from_checkpoint_version: z.number().int().min(1).nullable(),
+  /** True only when the re-drive actually happened (honest replay accounting). */
+  replayed: z.boolean(),
+});
+export type RecoveryDecidedPayload = z.infer<typeof RecoveryDecidedPayload>;
+
+/**
  * Provider configuration refusal (S23 chunk 5; D17, D20, D22, G3). Journaled
  * on the RUN's stream when the run-start custody check refuses a worker: the
  * typed configuration state and the provider REFERENCE — never credential
@@ -493,6 +520,7 @@ export const EVENT_TYPES = {
     schema_version: 1,
     payload: RunCreditOutcomeAmbiguousPayload,
   },
+  "recovery.decided": { schema_version: 1, payload: RecoveryDecidedPayload },
   "trigger.credit_paused": { schema_version: 1, payload: TriggerCreditPausedPayload },
   "trigger.credit_resumed": { schema_version: 1, payload: TriggerCreditResumedPayload },
   "trigger.catchup_decided": { schema_version: 1, payload: TriggerCatchupDecidedPayload },

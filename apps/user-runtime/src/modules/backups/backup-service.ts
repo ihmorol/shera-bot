@@ -47,13 +47,14 @@ export const RETENTION_KEEP = 7;
 /** PRD §12: snapshot every six hours (the schedule seam's default tick). */
 export const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
 
-/** The typed failure the takeSnapshot walk can report. */
+/** The typed failure the takeSnapshot walk and the scheduler can report. */
 export type BackupServiceFailureCode =
   | "SNAPSHOT_DIR_CONFLICT"
   | "SNAPSHOT_EXPORT_FAILED"
   | "SNAPSHOT_INTEGRITY_FAILED"
   | "SNAPSHOT_VOLUME_FAILED"
-  | "SNAPSHOT_LEDGER_REFUSED";
+  | "SNAPSHOT_LEDGER_REFUSED"
+  | "BACKUP_SCHEDULER_ALREADY_RUNNING";
 
 export class BackupServiceError extends Error {
   readonly code: BackupServiceFailureCode;
@@ -107,6 +108,15 @@ export interface BackupServiceDeps {
   logFault?: ((event: string, fields: Record<string, unknown>) => void) | undefined;
 }
 
+/**
+ * The takeSnapshot result. OPERATIONAL failures are honest results (the
+ * schedule tick and the admin execute path both read them — a bad disk or a
+ * refused ledger never throws across a tick boundary); the one THROW is the
+ * caller error SNAPSHOT_DIR_CONFLICT (a replayed ref). `snapshot_dir` on a
+ * false arm is the path the partial attempt OCCUPIED (removed before the
+ * result returns); `snapshot_id: "unknown"` only when the service itself
+ * failed before an id could be attributed (recorded honestly, G4).
+ */
 export type TakeSnapshotResult =
   | {
       taken: true;
@@ -125,9 +135,10 @@ export type TakeSnapshotResult =
       taken: false;
       snapshot_id: string;
       taken_at: string;
-      reason: "integrity_failed";
-      integrity_message: string;
-      snapshot_dir: string;
+      reason:
+        "export_failed" | "integrity_failed" | "volume_failed" | "ledger_refused" | "tick_failed";
+      detail: string;
+      snapshot_dir: string | null;
     };
 
 export interface RetentionResult {
@@ -197,17 +208,21 @@ export class BackupService {
       this.exportDatabase(dbTarget);
     } catch (error) {
       rmSync(snapshotDir, { recursive: true, force: true });
+      const detail =
+        error instanceof Error ? error.message.slice(0, 300) : String(error).slice(0, 300);
       this.logFault("backup_snapshot_failed", {
         snapshot_id: snapshotId,
         stage: "export",
-        name: error instanceof Error ? error.name : "Error",
-        message: error instanceof Error ? error.message.slice(0, 300) : String(error).slice(0, 300),
+        reason: detail,
       });
-      throw new BackupServiceError(
-        "SNAPSHOT_EXPORT_FAILED",
-        error instanceof Error ? error.message.slice(0, 300) : "the database export failed",
-        snapshotId,
-      );
+      return {
+        taken: false,
+        snapshot_id: snapshotId,
+        taken_at: takenAt,
+        reason: "export_failed",
+        detail,
+        snapshot_dir: snapshotDir,
+      };
     }
 
     // E11: every snapshot is verified at snapshot time. A failed copy is
@@ -227,7 +242,7 @@ export class BackupService {
         snapshot_id: snapshotId,
         taken_at: takenAt,
         reason: "integrity_failed",
-        integrity_message: integrity.message,
+        detail: integrity.message,
         snapshot_dir: snapshotDir,
       };
     }
@@ -236,11 +251,31 @@ export class BackupService {
     // with the key files and the live database files excluded (D22/E9).
     const volumeDir = join(snapshotDir, "volume");
     mkdirSync(volumeDir, { recursive: true });
-    const volume = await this.volumeBackend.snapshotVolume({
-      roots: this.volumeRoots,
-      targetDir: volumeDir,
-      excludeNames: this.volumeExcludeNames(),
-    });
+    let volume: { entries: string[]; bytes: number };
+    try {
+      volume = await this.volumeBackend.snapshotVolume({
+        roots: this.volumeRoots,
+        targetDir: volumeDir,
+        excludeNames: this.volumeExcludeNames(),
+      });
+    } catch (error) {
+      rmSync(snapshotDir, { recursive: true, force: true });
+      const detail =
+        error instanceof Error ? error.message.slice(0, 300) : String(error).slice(0, 300);
+      this.logFault("backup_snapshot_failed", {
+        snapshot_id: snapshotId,
+        stage: "volume",
+        reason: detail,
+      });
+      return {
+        taken: false,
+        snapshot_id: snapshotId,
+        taken_at: takenAt,
+        reason: "volume_failed",
+        detail,
+        snapshot_dir: snapshotDir,
+      };
+    }
 
     const dbBytes = statSize(dbTarget);
     const insert: BackupSnapshotInsert = {
@@ -257,11 +292,21 @@ export class BackupService {
       this.snapshots.record(insert);
     } catch (error) {
       rmSync(snapshotDir, { recursive: true, force: true });
-      throw new BackupServiceError(
-        "SNAPSHOT_LEDGER_REFUSED",
-        error instanceof Error ? error.message.slice(0, 300) : "the ledger refused the snapshot",
-        snapshotId,
-      );
+      const detail =
+        error instanceof Error ? error.message.slice(0, 300) : String(error).slice(0, 300);
+      this.logFault("backup_snapshot_failed", {
+        snapshot_id: snapshotId,
+        stage: "ledger",
+        reason: detail,
+      });
+      return {
+        taken: false,
+        snapshot_id: snapshotId,
+        taken_at: takenAt,
+        reason: "ledger_refused",
+        detail,
+        snapshot_dir: snapshotDir,
+      };
     }
 
     // The sidecar makes the snapshot directory self-describing (the drill

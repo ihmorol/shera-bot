@@ -266,11 +266,12 @@ describe("the S33 backup mechanism (takeSnapshot)", () => {
     expect(result.taken).toBe(false);
     if (result.taken) return;
     expect(result.reason).toBe("integrity_failed");
-    expect(result.integrity_message).toContain("page 3");
+    expect(result.detail).toContain("page 3");
     // The bad copy's directory is removed (a corrupted file never sits in
     // the snapshot root as a restore candidate); the failure is recorded in
     // the redacted fault log.
-    expect(existsSync(result.snapshot_dir)).toBe(false);
+    expect(result.snapshot_dir).not.toBeNull();
+    expect(existsSync(result.snapshot_dir as string)).toBe(false);
     expect(faultLines.length).toBeGreaterThanOrEqual(1);
     expect(faultLines[0]).toContain("backup_snapshot_failed");
     // The ledger holds only restorable snapshots (the failed row's evidence

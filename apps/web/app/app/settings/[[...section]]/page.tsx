@@ -10,6 +10,7 @@ import { ProvidersSettingsSurface } from "@/components/settings/providers-settin
 import { SchedulesSettingsSurface } from "@/components/settings/schedules-settings";
 import { CreditsSettingsSurface } from "@/components/settings/credits-settings";
 import { MemorySettingsSurface } from "@/components/settings/memory-settings";
+import { NotificationsSettingsSurface } from "@/components/settings/notifications-settings";
 import { WorkersSettingsSurface } from "@/components/settings/worker-admission-readout";
 import { SurfaceFrame } from "@/components/shell/surface-frame";
 import { findAgent } from "@/lib/navigation";
@@ -76,6 +77,17 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
     return (
       <SurfaceFrame title="Settings" meta="Memory">
         <MemorySettingsSurface />
+      </SurfaceFrame>
+    );
+  }
+
+  // S30 (§S9 "Notifications", PRD §14, D16): the delivery toggles as REAL
+  // command targets — in-app + browser (unfocused tab, explicit permission),
+  // reset-to-default, and the honest denied-permission state.
+  if (section?.length === 1 && section[0] === "notifications") {
+    return (
+      <SurfaceFrame title="Settings" meta="Notifications">
+        <NotificationsSettingsSurface />
       </SurfaceFrame>
     );
   }

@@ -11,6 +11,13 @@ import {
 import { RuntimeApiError } from "@/lib/runtime-client";
 import type { NotificationCommand } from "@shera-bot/contracts";
 import type { NotificationView } from "@shera-bot/contracts";
+import {
+  broadcastTabEvent,
+  openTabSyncChannel,
+  subscribeTabEvents,
+  type TabSyncChannel,
+} from "@/lib/tab-sync";
+import { useEffect, useRef } from "react";
 
 /**
  * S30 — the notification center data hooks (the approvals-data idiom). The
@@ -148,4 +155,30 @@ export function useNotificationCommands(workspaceId: string | null): {
       ? safeNotificationsMessage(mutation.error, "The notification command was not accepted.")
       : undefined,
   };
+}
+
+
+/**
+ * The receiving side of the hint layer: another tab's settled command
+ * invalidates THIS tab's reads immediately (the poll remains the truth — the
+ * hint only removes the wait). Never carries content; the re-read answers
+ * from the runtime.
+ */
+export function useTabSyncNotifications(workspaceId: string | null): void {
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    const channel = openTabSyncChannel();
+    const unsubscribe = subscribeTabEvents(channel, (event) => {
+      if (event.kind === "notifications-changed") {
+        void queryClient.invalidateQueries({ queryKey: ["notifications", workspaceId] });
+        void queryClient.invalidateQueries({ queryKey: ["notification-settings", workspaceId] });
+      } else if (event.kind === "approvals-changed") {
+        void queryClient.invalidateQueries({ queryKey: ["approval-pending", workspaceId] });
+      }
+    });
+    return () => {
+      unsubscribe();
+      channel?.close();
+    };
+  }, [queryClient, workspaceId]);
 }

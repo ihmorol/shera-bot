@@ -21,9 +21,14 @@ import {
   useNotificationCommands,
   useNotifications,
   useNotificationSettings,
+  useTabSyncNotifications,
 } from "@/lib/notifications-data";
 import { useSessionIdentity } from "@/lib/container-connection";
 import { routes } from "@/lib/routes";
+import {
+  browserNotificationDecision,
+  fireBrowserNotification,
+} from "@/lib/desktop-notifications";
 import type { NotificationView } from "@shera-bot/contracts";
 import { cn } from "@/lib/utils";
 
@@ -345,8 +350,46 @@ function NotificationCenterHost({
   const settings = useNotificationSettings(workspaceId);
   const commands = useNotificationCommands(workspaceId);
   const session = useSessionIdentity();
+  useTabSyncNotifications(workspaceId);
 
   const actorId = session.data?.google_sub ?? "";
+
+  // The browser-notification delivery (PRD §14; E15 embed). The 5s poll is
+  // the arrival mechanism; the decision logic (desktop-notifications) fires
+  // ONLY when the tab is open but unfocused, permission granted, and the
+  // toggle on — the focused case produces NO notification. Seen-ids bound
+  // the trigger to ARRIVALS (a re-render never re-fires), and the body is
+  // the runtime's bounded summary only (G3).
+  const deliveredIdsRef = useRef<ReadonlySet<string>>(new Set());
+  const rowsRef = useRef<readonly NotificationRow[]>([]);
+  rowsRef.current = query.rows;
+  useEffect(() => {
+    if (!workspaceId) return;
+    const id = window.setInterval(() => {
+      const browserEnabled = settingsRef.current?.browser_enabled ?? false;
+      const permission =
+        typeof Notification === "undefined" ? "denied" : Notification.permission;
+      for (const row of rowsRef.current) {
+        if (deliveredIdsRef.current.has(row.notification_id)) continue;
+        // Arrivals seed the seen set: only rows arriving AFTER mount can
+        // fire (a fresh page load never spams the history).
+        deliveredIdsRef.current.add(row.notification_id);
+        if (row.read_at !== null || row.muted) continue;
+        const decision = browserNotificationDecision({
+          permission: permission as NotificationPermission,
+          browserEnabled,
+          documentHidden: document.hidden,
+        });
+        if (decision.action === "fire") {
+          fireBrowserNotification({ title: row.title, body: row.summary });
+        }
+      }
+    }, 5_000);
+    return () => window.clearInterval(id);
+  }, [workspaceId]);
+
+  const settingsRef = useRef(settings.settings);
+  settingsRef.current = settings.settings;
 
   const markRead = (notificationId: string) => {
     if (!workspaceId) return;

@@ -278,6 +278,8 @@ interface AgentSummaryPayload {
   initial_glyph: string;
   has_user_instructions: boolean;
   session: { presence: AgentSessionPresence };
+  /** S30 (E43 idea 4): the journal-derived last activity; null when quiet. */
+  last_activity: { at: string; preview: string } | null;
 }
 
 function agentSummary(

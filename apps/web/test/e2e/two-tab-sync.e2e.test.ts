@@ -58,7 +58,7 @@ interface Harness {
 }
 
 async function startHarness(
-  options: { scriptedToolProposal?: Parameters<typeof startE2eMockRuntime>[0]["scriptedToolProposal"] } = {},
+  options: { scriptedToolProposal?: NonNullable<Parameters<typeof startE2eMockRuntime>[0]>["scriptedToolProposal"] | undefined } = {},
 ): Promise<Harness> {
   const mock = await startE2eMockRuntime({ scriptedReplies: false, ...options });
   WORKSPACE = mock.workspace_id;

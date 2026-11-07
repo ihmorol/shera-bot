@@ -54,7 +54,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </button>
           <Wordmark />
           <div className="ml-auto">
-            <NotificationBell workspaceId={null} />
+            <NotificationBell workspaceId={null} onNavigate={undefined} />
           </div>
         </header>
 

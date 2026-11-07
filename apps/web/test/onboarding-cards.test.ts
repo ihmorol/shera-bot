@@ -14,6 +14,8 @@ import { OnboardingCardsView, type OnboardingCardSnapshot } from "../components/
 
 function snapshot(overrides: Partial<OnboardingCardSnapshot> = {}): OnboardingCardSnapshot {
   return {
+    workspace_id: "ws_default_01",
+    provider_summary: { configured: false, provider_id: null, model: null },
     status: "pending",
     current_step: "welcome",
     steps: [

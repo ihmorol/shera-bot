@@ -79,7 +79,9 @@ export interface E2eMockRuntimeOptions {
    * composition — the approval E2E legs drive the REAL pause/decision
    * machinery instead of seeding rows (G2).
    */
-  scriptedToolProposal?: import("../transport/local-api/s20-approvals-api.ts").ScriptedToolProposalConfig;
+  scriptedToolProposal?:
+    | import("../transport/local-api/s20-approvals-api.ts").ScriptedToolProposalConfig
+    | undefined;
 }
 
 export interface E2eMockRuntime {
@@ -112,6 +114,7 @@ export async function startE2eMockRuntime(
   const workspaceId = options.workspaceId ?? DEFAULT_WORKSPACE_ID;
   const now = options.now ?? (() => E2E_MOCK_FIXED_EPOCH);
 
+  const scriptedToolProposal = options.scriptedToolProposal;
   const runtime: RuntimeHandle = composeRuntime({
     dbPath,
     workspaceId,
@@ -132,9 +135,7 @@ export async function startE2eMockRuntime(
     ...(options.scriptedReplies === false
       ? {}
       : { scriptedReplies: { ...DEFAULT_SCRIPTED_REPLY, deltaIntervalMs: 15 } }),
-    ...(options.scriptedToolProposal
-      ? { scriptedToolProposal: options.scriptedToolProposal }
-      : {}),
+    ...(scriptedToolProposal ? { scriptedToolProposal } : {}),
   });
 
   await new Promise<void>((resolve, reject) => {

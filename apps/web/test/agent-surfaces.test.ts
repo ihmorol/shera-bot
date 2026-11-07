@@ -58,6 +58,7 @@ function rosterEntry(manifestAgent: (typeof STUDENT_MANIFEST.agents)[number]): A
     display_name: manifestAgent.display_name,
     role_description: manifestAgent.role_description,
     avatar_hue: manifestAgent.ui_identity.avatar_hue,
+    last_activity: null,
     initial_glyph: manifestAgent.ui_identity.initial_glyph,
     has_user_instructions: false,
   };

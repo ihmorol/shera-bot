@@ -25,6 +25,7 @@ import {
 } from "@/lib/notifications-data";
 import { useSessionIdentity } from "@/lib/container-connection";
 import { routes } from "@/lib/routes";
+import { useRouter } from "next/navigation";
 import {
   browserNotificationDecision,
   fireBrowserNotification,
@@ -302,22 +303,13 @@ export function NotificationBell({
   className,
 }: {
   workspaceId: string | null;
-  onNavigate?: () => void;
+  onNavigate: (() => void) | undefined;
   className?: string | undefined;
 }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button
-        variant="ghost"
-        size="icon"
-        className={cn("relative", className)}
-        aria-label="Open notifications"
-        onClick={() => setOpen(true)}
-      >
-        <Bell className="size-4" aria-hidden="true" />
-        <NotificationBadge workspaceId={workspaceId} />
-      </Button>
+      <BellButton workspaceId={workspaceId} className={className} onOpen={() => setOpen(true)} />
       <NotificationCenterHost
         workspaceId={workspaceId}
         open={open}
@@ -335,6 +327,36 @@ function NotificationBadge({ workspaceId }: { workspaceId: string | null }) {
   return <BellBadge count={notificationBadgeCount(query.rows)} />;
 }
 
+/**
+ * The bell with its §2.3 honest label: the visual badge is decorative, so
+ * the accessible name carries the unread count (color/position is never the
+ * only signal).
+ */
+function BellButton({
+  workspaceId,
+  className,
+  onOpen,
+}: {
+  workspaceId: string | null;
+  className?: string | undefined;
+  onOpen: () => void;
+}) {
+  const query = useNotifications(workspaceId);
+  const unread = workspaceId ? notificationBadgeCount(query.rows) : 0;
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      className={cn("relative", className)}
+      aria-label={unread > 0 ? `Open notifications, ${unread} unread` : "Open notifications"}
+      onClick={onOpen}
+    >
+      <Bell className="size-4" aria-hidden="true" />
+      <NotificationBadge workspaceId={workspaceId} />
+    </Button>
+  );
+}
+
 function NotificationCenterHost({
   workspaceId,
   open,
@@ -344,12 +366,13 @@ function NotificationCenterHost({
   workspaceId: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onNavigate?: () => void;
+  onNavigate: (() => void) | undefined;
 }) {
   const query = useNotifications(workspaceId);
   const settings = useNotificationSettings(workspaceId);
   const commands = useNotificationCommands(workspaceId);
   const session = useSessionIdentity();
+  const router = useRouter();
   useTabSyncNotifications(workspaceId);
 
   const actorId = session.data?.google_sub ?? "";
@@ -360,7 +383,7 @@ function NotificationCenterHost({
   // toggle on — the focused case produces NO notification. Seen-ids bound
   // the trigger to ARRIVALS (a re-render never re-fires), and the body is
   // the runtime's bounded summary only (G3).
-  const deliveredIdsRef = useRef<ReadonlySet<string>>(new Set());
+  const deliveredIdsRef = useRef<Set<string>>(new Set());
   const rowsRef = useRef<readonly NotificationRow[]>([]);
   rowsRef.current = query.rows;
   useEffect(() => {
@@ -402,8 +425,7 @@ function NotificationCenterHost({
         issued_at: new Date().toISOString(),
         type: "notifications.mark_read",
         notification_id: notificationId,
-      },
-    );
+      });
   };
 
   const mute = (notificationId: string) => {
@@ -417,8 +439,7 @@ function NotificationCenterHost({
         issued_at: new Date().toISOString(),
         type: "notifications.mute",
         notification_id: notificationId,
-      },
-    );
+      });
   };
 
   const surfaceState: "loading" | "ready" | "error" = query.loading
@@ -446,7 +467,7 @@ function NotificationCenterHost({
           onOpenSettings={() => {
             onOpenChange(false);
             onNavigate?.();
-            window.location.assign(routes.settings("notifications"));
+            router.push(routes.settings("notifications"));
           }}
         />
         <SheetTitle className="sr-only">Notifications</SheetTitle>

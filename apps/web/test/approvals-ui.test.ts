@@ -91,6 +91,7 @@ const RESEARCHER: AgentRosterSummary = {
   initial_glyph: "R",
   has_user_instructions: false,
   session: { presence: "active" },
+  last_activity: null,
 };
 /** The detail read model's five E3 slots (index 1 delivered). */
 const DETAIL_REMINDERS = [

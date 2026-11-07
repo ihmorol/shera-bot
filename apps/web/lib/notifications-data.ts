@@ -129,7 +129,7 @@ export function useNotificationSettings(workspaceId: string | null): {
  * invalidations therefore cover the approvals reads too.
  */
 export function useNotificationCommands(workspaceId: string | null): {
-  submit: (command: NotificationCommand, kind: "mark" | "mute" | "settings") => void;
+  submit: (command: NotificationCommand) => void;
   pending: boolean;
   safeError: string | undefined;
 } {

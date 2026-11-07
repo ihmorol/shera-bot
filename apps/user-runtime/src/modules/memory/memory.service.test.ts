@@ -108,6 +108,86 @@ describe("memory service backstops (S29 chunk 1)", () => {
     });
   });
 
+  it("refuses an agent actor on the user-only commands — create, edit, restore, forget, and the auto-memory switches (fix-round F17)", async () => {
+    const suite = makeSuite();
+    // The user's own entry, the target for the agent-actor attempts.
+    const created = (await suite.service.applyCommand(createCommand({ scope: "workspace" }))) as {
+      entry: { memory_id: string };
+    };
+    const memoryId = created.entry.memory_id;
+    const agentCommand = (overrides: Record<string, unknown>) =>
+      ({
+        command_id: `cmd_${randomUUID()}`,
+        idempotency_key: `idem_${randomUUID()}`,
+        workspace_id: WORKSPACE,
+        actor: { type: "agent", id: "agent_researcher" } as const,
+        issued_at: "2026-11-04T10:05:00.000Z",
+        ...overrides,
+      }) as unknown as MemoryCommand;
+
+    // memory.create is the AC5-shaped hole: an agent-actor create would land
+    // origin "automatic" WITHOUT consulting the auto-memory switches (their
+    // gate lives only at the top of proposeCandidate). The user commands are
+    // the USER's writes — the agent proposal path is the typed candidate
+    // event (G2), and only the user wields the controls.
+    await expect(
+      suite.service.applyCommand(
+        agentCommand({
+          type: "memory.create",
+          scope: "workspace",
+          owner_agent_id: null,
+          operation_id: null,
+          task_id: null,
+          summary: "An agent-side write",
+          content: "The content an agent actor must not store directly.",
+          sensitivity: "normal",
+          source_refs: ["conversation://x"],
+          confidence: 0.5,
+          expires_at: null,
+        }),
+      ),
+    ).rejects.toMatchObject({ code: "MEMORY_COMMAND_ACTOR_FORBIDDEN" });
+    await expect(
+      suite.service.applyCommand(
+        agentCommand({
+          type: "memory.edit",
+          memory_id: memoryId,
+          summary: "A workspace note",
+          content: "Edited by an agent actor.",
+          sensitivity: "normal",
+          source_refs: ["conversation://direct/user_emon"],
+          confidence: 0.7,
+          expires_at: null,
+        }),
+      ),
+    ).rejects.toMatchObject({ code: "MEMORY_COMMAND_ACTOR_FORBIDDEN" });
+    await expect(
+      suite.service.applyCommand(
+        agentCommand({ type: "memory.restore", memory_id: memoryId, version: 1 }),
+      ),
+    ).rejects.toMatchObject({ code: "MEMORY_COMMAND_ACTOR_FORBIDDEN" });
+    await expect(
+      suite.service.applyCommand(agentCommand({ type: "memory.forget", memory_id: memoryId })),
+    ).rejects.toMatchObject({ code: "MEMORY_COMMAND_ACTOR_FORBIDDEN" });
+    await expect(
+      suite.service.applyCommand(agentCommand({ type: "memory.set_auto_memory", enabled: false })),
+    ).rejects.toMatchObject({ code: "MEMORY_COMMAND_ACTOR_FORBIDDEN" });
+    await expect(
+      suite.service.applyCommand(
+        agentCommand({ type: "memory.set_agent_auto_memory", agent_id: "agent_researcher", enabled: false }),
+      ),
+    ).rejects.toMatchObject({ code: "MEMORY_COMMAND_ACTOR_FORBIDDEN" });
+
+    // Nothing happened: the user's entry is untouched (content, history, and
+    // the settings tables).
+    const entries = suite.memory.listEntries(WORKSPACE);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]!.content).toBe("The workspace note's content.");
+    expect(suite.memory.listVersions(WORKSPACE, memoryId).map((v) => v.version)).toEqual([1]);
+    expect(suite.memory.findSettings(WORKSPACE)).toBeUndefined();
+    expect(suite.memory.findAgentSettings(WORKSPACE, "agent_researcher")).toBeUndefined();
+  });
+
   it("refuses an agent-actor publication decision — agents never self-approve (G6)", async () => {
     const suite = makeSuite();
     const created = (await suite.service.applyCommand(createCommand({ scope: "workspace" }))) as {

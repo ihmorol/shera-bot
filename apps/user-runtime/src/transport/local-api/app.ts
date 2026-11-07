@@ -68,6 +68,10 @@ import { registerRecoveryRoutes, type RecoveryApiHandle } from "./s31-recovery-a
 import { registerSchedulesRoutes, type SchedulesApiHandle } from "./s28-schedules-api.ts";
 import { registerCreditsRoutes, type CreditsApiHandle } from "./s24-credits-api.ts";
 import { registerMemoryRoutes, type MemoryApiHandle } from "./s29-memory-api.ts";
+import {
+  registerNotificationsRoutes,
+  type NotificationsApiHandle,
+} from "./s30-notifications-api.ts";
 
 export const SUBMIT_CONVERSATION_COMMAND_PATH = "/v1/conversations/commands" as const;
 export const LIST_CONVERSATION_EVENTS_PATH = "/v1/conversations/:conversation_id/events" as const;
@@ -513,6 +517,12 @@ export interface LocalApiDeps {
    * is proven against. Every rule lives in the memory service (G2/G6).
    */
   memory?: MemoryApiHandle;
+  /**
+   * S30: the notification center surface — the derived rows (the runtime's
+   * own records), the ONE typed commands envelope, and the delivery toggles
+   * (PRD §14, D16, E3).
+   */
+  notifications?: NotificationsApiHandle;
   /**
    * S23: the provider registry seam — the masked catalog CRUD, credential
    * revoke/replace, enable/disable, the connection test, the AC11 override,
@@ -1319,6 +1329,13 @@ export function createLocalApi(deps: LocalApiDeps): Express {
   // silently lose the surface — the G4 silent-drop class).
   if (deps.memory !== undefined) {
     registerMemoryRoutes(app, deps.memory);
+  }
+
+  // S30: the notification center surface — the derived rows, the ONE typed
+  // commands envelope, and the delivery toggles (PRD §14). Registered
+  // INDEPENDENTLY of the memory option (the G4 silent-drop class).
+  if (deps.notifications !== undefined) {
+    registerNotificationsRoutes(app, deps.notifications);
   }
 
   // Typed failures and unknown routes: the SheraError taxonomy, never an

@@ -133,6 +133,32 @@ export class EventJournalRepository {
     return rows.map((row) => row.stream_id);
   }
 
+  /**
+   * The workspace's most recent events of the given types, newest first
+   * (S30: the notification center's derivation read — the derived rows come
+   * from the durable journal, never a parallel store). `limit` bounds the
+   * read; strictly a read, the journal is append-only.
+   */
+  listByTypes(
+    workspaceId: string,
+    eventTypes: readonly string[],
+    limit: number,
+    exec?: DatabaseSync,
+  ): EventJournalRow[] {
+    const db = exec ?? this.tx.connection();
+    const placeholders = eventTypes.map(() => "?").join(", ");
+    return db
+      .prepare(
+        `SELECT stream_id, sequence, event_id, event_type, schema_version,
+                payload, workspace_id, occurred_at, correlation_id
+         FROM event_journal
+         WHERE workspace_id = ? AND event_type IN (${placeholders})
+         ORDER BY occurred_at DESC, sequence DESC
+         LIMIT ?`,
+      )
+      .all(...[workspaceId, ...eventTypes, limit]) as unknown as EventJournalRow[];
+  }
+
   countStream(streamId: string, workspaceId: string, exec?: DatabaseSync): number {
     const db = exec ?? this.tx.connection();
     const row = db

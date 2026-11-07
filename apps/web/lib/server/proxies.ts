@@ -59,6 +59,12 @@ const SESSION_ACTOR_BINDINGS: ReadonlyArray<{ pathPattern: RegExp; bodyField: st
   // actors on the decision paths). The browser client names the actor
   // shape only; the audit trail is the session identity.
   { pathPattern: /^\/v1\/memory\/commands$/, bodyField: "actor" },
+  // S30 (PRD §14, D16, E3, G6): every notification command binds the acting
+  // user server-side — mark-read, the per-item mute (an approval item's mute
+  // creates the S20 approval-scope mute with THIS identity as created_by —
+  // one mute record family, E3), and the delivery toggles are USER actions.
+  { pathPattern: /^\/v1\/notifications\/commands$/, bodyField: "actor" },
+  { pathPattern: /^\/v1\/notifications\/settings\/commands$/, bodyField: "actor" },
 ];
 
 /** The 401 failure shape for a request whose session carries no usable identity. */

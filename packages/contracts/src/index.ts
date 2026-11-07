@@ -31,6 +31,7 @@ export * from "./approval.ts";
 export * from "./artifact.ts";
 export * from "./credits.ts";
 export * from "./memory.ts";
+export * from "./notifications.ts";
 export * from "./tool.ts";
 export * from "./collaboration.ts";
 export * from "./api.ts";

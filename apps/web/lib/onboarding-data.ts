@@ -72,6 +72,7 @@ export function useOnboarding(workspaceId: string | null): {
 export interface OnboardingCommands {
   submit: (command: OnboardingCommand) => void;
   submitReopen: () => void;
+  submitDismiss: () => void;
   pending: boolean;
   state: "loading" | "ready" | "error";
   safeError: string | undefined;
@@ -119,6 +120,17 @@ export function useOnboardingCommands(workspaceId: string | null): OnboardingCom
         actor: { type: "user", id: "" },
         issued_at: new Date().toISOString(),
         type: "onboarding.reopen",
+      });
+    },
+    submitDismiss: () => {
+      if (!workspaceId) return;
+      mutation.mutate({
+        command_id: `cmd_${crypto.randomUUID()}`,
+        idempotency_key: `idem_${crypto.randomUUID()}`,
+        workspace_id: workspaceId,
+        actor: { type: "user", id: "" },
+        issued_at: new Date().toISOString(),
+        type: "onboarding.dismiss",
       });
     },
     pending: mutation.isPending,

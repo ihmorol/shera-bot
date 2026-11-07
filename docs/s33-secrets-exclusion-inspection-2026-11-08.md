@@ -1,9 +1,11 @@
 # S33 secrets-exclusion inspection — archived evidence (2026-11-08)
 
-**Status:** PASSED (exit 0). The exclusion is **asserted by inspection, not
-assumed** (issue #34, D22/E9) — and the inspection EARNED its keep: its FIRST
-run found a real exclusion hole, which was fixed on this branch before the
-passing run below.
+**Status:** PASSED (exit 0) — **the exclusion is a NAME vocabulary, not a
+content scan** (see the boundary at the end of this document). It is
+**asserted by inspection, not assumed** (issue #34, D22/E9) — and the
+inspection EARNED its keep: its FIRST run found a real exclusion hole (the
+wholesale `cpSync`), and the review round found a second class (link
+dereferencing, F1) — each fixed on this branch before the passing run.
 
 **What ran:** `node --experimental-transform-types apps/user-runtime/scripts/s33-secrets-exclusion-inspection.ts`
 (the script is committed at `apps/user-runtime/scripts/s33-secrets-exclusion-inspection.ts`).
@@ -63,13 +65,13 @@ posture: the planted key files carry a SYNTHETIC secret; every path is under a
          throwaway scratch root and printed as a scratch-relative label (G3)
 
 step 1 — the snapshot is taken through the recorded BackupService walk
-  snapshot taken (db_bytes=622592, volume_entries=0:agent-files, 0:projects)
+  snapshot taken (db_bytes=684032, volume_entries=0:agent-files, 0:projects)
 
 $ find <snapshot-root> -type f | sort
-  <snapshot-root>/data.snapshots/snapshot_11ee319f-602d-449e-8006-92549ab82aed/runtime.db
-  <snapshot-root>/data.snapshots/snapshot_11ee319f-602d-449e-8006-92549ab82aed/snapshot.json
-  <snapshot-root>/data.snapshots/snapshot_11ee319f-602d-449e-8006-92549ab82aed/volume/roots/0/agent-files/profile.md
-  <snapshot-root>/data.snapshots/snapshot_11ee319f-602d-449e-8006-92549ab82aed/volume/roots/0/projects/repo.txt
+  <snapshot-root>/data.snapshots/snapshot_5cb74e38-b620-4714-8d8d-992533bab43f/runtime.db
+  <snapshot-root>/data.snapshots/snapshot_5cb74e38-b620-4714-8d8d-992533bab43f/snapshot.json
+  <snapshot-root>/data.snapshots/snapshot_5cb74e38-b620-4714-8d8d-992533bab43f/volume/roots/0/agent-files/profile.md
+  <snapshot-root>/data.snapshots/snapshot_5cb74e38-b620-4714-8d8d-992533bab43f/volume/roots/0/projects/repo.txt
   [exit=0]
 
 $ find <snapshot-root> -name '*credentials*'
@@ -84,8 +86,29 @@ $ grep -R -a -F '<SYNTHETIC-SECRET-16-CHAR-FRAGMENT>' <snapshot-root>
 $ jq -r '.volume_entries[]' <snapshot-root>/<snapshot-id>/snapshot.json | grep credentials
   [exit=1]
 
-INSPECTION RESULT: PASSED — no credential key file, and no synthetic secret bytes, appear anywhere in the snapshot
+INSPECTION RESULT: PASSED — none of the PLANTED key-file shapes (the recorded exclusion names, at any depth, through any link) and none of the planted synthetic secret bytes appear in the snapshot. The exclusion is a NAME vocabulary, not a content scan — see the boundary note in the archived evidence.
 ```
+
+## The boundary (the review F3 honesty — recorded, not hidden)
+
+The exclusion vocabulary is **NAME-based at the recorded paths**: the
+credential key FILES (`provider-credentials.key`, `project-credentials.key`,
+and the live database files) never enter a snapshot, at any directory depth,
+through any link type (the F1 fix). It is NOT a content scan. A reviewer
+proved the difference live: a file named `provider-credentials.key.bak`, an
+`.env`, a `projects/secrets.json`, or a `.git/config` with embedded
+credentials is an ORDINARY name to the walk and its bytes DO ride the
+snapshot. The passing verdict below therefore claims exactly the planted
+shape — no file under the recorded exclusion NAMES, and none of the planted
+synthetic secret's bytes — nothing stronger.
+
+**Capture-time content scanning is OUT of S33 scope** and is the recorded
+follow-up: scan every captured file's bytes for secret-shaped content at
+capture time (and refuse-or-redact typed) — the S29 memory scanner's
+write-time secret posture (`memory_entry`'s G3 write-time scan) is the
+future reference for that machinery. Until that follow-up lands, the
+runbook's forensic-archive step (step 3) and the deployment's at-rest
+controls are what bound a same-shape leak.
 
 **Commands, verbatim** (as printed by the script; `<snapshot-root>` is the
 throwaway mktemp root, `<snapshot-id>` the taken snapshot's id):

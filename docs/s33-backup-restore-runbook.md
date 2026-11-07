@@ -132,9 +132,19 @@ cp "$SNAP_DIR/runtime.db" "$DB_PATH"
 #       into place; the D22/E9 exclusions are NEVER copied IN and the live
 #       custody key files on disk are NEVER deleted) ──
 rsync -a "$SNAP_DIR/volume/roots/0/" "<db-dir>/"
-#   (the snapshot contains no key files by construction; if your deployment
-#    stores the live key files under <db-dir>, they are still there — step 3
-#    archived them with the volume)
+#   (the snapshot contains no key files by construction)
+
+# ── 5b. RESTORE THE CUSTODY KEYS (review F2 — do NOT skip) ──
+#   The snapshot EXCLUDES the key files by design (D22/E9), so the rebuilt
+#   <db-dir> has none. Boot without them generates a FRESH key — the
+#   restored sealed credential rows can never resolve against it. Copy the
+#   keys back from the step-3 archive BEFORE restart:
+cp "$DB_PATH.pre-restore/provider-credentials.key" "<db-dir>/" 2>/dev/null || \
+  echo "no provider key in the archive — see decision 6"
+cp "$DB_PATH.pre-restore/project-credentials.key" "<db-dir>/" 2>/dev/null || \
+  echo "no project key in the archive — see decision 6"
+#   (adjust the paths if your deployment stores them elsewhere; the rsync in
+#    step 5 never deleted them — they live only in the step-3 archive now)
 
 # ── 6. RESTART ──
 docker compose start <runtime-service>     # / systemctl start shera-runtime
@@ -182,11 +192,15 @@ rollback.
 4. **User communication.** What users are told, and when, is human work.
 5. **Beyond the smoke subset.** The three probes prove the machinery; a human
    must still look at the restored CONTENT and confirm it is the right data.
-6. **The custody re-check.** Key files are never in a snapshot. After a
-   restore — especially after a disk-level incident — confirm the live
+6. **The custody re-check.** Key files are never in a snapshot, so the
+   restore's rebuilt directory has none until step 5b copies them back from
+   the pre-restore archive. After a restore, confirm the copied
    `provider-credentials.key` / `project-credentials.key` still resolve the
-   sealed payloads; if the disk died, re-provisioning custody is a MANUAL
-   control-plane step.
+   restored sealed payloads (a successful provider status read is the
+   proof). If the step-3 archive is MISSING (or the disk itself died), the
+   keys are unrecoverable from this machine — re-provisioning custody is a
+   MANUAL control-plane step, and the restored sealed rows stay unresolvable
+   until it runs.
 7. **Forensics retention.** How long the `.pre-restore` archives are kept
    (and when they are destroyed) is a policy decision, made by a person.
 8. **The owner's live drill** (E11, P4/P9) — performed by the owner, recorded

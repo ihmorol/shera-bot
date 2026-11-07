@@ -192,7 +192,7 @@ function main(): void {
 
       line(
         exitCode === 0
-          ? "INSPECTION RESULT: PASSED — no credential key file, and no synthetic secret bytes, appear anywhere in the snapshot"
+          ? "INSPECTION RESULT: PASSED — none of the PLANTED key-file shapes (the recorded exclusion names, at any depth, through any link) and none of the planted synthetic secret bytes appear in the snapshot. The exclusion is a NAME vocabulary, not a content scan — see the boundary note in the archived evidence."
           : "INSPECTION RESULT: FAILED — see the unexpected findings above",
       );
       try {

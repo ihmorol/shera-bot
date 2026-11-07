@@ -653,3 +653,248 @@ describe("S29 chunk 2: the approval decision settles the request it approves (fi
     await running.close();
   });
 });
+
+describe("S29 review round: the publication boundary holds for EVERY scope (review C1/C2/C3)", () => {
+  it("an account-scope memory can never be published into an Operation — the typed refusal, and the entry reaches no Agent context (review C1)", async () => {
+    const running = await composeOn(join(makeTempDir("shera-s29-c1-account-"), "runtime.db"));
+    const { origin } = running;
+
+    // The publication target (a real Operation with a roster, so the only
+    // thing standing between the account row and the Agents is the
+    // boundary itself).
+    const op = await post(origin, "/v1/operations", {
+      workspace_id: WORKSPACE,
+      definition_ref: null,
+      name: "Account leak probe",
+      roster_agent_ids: [RESEARCHER],
+      coordinator_agent_id: RESEARCHER,
+    });
+    expect(op.status).toBe(201);
+    const operationId = op.body["operation_id"] as string;
+
+    // The account-scope SENSITIVE memory: D37's account row says the user
+    // (and explicitly authorized runtime services) alone ever see it.
+    const created = await post(
+      origin,
+      "/v1/memory/commands",
+      createCommand({
+        scope: "account",
+        summary: "Account-wide onboarding fact",
+        content: "The workspace runs on the student pack and studies physics.",
+        sensitivity: "sensitive",
+        source_refs: ["conversation://direct/user_emon"],
+        confidence: 0.9,
+      }),
+    );
+    expect(created.status).toBe(200);
+    const memoryId = (created.body["entry"] as { memory_id: string }).memory_id;
+
+    // The Agent's request_publication (the D37 proposing flow — deliberately
+    // NOT on the F17 user-only list) must be REFUSED for an account-scope
+    // entry: approving it would share account memory into an Operation.
+    const agentRequest = await post(origin, "/v1/memory/commands", {
+      command_id: "cmd_c1_agent_request",
+      idempotency_key: "idem_c1_agent_request",
+      workspace_id: WORKSPACE,
+      actor: { type: "agent", id: RESEARCHER },
+      issued_at: "2026-11-04T10:05:00.000Z",
+      type: "memory.request_publication",
+      memory_id: memoryId,
+      operation_id: operationId,
+    });
+    expect(agentRequest.status).toBe(403);
+    expect(agentRequest.body).toMatchObject({ code: "MEMORY_PUBLICATION_SCOPE_FORBIDDEN" });
+
+    // The user's own request is refused for the same reason — the scope
+    // rule is about WHAT may be published, not WHO asks.
+    const userRequest = await post(origin, "/v1/memory/commands", {
+      command_id: "cmd_c1_user_request",
+      idempotency_key: "idem_c1_user_request",
+      workspace_id: WORKSPACE,
+      actor: { type: "user", id: "user_emon" },
+      issued_at: "2026-11-04T10:06:00.000Z",
+      type: "memory.request_publication",
+      memory_id: memoryId,
+      operation_id: operationId,
+    });
+    expect(userRequest.status).toBe(403);
+    expect(userRequest.body).toMatchObject({ code: "MEMORY_PUBLICATION_SCOPE_FORBIDDEN" });
+
+    // A direct user approve is refused too — no path may set the published
+    // column on an account-scope row.
+    const approve = await post(origin, "/v1/memory/commands", {
+      command_id: "cmd_c1_approve",
+      idempotency_key: "idem_c1_approve",
+      workspace_id: WORKSPACE,
+      actor: { type: "user", id: "user_emon" },
+      issued_at: "2026-11-04T10:07:00.000Z",
+      type: "memory.publish_decision",
+      memory_id: memoryId,
+      operation_id: operationId,
+      decision: "approve",
+    });
+    expect(approve.status).toBe(403);
+    expect(approve.body).toMatchObject({ code: "MEMORY_PUBLICATION_SCOPE_FORBIDDEN" });
+
+    // The queue carries nothing for this memory, and the entry appears in
+    // NO Agent context read — plain AND Operation (the live-proven leak
+    // closes only when every read shape is checked).
+    const view = (await (await fetch(`${origin}/v1/memory?workspace_id=${WORKSPACE}`)).json()) as {
+      publication_queue: { memory_id: string }[];
+    };
+    expect(view.publication_queue.some((row) => row.memory_id === memoryId)).toBe(false);
+    for (const path of [
+      `/v1/agents/${RESEARCHER}/memory/context?workspace_id=${WORKSPACE}`,
+      `/v1/agents/${RESEARCHER}/memory/context?workspace_id=${WORKSPACE}&operation_id=${operationId}`,
+    ]) {
+      const context = (await (await fetch(`${origin}${path}`)).json()) as {
+        entries: { memory_id: string }[];
+      };
+      expect(
+        context.entries.map((entry) => entry.memory_id),
+        path,
+      ).not.toContain(memoryId);
+    }
+
+    await running.close();
+  });
+
+  it("a published sensitive entry is participation-gated — a non-participant Agent's context read excludes it (review C2)", async () => {
+    const running = await composeOn(join(makeTempDir("shera-s29-c2-participant-"), "runtime.db"));
+    const { origin, runtime } = running;
+
+    // The roster holds ONLY the researcher: general_assistant is NOT a
+    // participant of this Operation.
+    const op = await post(origin, "/v1/operations", {
+      workspace_id: WORKSPACE,
+      definition_ref: null,
+      name: "Participant gate probe",
+      roster_agent_ids: [RESEARCHER],
+      coordinator_agent_id: RESEARCHER,
+    });
+    expect(op.status).toBe(201);
+    const operationId = op.body["operation_id"] as string;
+
+    // The Agent proposes a SENSITIVE operation-scope candidate; the user
+    // approves it through the queue (the recorded flow — 200 by design).
+    const accepted = await runtime.memory.proposeCandidate({
+      workspace_id: WORKSPACE,
+      proposed_by_agent_id: RESEARCHER,
+      scope: "operation",
+      operation_id: operationId,
+      summary: "Participant health context",
+      content: "The cohort includes participant health records; citations need care.",
+      source_refs: [`conversation://${operationId}/messages`],
+      confidence: 0.8,
+      sensitivity: "sensitive",
+    });
+    expect(accepted.entry.memory_id).toBeTruthy();
+
+    const approve = await post(origin, "/v1/memory/commands", {
+      command_id: "cmd_c2_approve",
+      idempotency_key: "idem_c2_approve",
+      workspace_id: WORKSPACE,
+      actor: { type: "user", id: "user_emon" },
+      issued_at: "2026-11-04T10:07:00.000Z",
+      type: "memory.publish_decision",
+      memory_id: accepted.entry.memory_id,
+      operation_id: operationId,
+      decision: "approve",
+    });
+    expect(approve.status).toBe(200);
+
+    // The PARTICIPANT sees the published entry in the Operation context;
+    // the NON-participant must NOT — the participation gate every other
+    // branch of the visibility table applies (the review's live-proven
+    // probe: the published sensitive row reached ANY agent naming the
+    // Operation).
+    const participant = (await (
+      await fetch(
+        `${origin}/v1/agents/${RESEARCHER}/memory/context?workspace_id=${WORKSPACE}&operation_id=${operationId}`,
+      )
+    ).json()) as { entries: { memory_id: string }[] };
+    expect(participant.entries.map((entry) => entry.memory_id)).toContain(accepted.entry.memory_id);
+    const nonParticipant = (await (
+      await fetch(
+        `${origin}/v1/agents/agent_general_assistant/memory/context?workspace_id=${WORKSPACE}&operation_id=${operationId}`,
+      )
+    ).json()) as { entries: { memory_id: string }[] };
+    expect(nonParticipant.entries.map((entry) => entry.memory_id)).not.toContain(
+      accepted.entry.memory_id,
+    );
+
+    await running.close();
+  });
+
+  it("a publication request must target the memory's own Operation — the scope/ownership validation (review C3)", async () => {
+    const running = await composeOn(join(makeTempDir("shera-s29-c3-target-"), "runtime.db"));
+    const { origin } = running;
+
+    const opOne = await post(origin, "/v1/operations", {
+      workspace_id: WORKSPACE,
+      definition_ref: null,
+      name: "Own operation",
+      roster_agent_ids: [RESEARCHER],
+      coordinator_agent_id: RESEARCHER,
+    });
+    expect(opOne.status).toBe(201);
+    const ownOperationId = opOne.body["operation_id"] as string;
+    const opTwo = await post(origin, "/v1/operations", {
+      workspace_id: WORKSPACE,
+      definition_ref: null,
+      name: "Other operation",
+      roster_agent_ids: [RESEARCHER],
+      coordinator_agent_id: RESEARCHER,
+    });
+    expect(opTwo.status).toBe(201);
+    const otherOperationId = opTwo.body["operation_id"] as string;
+
+    // An operation-scoped memory belongs to ITS Operation: publishing its
+    // content into a DIFFERENT Operation would leak it past the scope
+    // binding the write enforced.
+    const created = await post(
+      origin,
+      "/v1/memory/commands",
+      createCommand({
+        scope: "operation",
+        operation_id: ownOperationId,
+        summary: "Own-operation note",
+        content: "This note belongs to its own Operation.",
+        sensitivity: "normal",
+        source_refs: [`conversation://${ownOperationId}/messages`],
+        confidence: 0.8,
+      }),
+    );
+    expect(created.status).toBe(200);
+    const memoryId = (created.body["entry"] as { memory_id: string }).memory_id;
+
+    const request = await post(origin, "/v1/memory/commands", {
+      command_id: "cmd_c3_request",
+      idempotency_key: "idem_c3_request",
+      workspace_id: WORKSPACE,
+      actor: { type: "user", id: "user_emon" },
+      issued_at: "2026-11-04T10:06:00.000Z",
+      type: "memory.request_publication",
+      memory_id: memoryId,
+      operation_id: otherOperationId,
+    });
+    expect(request.status).toBe(403);
+    expect(request.body).toMatchObject({ code: "MEMORY_PUBLICATION_SCOPE_FORBIDDEN" });
+
+    const approve = await post(origin, "/v1/memory/commands", {
+      command_id: "cmd_c3_approve",
+      idempotency_key: "idem_c3_approve",
+      workspace_id: WORKSPACE,
+      actor: { type: "user", id: "user_emon" },
+      issued_at: "2026-11-04T10:07:00.000Z",
+      type: "memory.publish_decision",
+      memory_id: memoryId,
+      operation_id: otherOperationId,
+      decision: "approve",
+    });
+    expect(approve.status).toBe(403);
+    expect(approve.body).toMatchObject({ code: "MEMORY_PUBLICATION_SCOPE_FORBIDDEN" });
+
+    await running.close();
+  });
+});

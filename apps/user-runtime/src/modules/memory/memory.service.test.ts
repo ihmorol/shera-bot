@@ -267,6 +267,112 @@ describe("memory service backstops (S29 chunk 1)", () => {
     expect(suite.memory.listPublicationRequests(WORKSPACE)).toHaveLength(0);
   });
 
+  it("the pending-request lookup is (memory, operation)-scoped — approving for B settles B's row and publishes into B while A stays pending (review C4, the storage layer)", async () => {
+    const suite = makeSuite();
+    // Two Operations: the SAME memory has a pending request into each. B's
+    // request was created FIRST, A's SECOND — the memory-scoped lookup (the
+    // review's finding) returns the NEWEST pending row regardless of which
+    // Operation the decision names, so approving for B settles A's trail
+    // row and B's request lingers pending forever.
+    suite.operations.createOperation(WORKSPACE, {
+      operation_id: "op_c4_b",
+      workspace_id: WORKSPACE,
+      definition_ref: null,
+      name: "C4 operation B",
+      status: "active",
+      coordinator_agent_id: "agent_researcher",
+      pinning: {
+        pack_id: "pack_student_v1",
+        pack_version: "1.0.0",
+        roster_agent_ids: ["agent_researcher"],
+        capabilities: [],
+        provider_snapshot: {},
+      },
+      created_at: "2026-11-04T09:00:00.000Z",
+      updated_at: "2026-11-04T09:00:00.000Z",
+    });
+    suite.operations.createOperation(WORKSPACE, {
+      operation_id: "op_c4_a",
+      workspace_id: WORKSPACE,
+      definition_ref: null,
+      name: "C4 operation A",
+      status: "active",
+      coordinator_agent_id: "agent_researcher",
+      pinning: {
+        pack_id: "pack_student_v1",
+        pack_version: "1.0.0",
+        roster_agent_ids: ["agent_researcher"],
+        capabilities: [],
+        provider_snapshot: {},
+      },
+      created_at: "2026-11-04T09:01:00.000Z",
+      updated_at: "2026-11-04T09:01:00.000Z",
+    });
+    const created = (await suite.service.applyCommand(createCommand({ scope: "workspace" }))) as {
+      entry: { memory_id: string };
+    };
+    const memoryId = created.entry.memory_id;
+    // The Agent proposed the memory into B first, then into A (two pending
+    // rows, A the newer one).
+    suite.memory.insertPublicationRequest(
+      {
+        workspace_id: WORKSPACE,
+        request_id: "pubreq_c4_into_b",
+        memory_id: memoryId,
+        operation_id: "op_c4_b",
+        requested_by: "agent_researcher",
+        status: "pending",
+        created_at: "2026-11-04T10:00:00.000Z",
+      },
+      suite.tx.connection(),
+    );
+    suite.memory.insertPublicationRequest(
+      {
+        workspace_id: WORKSPACE,
+        request_id: "pubreq_c4_into_a",
+        memory_id: memoryId,
+        operation_id: "op_c4_a",
+        requested_by: "agent_researcher",
+        status: "pending",
+        created_at: "2026-11-04T10:01:00.000Z",
+      },
+      suite.tx.connection(),
+    );
+
+    // The user approves the publication into B (the S9 queue row for B).
+    const approved = (await suite.service.applyCommand({
+      command_id: `cmd_${randomUUID()}`,
+      idempotency_key: `idem_${randomUUID()}`,
+      workspace_id: WORKSPACE,
+      actor: { type: "user", id: "user_emon" } as const,
+      issued_at: "2026-11-04T10:07:00.000Z",
+      type: "memory.publish_decision",
+      memory_id: memoryId,
+      operation_id: "op_c4_b",
+      decision: "approve",
+    } as Extract<MemoryCommand, { type: "memory.publish_decision" }>)) as { decision: string };
+    expect(approved.decision).toBe("approved");
+
+    // B's OWN row is the one decided (requested_by the proposer preserved,
+    // decided_by the deciding user) — not A's newer row.
+    const decidedB = suite.memory.findPublicationRequest(WORKSPACE, "pubreq_c4_into_b");
+    expect(decidedB).not.toBeNull();
+    expect(decidedB!.status).toBe("approved");
+    expect(decidedB!.requested_by).toBe("agent_researcher");
+    expect(decidedB!.decided_by).toBe("user_emon");
+    // A's request stays PENDING — the user never decided it.
+    const pendingA = suite.memory.findPublicationRequest(WORKSPACE, "pubreq_c4_into_a");
+    expect(pendingA).not.toBeNull();
+    expect(pendingA!.status).toBe("pending");
+    expect(pendingA!.decided_by).toBeNull();
+    // The publication went into B — the Operation the user actually
+    // approved.
+    const published = suite.memory.findEntry(WORKSPACE, memoryId);
+    expect(published).not.toBeNull();
+    expect(published!.published).toBe(1);
+    expect(published!.published_into_operation_id).toBe("op_c4_b");
+  });
+
   it("refuses an agent-actor publication decision — agents never self-approve (G6)", async () => {
     const suite = makeSuite();
     const created = (await suite.service.applyCommand(createCommand({ scope: "workspace" }))) as {

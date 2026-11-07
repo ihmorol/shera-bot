@@ -56,6 +56,9 @@ export interface BackupSchedulerDeps {
   intervalMs?: number;
   /** The injected clock seam. Default: the unref'd interval timer. */
   schedule?: ScheduleClock | undefined;
+  /** The deterministic clock for the typed failure result's taken_at stamp
+   * (the injected-clock discipline; default: wall clock). */
+  now?: (() => string) | undefined;
   /** The redacted fault sink (a failed tick's log leg, G3). */
   logFault?: ((event: string, fields: Record<string, unknown>) => void) | undefined;
 }
@@ -65,6 +68,7 @@ export class BackupScheduler {
   private readonly scheduleClock: ScheduleClock;
   private readonly service: Pick<BackupService, "takeSnapshot">;
   private readonly verify: BackupWindowVerifier | null;
+  private readonly now: () => string;
   private readonly logFault: (event: string, fields: Record<string, unknown>) => void;
   private cancelTick: (() => void) | null = null;
 
@@ -73,6 +77,7 @@ export class BackupScheduler {
     this.verify = deps.verify ?? null;
     this.intervalMs = deps.intervalMs ?? SIX_HOURS_MS;
     this.scheduleClock = deps.schedule ?? defaultScheduleClock;
+    this.now = deps.now ?? (() => new Date().toISOString());
     this.logFault = deps.logFault ?? (() => {});
   }
 
@@ -128,7 +133,7 @@ export class BackupScheduler {
       return {
         taken: false,
         snapshot_id: "unknown",
-        taken_at: new Date().toISOString(),
+        taken_at: this.now(),
         reason: "tick_failed",
         detail,
         snapshot_dir: null,

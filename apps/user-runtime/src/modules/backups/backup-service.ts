@@ -84,6 +84,7 @@ export interface BackupSnapshotLedger {
   listNewestFirst(workspaceId: string): BackupSnapshotRow[];
   markAlert(workspaceId: string, snapshotId: string, alert: string): void;
   clearAlert(workspaceId: string, snapshotId: string): void;
+  markRestored(workspaceId: string, snapshotId: string, restoredAt: string): void;
   setRetainedIndex(workspaceId: string, snapshotId: string, index: number | null): void;
   delete(workspaceId: string, snapshotId: string): boolean;
 }

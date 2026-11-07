@@ -80,6 +80,52 @@ export class AdminBackupsService {
   }
 
   /**
+   * S33 (issue #34): the runtime mechanism answered the trigger — the row
+   * transitions to a TRUTHFUL terminal value. `taken` records the runtime's
+   * taken_at; `take_refused`/`take_unreachable` keep the honest non-terminal
+   * record (a refused take is never recorded as taken, G4).
+   */
+  async markTaken(accountId: string, backupId: string, takenAt: Date): Promise<void> {
+    await this.db
+      .update(controlBackups)
+      .set({ status: "taken", takenAt })
+      .where(and(eq(controlBackups.accountId, accountId), eq(controlBackups.id, backupId)));
+  }
+
+  async markTakeRefused(accountId: string, backupId: string, reason: string): Promise<void> {
+    await this.db
+      .update(controlBackups)
+      .set({ status: `take_refused:${reason.slice(0, 60)}` })
+      .where(and(eq(controlBackups.accountId, accountId), eq(controlBackups.id, backupId)));
+  }
+
+  /** S33: the runtime answered the restore trigger — `restored` or the
+   * honest refusal status; the request record never becomes a success (G4). */
+  async markRestoreOutcome(
+    accountId: string,
+    backupId: string,
+    outcome: "restored" | "restore_refused",
+    detail: string,
+  ): Promise<void> {
+    const status = outcome === "restored" ? "restored" : `restore_refused:${detail.slice(0, 60)}`;
+    await this.db
+      .update(controlBackups)
+      .set({ status })
+      .where(and(eq(controlBackups.accountId, accountId), eq(controlBackups.id, backupId)));
+  }
+
+  async requireIdBySnapshotRef(accountId: string, snapshotRef: string): Promise<string | null> {
+    const rows = await this.db
+      .select({ id: controlBackups.id })
+      .from(controlBackups)
+      .where(
+        and(eq(controlBackups.accountId, accountId), eq(controlBackups.snapshotRef, snapshotRef)),
+      )
+      .limit(1);
+    return rows[0]?.id ?? null;
+  }
+
+  /**
    * Record the restore REQUEST for one recorded snapshot (typed 404 on an
    * unknown ref — the seven-snapshot retention is S33's enforcement; this
    * only restores what the control plane actually recorded).

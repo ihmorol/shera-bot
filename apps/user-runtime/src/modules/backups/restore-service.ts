@@ -333,7 +333,7 @@ export class RestoreService {
    * recorded names the snapshot never captured (the live database files and
    * the credential key files) are the names the replace never deletes. */
   private restoreExcludeNames(): ReadonlySet<string> {
-    const names = databaseFileNames(this.dbPath);
+    const names = new Set(databaseFileNames(this.dbPath));
     for (const name of ["provider-credentials.key", "project-credentials.key"]) {
       names.add(name);
     }

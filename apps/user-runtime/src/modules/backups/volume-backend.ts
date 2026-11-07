@@ -21,7 +21,7 @@
  * always a SIBLING of the data dir, but the exclusion keeps the walk safe
  * even if a deployment configures it inside.
  */
-import { cpSync, existsSync, readdirSync, statSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 
 /** The names a volume snapshot NEVER captures (D22/E9 key exclusion; the
@@ -58,9 +58,31 @@ export interface VolumeSnapshotResult {
   bytes: number;
 }
 
+export interface VolumeRestoreRequest {
+  /** The snapshot's volume directory (its `roots/` subtree). */
+  volumeDir: string;
+  /** The volume roots to restore INTO (the same roots, same order). */
+  roots: readonly string[];
+  /** The captured manifest (the snapshot result's `entries` rows). */
+  manifest: readonly string[];
+  /** Names never to DELETE on the clear leg either (D22/E9: the excluded
+   * names can never be captured, and the restore's replace never deletes
+   * them at a root either). */
+  excludeNames: ReadonlySet<string>;
+}
+
+export interface VolumeRestoreResult {
+  /** The restored root entries, as `<rootIndex>:<entryName>` rows. */
+  entries: string[];
+}
+
 export interface VolumeSnapshotBackend {
   readonly kind: BackupVolumeKindTag;
   snapshotVolume(request: VolumeSnapshotRequest): Promise<VolumeSnapshotResult>;
+  /** The reverse walk: REPLACE each root's top-level content with the
+   * snapshot's (the mount-replacement semantics; the excluded names are
+   * never deleted on the clear leg). */
+  restoreVolume(request: VolumeRestoreRequest): Promise<VolumeRestoreResult>;
 }
 
 /** The backend tag (mirrors the ledger's volume_kind vocabulary). */
@@ -99,6 +121,47 @@ export class CopyVolumeBackend implements VolumeSnapshotBackend {
       }
     });
     return { entries, bytes };
+  }
+
+  /** The reverse walk (the replace semantics): for each root, CLEAR its
+   * top-level entries (never an excluded name — D22/E9 holds on the delete
+   * leg too), then copy the snapshot's captured entries back. */
+  async restoreVolume(request: VolumeRestoreRequest): Promise<VolumeRestoreResult> {
+    const entries: string[] = [];
+    const byRoot = new Map<string, string[]>();
+    for (const row of request.manifest) {
+      const sep = row.indexOf(":");
+      if (sep <= 0) continue;
+      const rootIndex = row.slice(0, sep);
+      const name = row.slice(sep + 1);
+      if (name.length === 0) continue;
+      const list = byRoot.get(rootIndex) ?? [];
+      list.push(name);
+      byRoot.set(rootIndex, list);
+    }
+    request.roots.forEach((root, rootIndex) => {
+      const captured = byRoot.get(String(rootIndex)) ?? [];
+      if (existsSync(root)) {
+        for (const entry of readdirSync(root, { withFileTypes: true })) {
+          if (request.excludeNames.has(entry.name) || captured.includes(entry.name)) {
+            continue;
+          }
+          rmSync(join(root, entry.name), { recursive: true, force: true });
+        }
+      } else {
+        mkdirSync(root, { recursive: true });
+      }
+      const rootSource = join(request.volumeDir, "roots", String(rootIndex));
+      for (const name of captured) {
+        const source = join(rootSource, name);
+        if (!existsSync(source)) {
+          throw new Error(`the snapshot's volume is missing its captured entry ${name}`);
+        }
+        cpSync(source, join(root, name), { recursive: true, force: false, errorOnExist: true });
+        entries.push(`${rootIndex}:${name}`);
+      }
+    });
+    return { entries };
   }
 }
 

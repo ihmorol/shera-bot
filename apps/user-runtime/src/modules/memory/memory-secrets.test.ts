@@ -898,3 +898,86 @@ describe("S29 review round: the publication boundary holds for EVERY scope (revi
     await running.close();
   });
 });
+
+describe("S29 review round: the scanner sees FIELD BOUNDARIES, not just whole fields (review C5)", () => {
+  // The straddle: EACH field alone is innocent — "pa" carries no vocabulary
+  // word and no high-entropy literal; "ssword=hunter2-correct-horse" names
+  // no key ("ssword" contains no vocabulary term) and its value is too
+  // short for the entropy pass. Joined with a newline (the scanner's field
+  // separator) the key-assignment regex cannot span the boundary — the
+  // credential only EXISTS when the fields are read together. The reviewer
+  // proved this shape stores today.
+  const STRADDLES: ReadonlyArray<{
+    label: string;
+    summary: string;
+    content: string;
+    needle: string;
+  }> = [
+    {
+      label: "key split mid-word at the boundary",
+      summary: "pa",
+      content: "ssword=hunter2-correct-horse",
+      needle: "hunter2-correct-horse",
+    },
+    {
+      label: "vocabulary word split at the boundary (mid-vocabulary variant)",
+      summary: "the api_",
+      content: "key=hunter2-correct-horse-battery",
+      needle: "hunter2-correct-horse-battery",
+    },
+  ];
+
+  it("rejects a key-assignment straddling the summary/content boundary — each field alone is innocent, together they are a credential, nothing stored", async () => {
+    const running = await composeOn(join(makeTempDir("shera-s29-c5-straddle-"), "runtime.db"));
+    const { origin, dbPath } = running;
+
+    for (const fixture of STRADDLES) {
+      const rejected = await post(
+        origin,
+        "/v1/memory/commands",
+        createCommand({
+          scope: "workspace",
+          summary: fixture.summary,
+          content: fixture.content,
+          sensitivity: "normal",
+          source_refs: ["conversation://direct/user_emon"],
+          confidence: 0.8,
+        }),
+      );
+      expect(rejected.status, fixture.label).toBe(400);
+      expect(rejected.body, fixture.label).toMatchObject({ code: "MEMORY_SECRET_REJECTED" });
+      // The refusal never echoes the credential (G3).
+      expect(JSON.stringify(rejected.body), fixture.label).not.toContain(fixture.needle);
+    }
+
+    // NOTHING was stored: the straddled literals appear nowhere in the
+    // database surface (db + WAL + shm), and no memory row exists.
+    const bytes = databaseBytes(dbPath);
+    for (const fixture of STRADDLES) {
+      expect(bytes.includes(fixture.needle), fixture.label).toBe(false);
+    }
+    const view = (await (await fetch(`${origin}/v1/memory?workspace_id=${WORKSPACE}`)).json()) as {
+      scopes: Record<string, unknown[]>;
+    };
+    const total = Object.values(view.scopes).reduce((sum, rows) => sum + rows.length, 0);
+    expect(total).toBe(0);
+
+    // The scanner still accepts ordinary prose AFTER the rejections — the
+    // boundary pass rejects credential shapes, not memory itself.
+    const clean = await post(
+      origin,
+      "/v1/memory/commands",
+      createCommand({
+        scope: "workspace",
+        summary: "A perfectly ordinary note",
+        content: "Nothing here resembles a credential in any field or across them.",
+        sensitivity: "normal",
+        source_refs: ["conversation://direct/user_emon"],
+        confidence: 0.7,
+      }),
+    );
+    expect(clean.status).toBe(200);
+
+    await running.close();
+  });
+});

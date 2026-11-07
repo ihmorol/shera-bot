@@ -1,0 +1,21 @@
+{
+  "event_id": "evt_mem_001",
+  "stream_id": "memory:ws_default_01",
+  "sequence": 1,
+  "event_type": "memory.candidate_proposed",
+  "event_version": 1,
+  "actor": { "type": "agent", "id": "agent_researcher" },
+  "task_id": "memory",
+  "conversation_id": "op_001",
+  "occurred_at": "2026-11-04T10:00:00.000Z",
+  "payload": {
+    "memory_id": "mem_001",
+    "scope": "operation",
+    "summary": "Operation decision: cite only peer-reviewed sources",
+    "source_refs": ["conversation://op_001/messages"],
+    "confidence": 0.85,
+    "sensitivity": "normal",
+    "expires_at": null
+  },
+  "redaction_class": "internal"
+}

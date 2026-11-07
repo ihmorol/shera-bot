@@ -1,0 +1,184 @@
+{
+  "workspace_id": "ws-local-default",
+  "scopes": {
+    "account": [],
+    "workspace": [
+      {
+        "memory_id": "mem_f940f5bd-2f19-486c-a0c6-d9dca5f245d2",
+        "workspace_id": "ws-local-default",
+        "scope": "workspace",
+        "owner_agent_id": null,
+        "operation_id": null,
+        "task_id": null,
+        "summary": "Sweep methodology",
+        "content": "Version two: narrow queries per section, then merge.",
+        "sensitivity": "normal",
+        "publication": {
+          "published": false,
+          "published_into_operation_id": null,
+          "published_at": null
+        },
+        "origin": "user",
+        "created_by": "capture-user",
+        "source_refs": ["conversation://direct/capture-user"],
+        "confidence": 0.7,
+        "created_at": "2026-11-04T18:48:24.589Z",
+        "updated_at": "2026-11-04T18:48:24.609Z",
+        "expires_at": null,
+        "versions": [
+          {
+            "version": 1,
+            "summary": "Sweep methodology",
+            "content": "Version one: search the corpus with the broad query first.",
+            "sensitivity": "normal",
+            "source_refs": ["conversation://direct/capture-user"],
+            "confidence": 0.7,
+            "change_kind": "created",
+            "changed_by": "capture-user",
+            "created_at": "2026-11-04T18:48:24.589Z"
+          },
+          {
+            "version": 2,
+            "summary": "Sweep methodology",
+            "content": "Version two: narrow queries per section, then merge.",
+            "sensitivity": "normal",
+            "source_refs": ["conversation://direct/capture-user"],
+            "confidence": 0.7,
+            "change_kind": "edited",
+            "changed_by": "capture-user",
+            "created_at": "2026-11-04T18:48:24.609Z"
+          }
+        ]
+      },
+      {
+        "memory_id": "mem_5bcc83fb-e541-4832-8db3-211bc5228d77",
+        "workspace_id": "ws-local-default",
+        "scope": "workspace",
+        "owner_agent_id": null,
+        "operation_id": null,
+        "task_id": null,
+        "summary": "The user prefers concise summaries",
+        "content": "Learned from corrections: summaries stay under two hundred words.",
+        "sensitivity": "normal",
+        "publication": {
+          "published": false,
+          "published_into_operation_id": null,
+          "published_at": null
+        },
+        "origin": "automatic",
+        "created_by": "agent_researcher",
+        "source_refs": ["conversation://2379a686-b53d-4c8f-a2f0-bc8ca7db6f2a/messages"],
+        "confidence": 0.85,
+        "created_at": "2026-11-04T18:48:24.541Z",
+        "updated_at": "2026-11-04T18:48:24.541Z",
+        "expires_at": null,
+        "versions": [
+          {
+            "version": 1,
+            "summary": "The user prefers concise summaries",
+            "content": "Learned from corrections: summaries stay under two hundred words.",
+            "sensitivity": "normal",
+            "source_refs": ["conversation://2379a686-b53d-4c8f-a2f0-bc8ca7db6f2a/messages"],
+            "confidence": 0.85,
+            "change_kind": "created",
+            "changed_by": "agent_researcher",
+            "created_at": "2026-11-04T18:48:24.541Z"
+          }
+        ]
+      }
+    ],
+    "operation": [
+      {
+        "memory_id": "mem_37382cf0-a5c5-4cf3-9b23-ef3e9df755b3",
+        "workspace_id": "ws-local-default",
+        "scope": "operation",
+        "owner_agent_id": null,
+        "operation_id": "2379a686-b53d-4c8f-a2f0-bc8ca7db6f2a",
+        "task_id": null,
+        "summary": "Participant health context",
+        "content": "The cohort includes participant health records; citations need care.",
+        "sensitivity": "sensitive",
+        "publication": {
+          "published": false,
+          "published_into_operation_id": null,
+          "published_at": null
+        },
+        "origin": "automatic",
+        "created_by": "agent_researcher",
+        "source_refs": ["conversation://2379a686-b53d-4c8f-a2f0-bc8ca7db6f2a/messages"],
+        "confidence": 0.8,
+        "created_at": "2026-11-04T18:48:24.567Z",
+        "updated_at": "2026-11-04T18:48:24.567Z",
+        "expires_at": null,
+        "versions": [
+          {
+            "version": 1,
+            "summary": "Participant health context",
+            "content": "The cohort includes participant health records; citations need care.",
+            "sensitivity": "sensitive",
+            "source_refs": ["conversation://2379a686-b53d-4c8f-a2f0-bc8ca7db6f2a/messages"],
+            "confidence": 0.8,
+            "change_kind": "created",
+            "changed_by": "agent_researcher",
+            "created_at": "2026-11-04T18:48:24.567Z"
+          }
+        ]
+      }
+    ],
+    "task": [],
+    "agent_private": [
+      {
+        "memory_id": "mem_a4752ed6-f8e2-4441-9c0f-2805877a7944",
+        "workspace_id": "ws-local-default",
+        "scope": "agent_private",
+        "owner_agent_id": "agent_researcher",
+        "operation_id": "2379a686-b53d-4c8f-a2f0-bc8ca7db6f2a",
+        "task_id": null,
+        "summary": "Failed extraction heuristic for corpus 3",
+        "content": "The regex-based extraction heuristic loses table rows when the PDF uses spanned cells; use the layout parser instead.",
+        "sensitivity": "normal",
+        "publication": {
+          "published": false,
+          "published_into_operation_id": null,
+          "published_at": null
+        },
+        "origin": "automatic",
+        "created_by": "agent_researcher",
+        "source_refs": ["conversation://2379a686-b53d-4c8f-a2f0-bc8ca7db6f2a/messages"],
+        "confidence": 0.8,
+        "created_at": "2026-11-04T18:48:24.559Z",
+        "updated_at": "2026-11-04T18:48:24.559Z",
+        "expires_at": null,
+        "versions": [
+          {
+            "version": 1,
+            "summary": "Failed extraction heuristic for corpus 3",
+            "content": "The regex-based extraction heuristic loses table rows when the PDF uses spanned cells; use the layout parser instead.",
+            "sensitivity": "normal",
+            "source_refs": ["conversation://2379a686-b53d-4c8f-a2f0-bc8ca7db6f2a/messages"],
+            "confidence": 0.8,
+            "change_kind": "created",
+            "changed_by": "agent_researcher",
+            "created_at": "2026-11-04T18:48:24.559Z"
+          }
+        ]
+      }
+    ]
+  },
+  "publication_queue": [
+    {
+      "request_id": "pubreq_220981b0-a567-4e03-8c5f-cfb746432ac4",
+      "memory_id": "mem_37382cf0-a5c5-4cf3-9b23-ef3e9df755b3",
+      "operation_id": "2379a686-b53d-4c8f-a2f0-bc8ca7db6f2a",
+      "requested_by": "agent_researcher",
+      "status": "pending",
+      "created_at": "2026-11-04T18:48:24.567Z",
+      "decided_by": null,
+      "decided_at": null
+    }
+  ],
+  "auto_memory": {
+    "global_enabled": true,
+    "agents": []
+  }
+}

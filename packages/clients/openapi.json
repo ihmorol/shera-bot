@@ -3525,6 +3525,159 @@
                     "event_type": {
                       "type": "string",
                       "enum": [
+                        "memory.candidate_proposed"
+                      ]
+                    },
+                    "payload": {
+                      "type": "object",
+                      "properties": {
+                        "memory_id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "scope": {
+                          "type": "string",
+                          "enum": [
+                            "account",
+                            "workspace",
+                            "operation",
+                            "task",
+                            "agent_private"
+                          ]
+                        },
+                        "summary": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 500
+                        },
+                        "source_refs": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256
+                          },
+                          "maxItems": 100
+                        },
+                        "confidence": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "sensitivity": {
+                          "type": "string",
+                          "enum": [
+                            "normal",
+                            "sensitive"
+                          ]
+                        },
+                        "expires_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "memory_id",
+                        "scope",
+                        "summary",
+                        "source_refs",
+                        "confidence",
+                        "sensitivity",
+                        "expires_at"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "event_id",
+                    "stream_id",
+                    "sequence",
+                    "event_version",
+                    "actor",
+                    "task_id",
+                    "conversation_id",
+                    "occurred_at",
+                    "redaction_class",
+                    "event_type",
+                    "payload"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "event_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "stream_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "sequence": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0
+                    },
+                    "event_version": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0
+                    },
+                    "actor": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "user",
+                            "agent",
+                            "runtime",
+                            "admin",
+                            "system"
+                          ]
+                        },
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "id"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "task_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "conversation_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "occurred_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "redaction_class": {
+                      "type": "string",
+                      "enum": [
+                        "public",
+                        "internal",
+                        "restricted"
+                      ]
+                    },
+                    "event_type": {
+                      "type": "string",
+                      "enum": [
                         "progress.reported"
                       ]
                     },
@@ -7124,6 +7277,719 @@
           }
         },
         "additionalProperties": false
+      },
+      "MemoryCommand": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "command_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "idempotency_key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "workspace_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "actor": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "user",
+                      "agent",
+                      "runtime",
+                      "admin",
+                      "system"
+                    ]
+                  },
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                },
+                "required": [
+                  "type",
+                  "id"
+                ],
+                "additionalProperties": false
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "memory.create"
+                ]
+              },
+              "scope": {
+                "type": "string",
+                "enum": [
+                  "account",
+                  "workspace",
+                  "operation",
+                  "task",
+                  "agent_private"
+                ]
+              },
+              "owner_agent_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "operation_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "task_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "summary": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "content": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20000
+              },
+              "sensitivity": {
+                "type": "string",
+                "enum": [
+                  "normal",
+                  "sensitive"
+                ]
+              },
+              "source_refs": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "pattern": "^(?:conversation|task|operation|workspace|agent|file|run):\\/\\/\\S+$"
+                },
+                "maxItems": 100
+              },
+              "confidence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "expires_at": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "command_id",
+              "idempotency_key",
+              "workspace_id",
+              "actor",
+              "issued_at",
+              "type",
+              "scope",
+              "owner_agent_id",
+              "operation_id",
+              "task_id",
+              "summary",
+              "content",
+              "sensitivity",
+              "source_refs",
+              "confidence",
+              "expires_at"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "command_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "idempotency_key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "workspace_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "actor": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "user",
+                      "agent",
+                      "runtime",
+                      "admin",
+                      "system"
+                    ]
+                  },
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                },
+                "required": [
+                  "type",
+                  "id"
+                ],
+                "additionalProperties": false
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "memory.publish_decision"
+                ]
+              },
+              "memory_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "operation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "decision": {
+                "type": "string",
+                "enum": [
+                  "approve",
+                  "dismiss"
+                ]
+              }
+            },
+            "required": [
+              "command_id",
+              "idempotency_key",
+              "workspace_id",
+              "actor",
+              "issued_at",
+              "type",
+              "memory_id",
+              "operation_id",
+              "decision"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "command_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "idempotency_key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "workspace_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "actor": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "user",
+                      "agent",
+                      "runtime",
+                      "admin",
+                      "system"
+                    ]
+                  },
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                },
+                "required": [
+                  "type",
+                  "id"
+                ],
+                "additionalProperties": false
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "memory.request_publication"
+                ]
+              },
+              "memory_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "operation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              }
+            },
+            "required": [
+              "command_id",
+              "idempotency_key",
+              "workspace_id",
+              "actor",
+              "issued_at",
+              "type",
+              "memory_id",
+              "operation_id"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "command_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "idempotency_key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "workspace_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "actor": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "user",
+                      "agent",
+                      "runtime",
+                      "admin",
+                      "system"
+                    ]
+                  },
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                },
+                "required": [
+                  "type",
+                  "id"
+                ],
+                "additionalProperties": false
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "memory.edit"
+                ]
+              },
+              "memory_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "summary": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "content": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20000
+              },
+              "sensitivity": {
+                "type": "string",
+                "enum": [
+                  "normal",
+                  "sensitive"
+                ]
+              },
+              "source_refs": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "pattern": "^(?:conversation|task|operation|workspace|agent|file|run):\\/\\/\\S+$"
+                },
+                "maxItems": 100
+              },
+              "confidence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "expires_at": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "command_id",
+              "idempotency_key",
+              "workspace_id",
+              "actor",
+              "issued_at",
+              "type",
+              "memory_id",
+              "summary",
+              "content",
+              "sensitivity",
+              "source_refs",
+              "confidence",
+              "expires_at"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "command_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "idempotency_key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "workspace_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "actor": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "user",
+                      "agent",
+                      "runtime",
+                      "admin",
+                      "system"
+                    ]
+                  },
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                },
+                "required": [
+                  "type",
+                  "id"
+                ],
+                "additionalProperties": false
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "memory.restore"
+                ]
+              },
+              "memory_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "version": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "required": [
+              "command_id",
+              "idempotency_key",
+              "workspace_id",
+              "actor",
+              "issued_at",
+              "type",
+              "memory_id",
+              "version"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "command_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "idempotency_key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "workspace_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "actor": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "user",
+                      "agent",
+                      "runtime",
+                      "admin",
+                      "system"
+                    ]
+                  },
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                },
+                "required": [
+                  "type",
+                  "id"
+                ],
+                "additionalProperties": false
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "memory.forget"
+                ]
+              },
+              "memory_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              }
+            },
+            "required": [
+              "command_id",
+              "idempotency_key",
+              "workspace_id",
+              "actor",
+              "issued_at",
+              "type",
+              "memory_id"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "command_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "idempotency_key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "workspace_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "actor": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "user",
+                      "agent",
+                      "runtime",
+                      "admin",
+                      "system"
+                    ]
+                  },
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                },
+                "required": [
+                  "type",
+                  "id"
+                ],
+                "additionalProperties": false
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "memory.set_auto_memory"
+                ]
+              },
+              "enabled": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "command_id",
+              "idempotency_key",
+              "workspace_id",
+              "actor",
+              "issued_at",
+              "type",
+              "enabled"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "command_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "idempotency_key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "workspace_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "actor": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "user",
+                      "agent",
+                      "runtime",
+                      "admin",
+                      "system"
+                    ]
+                  },
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                },
+                "required": [
+                  "type",
+                  "id"
+                ],
+                "additionalProperties": false
+              },
+              "issued_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "memory.set_agent_auto_memory"
+                ]
+              },
+              "agent_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "enabled": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "command_id",
+              "idempotency_key",
+              "workspace_id",
+              "actor",
+              "issued_at",
+              "type",
+              "agent_id",
+              "enabled"
+            ],
+            "additionalProperties": false
+          }
+        ]
       },
       "MemoryEntry": {
         "type": "object",
@@ -14239,6 +15105,159 @@
               "event_type": {
                 "type": "string",
                 "enum": [
+                  "memory.candidate_proposed"
+                ]
+              },
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "memory_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "scope": {
+                    "type": "string",
+                    "enum": [
+                      "account",
+                      "workspace",
+                      "operation",
+                      "task",
+                      "agent_private"
+                    ]
+                  },
+                  "summary": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "source_refs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "maxItems": 100
+                  },
+                  "confidence": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "sensitivity": {
+                    "type": "string",
+                    "enum": [
+                      "normal",
+                      "sensitive"
+                    ]
+                  },
+                  "expires_at": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "date-time"
+                  }
+                },
+                "required": [
+                  "memory_id",
+                  "scope",
+                  "summary",
+                  "source_refs",
+                  "confidence",
+                  "sensitivity",
+                  "expires_at"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "event_id",
+              "stream_id",
+              "sequence",
+              "event_version",
+              "actor",
+              "task_id",
+              "conversation_id",
+              "occurred_at",
+              "redaction_class",
+              "event_type",
+              "payload"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "event_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "stream_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "sequence": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "event_version": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "actor": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "user",
+                      "agent",
+                      "runtime",
+                      "admin",
+                      "system"
+                    ]
+                  },
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  }
+                },
+                "required": [
+                  "type",
+                  "id"
+                ],
+                "additionalProperties": false
+              },
+              "task_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "conversation_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "occurred_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "redaction_class": {
+                "type": "string",
+                "enum": [
+                  "public",
+                  "internal",
+                  "restricted"
+                ]
+              },
+              "event_type": {
+                "type": "string",
+                "enum": [
                   "progress.reported"
                 ]
               },
@@ -18252,6 +19271,159 @@
               "to_agent_id",
               "goal_summary",
               "parent_task_id"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "event_id",
+          "stream_id",
+          "sequence",
+          "event_version",
+          "actor",
+          "task_id",
+          "conversation_id",
+          "occurred_at",
+          "redaction_class",
+          "event_type",
+          "payload"
+        ],
+        "additionalProperties": false
+      },
+      "memory.candidate_proposed": {
+        "type": "object",
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "stream_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "sequence": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
+          "event_version": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
+          "actor": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "user",
+                  "agent",
+                  "runtime",
+                  "admin",
+                  "system"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              }
+            },
+            "required": [
+              "type",
+              "id"
+            ],
+            "additionalProperties": false
+          },
+          "task_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "conversation_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "redaction_class": {
+            "type": "string",
+            "enum": [
+              "public",
+              "internal",
+              "restricted"
+            ]
+          },
+          "event_type": {
+            "type": "string",
+            "enum": [
+              "memory.candidate_proposed"
+            ]
+          },
+          "payload": {
+            "type": "object",
+            "properties": {
+              "memory_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "scope": {
+                "type": "string",
+                "enum": [
+                  "account",
+                  "workspace",
+                  "operation",
+                  "task",
+                  "agent_private"
+                ]
+              },
+              "summary": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "source_refs": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "maxItems": 100
+              },
+              "confidence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "sensitivity": {
+                "type": "string",
+                "enum": [
+                  "normal",
+                  "sensitive"
+                ]
+              },
+              "expires_at": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "memory_id",
+              "scope",
+              "summary",
+              "source_refs",
+              "confidence",
+              "sensitivity",
+              "expires_at"
             ],
             "additionalProperties": false
           }
@@ -32843,6 +34015,159 @@
                                   "trigger_event_type",
                                   "trigger_event_id",
                                   "correlation_id"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "event_id",
+                              "stream_id",
+                              "sequence",
+                              "event_version",
+                              "actor",
+                              "task_id",
+                              "conversation_id",
+                              "occurred_at",
+                              "redaction_class",
+                              "event_type",
+                              "payload"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "event_id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 256
+                              },
+                              "stream_id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 256
+                              },
+                              "sequence": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0
+                              },
+                              "event_version": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0
+                              },
+                              "actor": {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "user",
+                                      "agent",
+                                      "runtime",
+                                      "admin",
+                                      "system"
+                                    ]
+                                  },
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "id"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "task_id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 256
+                              },
+                              "conversation_id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 256
+                              },
+                              "occurred_at": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "redaction_class": {
+                                "type": "string",
+                                "enum": [
+                                  "public",
+                                  "internal",
+                                  "restricted"
+                                ]
+                              },
+                              "event_type": {
+                                "type": "string",
+                                "enum": [
+                                  "memory.candidate_proposed"
+                                ]
+                              },
+                              "payload": {
+                                "type": "object",
+                                "properties": {
+                                  "memory_id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 256
+                                  },
+                                  "scope": {
+                                    "type": "string",
+                                    "enum": [
+                                      "account",
+                                      "workspace",
+                                      "operation",
+                                      "task",
+                                      "agent_private"
+                                    ]
+                                  },
+                                  "summary": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 500
+                                  },
+                                  "source_refs": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 256
+                                    },
+                                    "maxItems": 100
+                                  },
+                                  "confidence": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 1
+                                  },
+                                  "sensitivity": {
+                                    "type": "string",
+                                    "enum": [
+                                      "normal",
+                                      "sensitive"
+                                    ]
+                                  },
+                                  "expires_at": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ],
+                                    "format": "date-time"
+                                  }
+                                },
+                                "required": [
+                                  "memory_id",
+                                  "scope",
+                                  "summary",
+                                  "source_refs",
+                                  "confidence",
+                                  "sensitivity",
+                                  "expires_at"
                                 ],
                                 "additionalProperties": false
                               }

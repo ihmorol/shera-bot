@@ -91,10 +91,14 @@ describe("v19 migration (trigger records)", () => {
     // itself never moves once merged.
     const v19 = MIGRATIONS.find((migration) => migration.version === 19);
     expect(v19?.name).toBe("trigger-records");
-    expect(MIGRATIONS.at(-2)?.version).toBe(20);
-    expect(MIGRATIONS.at(-2)?.name).toBe("credit-ledger");
-    expect(MIGRATIONS.at(-1)?.version).toBe(21);
-    expect(MIGRATIONS.at(-1)?.name).toBe("run-checkpoints");
+    expect(MIGRATIONS.at(-3)?.version).toBe(20);
+    expect(MIGRATIONS.at(-3)?.name).toBe("credit-ledger");
+    expect(MIGRATIONS.at(-2)?.version).toBe(21);
+    expect(MIGRATIONS.at(-2)?.name).toBe("run-checkpoints");
+    // S33 appended v22 (backup-snapshots) after this migration; the S28
+    // entry itself never moves once merged.
+    expect(MIGRATIONS.at(-1)?.version).toBe(22);
+    expect(MIGRATIONS.at(-1)?.name).toBe("backup-snapshots");
     expect(appliedMigrationVersions(newDb().conn.db)).toContain(19);
   });
 

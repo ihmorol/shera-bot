@@ -99,3 +99,75 @@ export function walCheckpointTruncate(db: DatabaseSync): void {
 export function vacuumIntoBackup(db: DatabaseSync, targetPath: string): void {
   db.exec(`VACUUM INTO '${targetPath.replaceAll("'", "''")}'`);
 }
+
+/** The result of the recorded snapshot-time verification (E11: every
+ * snapshot is verified when it is taken; the restore path re-verifies). */
+export interface SnapshotIntegrityResult {
+  ok: boolean;
+  /** "ok" when the check passed; otherwise the bounded failure detail. */
+  message: string;
+}
+
+/**
+ * The E11 snapshot-time verification: open a database FILE and run the
+ * recorded integrity statement (`PRAGMA integrity_check`) over it. Every
+ * row must read exactly "ok" — a partially-readable or corrupt file fails
+ * closed. The file is opened and closed read-only-fashion (no statement
+ * other than the check runs; the target is never modified). An unreadable
+ * file (a damaged header, absolute garbage) is a failed check, never a
+ * thrown driver error crossing the adapter boundary.
+ */
+export function verifySnapshotIntegrity(path: string): SnapshotIntegrityResult {
+  let db: DatabaseSync;
+  try {
+    db = new DatabaseSync(path);
+  } catch (error) {
+    return {
+      ok: false,
+      message: `integrity check could not open the file: ${
+        error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200)
+      }`,
+    };
+  }
+  try {
+    const rows = db.prepare("PRAGMA integrity_check").all() as Array<
+      Record<string, string | number | bigint | null>
+    >;
+    const messages = rows.map((row) => String(Object.values(row)[0]));
+    if (messages.length === 0) {
+      return { ok: false, message: "integrity check returned no rows" };
+    }
+    if (messages.every((message) => message === "ok")) {
+      return { ok: true, message: "ok" };
+    }
+    return { ok: false, message: messages.join("; ").slice(0, 300) };
+  } catch (error) {
+    return {
+      ok: false,
+      message: `integrity check failed: ${
+        error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200)
+      }`,
+    };
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * The restore-side companion (E11 restore step 3, E17's recorded
+ * implication): a database COPY is produced without WAL journal mode (the
+ * recorded measurement — the copy opens in delete journal mode), so a
+ * restored database re-executes the required pragmas. Returns the journal
+ * mode the file now runs so the caller can ASSERT the restored state.
+ */
+export function reexecuteWalMode(path: string): string {
+  const db = new DatabaseSync(path);
+  try {
+    db.exec("PRAGMA foreign_keys = ON");
+    const row = db.prepare("PRAGMA journal_mode = WAL").get() as Record<string, unknown>;
+    const mode = String(Object.values(row)[0]);
+    return mode;
+  } finally {
+    db.close();
+  }
+}

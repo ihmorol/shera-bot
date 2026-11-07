@@ -1557,6 +1557,29 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
         ON run_checkpoints (workspace_id, task_id, checkpoint_version);
     `,
   },
+  {
+    version: 22,
+    name: "backup-snapshots",
+    sql: `
+      CREATE TABLE IF NOT EXISTS backup_snapshots (
+        workspace_id     TEXT    NOT NULL,
+        snapshot_id      TEXT    NOT NULL CHECK (length(snapshot_id) BETWEEN 1 AND 128),
+        taken_at         TEXT    NOT NULL CHECK (length(taken_at) BETWEEN 10 AND 40),
+        triggered_by     TEXT    NOT NULL CHECK (triggered_by IN ('schedule', 'admin')),
+        db_bytes         INTEGER NOT NULL CHECK (db_bytes >= 0),
+        integrity_status TEXT    NOT NULL CHECK (integrity_status IN ('ok', 'failed')),
+        volume_kind      TEXT    NOT NULL CHECK (volume_kind IN ('copy', 'restic')),
+        snapshot_dir     TEXT    NOT NULL CHECK (length(snapshot_dir) BETWEEN 1 AND 1024),
+        retained_index   INTEGER CHECK (retained_index IS NULL OR retained_index >= 1),
+        alert            TEXT    CHECK (alert IS NULL OR length(alert) BETWEEN 1 AND 300),
+        restored_at      TEXT,
+        PRIMARY KEY (workspace_id, snapshot_id)
+      ) STRICT;
+
+      CREATE INDEX IF NOT EXISTS backup_snapshots_by_taken_idx
+        ON backup_snapshots (workspace_id, taken_at);
+    `,
+  },
 ];
 
 /**

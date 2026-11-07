@@ -77,8 +77,11 @@ describe("provider catalog storage (S23 migration v18)", () => {
     // S24 appended the credit ledger after the trigger records, and S31 the
     // run checkpoints after the credit ledger — the chain is append-only
     // and the head moves with each slice.
-    expect(MIGRATIONS.at(-2)?.version).toBe(20);
-    expect(MIGRATIONS.at(-1)?.version).toBe(21);
+    expect(MIGRATIONS.at(-3)?.version).toBe(20);
+    expect(MIGRATIONS.at(-2)?.version).toBe(21);
+    // S33 appended v22 (backup-snapshots) after this migration; the S23
+    // entry itself never moves once merged.
+    expect(MIGRATIONS.at(-1)?.version).toBe(22);
   });
 
   it("creates the STRICT tables through the migration runner", () => {

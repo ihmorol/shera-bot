@@ -17,10 +17,12 @@
  */
 import {
   existsSync,
+  linkSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
   mkdirSync,
 } from "node:fs";
@@ -228,6 +230,39 @@ describe("the S33 backup mechanism (takeSnapshot)", () => {
     // secret-shaped value never appears (the sealed rows ride the database
     // copy encrypted; the key files that could open them ride nothing).
     assertSecretAbsentFromTree(fixture.snapshotRoot, "snapshot tree");
+  });
+
+  it("never dereferences a link out of the volume (the review-proven symlink and hard-link leak shapes)", async () => {
+    const fixture = makeFixture();
+    // The reviewer's EXACT shapes: a symlink NAMED outside the exclusion
+    // vocabulary pointing AT the vault key, and a HARD link to it — a
+    // regular file by any stat, invisible to a name check. Both must ride
+    // NOTHING into the snapshot (zero key bytes).
+    symlinkSync("../../provider-credentials.key", join(fixture.dataDir, "projects", "notes.txt"));
+    linkSync(
+      join(fixture.dataDir, "provider-credentials.key"),
+      join(fixture.dataDir, "projects", "build-cache.dat"),
+    );
+    const result = await fixture.service.takeSnapshot({ triggeredBy: "schedule" });
+    expect(result.taken).toBe(true);
+    if (!result.taken) return;
+    // Byte-level inspection of EVERY file the snapshot produced: the linked
+    // key bytes appear NOWHERE (the capture walks with lstat and never
+    // dereferences; a multi-linked regular file is skipped — its bytes are
+    // shared with a name the walk does not control).
+    assertSecretAbsentFromTree(fixture.snapshotRoot, "snapshot tree");
+    // The link entries themselves are absent from the capture (skipped, not
+    // copied-as-content).
+    expect(
+      existsSync(join(result.snapshot_dir, "volume", "roots", "0", "projects", "notes.txt")),
+    ).toBe(false);
+    expect(
+      existsSync(join(result.snapshot_dir, "volume", "roots", "0", "projects", "build-cache.dat")),
+    ).toBe(false);
+    // The ordinary content beside the links is still captured.
+    expect(
+      existsSync(join(result.snapshot_dir, "volume", "roots", "0", "projects", "repo.txt")),
+    ).toBe(true);
   });
 
   it("refuses a second snapshot under the same explicit id (typed, nothing overwritten)", async () => {

@@ -25,10 +25,10 @@ import {
   copyFileSync,
   cpSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   readdirSync,
   rmSync,
-  statSync,
 } from "node:fs";
 import { basename, join } from "node:path";
 
@@ -130,9 +130,34 @@ export class CopyVolumeBackend implements VolumeSnapshotBackend {
         // not copied wholesale by a recursive cpSync (the D22/E9 inspection
         // caught exactly that hole; the recorded names are excluded by name
         // at every depth).
-        copyExcluding(source, target, request.excludeNames);
+        //
+        // NEVER DEREFERENCE (the review-proven leak, F1): the entry's OWN
+        // type decides, lstat semantics through readdirSync's Dirent — a
+        // symlink named outside the vocabulary pointing at the vault key
+        // carries the key's bytes in if anything follows it, so links and
+        // every non-regular entry are skipped, and a multi-linked regular
+        // file is skipped too (its bytes are shared with a name this walk
+        // does not control). The exclusion is a NAME vocabulary at capture;
+        // content scanning is the recorded follow-up (see the inspection
+        // evidence's boundary note).
+        if (entry.isSymbolicLink() || !entry.isFile()) {
+          if (!entry.isDirectory()) {
+            continue;
+          }
+        }
+        if (entry.isDirectory()) {
+          copyExcluding(source, target, request.excludeNames);
+          entries.push(`${rootIndex}:${entry.name}`);
+          bytes += directoryBytes(source);
+          continue;
+        }
+        const lstat = lstatSync(source);
+        if (lstat.nlink > 1) {
+          continue;
+        }
+        copyFileSync(source, target);
         entries.push(`${rootIndex}:${entry.name}`);
-        bytes += entry.isDirectory() ? directoryBytes(source) : statSync(source).size;
+        bytes += lstat.size;
       }
     });
     return { entries, bytes };
@@ -182,30 +207,59 @@ export class CopyVolumeBackend implements VolumeSnapshotBackend {
 
 /** The exclusion-honoring recursive copy: every directory level is walked
  * (never a wholesale cpSync — an excluded name inside a captured directory
- * must be skipped, not swept in), and an excluded name is never created in
- * the target (D22/E9 at every depth). */
+ * must be skipped, not swept in), an excluded name is never created in the
+ * target (D22/E9 at every depth), and NO entry is ever dereferenced (F1):
+ * the walk decides on the entry's own lstat — a symlink (or any non-regular
+ * entry) is skipped, and a multi-linked regular file is skipped too (its
+ * bytes are shared with a name this walk does not control). */
 function copyExcluding(source: string, target: string, excludeNames: ReadonlySet<string>): void {
-  const stat = statSync(source);
-  if (!stat.isDirectory()) {
-    copyFileSync(source, target);
+  const lstat = lstatSync(source);
+  if (lstat.isSymbolicLink() || !lstat.isFile() || lstat.nlink > 1) {
+    // Never dereference; never capture shared bytes. Directories are
+    // recursed by the caller (the withFileTypes walk); everything else
+    // non-regular rides nothing.
+    if (!lstat.isDirectory()) {
+      return;
+    }
+  }
+  if (lstat.isDirectory()) {
+    mkdirSync(target, { recursive: true });
+    for (const entry of readdirSync(source, { withFileTypes: true })) {
+      if (excludeNames.has(entry.name)) {
+        continue;
+      }
+      copyExcluding(join(source, entry.name), join(target, entry.name), excludeNames);
+    }
     return;
   }
-  mkdirSync(target, { recursive: true });
-  for (const entry of readdirSync(source, { withFileTypes: true })) {
-    if (excludeNames.has(entry.name)) {
-      continue;
-    }
-    copyExcluding(join(source, entry.name), join(target, entry.name), excludeNames);
-  }
+  copyFileSync(source, target);
 }
 
 /** Best-effort recursive size (the ledger's byte honesty is best effort by
- * design — a size that cannot be read is not fabricated). */
+ * design — a size that cannot be read is not fabricated). The same
+ * never-dereference vocabulary as the capture walk: symlinks and non-regular
+ * entries are skipped (a symlink cycle can never hang the walk), and
+ * multi-linked regular files contribute nothing (their capture is skipped
+ * with them). */
 function directoryBytes(dir: string): number {
   let total = 0;
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name);
-    total += entry.isDirectory() ? directoryBytes(full) : statSync(full).size;
+    if (entry.isSymbolicLink()) {
+      continue;
+    }
+    if (entry.isDirectory()) {
+      total += directoryBytes(full);
+      continue;
+    }
+    if (!entry.isFile()) {
+      continue;
+    }
+    const lstat = lstatSync(full);
+    if (lstat.nlink > 1) {
+      continue;
+    }
+    total += lstat.size;
   }
   return total;
 }

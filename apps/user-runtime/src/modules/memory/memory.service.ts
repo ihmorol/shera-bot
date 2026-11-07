@@ -33,6 +33,8 @@
  */
 import { randomUUID } from "node:crypto";
 
+import { MEMORY_SOURCE_REF_PATTERN } from "@shera-bot/contracts";
+
 import type {
   MemoryCommand,
   MemoryCandidateProposedPayload,
@@ -193,15 +195,20 @@ export class MemoryService {
    */
   async applyCommand(command: MemoryCommand): Promise<unknown> {
     // The write-time secret scan (AC2) runs BEFORE anything is validated
-    // into storage: the scan sees the summary and the content; a rejection
+    // into storage: the scan sees every write field (summary, content, and
+    // the provenance references — fix-round F2); a rejection
     // leaves no receipt, no row, no version, no event — and the response
     // names the RULE classes, never the matched content (G3).
     if (command.type === "memory.create" || command.type === "memory.edit") {
       // The write-time secret scan (AC2) covers CREATES and EDITS alike —
-      // an edit is exactly as much a write as a create is. A rejection
-      // leaves no receipt, no row, no version, no event — and the response
-      // names the RULE classes, never the matched content (G3).
-      const scan = await scanForSecrets(command.summary, command.content);
+      // an edit is exactly as much a write as a create is. The scan sees
+      // EVERY write field: the summary, the content, AND the provenance
+      // references (fix-round F2 — a ref is as much a write field as the
+      // content is; `file:///srv/exports/OpenAI_API_KEY=…` must refuse just
+      // like the content carrying it). A rejection leaves no receipt, no
+      // row, no version, no event — and the response names the RULE
+      // classes, never the matched content (G3).
+      const scan = await scanForSecrets(command.summary, command.content, ...command.source_refs);
       if (scan.rejected) {
         throw new MemoryServiceError(
           "MEMORY_SECRET_REJECTED",
@@ -623,9 +630,24 @@ export class MemoryService {
         "an automatic memory candidate requires at least one source reference",
       );
     }
+    // 1b. The recorded reference scheme set (fix-round F2): the automatic
+    //     candidate path has no command envelope to parse it through, so the
+    //     service applies the SAME closed-scheme rule the contracts envelope
+    //     applies to user writes — a ref outside the recorded vocabulary is
+    //     not a memory reference (the backstop the contracts comment names).
+    for (const ref of input.source_refs) {
+      if (!MEMORY_SOURCE_REF_PATTERN.test(ref)) {
+        throw new MemoryServiceError(
+          "MEMORY_COMMAND_INVALID",
+          "validation",
+          "a source reference must be a recorded-scheme URI (conversation://, task://, operation://, workspace://, agent://, file://, run://)",
+        );
+      }
+    }
     // 2. The write-time secret scan (AC2/D22) — the automatic path never
-    //    becomes the leak path.
-    const scan = await scanForSecrets(input.summary, input.content);
+    //    becomes the leak path. The scan sees every write field, the
+    //    provenance references included (fix-round F2).
+    const scan = await scanForSecrets(input.summary, input.content, ...input.source_refs);
     if (scan.rejected) {
       throw new MemoryServiceError(
         "MEMORY_SECRET_REJECTED",

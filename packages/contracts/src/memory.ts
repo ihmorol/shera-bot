@@ -20,6 +20,39 @@ export const MEMORY_SCOPES = [
 export const MemoryScope = z.enum(MEMORY_SCOPES);
 export type MemoryScope = z.infer<typeof MemoryScope>;
 
+/**
+ * The recorded provenance-reference scheme set (fix-round F2): a source
+ * reference is a URI from THIS closed vocabulary — the schemes the codebase
+ * and the recorded D37 text actually use (refs point to conversations, tasks,
+ * operations, workspace files, Agent folders, and files; `run:` is recorded
+ * for future task-run provenance). A ref outside the set is not a memory
+ * reference: the write-command envelope refuses it, and the runtime service
+ * applies the same rule to the automatic candidate path (which has no
+ * envelope gate). The READ models (MemoryEntry, the candidate payload) stay
+ * permissive so historical shapes remain representable.
+ */
+export const MEMORY_SOURCE_REF_SCHEMES = [
+  "conversation",
+  "task",
+  "operation",
+  "workspace",
+  "agent",
+  "file",
+  "run",
+] as const;
+export const MEMORY_SOURCE_REF_PATTERN = new RegExp(
+  `^(?:${MEMORY_SOURCE_REF_SCHEMES.join("|")})://\\S+$`,
+);
+export const MemorySourceRef = z
+  .string()
+  .min(1)
+  .max(256)
+  .regex(
+    MEMORY_SOURCE_REF_PATTERN,
+    "a source reference must be a recorded-scheme URI (conversation://, task://, operation://, workspace://, agent://, file://, run://)",
+  );
+export type MemorySourceRef = z.infer<typeof MemorySourceRef>;
+
 export const MemoryEntry = z.strictObject({
   memory_id: Id,
   workspace_id: WorkspaceId,
@@ -78,8 +111,9 @@ export const MemoryCommand = z.discriminatedUnion("type", [
     summary: z.string().min(1).max(500),
     content: z.string().min(1).max(20000),
     sensitivity: z.enum(["normal", "sensitive"]),
-    /** D37: source references are preserved — provenance is never optional. */
-    source_refs: z.array(z.string().min(1).max(256)).max(100),
+    /** D37: source references are preserved — provenance is never optional.
+     * Each ref is a recorded-scheme URI (the closed set above; fix-round F2). */
+    source_refs: z.array(MemorySourceRef).max(100),
     confidence: z.number().min(0).max(1),
     expires_at: IsoDateTime.nullable(),
   }),
@@ -117,7 +151,7 @@ export const MemoryCommand = z.discriminatedUnion("type", [
     summary: z.string().min(1).max(500),
     content: z.string().min(1).max(20000),
     sensitivity: z.enum(["normal", "sensitive"]),
-    source_refs: z.array(z.string().min(1).max(256)).max(100),
+    source_refs: z.array(MemorySourceRef).max(100),
     confidence: z.number().min(0).max(1),
     expires_at: IsoDateTime.nullable(),
   }),

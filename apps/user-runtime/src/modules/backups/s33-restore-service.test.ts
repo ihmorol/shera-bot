@@ -309,7 +309,7 @@ describe("the S33 restore walk (stop → verify → replace → restart, typed)"
       snapshots: fixture.service.snapshots,
       verifyDatabaseCopy: verifySnapshotIntegrity,
       stopServices: () => {
-        throw new Error("docker compose stop failed");
+        throw new Error("the container supervisor refused the stop");
       },
       startServices: () => {},
       logFault: (event, fields) => {

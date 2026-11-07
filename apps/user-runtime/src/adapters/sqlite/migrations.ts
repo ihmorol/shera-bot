@@ -1683,6 +1683,33 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
         PRIMARY KEY (workspace_id, agent_id)
       ) STRICT;    `,
   },
+  {
+    version: 23,
+    name: "backup-snapshots",
+    // Authored as v22 on the s33-backups branch; the integration merge with
+    // main-with-S29 renumbered it to v23 — main's landed v22 memory keeps its
+    // slot (the S31 integration precedent: the chain is append-only and each
+    // slice's entries never move once merged).
+    sql: `
+      CREATE TABLE IF NOT EXISTS backup_snapshots (
+        workspace_id     TEXT    NOT NULL,
+        snapshot_id      TEXT    NOT NULL CHECK (length(snapshot_id) BETWEEN 1 AND 128),
+        taken_at         TEXT    NOT NULL CHECK (length(taken_at) BETWEEN 10 AND 40),
+        triggered_by     TEXT    NOT NULL CHECK (triggered_by IN ('schedule', 'admin')),
+        db_bytes         INTEGER NOT NULL CHECK (db_bytes >= 0),
+        integrity_status TEXT    NOT NULL CHECK (integrity_status IN ('ok', 'failed')),
+        volume_kind      TEXT    NOT NULL CHECK (volume_kind IN ('copy', 'restic')),
+        snapshot_dir     TEXT    NOT NULL CHECK (length(snapshot_dir) BETWEEN 1 AND 1024),
+        retained_index   INTEGER CHECK (retained_index IS NULL OR retained_index >= 1),
+        alert            TEXT    CHECK (alert IS NULL OR length(alert) BETWEEN 1 AND 300),
+        restored_at      TEXT,
+        PRIMARY KEY (workspace_id, snapshot_id)
+      ) STRICT;
+
+      CREATE INDEX IF NOT EXISTS backup_snapshots_by_taken_idx
+        ON backup_snapshots (workspace_id, taken_at);
+    `,
+  },
 ];
 
 /**
@@ -1725,6 +1752,18 @@ export function sqliteTableColumns(db: DatabaseSync, tableName: string): string[
 }
 
 export function applyMigrations(db: DatabaseSync): void {
+  applyMigrationsUpTo(db, Number.MAX_SAFE_INTEGER);
+}
+
+/**
+ * The migration run bounded at a version (the D24 restore-older-snapshot
+ * verification's recorded helper): the SAME discipline as applyMigrations —
+ * the schema_migrations bootstrap, the BEGIN IMMEDIATE walk, the recorded
+ * version row — over the chain PREFIX `version <= maxVersion`. A database
+ * built with this helper is exactly what a runtime that far behind the head
+ * holds, and the post-restore applyMigrations lands it at the real head.
+ */
+export function applyMigrationsUpTo(db: DatabaseSync, maxVersion: number): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       version    INTEGER PRIMARY KEY,
@@ -1740,6 +1779,9 @@ export function applyMigrations(db: DatabaseSync): void {
   );
 
   for (const migration of MIGRATIONS) {
+    if (migration.version > maxVersion) {
+      continue;
+    }
     if (applied.has(migration.version)) {
       continue;
     }

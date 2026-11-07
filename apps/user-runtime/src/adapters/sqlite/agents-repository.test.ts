@@ -95,17 +95,24 @@ describe("agent identities (S11 migration v4)", () => {
     // S23 appended the provider catalog after S21's tool inventory, S28 the
     // trigger records after the provider catalog, S24 the credit ledger
     // after the trigger records, and S31 the run checkpoints after the
+    // credit ledger — the chain is append-only and the head moves with each
+    // slice (S31's own v20 entry renumbered to v21 at the integration, the
+    // orchestrator-owned renumber).
     // credit ledger (S31's own v20 entry renumbered to v21 at that
     // integration, the orchestrator-owned renumber) — the chain is
     // append-only and the head moves with each slice. The S29 integration
     // renumbered the memory tables (authored v21) to v22 — main's landed
     // v21 run-checkpoints keeps its slot.
-    expect(MIGRATIONS.at(-3)?.version).toBe(20);
-    expect(MIGRATIONS.at(-3)?.name).toBe("credit-ledger");
-    expect(MIGRATIONS.at(-2)?.version).toBe(21);
-    expect(MIGRATIONS.at(-2)?.name).toBe("run-checkpoints");
-    expect(MIGRATIONS.at(-1)?.version).toBe(22);
-    expect(MIGRATIONS.at(-1)?.name).toBe("memory");
+    expect(MIGRATIONS.at(-4)?.version).toBe(20);
+    expect(MIGRATIONS.at(-4)?.name).toBe("credit-ledger");
+    expect(MIGRATIONS.at(-3)?.version).toBe(21);
+    expect(MIGRATIONS.at(-3)?.name).toBe("run-checkpoints");
+    // S33 appended v22 (backup-snapshots) after this migration; the S11
+    // entry itself never moves once merged.
+    expect(MIGRATIONS.at(-2)?.version).toBe(22);
+    expect(MIGRATIONS.at(-2)?.name).toBe("memory");
+    expect(MIGRATIONS.at(-1)?.version).toBe(23);
+    expect(MIGRATIONS.at(-1)?.name).toBe("backup-snapshots");
     expect(MIGRATIONS.find((migration) => migration.version === 14)?.name).toBe("terminal-events");
   });
 

@@ -268,11 +268,38 @@ export function createAdminRoutes(deps: AdminRouteDependencies): Router {
     adminHandler(deps.securityEvents, "backups.trigger", async (args) => {
       const id = await requireAccountId(deps.db, args.req.params.id);
       const result = await backups.triggerBackup(id);
+      // S33 (issue #34, D47): the trigger is EXECUTED over the recorded
+      // channel — the runtime mechanism's own typed result transitions the
+      // row to a truthful status. An unreachable runtime leaves the row at
+      // `requested` (the honest non-terminal record, G4 — the snapshot was
+      // never taken).
+      let dispatched: string = "runtime_unavailable";
+      try {
+        const target = await deps.runtimeTargetForAccount(id);
+        const take = await deps.channel.takeBackup(target.endpoint, target.bearer, {
+          workspace_id: `ws_${id}`,
+          snapshot_ref: result.snapshot_ref,
+          actor: { type: "admin", id: `admin-token:${args.tokenId}` },
+        });
+        if (take.taken) {
+          await backups.markTaken(id, result.backup_id, new Date(take.taken_at));
+          dispatched = "taken";
+        } else {
+          await backups.markTakeRefused(id, result.backup_id, take.reason);
+          dispatched = `refused:${take.reason}`;
+        }
+      } catch {
+        // Unreachable/ChannelRejected: the row stays `requested`.
+      }
       return {
         status: 200,
-        body: result,
+        body: { ...result, dispatched },
         target: id,
-        details: { backup_id: result.backup_id, snapshot_ref: result.snapshot_ref },
+        details: {
+          backup_id: result.backup_id,
+          snapshot_ref: result.snapshot_ref,
+          dispatched,
+        },
       };
     }),
   );
@@ -292,11 +319,39 @@ export function createAdminRoutes(deps: AdminRouteDependencies): Router {
       const id = await requireAccountId(deps.db, args.req.params.id);
       const snapshotRef = Id.parse(args.req.params.snapshotRef);
       const result = await backups.requestRestore(id, snapshotRef);
+      // S33 (issue #34, D47): the restore EXECUTES over the recorded channel
+      // through the runtime's recorded walk. The row transitions to the
+      // truthful outcome; an unreachable runtime leaves the request recorded
+      // (restore_requested) — the runbook's operator procedure is the
+      // handoff, never a claimed restore (G4).
+      const backupId = await backups.requireIdBySnapshotRef(id, result.snapshot_ref);
+      let dispatched: string = "runtime_unavailable";
+      try {
+        const target = await deps.runtimeTargetForAccount(id);
+        const restore = await deps.channel.restoreBackup(target.endpoint, target.bearer, {
+          workspace_id: `ws_${id}`,
+          snapshot_id: result.snapshot_ref,
+          actor: { type: "admin", id: `admin-token:${args.tokenId}` },
+        });
+        if (restore.restored) {
+          if (backupId) {
+            await backups.markRestoreOutcome(id, backupId, "restored", "");
+          }
+          dispatched = "restored";
+        } else {
+          if (backupId) {
+            await backups.markRestoreOutcome(id, backupId, "restore_refused", restore.code);
+          }
+          dispatched = `refused:${restore.code}`;
+        }
+      } catch {
+        // Unreachable/ChannelRejected: the row stays `restore_requested`.
+      }
       return {
         status: 200,
-        body: result,
+        body: { ...result, dispatched },
         target: `${id}/${result.snapshot_ref}`,
-        details: { account_id: id, snapshot_ref: result.snapshot_ref },
+        details: { account_id: id, snapshot_ref: result.snapshot_ref, dispatched },
       };
     }),
   );

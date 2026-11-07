@@ -28,7 +28,7 @@
  * before (G4).
  */
 import { randomUUID } from "node:crypto";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { FileAgentFolderStore } from "../../adapters/fs/agent-folder-store.ts";
 import { createServer, type Server as HTTPServer } from "node:http";
 
@@ -133,6 +133,12 @@ import {
   buildRuntimeAdminCommandsHandle,
   type RuntimeAdminCommandsHandle,
 } from "../../modules/admin/runtime-admin-commands.ts";
+import { BackupSnapshotsRepository } from "../../adapters/sqlite/backup-snapshots-repository.ts";
+import { vacuumIntoBackup, verifySnapshotIntegrity } from "../../adapters/sqlite/connection.ts";
+import { BackupService } from "../../modules/backups/backup-service.ts";
+import { BackupScheduler } from "../../modules/backups/backup-scheduler.ts";
+import { SnapshotVerifier } from "../../modules/backups/snapshot-verifier.ts";
+import type { RestoreService } from "../../modules/backups/restore-service.ts";
 import { RunFlowOperationsService } from "../../modules/workers/task-run-flow.ts";
 import {
   TaskWorkerSupervisor,
@@ -347,6 +353,14 @@ export interface ComposeRuntimeOptions extends ComposeLocalApiOptions {
    * no filesystem pack loads.
    */
   packsRoot?: string;
+  /**
+   * S33 (issue #34, D47): the container-level restore ports — the stop/start
+   * seam the admin-triggered restore executes through. A deployment that CAN
+   * stop its own services supplies them; the prototype composition does not
+   * (the container-level stop is the OPERATOR runbook's step), and the admin
+   * restore then answers the honest typed RESTORE_PORTS_NOT_WIRED refusal.
+   */
+  restorePorts?: Pick<RestoreService, "restoreSnapshot">;
   /** S10: the pack id to load from `packsRoot`. Default: "student". */
   packId?: string;
   /** S10: the pack version to load from `packsRoot`. Default: latest in the tree. */
@@ -620,6 +634,9 @@ interface Wired {
   runCancellation: RunCancellationService;
   runControl: RunControlApiHandle;
   adminCommands: RuntimeAdminCommandsHandle;
+  /** S33 (issue #34, AC18): the six-hour backup cadence over the injected
+   * clock — started at composition, stopped at close. */
+  backupScheduler: BackupScheduler;
   providers: ProviderService;
   credits: CreditLedgerService;
   schedules: SchedulesService;
@@ -743,6 +760,7 @@ function wire(
     workspaceId?: string | undefined;
     workerPolicy?: Partial<TaskWorkerSupervisorPolicy> | undefined;
     retryPolicy?: { maxAttempts: number; backoffScheduleMs: readonly number[] } | undefined;
+    restorePorts?: Pick<RestoreService, "restoreSnapshot"> | undefined;
   },
 ): Wired {
   const logFault = options.logUntypedFault ?? consoleRedactedLogger;
@@ -1686,6 +1704,37 @@ function wire(
     onWake: () => scheduler.tick(),
     logFault: (event, fields) => logFault(event, fields),
   });
+  // S33 (issue #34, PRD §12/E11, AC18): the backup mechanism, wired into the
+  // ONE composition — the recorded E17 export over the LIVE WAL connection,
+  // the snapshot-time integrity verification, the D22/E9 key exclusion, the
+  // ledger, and the six-hour cadence over the injected clock (started here,
+  // stopped at close). The snapshot root is the data dir's SIBLING by
+  // convention (a snapshot never lives inside the volume it captures).
+  const backupDataDir = dirname(options.dbPath);
+  const backupService = new BackupService({
+    workspaceId: wireWorkspaceId,
+    dbPath: options.dbPath,
+    snapshotRoot: join(dirname(backupDataDir), `${basename(backupDataDir)}.snapshots`),
+    exportDatabase: (target) => vacuumIntoBackup(tx.connection(), target),
+    verifyDatabaseCopy: verifySnapshotIntegrity,
+    snapshots: new BackupSnapshotsRepository(tx),
+    ...(options.now ? { now: options.now } : {}),
+    logFault: (event, fields) => logFault(event, fields),
+  });
+  const backupScheduler = new BackupScheduler({
+    service: backupService,
+    verify: new SnapshotVerifier({
+      workspaceId: wireWorkspaceId,
+      verifyDatabaseCopy: verifySnapshotIntegrity,
+      snapshots: backupService.snapshots,
+      ...(options.now ? { now: options.now } : {}),
+      logFault: (event, fields) => logFault(event, fields),
+    }),
+    ...(options.now ? { now: options.now } : {}),
+    logFault: (event, fields) => logFault(event, fields),
+  });
+  backupScheduler.start();
+
   // S32 (issue #33): the admin command handle the internal API serves to the
   // control plane over the recorded channel. The cancellation leg re-enters
   // the SAME RunCancellationService the user stop control uses — the admin
@@ -1716,6 +1765,19 @@ function wire(
     afterTopUp: (workspaceId) => {
       scheduler.resumeAfterTopUp(workspaceId);
     },
+    // S33 (issue #34, D47): the admin-triggered snapshot (the 1:1 ref) and
+    // the restore through the deployment-supplied stop/start ports when the
+    // composition carries them (the prototype composition does not — the
+    // typed RESTORE_PORTS_NOT_WIRED refusal is the runbook handoff, G4).
+    backupTake: (input) => backupService.takeSnapshot(input),
+    ...(options.restorePorts
+      ? {
+          restorePorts: {
+            restoreSnapshot: options.restorePorts.restoreSnapshot,
+            workspaceId: wireWorkspaceId,
+          },
+        }
+      : {}),
     ...(options.now ? { now: options.now } : {}),
     logFault: (event, fields) => logFault(event, fields),
   });
@@ -1833,6 +1895,7 @@ function wire(
     runCancellation,
     runControl: runControlApi,
     adminCommands,
+    backupScheduler,
     providers,
     credits: creditLedger,
     schedules,
@@ -1864,7 +1927,11 @@ export function composeLocalApi(options: ComposeLocalApiOptions): LocalApiHandle
     credits: wired.credits,
     memory: wired.memory,
     browser: wired.browser,
-    close: () => wired.conn.close(),
+    close: () => {
+      // S33: the six-hour backup cadence never outlives the composition.
+      wired.backupScheduler.stop();
+      wired.conn.close();
+    },
   };
 }
 
@@ -2133,6 +2200,9 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     noteStore: wired.noteStore,
     tx: wired.tx,
     close: async () => {
+      // S33: stop the six-hour backup cadence BEFORE the transport goes down
+      // (a stopped runtime never takes a snapshot).
+      wired.backupScheduler.stop();
       // S28: stop the scheduler's tick loop and the watcher wake manager
       // BEFORE the transport goes down (a stopped runtime never fires a
       // trigger; chokidar never outlives the gateway).

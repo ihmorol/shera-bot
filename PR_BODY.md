@@ -29,7 +29,9 @@ Branch: `s29-memory` (off main `1de68ae`, worktree `../shera-bot-s29`). Engineer
 | AC8 | Pack upgrade does not rewrite memory rows                                                                      | `a pack upgrade never rewrites existing memory rows` — a real re-composition over the same database (pack re-load, re-pin, Agent re-seed) with the row byte-identical                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | `apps/user-runtime/src/modules/memory/memory-controls.test.ts`                                             | `c328ac3` → `d6886c0`                    |
 | AC9 | UI: per-scope breakdown, publication queue, provenance, toggles; craft-floor + taste pass recorded             | 15 UI tests (the five scope groups with runtime counts, truthful entry rendering, private-only visibility, the published-into naming, both provenance verbs, the queue's teaching empty state + pending rows, the restore affordance with verbatim history rows, the honest forget boundary, the auto-memory copy, the honest rejection display and its contrast, the no-fixture guard) + the capture gate's truth legs (`s29-truth-leg.json` — scope counts/queue/provenance vs `memory.userView`; `s29-approval-leg.json` — the approval flips the runtime's context read) + captures at 360/768/1440 + reduced motion + the 26-step keyboard trail under `apps/web/.impeccable/review/s29/` | `apps/web/test/memory-ui.test.ts`, `apps/user-runtime/scripts/capture-s29.mjs`                             | `656b716`                                |
 
-## Gate table (the solo fresh-archive gate at `b37ecb2` — fresh `git archive HEAD | tar -x`, frozen install)
+## Gate tables (the solo fresh-archive gate — fresh `git archive HEAD | tar -x`, frozen install, every step logged with its exit code)
+
+**The definitive gate at the fix-round tip `20bc2f1`** (the finisher session, 2026-11-07):
 
 | Step | Command                                          | Exit | Result                                                                               |
 | ---- | ------------------------------------------------ | ---- | ------------------------------------------------------------------------------------ |
@@ -37,15 +39,21 @@ Branch: `s29-memory` (off main `1de68ae`, worktree `../shera-bot-s29`). Engineer
 | 2    | `pnpm lint`                                      | 0    | zero findings                                                                        |
 | 3    | `pnpm format:check`                              | 0    | clean                                                                                |
 | 4    | `pnpm typecheck`                                 | 0    | clean                                                                                |
-| 5    | `pnpm test` (`SHERA_PG_BIN`, real PostgreSQL 16) | 0    | **2242 passed / 2242 in 196 files**                                                  |
+| 5    | `pnpm test` (`SHERA_PG_BIN`, real PostgreSQL 16) | 0    | **2250 passed / 2250 in 196 files — zero flakes this run**                           |
 | 6    | `pnpm build`                                     | 0    | all workspaces build                                                                 |
 | 7    | `pnpm license:inventory`                         | 0    | all licenses allowed or reviewed-exception (the two secretlint MIT packages covered) |
 | 8    | `pnpm boundary-guards`                           | 0    | PASS — 470 source files scanned                                                      |
 | 9    | `pnpm mockup:test`                               | 0    | pass                                                                                 |
 
-The worktree full-suite history, recorded honestly: one run landed 2241/2242 with the documented S12 session-supervisor protocol-cap co-run flake (green solo immediately after), and another surfaced the same family plus an S16 supervisor spawn race (both green isolated); the definitive run and the gate were fully green — never widened, no assertion changed.
+`pnpm gen:clients` at the tip: exit 0 with a clean tree — the committed generated clients are current with the F2 contracts change. One honest note: the worktree's parallel boundary-guards run reported 474 files against the archive's 470 — the scanner skips `node_modules/dist/build/coverage/.turbo` but not `.next`, and the worktree carried the capture-harness `.next` from the UI gate (8 `.ts` files) against the archive's fresh build (4); the committed tree scans at 470, matching the pre-fix-round gate exactly.
+
+**The pre-fix-round gate at `b37ecb2`** (historical, the original build session): all nine steps exit 0 with **2242 passed / 2242 in 196 files** at the same step list.
+
+The worktree full-suite history, recorded honestly: one run landed 2241/2242 with the documented S12 session-supervisor protocol-cap co-run flake (green solo immediately after), another surfaced the same family plus an S16 supervisor spawn race (both green isolated), and one fix-round run landed 2249/2250 with the `kill9-recovery` mock-runtime ready-line spawn timeout (the recorded load-flake family, unrelated to memory, green isolated) — never widened, no assertion changed; the definitive runs and both gates were fully green.
 
 ## Fresh-context review passes
+
+The three passes below were RUN by the continuation session (2026-11-07) over the full branch diff `1de68ae..HEAD` after the first fix-round builder died mid-round; the consolidated ledger they produced is the fix-round section below. The finisher session (2026-11-07, later the same day) audited that ledger for completeness and ambiguity — it was complete and unambiguous (every finding carries a red/fix hash pair or a disproof), so per the standing loop no re-run was required; the finisher's own verification this session: the five S29 suites green (40/40), the four repo-wide fast gates green, and the definitive solo fresh-archive gate at the final tip (the gate table above).
 
 - Standards pass (correctness, G1–G8, red-first discipline, vocabulary): **RUN — PASS-WITH-FINDINGS** (continuation session, 2026-11-07; findings F17 below, resolved on the branch)
 - Spec-conditions pass (issue #30's nine ACs + PRD §11/§19 + D37 point by point): **RUN — PASS-WITH-FINDINGS** (F17 is the AC5-shaped gap; the rest of the ACs re-verified against the tests named in the AC table)
@@ -75,8 +83,13 @@ Recorded nits (no red test — none is a behavior defect on a reachable path, pr
 - **Multi-container behavior:** one container per user (D2); memory has never been observed across two composed runtimes.
 - **Real Google OAuth, Docker, a real Pi binary:** standing from E22–E40.
 
+## Integration notes (recorded, NOT executed — integration happens after this round)
+
+- **Migration renumber at rebase:** this branch adds the memory migration as `version: 21` in `apps/user-runtime/src/adapters/sqlite/migrations.ts`; main has since moved (S31) and carries its own `version: 21` (`run-checkpoints`). At integration, rebase onto main and renumber the memory migration to the next free version (v22) per the S31 precedent — the writers-validate-no-FK discipline is unaffected by the number.
+- **Docs conflicts at merge:** main now carries an E43 (OpenMausBot leverage, renumbered from E42 per the E16 precedent — this branch's record KEEPS the E42 identifier); `docs/TRACEABILITY.md` and `docs/decisions/README.md` will both-sides-add conflict at merge. Keep BOTH sections (this branch's stays E42).
+
 ## Owner items
 
 - **P9 sensitive-slice diff-read before merge** (memory is a privacy boundary): `apps/user-runtime/src/modules/memory/memory.service.ts` (the D37 visibility table, the publication decision machinery, the AC5 gates), `apps/user-runtime/src/modules/memory/secret-scanner.ts` (the three-layer rejection boundary), `packages/contracts/src/runtime-access.ts` (the two-route browser allowlist growth).
 - **PRD reconciliation:** §11/§19 acceptance statuses are unchanged in this branch (owner reconciliation pending per the recorded decision flow).
-- **The three fresh-context review passes and the merge itself are the orchestrator's** (G8 — no PR created by the builder).
+- **The merge is the owner's** (G8): this PR is the handoff artifact (the slice was stranded without one twice); merging happens only on the owner's explicit approval sentence. The three fresh-context review passes were run and recorded above; the owner's own diff-read and approval remain the merge gate.

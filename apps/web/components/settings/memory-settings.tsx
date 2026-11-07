@@ -596,6 +596,14 @@ function PublicationQueueCard({
               <p className="text-sm font-medium text-text">
                 {entry?.summary ?? "A memory that has since been removed"}
               </p>
+              {entry ? (
+                <p className="mt-0.5 text-xs text-muted" data-testid="memory-queue-item-scope">
+                  {memoryScopeLabel(entry.scope)}
+                  {entry.sensitivity === "sensitive" ? (
+                    <span className="ml-1 font-medium text-amber-300">· sensitive</span>
+                  ) : null}
+                </p>
+              ) : null}
               <p className="mt-0.5 text-xs text-muted">
                 Proposed by {actorLabel(request.requested_by)} · {formatWhen(request.created_at)} ·
                 into {operationName(request.operation_id)}

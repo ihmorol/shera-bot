@@ -373,6 +373,11 @@ async function openMemory(viewport, opts = {}) {
         (line) => line.textContent ?? "",
       ),
       queue: pick("memory-publication-queue"),
+      // The REAL row count (review G5 fix — the old leg recorded the queue
+      // section's TEXT LENGTH under a name that read like a row count): the
+      // number of rendered queue rows, compared against the runtime's own
+      // pending queue below.
+      queueRowCount: document.querySelectorAll('[data-testid="memory-queue-item"]').length,
       globalToggle: pick("memory-auto-global-toggle"),
     };
   });
@@ -380,6 +385,11 @@ async function openMemory(viewport, opts = {}) {
   const mismatches = [];
   if (rendered.scopeGroups.length !== 5) {
     mismatches.push(`expected 5 scope groups, rendered ${rendered.scopeGroups.length}`);
+  }
+  if (rendered.queueRowCount !== expected.queueCount) {
+    mismatches.push(
+      `queue rows rendered ${rendered.queueRowCount} != runtime's pending queue ${expected.queueCount}`,
+    );
   }
   for (const group of rendered.scopeGroups) {
     const truthCount = expected.scopeCounts[group.scope] ?? 0;
@@ -412,7 +422,7 @@ async function openMemory(viewport, opts = {}) {
     join(CAPTURE_OUT, "s29-truth-leg.json"),
     JSON.stringify(
       {
-        rendered: { scopeGroups: rendered.scopeGroups, queueCount: rendered.queue?.length },
+        rendered: { scopeGroups: rendered.scopeGroups, queueCount: rendered.queueRowCount },
         mismatches,
       },
       null,

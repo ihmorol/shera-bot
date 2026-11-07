@@ -1,6 +1,6 @@
 /**
  * S33 backup-snapshot storage contract tests (issue #34, PRD §12, E11, E12,
- * D23 rule 2): the v22 migration creates the STRICT backup_snapshots ledger —
+ * D23 rule 2): the v23 migration creates the STRICT backup_snapshots ledger —
  * the runtime's durable record of every snapshot it took — and the repository
  * enforces the writer-side rules: workspace scoping as the primary-key prefix
  * (E12), the checked vocabularies (triggered_by / integrity_status /
@@ -71,7 +71,7 @@ function snapshotInput(overrides: Partial<BackupSnapshotInsert> = {}): BackupSna
   };
 }
 
-describe("the v22 backup_snapshots migration (chain head)", () => {
+describe("the v23 backup_snapshots migration (chain head)", () => {
   it("is the migration-chain head and creates the STRICT ledger table", () => {
     const { conn } = newDb();
     const versions = appliedMigrationVersions(conn.db);

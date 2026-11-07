@@ -190,9 +190,12 @@ describe("the S33 restore walk (stop → verify → replace → restart, typed)"
     // verifies, and carries the schema (not the stale garbage bytes).
     const dbPath = join(harness.target.dataDir, "runtime.db");
     expect(readFileSync(dbPath, "utf8").startsWith("this is not a database")).toBe(false);
-    expect(verifySnapshotIntegrity(dbPath).ok).toBe(true);
+    // The walk left NO stale WAL siblings — asserted BEFORE the verification
+    // read below: the readonly verification open creates its own (empty)
+    // WAL read-view pair, a read artifact, never stale state.
     expect(existsSync(`${dbPath}-wal`)).toBe(false);
     expect(existsSync(`${dbPath}-shm`)).toBe(false);
+    expect(verifySnapshotIntegrity(dbPath).ok).toBe(true);
 
     // The scratch workspace is the SNAPSHOT's volume: the seeded file is
     // back, the post-snapshot stale file is GONE (the replace semantics).
@@ -201,8 +204,8 @@ describe("the S33 restore walk (stop → verify → replace → restart, typed)"
     );
     expect(existsSync(join(harness.target.workspaceDir, "stale-after-snapshot.txt"))).toBe(false);
 
-    // The honest migration record (v22 head at snapshot time, v22 after).
-    expect(result.migrated_from).toEqual(expect.arrayContaining([22]));
+    // The honest migration record (the head at snapshot time, the head after).
+    expect(result.migrated_from).toEqual(expect.arrayContaining([23]));
     expect(result.migrated_to).toEqual(result.migrated_from);
 
     // The ledger stamps the restore.
@@ -289,6 +292,62 @@ describe("the S33 restore walk (stop → verify → replace → restart, typed)"
     expect(result.failed_stage).toBe("policy");
     expect(result.code).toBe("RESTORE_SNAPSHOT_NOT_FOUND");
     expect(harness.order).toEqual(["policy"]);
+  });
+
+  it("never deletes a custody key from the restore target (the delete leg's D22/E9)", async () => {
+    const fixture = makeFixture();
+    const taken = await fixture.service.takeSnapshot({ triggeredBy: "schedule" });
+    expect(taken.taken).toBe(true);
+    if (!taken.taken) return;
+
+    const targetParent = mkdtempSync(join(tmpdir(), "shera-s33-restore-target-"));
+    tempDirs.push(targetParent);
+    const harness = makeRestoreHarness(fixture, taken.snapshot_id, targetParent);
+    // The live custody keys are NEVER in a snapshot (D22/E9) — the restore's
+    // replace must leave them standing (the runbook copies them back from the
+    // pre-restore archive; the walk must not be what removes them).
+    writeFileSync(join(harness.target.workspaceDir, "provider-credentials.key"), "live-custody");
+    writeFileSync(join(harness.target.dataDir, "project-credentials.key"), "live-custody");
+
+    const result = await harness.restore.restoreSnapshot({ snapshotId: taken.snapshot_id });
+    expect(result.restored).toBe(true);
+    if (!result.restored) return;
+    expect(
+      readFileSync(join(harness.target.workspaceDir, "provider-credentials.key"), "utf8"),
+    ).toBe("live-custody");
+    expect(readFileSync(join(harness.target.dataDir, "project-credentials.key"), "utf8")).toBe(
+      "live-custody",
+    );
+  });
+
+  it("a tampered sidecar manifest entry is refused typed (never writes outside the restore root)", async () => {
+    const fixture = makeFixture();
+    const taken = await fixture.service.takeSnapshot({ triggeredBy: "schedule" });
+    expect(taken.taken).toBe(true);
+    if (!taken.taken) return;
+    // The tamper (the review P3c): an attacker-controlled snapshot directory
+    // — a manifest row naming a path OUTSIDE the captured roots, with the
+    // payload staged where the reverse mapping would read it.
+    const sidecarPath = join(taken.snapshot_dir, "snapshot.json");
+    const sidecar = JSON.parse(readFileSync(sidecarPath, "utf8")) as {
+      volume_entries: string[];
+    };
+    sidecar.volume_entries = ["0:../../exfil"];
+    writeFileSync(sidecarPath, JSON.stringify(sidecar));
+    writeFileSync(join(taken.snapshot_dir, "volume", "exfil"), "exfiltrated-bytes", "utf8");
+
+    const targetParent = mkdtempSync(join(tmpdir(), "shera-s33-restore-target-"));
+    tempDirs.push(targetParent);
+    const harness = makeRestoreHarness(fixture, taken.snapshot_id, targetParent);
+
+    const result = await harness.restore.restoreSnapshot({ snapshotId: taken.snapshot_id });
+    expect(result.restored).toBe(false);
+    if (result.restored) return;
+    expect(result.failed_stage).toBe("volume");
+    expect(result.code).toBe("RESTORE_VOLUME_FAILED");
+    // Nothing landed outside the restore root (the workspace's grandparent
+    // is where the tampered row pointed).
+    expect(existsSync(join(targetParent, "exfil"))).toBe(false);
   });
 
   it("a stop failure refuses typed before anything is touched", async () => {

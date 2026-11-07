@@ -120,7 +120,11 @@ export interface SnapshotIntegrityResult {
 export function verifySnapshotIntegrity(path: string): SnapshotIntegrityResult {
   let db: DatabaseSync;
   try {
-    db = new DatabaseSync(path);
+    // The verification is a READ (the review P3): the file is opened
+    // READ-ONLY at the driver level — no statement other than the check
+    // runs, and the driver itself refuses writes (the docstring's
+    // "read-only-fashion" made structural).
+    db = new DatabaseSync(path, { readOnly: true });
   } catch (error) {
     return {
       ok: false,

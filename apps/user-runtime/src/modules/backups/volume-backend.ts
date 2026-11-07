@@ -175,6 +175,24 @@ export class CopyVolumeBackend implements VolumeSnapshotBackend {
       const rootIndex = row.slice(0, sep);
       const name = row.slice(sep + 1);
       if (name.length === 0) continue;
+      // The manifest rows are plain basenames (the review P3c): the sidecar
+      // is attacker-controllable in a crafted snapshot, and an entry like
+      // `0:../../x` would aim the reverse mapping OUTSIDE the restore root.
+      // A root index is digits; an entry name carries no separators and is
+      // never a dot form. Anything else refuses the walk (typed, the
+      // restore's volume stage).
+      if (
+        !/^[0-9]+$/.test(rootIndex) ||
+        name === "." ||
+        name === ".." ||
+        name.includes("/") ||
+        name.includes("\\") ||
+        name.includes("\0")
+      ) {
+        throw new Error(
+          `the snapshot's volume manifest entry is not a plain basename: ${row.slice(0, 64)}`,
+        );
+      }
       const list = byRoot.get(rootIndex) ?? [];
       list.push(name);
       byRoot.set(rootIndex, list);

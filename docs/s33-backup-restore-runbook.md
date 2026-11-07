@@ -22,7 +22,7 @@ follows.
 | One snapshot | `<snapshot-root>/<snapshot_id>/` = `runtime.db` + `snapshot.json` (sidecar) + `volume/roots/<n>/…` |
 | Retention | the latest 7; the 8th removes the OLDEST, never the newest (AC18) |
 | Cadence | every 6 hours from runtime boot (the runtime owns the clock; a restarted runtime re-anchors at ITS boot) |
-| Ledger | the runtime's own SQLite `backup_snapshots` table (v22) — integrity status, alert, `restored_at` |
+| Ledger | the runtime's own SQLite `backup_snapshots` table (v23; authored v22, renumbered at the S29 integration — the chain is append-only) — integrity status, alert, `restored_at` |
 
 The credential key files (`provider-credentials.key`, `project-credentials.key`)
 and the live database files are NEVER inside a snapshot (D22/E9 — asserted by

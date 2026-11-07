@@ -180,7 +180,7 @@ describe("the S33 backup mechanism (takeSnapshot)", () => {
     expect(existsSync(copyPath)).toBe(true);
     const copy = openDatabase(copyPath);
     try {
-      expect(appliedMigrationVersions(copy.db)).toContain(22);
+      expect(appliedMigrationVersions(copy.db)).toContain(23);
       const copyTriggers = new TriggersRepository(new SqliteTransactions(copy.db));
       const rows = copyTriggers.listTriggers(WS);
       expect(rows.map((row) => row.trigger_id)).toEqual(["trg_backup_probe"]);

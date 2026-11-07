@@ -308,7 +308,8 @@ describe("S29 chunk 2: the write-time secret rejection (AC2)", () => {
 
 describe("S29 chunk 2: the source_refs scan gap (fix-round F2)", () => {
   const REF_SECRET = "sk-proj-4f9a2b8c1d3e5f7a9b1c3d5e7f9a1b3c5d7e9f1a3b5c7d9e";
-  const REF_NEEDLE_FILE = "file:///srv/exports/OpenAI_API_KEY=sk-proj-4f9a2b8c1d3e5f7a9b1c3d5e7f9a1b3c5d7e9f1a3b5c7d9e";
+  const REF_NEEDLE_FILE =
+    "file:///srv/exports/OpenAI_API_KEY=sk-proj-4f9a2b8c1d3e5f7a9b1c3d5e7f9a1b3c5d7e9f1a3b5c7d9e";
 
   it("rejects a secret inside source_refs on CREATE — the ref is scanned like every other write field, nothing stored", async () => {
     const running = await composeOn(join(makeTempDir("shera-s29-refcreate-"), "runtime.db"));
@@ -600,7 +601,9 @@ describe("S29 chunk 2: the approval decision settles the request it approves (fi
     });
     expect(accepted.entry.memory_id).toBeTruthy();
 
-    const before = (await (await fetch(`${origin}/v1/memory?workspace_id=${WORKSPACE}`)).json()) as {
+    const before = (await (
+      await fetch(`${origin}/v1/memory?workspace_id=${WORKSPACE}`)
+    ).json()) as {
       publication_queue: {
         request_id: string;
         memory_id: string;
@@ -637,9 +640,9 @@ describe("S29 chunk 2: the approval decision settles the request it approves (fi
     const after = (await (await fetch(`${origin}/v1/memory?workspace_id=${WORKSPACE}`)).json()) as {
       publication_queue: { request_id: string; memory_id: string; status: string }[];
     };
-    expect(
-      after.publication_queue.some((row) => row.memory_id === accepted.entry.memory_id),
-    ).toBe(false);
+    expect(after.publication_queue.some((row) => row.memory_id === accepted.entry.memory_id)).toBe(
+      false,
+    );
 
     // The boundary still flips: the entry is visible in the Operation context.
     const visible = (await await fetch(

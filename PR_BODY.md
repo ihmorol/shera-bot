@@ -66,7 +66,6 @@ The first fix-round builder died mid-round: its F1 fix (`e2636c0`) and its F2 re
 
 Recorded nits (no red test — none is a behavior defect on a reachable path, preserved per G5): the browser client spreads the caller body after the actor field (`memory-api.ts`) — neutralized server-side because the proxy's session binding sets the bound actor LAST (the recorded S20 F1 pattern); `PublicationControls` carries an unreachable third copy branch (the component returns null unless the entry is private or sensitive); the edit hook's `confidence: 0.7`/`sensitivity: "normal"` fallbacks fire only if the entry vanished between render and click and the empty-provenance refusal precedes any storage; `actorLabel` maps the prototype's demo ids (`user_emon`/`session-user`) with the raw id as the honest fallback, as its comment records.
 
-
 ## NOT verified (standing)
 
 - **The Agent-side learning loop:** `proposeCandidate` is the typed, gated, event-journaled seam with full test coverage — but no conversation/task pipeline CALLS it yet; what an Agent remembers from a finished conversation is future integration. S29 pins the contract.

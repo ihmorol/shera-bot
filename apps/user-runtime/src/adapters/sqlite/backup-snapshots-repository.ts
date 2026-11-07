@@ -185,6 +185,18 @@ export class BackupSnapshotsRepository {
       .run(alert.slice(0, 300), workspaceId, snapshotId);
   }
 
+  /** Clear the alert on one snapshot (a later HEALTHY verification clears
+   * it — an environmental failure must not block a restore forever; real
+   * corruption re-fails the next check and re-raises). */
+  clearAlert(workspaceId: string, snapshotId: string, exec?: SqliteExec): void {
+    this.require(workspaceId, snapshotId, exec);
+    this.db(exec)
+      .prepare(
+        `UPDATE backup_snapshots SET alert = NULL WHERE workspace_id = ? AND snapshot_id = ?`,
+      )
+      .run(workspaceId, snapshotId);
+  }
+
   /** Record when this snapshot was restored. */
   markRestored(
     workspaceId: string,

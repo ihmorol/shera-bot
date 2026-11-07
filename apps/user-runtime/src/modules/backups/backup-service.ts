@@ -54,6 +54,7 @@ export type BackupServiceFailureCode =
   | "SNAPSHOT_INTEGRITY_FAILED"
   | "SNAPSHOT_VOLUME_FAILED"
   | "SNAPSHOT_LEDGER_REFUSED"
+  | "RESTORE_SNAPSHOT_CORRUPT"
   | "BACKUP_SCHEDULER_ALREADY_RUNNING";
 
 export class BackupServiceError extends Error {
@@ -68,7 +69,7 @@ export class BackupServiceError extends Error {
     this.category =
       code === "SNAPSHOT_DIR_CONFLICT"
         ? "conflict"
-        : code === "SNAPSHOT_LEDGER_REFUSED"
+        : code === "SNAPSHOT_LEDGER_REFUSED" || code === "RESTORE_SNAPSHOT_CORRUPT"
           ? "state"
           : "internal";
     this.snapshotId = snapshotId;
@@ -82,6 +83,7 @@ export interface BackupSnapshotLedger {
   require(workspaceId: string, snapshotId: string): BackupSnapshotRow;
   listNewestFirst(workspaceId: string): BackupSnapshotRow[];
   markAlert(workspaceId: string, snapshotId: string, alert: string): void;
+  clearAlert(workspaceId: string, snapshotId: string): void;
   setRetainedIndex(workspaceId: string, snapshotId: string, index: number | null): void;
   delete(workspaceId: string, snapshotId: string): boolean;
 }
@@ -144,6 +146,34 @@ export type TakeSnapshotResult =
 export interface RetentionResult {
   kept: number;
   removed: string[];
+}
+
+/**
+ * The restore-candidate policy (issue #34: "verify the snapshot's integrity"
+ * as the restore path's SECOND step, before anything is replaced): a ledger
+ * row is restorable only when its recorded integrity status is clean AND no
+ * verification has raised an alert on it. A corrupt snapshot can NEVER be
+ * restored — the restore path calls this first and refuses typed. (The
+ * restore step itself re-verifies the file too; this policy is the gate that
+ * keeps a known-bad row from even being attempted.)
+ */
+export function assertRestorableRow(row: BackupSnapshotRow): void {
+  if (row.integrity_status !== "ok") {
+    throw new BackupServiceError(
+      "RESTORE_SNAPSHOT_CORRUPT",
+      `snapshot ${row.snapshot_id} is not a restore candidate: its recorded ` +
+        `integrity status is "${row.integrity_status}", never verified clean`,
+      row.snapshot_id,
+    );
+  }
+  if (row.alert !== null) {
+    throw new BackupServiceError(
+      "RESTORE_SNAPSHOT_CORRUPT",
+      `snapshot ${row.snapshot_id} is not a restore candidate: an integrity ` +
+        `check raised an alert (${row.alert})`,
+      row.snapshot_id,
+    );
+  }
 }
 
 export class BackupService {

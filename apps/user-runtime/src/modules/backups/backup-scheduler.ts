@@ -27,8 +27,15 @@ import {
   type BackupService,
   type TakeSnapshotResult,
 } from "./backup-service.ts";
+import type { VerifyOutcome } from "./snapshot-verifier.ts";
 
 export type ScheduleClock = (delayMs: number, fn: () => void) => () => void;
+
+/** The structural verification surface the tick drives BEFORE each snapshot
+ * (the SnapshotVerifier implements it; tests may substitute). */
+export interface BackupWindowVerifier {
+  verifyRetainedWindow(): VerifyOutcome[];
+}
 
 /** The production clock: an unref'd interval (never holds the process open). */
 export const defaultScheduleClock: ScheduleClock = (delayMs, fn) => {
@@ -40,6 +47,11 @@ export const defaultScheduleClock: ScheduleClock = (delayMs, fn) => {
 export interface BackupSchedulerDeps {
   /** The backup service the ticks drive (the ONE snapshot path). */
   service: Pick<BackupService, "takeSnapshot">;
+  /** The scheduled check that the retained snapshots still verify, run at
+   * the START of every tick — BEFORE the new snapshot (issue #34: a
+   * scheduled check that a snapshot actually restores, with alerting on
+   * failure; the verifier raises each failure's alert itself). */
+  verify?: BackupWindowVerifier | undefined;
   /** The tick interval. Default: PRD §12's six hours. */
   intervalMs?: number;
   /** The injected clock seam. Default: the unref'd interval timer. */
@@ -52,11 +64,13 @@ export class BackupScheduler {
   private readonly intervalMs: number;
   private readonly scheduleClock: ScheduleClock;
   private readonly service: Pick<BackupService, "takeSnapshot">;
+  private readonly verify: BackupWindowVerifier | null;
   private readonly logFault: (event: string, fields: Record<string, unknown>) => void;
   private cancelTick: (() => void) | null = null;
 
   constructor(deps: BackupSchedulerDeps) {
     this.service = deps.service;
+    this.verify = deps.verify ?? null;
     this.intervalMs = deps.intervalMs ?? SIX_HOURS_MS;
     this.scheduleClock = deps.schedule ?? defaultScheduleClock;
     this.logFault = deps.logFault ?? (() => {});
@@ -84,14 +98,17 @@ export class BackupScheduler {
     }
   }
 
-  /** One scheduled tick: one snapshot through the service's recorded path.
-   * The clock seam's callback and the tests both drive this. The tick is
-   * TOTAL — an operational failure is the typed false result (fault-logged),
-   * and even an unexpected throw is contained into the honest false result
-   * so the interval callback can never produce an unhandled rejection: the
-   * six-hour cadence never silently stalls. */
+  /** One scheduled tick: FIRST the scheduled verification of the retained
+   * window (the alert leg — a corrupt stored snapshot is raised BEFORE the
+   * new snapshot lands), THEN one snapshot through the service's recorded
+   * path. The clock seam's callback and the tests both drive this. The tick
+   * is TOTAL — an operational failure is the typed false result
+   * (fault-logged), and even an unexpected throw is contained into the
+   * honest false result so the interval callback can never produce an
+   * unhandled rejection: the six-hour cadence never silently stalls. */
   async tick(): Promise<TakeSnapshotResult> {
     try {
+      this.verifyRetainedWindow();
       const result = await this.service.takeSnapshot({ triggeredBy: "schedule" });
       if (!result.taken) {
         this.logFault("backup_snapshot_failed", {
@@ -116,6 +133,32 @@ export class BackupScheduler {
         detail,
         snapshot_dir: null,
       };
+    }
+  }
+
+  /** The scheduled check, contained: per-snapshot failures are raised (and
+   * fault-logged) by the verifier itself; a summary rides this tick's log;
+   * an unexpected verifier throw is fault-logged and NEVER blocks the new
+   * snapshot — a broken check must not stop the backups (G4). */
+  private verifyRetainedWindow(): void {
+    if (this.verify === null) {
+      return;
+    }
+    try {
+      const outcomes = this.verify.verifyRetainedWindow();
+      const failed = outcomes.filter((outcome) => !outcome.verified);
+      if (failed.length > 0) {
+        this.logFault("backup_verify_failed", {
+          failed_count: failed.length,
+          checked_count: outcomes.length,
+          snapshot_ids: failed.map((outcome) => outcome.snapshot_id).slice(0, 7),
+        });
+      }
+    } catch (error) {
+      this.logFault("backup_verify_tick_failed", {
+        name: error instanceof Error ? error.name : "Error",
+        reason: (error instanceof Error ? error.message : String(error)).slice(0, 300),
+      });
     }
   }
 }

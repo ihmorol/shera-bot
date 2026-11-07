@@ -488,49 +488,64 @@ export class MemoryService {
     const now = this.now();
     const approving = command.decision === "approve";
 
-    // The sensitive-approval gate (AC2): a SENSITIVE entry's publication
-    // always carries the approval record — a direct approve without a
-    // pending request is the typed refusal, no matter who asks.
-    if (approving && entry.sensitivity === "sensitive") {
-      const pending = this.deps.memory.findPendingPublicationRequest(
-        command.workspace_id,
-        command.memory_id,
+    // The ONE pending-request lookup for this decision (fix-round F18 reads
+    // it too): the sensitive-approval gate (AC2) refuses a direct approve
+    // without a pending request — a SENSITIVE entry's publication always
+    // carries the approval record, no matter who asks.
+    const existingPending = approving
+      ? this.deps.memory.findPendingPublicationRequest(command.workspace_id, command.memory_id)
+      : null;
+    if (approving && entry.sensitivity === "sensitive" && !existingPending) {
+      throw new MemoryServiceError(
+        "MEMORY_PUBLICATION_APPROVAL_REQUIRED",
+        "policy",
+        "a sensitive memory needs a publication request before it can be approved",
       );
-      if (!pending) {
-        throw new MemoryServiceError(
-          "MEMORY_PUBLICATION_APPROVAL_REQUIRED",
-          "policy",
-          "a sensitive memory needs a publication request before it can be approved",
-        );
-      }
     }
 
     if (approving) {
-      const requestId = `pubreq_${randomUUID()}`;
+      // Fix-round F18: the decision settles the request it approves. When a
+      // pending request exists (the Agent's proposal, or the user's own
+      // request-publication step), THAT row is decided — its requested_by is
+      // preserved and decided_by names the deciding user. Only the direct
+      // approve with no pending request (the non-sensitive flow where the
+      // user approves outright) records the one-actor-both-roles trail row.
       this.deps.tx.transaction((exec) => {
-        // The decision record is born pending and decided in the SAME
-        // transaction: requested_by and decided_by are both on the row (the
-        // user initiated and approved — one actor, both roles recorded).
-        this.deps.memory.insertPublicationRequest(
-          {
-            workspace_id: command.workspace_id,
-            request_id: requestId,
-            memory_id: command.memory_id,
-            operation_id: command.operation_id,
-            requested_by: command.actor.id,
-            status: "pending",
-            created_at: now,
-          },
-          exec,
-        );
-        this.deps.memory.decidePublicationRequest(
-          command.workspace_id,
-          requestId,
-          "approved",
-          command.actor.id,
-          now,
-          exec,
-        );
+        if (existingPending) {
+          this.deps.memory.decidePublicationRequest(
+            command.workspace_id,
+            existingPending.request_id,
+            "approved",
+            command.actor.id,
+            now,
+            exec,
+          );
+        } else {
+          // The decision record is born pending and decided in the SAME
+          // transaction: requested_by and decided_by are both on the row (the
+          // user initiated and approved — one actor, both roles recorded).
+          const requestId = `pubreq_${randomUUID()}`;
+          this.deps.memory.insertPublicationRequest(
+            {
+              workspace_id: command.workspace_id,
+              request_id: requestId,
+              memory_id: command.memory_id,
+              operation_id: command.operation_id,
+              requested_by: command.actor.id,
+              status: "pending",
+              created_at: now,
+            },
+            exec,
+          );
+          this.deps.memory.decidePublicationRequest(
+            command.workspace_id,
+            requestId,
+            "approved",
+            command.actor.id,
+            now,
+            exec,
+          );
+        }
         this.deps.memory.applyPublication(
           command.workspace_id,
           command.memory_id,

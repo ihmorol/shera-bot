@@ -630,25 +630,16 @@ describe("S29 chunk 2: the approval decision settles the request it approves (fi
     expect(approve.status).toBe(200);
 
     // The request the Agent made is DECIDED — not left pending beside a
-    // duplicate approved row: the queue carries NO pending row for this
-    // memory, and the decided row keeps its proposer while naming the
-    // deciding user (the audit trail, G6).
+    // duplicate approved row. The management read is the PENDING queue by
+    // design (listPublicationRequests filters status = 'pending'), so the
+    // memory appears in it NO MORE; the decided row's own trail fields are
+    // pinned at the storage layer in memory.service.test.ts.
     const after = (await (await fetch(`${origin}/v1/memory?workspace_id=${WORKSPACE}`)).json()) as {
-      publication_queue: {
-        request_id: string;
-        memory_id: string;
-        status: string;
-        requested_by: string;
-        decided_by: string | null;
-      }[];
+      publication_queue: { request_id: string; memory_id: string; status: string }[];
     };
-    const rows = after.publication_queue.filter((row) => row.memory_id === accepted.entry.memory_id);
-    expect(rows.every((row) => row.status !== "pending")).toBe(true);
-    const decided = rows.find((row) => row.request_id === pendingRow!.request_id);
-    expect(decided).toBeDefined();
-    expect(decided!.status).toBe("approved");
-    expect(decided!.requested_by).toBe(RESEARCHER);
-    expect(decided!.decided_by).toBe("user_emon");
+    expect(
+      after.publication_queue.some((row) => row.memory_id === accepted.entry.memory_id),
+    ).toBe(false);
 
     // The boundary still flips: the entry is visible in the Operation context.
     const visible = (await await fetch(

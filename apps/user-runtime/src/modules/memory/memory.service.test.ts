@@ -30,6 +30,7 @@ const WORKSPACE = "ws-local-default";
 interface Suite {
   service: MemoryService;
   memory: MemoryRepository;
+  operations: OperationsRepository;
   conn: SqliteConnection;
   tx: SqliteTransactions;
   close(): void;
@@ -43,10 +44,11 @@ function makeSuite(): Suite {
   applyMigrations(conn.db);
   const tx = new SqliteTransactions(conn.db);
   const memory = new MemoryRepository(tx);
+  const operations = new OperationsRepository(tx);
   const journal = new EventJournalRepository(tx);
   const service = new MemoryService({
     memory,
-    operations: new OperationsRepository(tx),
+    operations,
     receipts: new CommandReceiptsRepository(tx),
     tx,
     journal,
@@ -55,6 +57,7 @@ function makeSuite(): Suite {
   const suite: Suite = {
     service,
     memory,
+    operations,
     conn,
     tx,
     close: () => conn.close(),
@@ -186,6 +189,83 @@ describe("memory service backstops (S29 chunk 1)", () => {
     expect(suite.memory.listVersions(WORKSPACE, memoryId).map((v) => v.version)).toEqual([1]);
     expect(suite.memory.findSettings(WORKSPACE)).toBeNull();
     expect(suite.memory.findAgentSettings(WORKSPACE, "agent_researcher")).toBeNull();
+  });
+
+  it("approving settles the pending request it approves — the proposer stays on the row, the deciding user is recorded, no duplicate trail row (fix-round F18, the storage layer)", async () => {
+    const suite = makeSuite();
+    // The target Operation the publication names (decidePublication
+    // validates it exists in this workspace).
+    suite.operations.createOperation(WORKSPACE, {
+      operation_id: "op_f18",
+      workspace_id: WORKSPACE,
+      definition_ref: null,
+      name: "F18 settle sweep",
+      status: "active",
+      coordinator_agent_id: "agent_researcher",
+      pinning: {
+        pack_id: "pack_student_v1",
+        pack_version: "1.0.0",
+        roster_agent_ids: ["agent_researcher"],
+        capabilities: [],
+        provider_snapshot: {},
+      },
+      created_at: "2026-11-04T09:00:00.000Z",
+      updated_at: "2026-11-04T09:00:00.000Z",
+    });
+    // A pending request born from the Agent's proposal (the proposeCandidate
+    // path inserts exactly this shape).
+    const created = (await suite.service.applyCommand(createCommand({ scope: "workspace" }))) as {
+      entry: { memory_id: string };
+    };
+    const memoryId = created.entry.memory_id;
+    suite.memory.insertPublicationRequest(
+      {
+        workspace_id: WORKSPACE,
+        request_id: "pubreq_f18_agent_request",
+        memory_id: memoryId,
+        operation_id: "op_f18",
+        requested_by: "agent_researcher",
+        status: "pending",
+        created_at: "2026-11-04T10:00:00.000Z",
+      },
+      suite.tx.connection(),
+    );
+
+    const approved = (await suite.service.applyCommand({
+      command_id: `cmd_${randomUUID()}`,
+      idempotency_key: `idem_${randomUUID()}`,
+      workspace_id: WORKSPACE,
+      actor: { type: "user", id: "user_emon" } as const,
+      issued_at: "2026-11-04T10:07:00.000Z",
+      type: "memory.publish_decision",
+      memory_id: memoryId,
+      operation_id: "op_f18",
+      decision: "approve",
+    } as Extract<MemoryCommand, { type: "memory.publish_decision" }>)) as {
+      decision: string;
+    };
+    expect(approved.decision).toBe("approved");
+
+    // The AGENT'S request row is the one decided — status approved, its
+    // requested_by preserved, decided_by the deciding user — and NO second
+    // trail row was inserted beside it.
+    const decided = suite.memory.findPublicationRequest(WORKSPACE, "pubreq_f18_agent_request");
+    expect(decided).not.toBeNull();
+    expect(decided!.status).toBe("approved");
+    expect(decided!.requested_by).toBe("agent_researcher");
+    expect(decided!.decided_by).toBe("user_emon");
+    // NO duplicate trail row was inserted beside it: the table holds exactly
+    // one row for this memory (the raw read — listPublicationRequests is the
+    // PENDING queue and nothing is pending anymore).
+    const allRows = suite.tx
+      .connection()
+      .prepare(
+        "SELECT * FROM memory_publication_request WHERE workspace_id = ? AND memory_id = ?",
+      )
+      .all(WORKSPACE, memoryId) as unknown[];
+    expect(allRows).toHaveLength(1);
+    // Nothing stays pending.
+    expect(suite.memory.listPublicationRequests(WORKSPACE)).toHaveLength(0);
   });
 
   it("refuses an agent-actor publication decision — agents never self-approve (G6)", async () => {

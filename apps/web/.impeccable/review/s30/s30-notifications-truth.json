@@ -44,15 +44,15 @@
         "deep_link": "/app"
       },
       {
-        "notification_id": "note-apr-apr_bf0df5a6-ff2e-49af-a3c5-b2dce9e90baf",
+        "notification_id": "note-apr-apr_b62a4b51-d870-4e3f-976a-7762ebddca9a",
         "workspace_id": "ws-local-default",
         "kind": "approval_required",
         "title": "Approval required",
         "summary": "repo.push on workspace://notes/draft.md — tool_repo_push@1.2.0",
         "conversation_id": "conv_capture_apr",
         "task_id": "task_evt_cap_trig",
-        "approval_id": "apr_bf0df5a6-ff2e-49af-a3c5-b2dce9e90baf",
-        "occurred_at": "2026-11-07T20:09:05.359Z",
+        "approval_id": "apr_b62a4b51-d870-4e3f-976a-7762ebddca9a",
+        "occurred_at": "2026-11-08T02:57:05.534Z",
         "read_at": null,
         "muted": false,
         "deep_link": "/app"
@@ -66,7 +66,7 @@
         "conversation_id": null,
         "task_id": "task_evt_cap_trig",
         "approval_id": null,
-        "occurred_at": "2026-11-07T20:09:05.330Z",
+        "occurred_at": "2026-11-08T02:57:05.522Z",
         "read_at": null,
         "muted": false,
         "deep_link": "/app"

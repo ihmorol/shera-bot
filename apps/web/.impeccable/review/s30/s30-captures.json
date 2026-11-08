@@ -138,7 +138,7 @@
         "note-evt_cap_rec",
         "note-evt_cap_fail",
         "note-evt_cap_done",
-        "note-apr-apr_bf0df5a6-ff2e-49af-a3c5-b2dce9e90baf",
+        "note-apr-apr_b62a4b51-d870-4e3f-976a-7762ebddca9a",
         "note-evt_cmd_complete_task_evt_cap_trig"
       ],
       "expectedUnread": 5,
@@ -275,7 +275,7 @@
         "welcome": {
           "option_id": "programming",
           "free_text": null,
-          "answered_at": "2026-11-07T20:09:35.348Z"
+          "answered_at": "2026-11-08T02:57:33.465Z"
         }
       },
       "current": "provider_check",

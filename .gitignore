@@ -26,3 +26,11 @@ artifacts/
 
 # Local review-gate transcripts (gate evidence for a review round; never source).
 .review-logs/
+
+# S34 criteria runner scratch: the worktree-local Playwright browser cache
+# (the official installer's target — never committed) and the browser-matrix
+# run artifacts. The evidence archives under tests/acceptance/evidence/ ARE
+# committed; these are tool-owned scratch.
+.browsers-cache/
+tests/acceptance/browser/test-results/
+tests/acceptance/browser/playwright-report/

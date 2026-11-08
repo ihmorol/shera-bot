@@ -1,0 +1,1132 @@
+{
+  "version": 1,
+  "rows": [
+    {
+      "id": "AC1",
+      "criterion": "Google OAuth login works and the five-account cap is enforced.",
+      "slices": ["S05"],
+      "records": ["PR #40", "E20", "E22", "E23", "TRACEABILITY"],
+      "automated": [
+        {
+          "kind": "vitest",
+          "file": "apps/control-plane/test/auth-flow.test.ts",
+          "covers": "Google OAuth flow (only login method): the control-plane session leg over the real OAuth app shell with the provider link asserted"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/control-plane/test/signup-cap.test.ts",
+          "covers": "five-account signup cap (server-enforced): the sixth signup is refused typed"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/web/test/login.test.ts",
+          "covers": "production entry: the sign-in surface renders with its control-plane provider link (the S09 E2E login assertion)"
+        }
+      ],
+      "manual": [
+        {
+          "ranBy": "agent",
+          "when": "2026-10-20",
+          "what": "Parent browser evidence over a seeded real session: account-bound runtime, live user message, refresh/reconnect and actual Auth.js signout",
+          "result": "Executed and recorded in E23; real Google login was explicitly out of that evidence's scope",
+          "evidenceLocation": "docs/decisions/engineering-record-e23-authenticated-live-transport-2026-10-20.md"
+        },
+        {
+          "ranBy": "pending-owner",
+          "when": "pending",
+          "what": "Owner personally signs in with a real Google account and attempts a sixth signup to see the cap refusal",
+          "result": "pending",
+          "evidenceLocation": "docs/ACCEPTANCE_LEDGER.md#ac1"
+        }
+      ],
+      "ownerVerdict": "open",
+      "gaps": [
+        "Real Google OAuth has never been exercised end to end — the automated legs run the OAuth app shell with the provider link asserted, and E23's browser evidence used a seeded session",
+        "The five-account cap has been proven at the control-plane API layer only; the owner's personal sixth-signup attempt is still pending"
+      ]
+    },
+    {
+      "id": "AC2",
+      "criterion": "A Balanced-tier user container is provisioned.",
+      "slices": ["S06"],
+      "records": ["PR #45", "E20", "E22", "TRACEABILITY"],
+      "automated": [
+        {
+          "kind": "vitest",
+          "file": "apps/control-plane/test/runtime-provisioning.test.ts",
+          "covers": "provisioning lifecycle (idempotent, truthful) plus the G4 leg: failure is surfaced, never faked"
+        },
+        {
+          "kind": "vitest",
+          "file": "tests/integration/runtime-provisioning.test.ts",
+          "covers": "provision → status → restart → status (deterministic, no cloud dependency) over the real PostgreSQL control plane"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/control-plane/test/runtime-container-spec.test.ts",
+          "covers": "local container spec builder: PRD §3.3 tier limits (Balanced among them) as real limits"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/control-plane/test/local-container-backend.test.ts",
+          "covers": "the Docker-independent local container backend — the verified provisioning seam in this environment"
+        }
+      ],
+      "manual": [
+        {
+          "ranBy": "pending-owner",
+          "when": "pending",
+          "what": "Owner provisions a user container against real Docker (or the deployment target's container runtime) and confirms the Balanced-tier limits",
+          "result": "pending",
+          "evidenceLocation": "docs/ACCEPTANCE_LEDGER.md#ac2"
+        }
+      ],
+      "ownerVerdict": "open",
+      "gaps": [
+        "Docker is NOT-VERIFIED in this environment (no daemon): every verified leg runs through the Docker-independent local container backend, which is the recorded S06 seam",
+        "Real cloud/VM container provisioning is a Stage-7 deployment concern (S35) and stays open"
+      ]
+    },
+    {
+      "id": "AC3",
+      "criterion": "All six Agents from the student pack are available as direct chats.",
+      "slices": ["S10", "S11"],
+      "records": ["E24", "E19", "PR #49", "PR #54", "D46", "TRACEABILITY"],
+      "automated": [
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/transport/local-api/s11-agents-api.test.ts",
+          "covers": "S11 startup composition: Agents seed from the pinned pack; the agent API exposes the six direct chats with journaled get-or-create"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/web/test/agent-surfaces.test.ts",
+          "covers": "sidebar Agents section (live roster): the six seeded Agents render as direct-chat entries"
+        }
+      ],
+      "manual": [
+        {
+          "ranBy": "agent",
+          "when": "2026-10-24",
+          "what": "Real-browser captures of the S11 identity surfaces (sidebar roster, chat header, agent profile) from a live runtime",
+          "result": "Captures archived; static-only assertions pin the six-Agent roster at the component layer",
+          "evidenceLocation": "apps/web/.impeccable/review/s11/"
+        },
+        {
+          "ranBy": "pending-owner",
+          "when": "pending",
+          "what": "Owner opens each of the six direct chats and confirms the student-pack roster",
+          "result": "pending",
+          "evidenceLocation": "docs/ACCEPTANCE_LEDGER.md#ac3"
+        }
+      ],
+      "ownerVerdict": "open",
+      "gaps": [
+        "The six-Agent roster is proven against the pinned pack fixture in tests and by captures; the owner's personal roster walk is pending"
+      ]
+    },
+    {
+      "id": "AC4",
+      "criterion": "Each Agent is a persistent identity with its own private profile folder and an on-demand supervised session process on its selected harness (Pi default, Hermes optional — D51).",
+      "slices": ["S11", "S12"],
+      "records": ["E24", "E25", "D51", "SYNC-3", "PR #55", "TRACEABILITY"],
+      "automated": [
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/transport/local-api/s11-agent-folder-api.test.ts",
+          "covers": "private-folder isolation guard and private-folder persistence in the real composition (the AC private profile folder leg)"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/sessions/session-supervisor.service.test.ts",
+          "covers": "SessionSupervisor on-demand start and idle hibernation (D32 layer 2): heartbeats, escalation, restart windows over the supervised session process"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/agents/agent-folders.service.test.ts",
+          "covers": "pure folder-URI resolution and the access-guard decision (agent:// scope isolation)"
+        }
+      ],
+      "manual": [
+        {
+          "ranBy": "agent",
+          "when": "2026-10-24",
+          "what": "Real-browser captures under apps/web/.impeccable/review/s12/ with the journal showing measured session start latencies, idle hibernations and idle-resume restarts",
+          "result": "Executed against the env-configured harness seam; the real Pi binary was never exercised (standing limitation recorded in E25)",
+          "evidenceLocation": "apps/web/.impeccable/review/s12/"
+        },
+        {
+          "ranBy": "pending-owner",
+          "when": "pending",
+          "what": "Owner opens an Agent, confirms its private folder is isolated from other Agents, and watches an on-demand session start and hibernate",
+          "result": "pending",
+          "evidenceLocation": "docs/ACCEPTANCE_LEDGER.md#ac4"
+        }
+      ],
+      "ownerVerdict": "open",
+      "gaps": [
+        "The real Pi binary is NOT-VERIFIED: every supervised-session leg runs against the fake Pi double (the D14 JSONL protocol is the exercised seam)",
+        "Hermes stays contract-defined only (D51): owner-supplied upstream source/license evidence is a recorded prerequisite before any Hermes code path (PRD §22 item 24); Pi is the only exercised harness value"
+      ]
+    },
+    {
+      "id": "AC5",
+      "criterion": "Ad-hoc Operations can be created with a custom same-Pack Agent roster.",
+      "slices": ["S14"],
+      "records": ["PR #57", "E26", "TRACEABILITY S14 follow-up 2026-10-24"],
+      "automated": [
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/transport/local-api/s14-adhoc-api.test.ts",
+          "covers": "S14 auto-label + ad-hoc read models (D41) and the zero-Agent refusal: unnamed creation through POST /v1/operations with the durable ad-hoc identity"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/web/test/adhoc-operation.test.ts",
+          "covers": "New Operation form (D41/D42): custom same-Pack roster selection, peer-to-peer coordinator choice, empty-form refusal"
+        }
+      ],
+      "manual": [
+        {
+          "ranBy": "agent",
+          "when": "2026-10-24",
+          "what": "21 real-browser captures of the ad-hoc creation flow (creation, roster picker, rename, pack summary, sidebar marking, keyboard focus) at 360/768/1440",
+          "result": "Executed against a live session exercising POST /v1/operations including the wire-level rename rejection; the mock control-plane stand-in was never committed",
+          "evidenceLocation": "apps/web/.impeccable/review/s14/"
+        },
+        {
+          "ranBy": "pending-owner",
+          "when": "pending",
+          "what": "Owner creates an ad-hoc Operation with a custom roster from the pack and renames it",
+          "result": "pending",
+          "evidenceLocation": "docs/ACCEPTANCE_LEDGER.md#ac5"
+        }
+      ],
+      "ownerVerdict": "open",
+      "gaps": [
+        "Roster membership in the captures ran against the seeded pack; a custom cross-Pack roster refusal path is covered by typed tests, not by a personal owner run"
+      ]
+    },
+    {
+      "id": "AC6",
+      "criterion": "Operations launch through a preview (agents, skills, connectors, provider/model, estimated credits, approval requirements) before execution, and Agents can delegate work inside Operations.",
+      "slices": ["S15", "S13"],
+      "records": ["E28", "E26", "E19", "PR #59", "PR #56", "TRACEABILITY"],
+      "automated": [
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/transport/local-api/s15-preview-api.test.ts",
+          "covers": "S15 operation launch preview read model (eight groups, honest nulls) and the launch confirm flow (POST /v1/operations/launch — nothing executes before confirmation)"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/web/test/launch-preview.test.ts",
+          "covers": "Operation preview client proxy paths and preview data hooks (testable contract)"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/operations/operations.service.test.ts",
+          "covers": "createOperation (D31/D36/D29 pinning) and the delegation path: exactly one identity-less child run per TaskDelegated event with parent_task_id (E26 D46 closure)"
+        }
+      ],
+      "manual": [
+        {
+          "ranBy": "agent",
+          "when": "2026-10-25",
+          "what": "Real-browser capture from a live session whose database held exactly one operation, one run, one chat binding after the browser confirm; preview groups rendered from the pinned manifest",
+          "result": "Executed; connectors honestly rendered as never-connected and providers as not-configured (the truthful state)",
+          "evidenceLocation": "apps/web/.impeccable/review/s15/"
+        },
+        {
+          "ranBy": "pending-owner",
+          "when": "pending",
+          "what": "Owner launches an Operation through the preview, confirms, and watches an Agent delegate a subtask inside it",
+          "result": "pending",
+          "evidenceLocation": "docs/ACCEPTANCE_LEDGER.md#ac6"
+        }
+      ],
+      "ownerVerdict": "open",
+      "gaps": [
+        "Real run execution behind the preview confirm is the runtime gateway's legs (task/worker suites), not a browser-observed real model run; real pricing is S23's recorded posture (estimated credits come from the D20 RANGE)",
+        "The delegation leg is proven by typed tests over the journal; the owner has not watched a live delegation"
+      ]
+    },
+    {
+      "id": "AC7",
+      "criterion": "Live agent messages, progress, tool calls, approvals, and results are visible.",
+      "slices": ["S18", "S13", "S09"],
+      "records": ["E31", "E26", "E22", "E23", "PR #65", "PR #48", "TRACEABILITY"],
+      "automated": [
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/transport/local-api/s18-live-views-api.test.ts",
+          "covers": "S18 live views API: the no-takeover route inventory, durable replay and current terminal state"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/web/test/live-views.test.ts",
+          "covers": "live-views client and browserTabState mapping (the terminal/browser read-only views)"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/web/test/runtime-live.test.ts",
+          "covers": "send → reconcile (D26/D23 rule 6) over the same-origin runtime websocket: the live message leg"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/web/test/e2e/mock-runtime-e2e.test.ts",
+          "covers": "the deterministic E2E pass: send → stream (progress/results visible) → refresh → replay over the REAL proxy, socket and reducer"
+        }
+      ],
+      "manual": [
+        {
+          "ranBy": "agent",
+          "when": "2026-10-29",
+          "what": "Real-browser captures of the terminal/browser live views and the S21-era tool-history cards hydrating runtime status by digest join",
+          "result": "Executed at 360/768/1440 with keyboard trail; WS fanout deferral (5s visible-tab poll) is the recorded mechanism of record",
+          "evidenceLocation": "apps/web/.impeccable/review/s18/"
+        },
+        {
+          "ranBy": "pending-owner",
+          "when": "pending",
+          "what": "Owner watches a live run: messages streaming, progress, a tool call, an approval card and the final artifact, without refreshing",
+          "result": "pending",
+          "evidenceLocation": "docs/ACCEPTANCE_LEDGER.md#ac7"
+        }
+      ],
+      "ownerVerdict": "open",
+      "gaps": [
+        "WebSocket fanout for run-lifecycle and tool states is the recorded deferral — the panels poll on the 5s visible-tab cadence (E30/E33); the browser-matrix leg exercises the surfaces, not a live fanout",
+        "Approval-event visibility is proven at the component/API layers; the owner has not observed a real in-browser approval arrive during a live run"
+      ]
+    },
+    {
+      "id": "AC8",
+      "criterion": "Prototype-functional tools work end-to-end.",
+      "slices": ["S21", "S25", "S26"],
+      "records": ["E33", "E40", "E36", "PR #67", "PR #75", "PR #70", "TRACEABILITY"],
+      "automated": [
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/tools/tool-executor.service.test.ts",
+          "covers": "the runtime-owned ToolExecutor: registry resolution, risk-class ladder as data, timeout/response-size enforcement, no-bypass execution authority"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/research/s25-research-tools.test.ts",
+          "covers": "research tools: declarations and read-only tools executing automatically (S25 chunk 1)"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/transport/local-api/s26-execution-api.test.ts",
+          "covers": "execution tools over the composed runtime (S26 chunk 6): sandboxed code execution and terminal with policy"
+        }
+      ],
+      "manual": [
+        {
+          "ranBy": "agent",
+          "when": "2026-11-02",
+          "what": "Real-browser captures of the research/data tool surfaces (S25) and execution-tool policy surfaces (S26) at 360/768/1440",
+          "result": "Executed against real seeded runtime state; tool history cards hydrate by digest join",
+          "evidenceLocation": "apps/web/.impeccable/review/s25/"
+        },
+        {
+          "ranBy": "pending-owner",
+          "when": "pending",
+          "what": "Owner runs one prototype-functional tool end to end (a research fetch or a sandboxed script) and sees its result as an artifact",
+          "result": "pending",
+          "evidenceLocation": "docs/ACCEPTANCE_LEDGER.md#ac8"
+        }
+      ],
+      "ownerVerdict": "open",
+      "gaps": [
+        "Live MCP-server wrapping stays scoped to the typed seam (E33 recorded; S25/S26 exercise the built-in families), and process-backed execution is covered by the S26 suites rather than real external services",
+        "The end-to-end leg runs on the mock/E8 runtime seams; a real provider-driven tool run is owner-run and opt-in (see AC10)"
+      ],
+      "liveOptIn": true
+    },
+    {
+      "id": "AC9",
+      "criterion": "Agents can create reusable private/shared tools under the approval policy.",
+      "slices": ["S21"],
+      "records": ["E33", "E30", "E4", "PR #67", "TRACEABILITY"],
+      "automated": [
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/transport/local-api/s21-tools-api.test.ts",
+          "covers": "tools API (S21 chunk 6): preview-gated creation surface, the truthful inventory and the disable switch"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/tools/tools-inventory.service.test.ts",
+          "covers": "the D38 intersection at creation naming the refusing layer, and the E4 lifecycle: READ_ONLY auto-activation, runtime-grant-only activation, agent self-activation refused (G6)"
+        }
+      ],
+      "manual": [
+        {
+          "ranBy": "agent",
+          "when": "2026-10-29",
+          "what": "Real-browser captures of Settings → Tools (inventory, preview-gated creation, disable switch) and the panel Tool history tab",
+          "result": "Executed from a production web build against the real runtime with real seeded S21 state",
+          "evidenceLocation": "apps/web/.impeccable/review/s21/"
+        },
+        {
+          "ranBy": "pending-owner",
+          "when": "pending",
+          "what": "Owner has an Agent propose a new tool, approves the creation, and reuses the tool from another conversation under the same grant",
+          "result": "pending",
+          "evidenceLocation": "docs/ACCEPTANCE_LEDGER.md#ac9"
+        }
+      ],
+      "ownerVerdict": "open",
+      "gaps": [
+        "Creation receipts are the typed already-exists refusal form (the full D23-rule-6 receipt shape is recorded as bounded, not silent)",
+        "A real agent-authored tool with live effects requires a real provider run — owner-run and opt-in"
+      ]
+    },
+    {
+      "id": "AC10",
+      "criterion": "Built-in, local, OpenAI-compatible, and custom providers can be configured and tested.",
+      "slices": ["S23"],
+      "records": ["E34", "E9", "PR #68", "TRACEABILITY"],
+      "automated": [
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/providers/provider-service.test.ts",
+          "covers": "provider service configuration (masked everywhere, G3) across built-in/local/OpenAI-compatible/custom origins"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/providers/connection-test.test.ts",
+          "covers": "provider adapters (the provider-neutral seam) and the connection test: one real minimal request, honest and redacted"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/transport/local-api/s23-providers-api.test.ts",
+          "covers": "the provider HTTP surface (masked everywhere, G3): configure + test-connection routes"
+        }
+      ],
+      "manual": [
+        {
+          "ranBy": "agent",
+          "when": "2026-10-31",
+          "what": "Real-browser captures of the provider settings surfaces (configure, masked credentials, test-connection states) at 360/768/1440",
+          "result": "Executed; the unconfigured/failure states render the configuration state, never a fake success (G4)",
+          "evidenceLocation": "apps/web/.impeccable/review/s23/"
+        },
+        {
+          "ranBy": "pending-owner",
+          "when": "pending",
+          "what": "Owner configures one real provider of each family they intend to use and runs the connection test with their own key",
+          "result": "pending",
+          "evidenceLocation": "docs/ACCEPTANCE_LEDGER.md#ac10"
+        }
+      ],
+      "ownerVerdict": "open",
+      "gaps": [
+        "No real provider endpoint was ever called in the default runs: the live connection-test suite (apps/user-runtime/live/providers-live.test.ts) is OPT-IN ONLY behind the owner's env credentials (G7) and has not been run on record",
+        "Local providers (ollama-family) are contract-covered; a live local model has not been exercised on record"
+      ],
+      "liveOptIn": true
+    },
+    {
+      "id": "AC11",
+      "criterion": "Per-agent defaults and per-conversation provider overrides work.",
+      "slices": ["S23", "S11"],
+      "records": ["E34", "E24", "D16", "PR #68", "TRACEABILITY"],
+      "automated": [
+        {
+          "kind": "vitest",
+          "file": "tests/contract/agent-settings-contract.test.ts",
+          "covers": "S11 agent settings commands (D16 — one command surface for settings AND onboarding) and the settings read model with reset metadata"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/providers/provider-service.test.ts",
+          "covers": "effective provider resolution (AC11): per-agent defaults and per-conversation overrides compose"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/transport/local-api/s23-providers-api.test.ts",
+          "covers": "the provider HTTP surface carrying the default/override fields (masked)"
+        }
+      ],
+      "manual": [
+        {
+          "ranBy": "pending-owner",
+          "when": "pending",
+          "what": "Owner sets a per-Agent provider default, overrides it in one conversation, and confirms each conversation uses the right provider",
+          "result": "pending",
+          "evidenceLocation": "docs/ACCEPTANCE_LEDGER.md#ac11"
+        }
+      ],
+      "ownerVerdict": "open",
+      "gaps": [
+        "Override behavior is proven by resolution tests and settings-command contracts; the owner has not personally exercised the override flow"
+      ]
+    },
+    {
+      "id": "AC12",
+      "criterion": "At least one autonomous scheduled or event-triggered task completes.",
+      "slices": ["S28"],
+      "records": ["E37", "E5", "PR #71", "PR #74", "TRACEABILITY"],
+      "automated": [
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/transport/local-api/s28-autonomous-proof.test.ts",
+          "covers": "AC12: one autonomous scheduled task completes with no user action (the named autonomous-proof leg)"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/schedules/scheduler.service.test.ts",
+          "covers": "the fire pipeline (at-least-once with the ledger claim) over the runtime-owned trigger ledger"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/schedules/scheduler-wake-manager.test.ts",
+          "covers": "the agent-folder wake manager: chokidar wakes the tick (the event-triggered family)"
+        }
+      ],
+      "manual": [
+        {
+          "ranBy": "agent",
+          "when": "2026-11-02",
+          "what": "Real-browser captures of the schedules surface (trigger ledger states) at 360/768/1440",
+          "result": "Executed; the autonomous-proof suite is the recorded AC12 completion evidence",
+          "evidenceLocation": "apps/web/.impeccable/review/s28/"
+        },
+        {
+          "ranBy": "pending-owner",
+          "when": "pending",
+          "what": "Owner creates one schedule, leaves the machine alone, and returns to find the task completed autonomously",
+          "result": "pending",
+          "evidenceLocation": "docs/ACCEPTANCE_LEDGER.md#ac12"
+        }
+      ],
+      "ownerVerdict": "open",
+      "gaps": [
+        "The autonomous completion is proven against the mock/E8 runtime with the scripted harness; a real model-driven autonomous task is owner-run and opt-in"
+      ],
+      "liveOptIn": true
+    },
+    {
+      "id": "AC13",
+      "criterion": "Risky actions pause and display the defined approval choices and reminder sequence.",
+      "slices": ["S20"],
+      "records": ["E30", "E3", "D9", "PR #63", "TRACEABILITY"],
+      "automated": [
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/approvals/approvals.service.test.ts",
+          "covers": "a gated typed proposal pauses the run (S20 chunk 1) and the five choices do exactly what they say (S20 chunk 2)"
+        },
+        {
+          "kind": "vitest",
+          "file": "tests/contract/approval-contract.test.ts",
+          "covers": "approval contract data (PRD §8, D9): the five choices and reminder vocabulary as contracts constants"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/web/test/approvals-ui.test.ts",
+          "covers": "Approvals client (proxy paths) and approval display logic: the five choices render verbatim"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/approvals/approvals.service.test.ts",
+          "covers": "E3 reminders: durable rows scanned on the injected clock across all five reminder slots, none after 24h"
+        }
+      ],
+      "manual": [
+        {
+          "ranBy": "agent",
+          "when": "2026-10-29",
+          "what": "Eleven live-browser captures of the approval card, the five choices, mutes and reminder states at 360/768/1440 including keyboard focus",
+          "result": "Executed against real seeded approval state from a production web build",
+          "evidenceLocation": "apps/web/.impeccable/review/s20/"
+        },
+        {
+          "ranBy": "pending-owner",
+          "when": "pending",
+          "what": "Owner triggers a risky action, sees the pause with the five choices, and observes at least one reminder fire",
+          "result": "pending",
+          "evidenceLocation": "docs/ACCEPTANCE_LEDGER.md#ac13"
+        }
+      ],
+      "ownerVerdict": "open",
+      "gaps": [
+        "The browser-matrix leg pins the approval card rendering; the reminder sequence's real-clock passage (waiting out the E3 slots) is the owner's personal observation",
+        "Real approval teeth depend on a real provider run executing the withheld effect — owner-run and opt-in"
+      ],
+      "browserMatrix": true
+    },
+    {
+      "id": "AC14",
+      "criterion": "Transient failures retry no more than three times before pausing and notifying.",
+      "slices": ["S22"],
+      "records": ["E35", "PR #69", "TRACEABILITY"],
+      "automated": [
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/tasks/retry-policy.test.ts",
+          "covers": "classifyFailure (the runtime's typed classification table, unknown codes fail closed) and decideRetry (bounded 1s/2s/4s, at most three attempts then pause)"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/tasks/retry-coordinator.service.test.ts",
+          "covers": "RetryCoordinator — transient retries are bounded and deterministic (AC14): attempt numbers journalled, exhaustion pauses with retry_exhausted"
+        }
+      ],
+      "manual": [
+        {
+          "ranBy": "pending-owner",
+          "when": "pending",
+          "what": "Owner observes a failing task retry visibly (RETRYING with the attempt number) and then pause with the honest reason",
+          "result": "pending",
+          "evidenceLocation": "docs/ACCEPTANCE_LEDGER.md#ac14"
+        }
+      ],
+      "ownerVerdict": "open",
+      "gaps": [
+        "Retry behavior is proven by deterministic suites over the injected scheduler; the owner has not watched a live retry sequence against a real failing provider"
+      ]
+    },
+    {
+      "id": "AC15",
+      "criterion": "Immediate cancellation stops parent, child, and queued work while preserving partial outputs.",
+      "slices": ["S22"],
+      "records": ["E35", "E27", "PR #69", "TRACEABILITY"],
+      "automated": [
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/tasks/run-cancellation.service.test.ts",
+          "covers": "the recorded D8 two-step cancellation: recursive child cancellation, terminal children never resurrected, partial outputs preserved, idempotency and races"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/workers/worker-tree-cancellation.test.ts",
+          "covers": "S22 process-tree cancellation (AC15): real kill(pid, 0) probes prove the worker's process group dies"
+        }
+      ],
+      "manual": [
+        {
+          "ranBy": "pending-owner",
+          "when": "pending",
+          "what": "Owner presses Stop on a running Operation with queued children and confirms everything stops and the partial outputs remain readable",
+          "result": "pending",
+          "evidenceLocation": "docs/ACCEPTANCE_LEDGER.md#ac15"
+        }
+      ],
+      "ownerVerdict": "open",
+      "gaps": [
+        "The runs panel stop control is capture-covered at the component layer (S22 evidence); the owner's personal cancel of a live multi-run Operation is pending"
+      ]
+    },
+    {
+      "id": "AC16",
+      "criterion": "Shared/private files, chats, tasks, memories, browser state, and tools persist across restart.",
+      "slices": ["S17", "S11", "S31"],
+      "records": ["E29", "E24", "E41", "E11", "PR #62", "TRACEABILITY"],
+      "automated": [
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/adapters/sqlite/workspace-files-repository.test.ts",
+          "covers": "workspace storage tables (S17 v9) and scoped URI resolution: shared/private files persist as rows"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/recovery/s31-restart-matrix.test.ts",
+          "covers": "S31 restart matrix (AC19/AC25 — one case per restart property): the persistence-across-restart leg"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/memory/memory.service.test.ts",
+          "covers": "memory service backstops: durable memory rows (the memories persistence leg)"
+        }
+      ],
+      "manual": [
+        {
+          "ranBy": "agent",
+          "when": "2026-11-04",
+          "what": "The S31 recovery suites and restart matrix re-open the same SQLite file across simulated restarts covering files, chats, tasks, memories and approvals",
+          "result": "Executed deterministically; browser-state persistence is covered by the S18 browser service tests (the shared Chromium profile), not by a real browser profile migration",
+          "evidenceLocation": "apps/user-runtime/src/modules/recovery/s31-restart-matrix.test.ts"
+        },
+        {
+          "ranBy": "pending-owner",
+          "when": "pending",
+          "what": "Owner restarts the prototype (or its container) and confirms every artifact family above is still present",
+          "result": "pending",
+          "evidenceLocation": "docs/ACCEPTANCE_LEDGER.md#ac16"
+        }
+      ],
+      "ownerVerdict": "open",
+      "gaps": [
+        "Browser-state persistence across restart is exercised through the browser service seam; a real shared-Chromium-profile survival across a real restart has not been observed",
+        "The owner has not personally restarted a provisioned container to verify persistence"
+      ]
+    },
+    {
+      "id": "AC17",
+      "criterion": "A coding task uses a separate branch/worktree and asks approval before merge.",
+      "slices": ["S19"],
+      "records": ["E32", "E6", "PR #66", "TRACEABILITY"],
+      "automated": [
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/git/git.service.test.ts",
+          "covers": "task-scoped branch + worktree creation and the conflict queue (the separate branch/worktree leg)"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/git/validation-runner.test.ts",
+          "covers": "validation runner: real execution inside the task worktree and the merge-request approval path (asks approval before merge)"
+        }
+      ],
+      "manual": [
+        {
+          "ranBy": "pending-owner",
+          "when": "pending",
+          "what": "Owner watches a coding task create its worktree, propose the merge, and approves it",
+          "result": "pending",
+          "evidenceLocation": "docs/ACCEPTANCE_LEDGER.md#ac17"
+        }
+      ],
+      "ownerVerdict": "open",
+      "gaps": [
+        "The merge-review surface is capture-covered (S19 evidence); a real coding task proposed by a real model has not been owner-observed"
+      ]
+    },
+    {
+      "id": "AC18",
+      "criterion": "Automatic backups run and an administrator restores one snapshot.",
+      "slices": ["S33", "S32"],
+      "records": ["E44", "E38", "E11", "PR #80", "PR #72", "TRACEABILITY"],
+      "automated": [
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/backups/s33-backups.test.ts",
+          "covers": "the S33 backup mechanism (takeSnapshot) and the scheduler: automatic six-hour snapshots with integrity checks"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/backups/s33-restore-service.test.ts",
+          "covers": "the S33 restore walk (stop → verify → replace → restart, typed) including the never-deletes-an-excluded-name pin and the outside-root refusal"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/control-plane/test/s33-admin-backups.test.ts",
+          "covers": "S33 admin backup chain (take + restore over the recorded channel): the administrator leg"
+        }
+      ],
+      "manual": [
+        {
+          "ranBy": "agent",
+          "when": "2026-11-07",
+          "what": "The recorded restore drill: snapshot, tamper, verify, restore, checkpoint-resume — with outputs committed",
+          "result": "Executed and documented; the drill was agent-run, not owner-run",
+          "evidenceLocation": "docs/s33-restore-drill-output-2026-11-07.md"
+        },
+        {
+          "ranBy": "pending-owner",
+          "when": "pending",
+          "what": "Owner (as administrator) personally takes and restores one snapshot through the admin CLI and confirms the restored state",
+          "result": "pending",
+          "evidenceLocation": "docs/ACCEPTANCE_LEDGER.md#ac18"
+        }
+      ],
+      "ownerVerdict": "open",
+      "gaps": [
+        "The restore drill and the S33 suites were run by the builder agents; the 'administrator restores one snapshot' clause wants the owner's personal run",
+        "Real six-hour cadence over a full day was not observed — the scheduler is proven by injected-clock suites"
+      ]
+    },
+    {
+      "id": "AC19",
+      "criterion": "Restart recovery restores processes, state, schedules, browser profile, and approvals safely.",
+      "slices": ["S31"],
+      "records": ["E41", "E13", "E27", "PR #77", "TRACEABILITY"],
+      "automated": [
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/recovery/s31-recovery-classes.test.ts",
+          "covers": "the E13 recovery-class decision as pure fail-closed data and the risk-class cap as the trust boundary"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/test/recovery/kill9-recovery.test.ts",
+          "covers": "kill -9 mid-reply-stream with restart on the same database: the real recovery probe"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/test/recovery/recovery-probes.test.ts",
+          "covers": "recovery probes over the boot path: process/state/schedule rehydration and the safe pause on unprovable external effects"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/transport/local-api/s31-recovery-boot.test.ts",
+          "covers": "the recovery boot API surface (the recovery surfaces leg)"
+        }
+      ],
+      "manual": [
+        {
+          "ranBy": "pending-owner",
+          "when": "pending",
+          "what": "Owner kills the runtime mid-run, restarts, and walks the recovery surface to resume or fail the paused run safely",
+          "result": "pending",
+          "evidenceLocation": "docs/ACCEPTANCE_LEDGER.md#ac19"
+        }
+      ],
+      "ownerVerdict": "open",
+      "gaps": [
+        "The browser-profile and schedules legs are covered through the service seams (browser.service, scheduler reconcile); a real container restart restoring a real browser profile is unobserved",
+        "Recovery surfaces are capture-covered (S31 evidence); the owner's personal kill-and-recover walk is pending"
+      ]
+    },
+    {
+      "id": "AC20",
+      "criterion": "Desktop and mobile web layouts work on target browsers.",
+      "slices": ["S08"],
+      "records": ["PR #47", "E14", "TRACEABILITY", "E15"],
+      "automated": [
+        {
+          "kind": "browser-matrix",
+          "file": "tests/acceptance/browser/layout.spec.ts",
+          "covers": "responsive layout sweep at 360/768/1024/1440 across the named surfaces on the §18 browser projects (no horizontal overflow, navigation intact)"
+        },
+        {
+          "kind": "browser-matrix",
+          "file": "tests/acceptance/browser/keyboard-a11y.spec.ts",
+          "covers": "axe-core scans (critical/serious = fail) and the keyboard-only tab trail over the named surfaces"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/web/test/design-tokens.test.ts",
+          "covers": "design tokens (UI_DESIGN §2.1): the responsive/token baseline the layouts are built on"
+        }
+      ],
+      "manual": [
+        {
+          "ranBy": "agent",
+          "when": "2026-11-08",
+          "what": "S34 browser-matrix run of the layout + keyboard/axe specs on the obtainable projects, JSON+markdown report archived under tests/acceptance/evidence/",
+          "result": "See the dated acceptance report for the per-project outcome; only obtainable browser projects count",
+          "evidenceLocation": "tests/acceptance/evidence/"
+        },
+        {
+          "ranBy": "pending-owner",
+          "when": "pending",
+          "what": "Owner opens the prototype on their own Chrome, Edge, Firefox and Safari (desktop + a phone) and confirms the layouts",
+          "result": "pending",
+          "evidenceLocation": "docs/ACCEPTANCE_LEDGER.md#ac20"
+        }
+      ],
+      "ownerVerdict": "open",
+      "gaps": [
+        "Playwright's chromium project covers the Chrome/Edge rendering engine and the chrome channel runs the system Chrome; Microsoft Edge itself is NOT-VERIFIED here (not installed, no Docker)",
+        "Safari is covered through the WebKit engine project; real macOS/iOS Safari is NOT-VERIFIED (no Apple hardware in this environment)",
+        "The browser-matrix runs the REAL shipped components in a hermetic Vite harness (the S24-harness pattern) against frozen fixture state — it is surface QA, not a live-runtime journey; the owner's real-device pass is pending",
+        "opt-in: full live-runtime browser journeys stay out of the default matrix (G7 posture); the deterministic non-browser journey leg is AC7's E2E suite"
+      ],
+      "browserMatrix": true
+    },
+    {
+      "id": "AC21",
+      "criterion": "No critical cross-user isolation or credential-leak failure is observed.",
+      "slices": ["S27", "S18", "S23"],
+      "records": [
+        "s27-security-suite (UNMERGED branch — G5 surfaced, not silently resolved)",
+        "E31",
+        "E34",
+        "E9",
+        "PR #38",
+        "TRACEABILITY"
+      ],
+      "automated": [
+        {
+          "kind": "vitest",
+          "file": "tests/security/s27-st01-path-traversal.test.ts",
+          "covers": "ST-01 path traversal + symlink escape (D27): hostile URIs and planted symlinks refused with outside-scope sentinels",
+          "requires": {
+            "branch": "s27-security-suite",
+            "head": "4af4704190d07591000c512d8815ad7f7b6811fe"
+          }
+        },
+        {
+          "kind": "vitest",
+          "file": "tests/security/s27-st02-workspace-boundary.test.ts",
+          "covers": "ST-02 workspace boundary escape (D39/E12): cross-Agent private-folder access refused (PRIVATE_SCOPE_DENIED)",
+          "requires": {
+            "branch": "s27-security-suite",
+            "head": "4af4704190d07591000c512d8815ad7f7b6811fe"
+          }
+        },
+        {
+          "kind": "vitest",
+          "file": "tests/security/s27-st07-credential-leakage.test.ts",
+          "covers": "ST-07 credential leakage (D14/D22 redaction boundary): rows, journal, capture and whole-database byte scans carry [REDACTED], never raw values",
+          "requires": {
+            "branch": "s27-security-suite",
+            "head": "4af4704190d07591000c512d8815ad7f7b6811fe"
+          }
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/providers/custody-boundary.test.ts",
+          "covers": "the custody at-rest scan (G3): provider credential custody over the secret-shaped fixture"
+        },
+        {
+          "kind": "vitest",
+          "file": "tests/contract/runtime-access.test.ts",
+          "covers": "browser runtime trust boundary and the run-control allowlist: the browser cannot reach non-allowlisted runtime routes"
+        },
+        {
+          "kind": "vitest",
+          "file": "tests/contract/user-runtime-boundary.test.ts",
+          "covers": "user-runtime SQL boundary (D23 rule 2) and workspace scoping by construction (E12)"
+        }
+      ],
+      "manual": [
+        {
+          "ranBy": "agent",
+          "when": "2026-11-05",
+          "what": "The S27 adversarial rounds: red/green outputs committed per family (ST-01/02, ST-03/04/06, ST-07/08/09)",
+          "result": "Red-first executed and archived on the s27-security-suite branch; the branch is NOT merged into main (G5 surfaced)",
+          "evidenceLocation": "tests/security-evidence/ (on s27-security-suite)"
+        },
+        {
+          "ranBy": "pending-owner",
+          "when": "pending",
+          "what": "Owner reviews the threat-coverage matrix and confirms no critical isolation/leak finding stands open",
+          "result": "pending",
+          "evidenceLocation": "docs/ACCEPTANCE_LEDGER.md#ac21"
+        }
+      ],
+      "ownerVerdict": "open",
+      "gaps": [
+        "s27-security-suite (head 4af4704190d07591000c512d8815ad7f7b6811fe) carries the adversarial suites and is NOT merged into main — the runner records these rows as PENDING_MERGE until it lands (G5: surfaced, never silently resolved)",
+        "The s27 THREAT-COVERAGE matrix maps ST-05/ST-10..ST-14 to pinned-elsewhere suites and documented procedures per its own record; cross-ACCOUNT (five-tenant) isolation beyond the account-bound runtime evidence of E23 has not had a dedicated two-tenant adversarial run",
+        "No real credential-leak bounty-style audit exists; 'no critical failure observed' is bounded by what the recorded suites and reviews cover"
+      ]
+    },
+    {
+      "id": "AC22",
+      "criterion": "A workspace is pinned to a versioned customer pack, and existing tasks retain the pack/Operation/Agent versions that created them.",
+      "slices": ["S10"],
+      "records": ["E19", "D28", "D29", "D39", "D40", "PR #49", "TRACEABILITY"],
+      "automated": [
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/runtime/pack-pin.test.ts",
+          "covers": "loadWorkspacePack (D19/D28) and RUNTIME_VERSION checkCompatibility: the workspace pack pin and version-retention seam"
+        },
+        {
+          "kind": "vitest",
+          "file": "packages/agent-pack-sdk/src/loader.test.ts",
+          "covers": "BuiltInPackLoader and PackRegistry (D28): versioned pack loading with integrity checks"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/adapters/sqlite/workspaces-repository.test.ts",
+          "covers": "workspace pack pinning (S10 migration v3): the durable pin rows"
+        }
+      ],
+      "manual": [
+        {
+          "ranBy": "pending-owner",
+          "when": "pending",
+          "what": "Owner pins a workspace to a pack version, creates tasks, upgrades the pack, and confirms old tasks still cite their creating versions",
+          "result": "pending",
+          "evidenceLocation": "docs/ACCEPTANCE_LEDGER.md#ac22"
+        }
+      ],
+      "ownerVerdict": "open",
+      "gaps": [
+        "Version retention across a pack upgrade is proven by repository/migration tests; the owner's upgrade-and-compare walk is pending"
+      ]
+    },
+    {
+      "id": "AC23",
+      "criterion": "An Operation launches through a preview that shows agents, skills, connectors, provider/model, estimated credits, and approval requirements before execution.",
+      "slices": ["S15"],
+      "records": ["E28", "D30", "PR #59", "TRACEABILITY"],
+      "automated": [
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/transport/local-api/s15-preview-api.test.ts",
+          "covers": "the eight preview groups truthful against the pinned manifest (connectors never connected, providers honestly not configured, the D20 credits RANGE) and the launch confirm"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/web/test/launch-preview.test.ts",
+          "covers": "the preview client: Cancel is pinned side-effect free (zero fetch calls in every surface state)"
+        }
+      ],
+      "manual": [
+        {
+          "ranBy": "agent",
+          "when": "2026-10-25",
+          "what": "Real-browser capture of the preview surface from a live session (one operation, one run, one chat binding after confirm)",
+          "result": "Executed; the byte-identical READ model was proven by the sqlite whole-database fingerprint probe",
+          "evidenceLocation": "apps/web/.impeccable/review/s15/"
+        },
+        {
+          "ranBy": "pending-owner",
+          "when": "pending",
+          "what": "Owner reads a launch preview, confirms nothing executed, then confirms and sees exactly one Operation created",
+          "result": "pending",
+          "evidenceLocation": "docs/ACCEPTANCE_LEDGER.md#ac23"
+        }
+      ],
+      "ownerVerdict": "open",
+      "gaps": [
+        "The preview's honest-null posture (no real pricing, connectors unconfigured) is the recorded G4 truth — a preview with REAL configured providers is part of the owner's live run"
+      ]
+    },
+    {
+      "id": "AC24",
+      "criterion": "One Operation chat can hold multiple independently tracked task runs without merging their state, events, or cost.",
+      "slices": ["S13"],
+      "records": ["E26", "D31", "D34", "D41", "D42", "PR #56", "TRACEABILITY"],
+      "automated": [
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/operations/operations.service.test.ts",
+          "covers": "createOperation and the multiple-run isolation: independent task runs under one Operation chat (D31/D34/D41)"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/transport/local-api/s13-operations-api.test.ts",
+          "covers": "S13 operations API: the roster, removable coordinator and run tracking surface"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/credits/credit-aggregation.test.ts",
+          "covers": "credit aggregation per run (the cost-isolation leg: runs never merge their cost)"
+        }
+      ],
+      "manual": [
+        {
+          "ranBy": "pending-owner",
+          "when": "pending",
+          "what": "Owner runs two tasks in one Operation chat and confirms separate events, states and costs",
+          "result": "pending",
+          "evidenceLocation": "docs/ACCEPTANCE_LEDGER.md#ac24"
+        }
+      ],
+      "ownerVerdict": "open",
+      "gaps": [
+        "Run isolation is proven by integration suites (the E26 receipts and D34 vocabulary); the owner has not watched two live runs side by side"
+      ]
+    },
+    {
+      "id": "AC25",
+      "criterion": "A long-running task survives browser closure, keeps its worker alive while healthy, and resumes from a semantic checkpoint after a restart.",
+      "slices": ["S16", "S31"],
+      "records": ["E27", "E41", "D32", "D33", "PR #58", "PR #77", "TRACEABILITY"],
+      "automated": [
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/tasks/s31-checkpoints.test.ts",
+          "covers": "S31 checkpoint writer (D33): semantic checkpoints on the journal, the resume leg"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/workers/task-worker-supervisor.service.test.ts",
+          "covers": "one supervised worker per run governed by task state: healthy workers are never killed (the keeps-its-worker-alive leg)"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/recovery/s31-restart-matrix.test.ts",
+          "covers": "the restart-matrix resume case: checkpoint resume after restart (D33/E13)"
+        }
+      ],
+      "manual": [
+        {
+          "ranBy": "pending-owner",
+          "when": "pending",
+          "what": "Owner closes the browser mid-task, reopens after a restart, and confirms the task resumed from its checkpoint",
+          "result": "pending",
+          "evidenceLocation": "docs/ACCEPTANCE_LEDGER.md#ac25"
+        }
+      ],
+      "ownerVerdict": "open",
+      "gaps": [
+        "Browser closure is simulated at the connection layer (the WebSocket drop suites); the AC25 hibernation-independence proof composes both supervisors over the same journal (E27) rather than a real browser being closed",
+        "A real long-running model task resuming from a semantic checkpoint is owner-run and opt-in"
+      ],
+      "liveOptIn": true
+    },
+    {
+      "id": "AC26",
+      "criterion": "Read-only tools run automatically, local mutations show a preview, and a matching reusable grant executes without another prompt while still being policy-checked.",
+      "slices": ["S20", "S21"],
+      "records": ["E30", "E33", "D35", "D9", "PR #63", "PR #67", "TRACEABILITY"],
+      "automated": [
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/tools/tool-executor-approvals.test.ts",
+          "covers": "the gated branch consulting the S20 machinery: task-then-agent grant fast-path with one-time consumption, preview recorded before the pause, withheld execution only through the decision callback"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/tools/tool-executor.service.test.ts",
+          "covers": "the risk-class ladder as a DATA table: READ_ONLY automatic, every other class gated"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/tools/tool-executor-cancellation.test.ts",
+          "covers": "cancel-for-task drops withheld gated executions so the effect never runs post-cancel (the policy-checked leg)"
+        }
+      ],
+      "manual": [
+        {
+          "ranBy": "pending-owner",
+          "when": "pending",
+          "what": "Owner approves a grant once, re-triggers the same tool, and confirms it runs without another prompt but refuses when the grant no longer matches",
+          "result": "pending",
+          "evidenceLocation": "docs/ACCEPTANCE_LEDGER.md#ac26"
+        }
+      ],
+      "ownerVerdict": "open",
+      "gaps": [
+        "The grant fast-path is proven by revoke-mid-flight, version-change, args-change and post-restart refusal tests (E30/E33); the owner's personal grant-reuse observation is pending"
+      ]
+    },
+    {
+      "id": "AC27",
+      "criterion": "Agent-private memory does not leak into Operation context without explicit publication.",
+      "slices": ["S29"],
+      "records": ["E42", "E19", "D37", "PR #79", "TRACEABILITY"],
+      "automated": [
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/transport/local-api/s29-memory-api.test.ts",
+          "covers": "S29 memory: the AC27 publication boundary (integration) — private memory stays out of Operation context until explicitly published"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/memory/memory-controls.test.ts",
+          "covers": "S29 chunk 3 user controls: scope controls and the publication command surface"
+        },
+        {
+          "kind": "vitest",
+          "file": "apps/user-runtime/src/modules/memory/memory-secrets.test.ts",
+          "covers": "memory secret rejection (G3): secret-shaped memory content refused"
+        }
+      ],
+      "manual": [
+        {
+          "ranBy": "pending-owner",
+          "when": "pending",
+          "what": "Owner stores a private memory in one Agent, opens an Operation with that Agent, and confirms the memory is absent until published",
+          "result": "pending",
+          "evidenceLocation": "docs/ACCEPTANCE_LEDGER.md#ac27"
+        }
+      ],
+      "ownerVerdict": "open",
+      "gaps": [
+        "The publication boundary is proven by the S29 integration suite and the E19 no-private-memory-inheritance rule; the owner's personal leak check is pending"
+      ]
+    }
+  ]
+}

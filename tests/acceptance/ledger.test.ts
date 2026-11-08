@@ -26,11 +26,7 @@ import { join, isAbsolute, resolve, sep } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import {
-  acceptanceLedgerSchema,
-  type AcceptanceLedger,
-  type LedgerRow,
-} from "./ledger.schema.ts";
+import { acceptanceLedgerSchema, type AcceptanceLedger, type LedgerRow } from "./ledger.schema.ts";
 
 const here = import.meta.dirname;
 const LEDGER_PATH = join(here, "ledger.json");
@@ -84,9 +80,7 @@ describe("the acceptance ledger (AC1–AC27)", () => {
   it("has exactly one row per criterion, ids AC1–AC27, no duplicates", () => {
     const ids = ledger.rows.map((row) => row.id);
     expect(new Set(ids).size).toBe(27);
-    expect(ids.sort()).toEqual(
-      Object.keys(PRD_SECTION_19).sort(),
-    );
+    expect(ids.sort()).toEqual(Object.keys(PRD_SECTION_19).sort());
   });
 
   it("carries the verbatim PRD §19 text on every row (frozen baseline)", () => {
@@ -121,10 +115,22 @@ describe("the acceptance ledger (AC1–AC27)", () => {
         expect(entry.file.includes(".."), `${row.id}: mapped file must not escape the repo`).toBe(
           false,
         );
-        expect(
-          existsSync(absolute),
-          `${row.id}: mapped test file ${entry.file} does not exist in this tree — the ledger must not claim evidence it cannot run`,
-        ).toBe(true);
+        // G5 correction (recorded in the S34 engineering record): the schema's
+        // own docstring defines `requires` as "mapped tests that live on a
+        // RECORDED unmerged branch" — the runner reports a typed
+        // pending-merge state naming the branch and head "instead of a fake
+        // pass". The existence rule below made that state unreachable (an
+        // unmerged branch's files cannot exist in this tree), so a
+        // requires-pinned entry is exempt from the in-tree existence check
+        // ONLY; its branch+head must be named in the row's gaps (the
+        // pending-merge test above) and the runner still fails the row until
+        // the branch merges. Every non-requires entry keeps the strict rule.
+        if (!entry.requires) {
+          expect(
+            existsSync(absolute),
+            `${row.id}: mapped test file ${entry.file} does not exist in this tree — the ledger must not claim evidence it cannot run`,
+          ).toBe(true);
+        }
         expect(entry.file.endsWith(".test.ts"), `${row.id}: vitest mappings cite .test.ts`).toBe(
           true,
         );
@@ -150,9 +156,10 @@ describe("the acceptance ledger (AC1–AC27)", () => {
   it("never marks a row accepted without BOTH evidence kinds (the E14/E7 rule)", () => {
     for (const row of ledger.rows) {
       if (row.ownerVerdict !== "accepted") continue;
-      expect(row.automated.length, `${row.id}: accepted without automated evidence`).toBeGreaterThan(
-        0,
-      );
+      expect(
+        row.automated.length,
+        `${row.id}: accepted without automated evidence`,
+      ).toBeGreaterThan(0);
       const ownerLeg = row.manual.find((leg) => leg.ranBy === "owner");
       expect(ownerLeg, `${row.id}: accepted without an owner-ran manual leg`).toBeDefined();
       expect(ownerLeg?.result ?? "").not.toBe("pending");
@@ -220,7 +227,10 @@ describe("ledger row hygiene", () => {
         expect(resolved.startsWith(REPO_ROOT + sep), `${row.id}: path escapes repo`).toBe(true);
       }
       for (const leg of row.manual) {
-        expect(leg.evidenceLocation.startsWith("/"), `${row.id}: evidence path must be repo-relative or a named external record`).toBe(false);
+        expect(
+          leg.evidenceLocation.startsWith("/"),
+          `${row.id}: evidence path must be repo-relative or a named external record`,
+        ).toBe(false);
       }
     }
   });

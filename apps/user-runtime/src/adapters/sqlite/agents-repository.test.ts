@@ -95,17 +95,29 @@ describe("agent identities (S11 migration v4)", () => {
     // S23 appended the provider catalog after S21's tool inventory, S28 the
     // trigger records after the provider catalog, S24 the credit ledger
     // after the trigger records, and S31 the run checkpoints after the
+    // credit ledger — the chain is append-only and the head moves with each
+    // slice (S31's own v20 entry renumbered to v21 at the integration, the
+    // orchestrator-owned renumber).
     // credit ledger (S31's own v20 entry renumbered to v21 at that
     // integration, the orchestrator-owned renumber) — the chain is
     // append-only and the head moves with each slice. The S29 integration
     // renumbered the memory tables (authored v21) to v22 — main's landed
     // v21 run-checkpoints keeps its slot.
-    expect(MIGRATIONS.at(-5)?.version).toBe(20);
-    expect(MIGRATIONS.at(-5)?.name).toBe("credit-ledger");
-    expect(MIGRATIONS.at(-4)?.version).toBe(21);
-    expect(MIGRATIONS.at(-4)?.name).toBe("run-checkpoints");
-    expect(MIGRATIONS.at(-3)?.version).toBe(22);
-    expect(MIGRATIONS.at(-3)?.name).toBe("memory");
+    expect(MIGRATIONS.at(-6)?.version).toBe(20);
+    expect(MIGRATIONS.at(-6)?.name).toBe("credit-ledger");
+    expect(MIGRATIONS.at(-5)?.version).toBe(21);
+    expect(MIGRATIONS.at(-5)?.name).toBe("run-checkpoints");
+    // The S30 integration renumbered the S30 entries (notifications authored
+    // v23 -> v24, onboarding authored v24 -> v25) behind main's landed v23
+    // backup-snapshots — each slice's entries never move once merged.
+    expect(MIGRATIONS.at(-4)?.version).toBe(22);
+    expect(MIGRATIONS.at(-4)?.name).toBe("memory");
+    expect(MIGRATIONS.at(-3)?.version).toBe(23);
+    expect(MIGRATIONS.at(-3)?.name).toBe("backup-snapshots");
+    expect(MIGRATIONS.at(-2)?.version).toBe(24);
+    expect(MIGRATIONS.at(-2)?.name).toBe("notifications");
+    expect(MIGRATIONS.at(-1)?.version).toBe(25);
+    expect(MIGRATIONS.at(-1)?.name).toBe("onboarding");
     expect(MIGRATIONS.find((migration) => migration.version === 14)?.name).toBe("terminal-events");
   });
 

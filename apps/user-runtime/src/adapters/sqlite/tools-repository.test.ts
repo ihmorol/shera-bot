@@ -90,11 +90,17 @@ describe("tool inventory storage (S21 migration v15)", () => {
     // (credit-ledger), and S31 appended v21 (run-checkpoints) after this
     // migration; the S21 entry itself never moves once merged. The S29
     // integration renumbered the memory tables (authored v21) to v22 —
-    // main's landed v21 run-checkpoints keeps its slot.
-    expect(MIGRATIONS.at(-3)?.version).toBe(22);
+    // main's landed v21 run-checkpoints keeps its slot — and the S30
+    // integration renumbered the S30 entries (notifications authored v23 ->
+    // v24, onboarding authored v24 -> v25) behind main's landed v23
+    // backup-snapshots the same way; the pin tracks the head.
+    expect(MIGRATIONS.at(-4)?.version).toBe(22);
+    expect(MIGRATIONS.at(-3)?.version).toBe(23);
+    expect(MIGRATIONS.at(-2)?.version).toBe(24);
+    expect(MIGRATIONS.at(-1)?.version).toBe(25);
     const conn = openTempDatabase();
     expect(appliedMigrationVersions(conn.db)).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     ]);
     expect(sqliteTableExists(conn.db, "tool_inventory")).toBe(true);
     expect(sqliteTableExists(conn.db, "tool_execution_history")).toBe(true);

@@ -12,7 +12,7 @@
  *   - approval_required from the approvals module's PENDING D9 requests,
  *     deterministic ids (`note-apr-<approval_id>`).
  *
- * Read/mute state lives in the v23 notification_state table, keyed by those
+ * Read/mute state lives in the v24 notification_state table, keyed by those
  * deterministic ids. Mutting an approval item creates the S20 approval-scope
  * mute through the approvals service — ONE mute record family (E3); muting
  * any other item writes the notification's own durable mute. A muted row

@@ -76,11 +76,12 @@ describe("provider catalog storage (S23 migration v18)", () => {
     expect(v18?.name).toBe("provider-catalog");
     // S24 appended the credit ledger after the trigger records, and S31 the
     // run checkpoints after the credit ledger — the chain is append-only
-    // and the head moves with each slice. The S29 integration renumbered
-    // the memory tables (authored v21) to v22 — main's landed v21
-    // run-checkpoints keeps its slot.
-    expect(MIGRATIONS.at(-5)?.version).toBe(20);
-    expect(MIGRATIONS.at(-3)?.version).toBe(22);
+    // and the head moves with each slice. The S30 integration renumbered
+    // the S30 entries (notifications authored v23 -> v24, onboarding
+    // authored v24 -> v25) behind main's landed v23 backup-snapshots —
+    // each slice's entries never move once merged.
+    expect(MIGRATIONS.at(-6)?.version).toBe(20);
+    expect(MIGRATIONS.at(-1)?.version).toBe(25);
   });
 
   it("creates the STRICT tables through the migration runner", () => {

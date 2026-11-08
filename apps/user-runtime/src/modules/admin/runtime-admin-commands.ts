@@ -28,12 +28,19 @@
  * workspace, and the internal API route verifies it against THIS runtime's
  * account binding before reaching the handle.
  */
-import { RuntimeAdminTaskFailureRecord, type OperationRun } from "@shera-bot/contracts";
+import {
+  RuntimeAdminTaskFailureRecord,
+  type OperationRun,
+  type RuntimeAdminBackupRestoreResponse,
+  type RuntimeAdminBackupTakeResponse,
+} from "@shera-bot/contracts";
 
 import type { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
 import type { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import type { EventsService } from "../events/events.service.ts";
 import type { TaskRunOperationsSeam } from "../workers/task-worker-supervisor.service.ts";
+import type { TakeSnapshotResult } from "../backups/backup-service.ts";
+import type { RestoreService } from "../backups/restore-service.ts";
 import {
   applyRowLifecycleTransition,
   type RowLifecycleAudit,
@@ -76,6 +83,25 @@ export interface RuntimeAdminCommandsHandle {
     workspaceId: string;
     limit: number;
   }): Promise<{ workspace_id: string; failures: RuntimeAdminTaskFailureRecord[] }>;
+  /** S33 (issue #34, D47): the admin-triggered snapshot — the control
+   * plane's 1:1 ref IS the snapshot id (a replayed trigger is the typed
+   * conflict, never a second snapshot). The mechanism's own typed result,
+   * never a fabricated success (G4). */
+  takeBackup(input: {
+    workspaceId: string;
+    snapshotRef: string;
+    actor: { type: "admin"; id: string };
+  }): Promise<RuntimeAdminBackupTakeResponse>;
+  /** S33: the admin-triggered restore — the recorded walk through the
+   * composition's stop/start ports. When the composition wires no ports
+   * (the prototype default: the container-level stop is the OPERATOR
+   * runbook's step), the typed RESTORE_PORTS_NOT_WIRED refusal is the
+   * honest answer — never a fake restore. */
+  restoreBackup(input: {
+    workspaceId: string;
+    snapshotId: string;
+    actor: { type: "admin"; id: string };
+  }): Promise<RuntimeAdminBackupRestoreResponse>;
 }
 
 export interface RuntimeAdminCommandsDeps {
@@ -114,6 +140,20 @@ export interface RuntimeAdminCommandsDeps {
    * composed scheduler's resumeAfterTopUp (credit-paused TRIGGERS re-arm).
    */
   afterTopUp?: ((workspaceId: string) => void) | undefined;
+  /**
+   * S33 (issue #34, D47): the composed BackupService's takeSnapshot, bound
+   * to THIS workspace (the composition's own). Absent: the typed refusal.
+   */
+  backupTake?:
+    | ((input: { triggeredBy: "admin"; snapshotRef: string }) => Promise<TakeSnapshotResult>)
+    | undefined;
+  /**
+   * S33: the composed RestoreService (the container-level stop/start ports
+   * are the deployment's to supply). Absent: the typed RESTORE_PORTS_NOT_WIRED
+   * refusal — the operator runbook is the recorded handoff, never a silent
+   * no-op (G4).
+   */
+  restorePorts?: (Pick<RestoreService, "restoreSnapshot"> & { workspaceId: string }) | undefined;
   now?: (() => string) | undefined;
   logFault?: ((event: string, fields: Record<string, unknown>) => void) | undefined;
 }
@@ -282,6 +322,96 @@ export function buildRuntimeAdminCommandsHandle(
       // Contract-checked at the boundary the same way every other response is.
       const parsed = failures.map((record) => RuntimeAdminTaskFailureRecord.parse(record));
       return { workspace_id: input.workspaceId, failures: parsed };
+    },
+
+    async takeBackup(input) {
+      if (!deps.backupTake) {
+        return {
+          taken: false,
+          workspace_id: input.workspaceId,
+          snapshot_ref: input.snapshotRef,
+          reason: "conflict",
+          detail: "the backup mechanism is not wired in this composition",
+        };
+      }
+      try {
+        const result = await deps.backupTake({
+          triggeredBy: "admin",
+          snapshotRef: input.snapshotRef,
+        });
+        if (result.taken) {
+          return {
+            taken: true,
+            workspace_id: input.workspaceId,
+            snapshot_id: result.snapshot_id,
+            taken_at: result.taken_at,
+            db_bytes: result.db_bytes,
+            retained_index: result.retained_index,
+          };
+        }
+        return {
+          taken: false,
+          workspace_id: input.workspaceId,
+          snapshot_ref: input.snapshotRef,
+          reason: result.reason === "tick_failed" ? "export_failed" : result.reason,
+          detail: result.detail.slice(0, 300),
+        };
+      } catch (error) {
+        // The one throw the walk keeps is the replayed-ref conflict
+        // (SNAPSHOT_DIR_CONFLICT) — the typed refusal, never a 500.
+        const detail = error instanceof Error ? error.message : String(error);
+        deps.logFault?.("admin_backup_take_refused", {
+          workspace_id: input.workspaceId,
+          snapshot_ref: input.snapshotRef,
+          actor: input.actor.id,
+          reason: detail.slice(0, 300),
+        });
+        return {
+          taken: false,
+          workspace_id: input.workspaceId,
+          snapshot_ref: input.snapshotRef,
+          reason: "conflict",
+          detail: detail.slice(0, 300),
+        };
+      }
+    },
+
+    async restoreBackup(input) {
+      if (!deps.restorePorts || deps.restorePorts.workspaceId !== input.workspaceId) {
+        return {
+          restored: false,
+          workspace_id: input.workspaceId,
+          snapshot_id: input.snapshotId,
+          failed_stage: "policy",
+          code: "RESTORE_PORTS_NOT_WIRED",
+          detail:
+            "this composition wires no container-level stop/start ports — the restore " +
+            "is performed through the operator runbook (stop services, run the restore, restart)",
+          replaced_before_failure: false,
+        };
+      }
+      const result = await deps.restorePorts.restoreSnapshot({ snapshotId: input.snapshotId });
+      if (result.restored) {
+        return {
+          restored: true,
+          workspace_id: input.workspaceId,
+          snapshot_id: result.snapshot_id,
+          restored_at: result.restored_at,
+          migrated_from: result.migrated_from,
+          migrated_to: result.migrated_to,
+          db_bytes: result.db_bytes,
+          volume_entry_count: result.volume_entries.length,
+        };
+      }
+      return {
+        restored: false,
+        workspace_id: input.workspaceId,
+        snapshot_id: result.snapshot_id,
+        failed_stage: result.failed_stage,
+        code: result.code,
+        detail: result.detail.slice(0, 300),
+        replaced_before_failure: result.replaced_before_failure,
+      };
     },
   };
 }

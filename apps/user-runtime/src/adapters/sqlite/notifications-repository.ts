@@ -1,7 +1,7 @@
 /**
  * S30 — the notification center's durable state (PRD §14, D16, E3). The
  * center's ROWS are derived from the runtime's own records; this repository
- * owns the two v23 tables: the per-workspace delivery toggles and the
+ * owns the two v24 tables: the per-workspace delivery toggles and the
  * per-notification read/mute stamps. Every method is workspace-scoped (E12).
  */
 import type { DatabaseSync } from "node:sqlite";

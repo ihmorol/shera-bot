@@ -10,7 +10,7 @@
  *     task.recovery_required) — deterministic ids from the event ids;
  *   - approval_required notifications derive from the approvals module's own
  *     PENDING rows (the D9 requests), conversation-deep-linkable;
- *   - read/mute state is workspace-scoped durable state (v23);
+ *   - read/mute state is workspace-scoped durable state (v24);
  *   - muting an approval rides the S20 mute machinery EXACTLY (E3 — one mute
  *     record family, delivery suppressed, the approval stays pending and
  *     visible);

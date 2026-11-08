@@ -34,18 +34,17 @@ import type {
   ApprovalsRepository,
   ApprovalMuteRow,
 } from "../../adapters/sqlite/approvals-repository.ts";
-import type { EventJournalRepository, EventJournalRow } from "../../adapters/sqlite/event-journal-repository.ts";
+import type {
+  EventJournalRepository,
+  EventJournalRow,
+} from "../../adapters/sqlite/event-journal-repository.ts";
 import type { OperationsRepository } from "../../adapters/sqlite/operations-repository.ts";
 import type { NotificationsRepository } from "../../adapters/sqlite/notifications-repository.ts";
 import type { CommandReceiptsRepository } from "../../adapters/sqlite/command-receipts-repository.ts";
 import type { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 
 /** The journal event types the completion/failure/recovery kinds derive from. */
-const LIFECYCLE_EVENT_TYPES = [
-  "task.succeeded",
-  "task.failed",
-  "task.recovery_required",
-] as const;
+const LIFECYCLE_EVENT_TYPES = ["task.succeeded", "task.failed", "task.recovery_required"] as const;
 
 const TASK_STREAM_PREFIX = "task:";
 
@@ -101,11 +100,7 @@ export class NotificationsService {
     const rows: NotificationView[] = [];
 
     // The journal-derived kinds (completion / failure / recovery).
-    const events = this.deps.journal.listByTypes(
-      workspaceId,
-      LIFECYCLE_EVENT_TYPES,
-      200,
-    );
+    const events = this.deps.journal.listByTypes(workspaceId, LIFECYCLE_EVENT_TYPES, 200);
     for (const event of events) {
       rows.push(this.viewFromJournalEvent(workspaceId, event, stateRows));
     }
@@ -125,10 +120,11 @@ export class NotificationsService {
         workspace_id: workspaceId,
         kind: "approval_required",
         title: KIND_TITLES["approval_required"]!,
-        summary: `${request.capability} on ${request.resource_scope} — ${request.tool_id}@${request.tool_version}`.slice(
-          0,
-          200,
-        ),
+        summary:
+          `${request.capability} on ${request.resource_scope} — ${request.tool_id}@${request.tool_version}`.slice(
+            0,
+            200,
+          ),
         conversation_id: request.conversation_id,
         task_id: request.task_id,
         approval_id: request.approval_id,
@@ -167,9 +163,7 @@ export class NotificationsService {
     const conversationId = operationId
       ? this.deps.operations.findChat(workspaceId, operationId)
       : null;
-    const deepLink = conversationId
-      ? `/app/operation/${operationId}`
-      : "/app";
+    const deepLink = conversationId ? `/app/operation/${operationId}` : "/app";
 
     const summary =
       kind === "completion"
@@ -204,7 +198,9 @@ export class NotificationsService {
   settings(workspaceId: string): NotificationSettingsView {
     const row = this.deps.notifications.getSettings(workspaceId);
     return {
-      in_app_enabled: row ? row.in_app_enabled : NotificationsService.RECOMMENDED_DEFAULT.in_app_enabled,
+      in_app_enabled: row
+        ? row.in_app_enabled
+        : NotificationsService.RECOMMENDED_DEFAULT.in_app_enabled,
       browser_enabled: row
         ? row.browser_enabled
         : NotificationsService.RECOMMENDED_DEFAULT.browser_enabled,
@@ -324,11 +320,7 @@ export class NotificationsService {
 }
 
 /** The S20 mute precedence (approval > task > all) as a row predicate. */
-function approvalMutedFor(
-  mutes: ApprovalMuteRow[],
-  approvalId: string,
-  taskId: string,
-): boolean {
+function approvalMutedFor(mutes: ApprovalMuteRow[], approvalId: string, taskId: string): boolean {
   return mutes.some(
     (mute) =>
       (mute.scope === "approval" && mute.target_id === approvalId) ||

@@ -25,9 +25,14 @@ export interface BrowserNotificationInput {
 
 export type BrowserNotificationDecision =
   | { action: "fire" }
-  | { action: "skip"; reason: "tab_focused" | "permission_denied" | "permission_default" | "browser_disabled" };
+  | {
+      action: "skip";
+      reason: "tab_focused" | "permission_denied" | "permission_default" | "browser_disabled";
+    };
 
-export function browserNotificationDecision(input: BrowserNotificationInput): BrowserNotificationDecision {
+export function browserNotificationDecision(
+  input: BrowserNotificationInput,
+): BrowserNotificationDecision {
   if (!input.documentHidden) {
     return { action: "skip", reason: "tab_focused" };
   }

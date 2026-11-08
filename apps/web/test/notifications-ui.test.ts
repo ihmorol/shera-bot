@@ -68,9 +68,7 @@ afterEach(() => {
 
 describe("Notifications client (proxy paths)", () => {
   it("fetchNotifications GETs the derived rows", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(jsonResponse(200, { notifications: [row()] }));
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { notifications: [row()] }));
     vi.stubGlobal("fetch", fetchMock);
     const rows = await fetchNotifications(WORKSPACE);
     expect(rows).toHaveLength(1);
@@ -112,17 +110,15 @@ describe("Notifications client (proxy paths)", () => {
   });
 
   it("the settings toggles POST the settings commands envelope and parse the typed view", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(
-        jsonResponse(200, {
-          settings: {
-            in_app_enabled: true,
-            browser_enabled: false,
-            recommended_default: { in_app_enabled: true, browser_enabled: false },
-          },
-        }),
-      );
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(200, {
+        settings: {
+          in_app_enabled: true,
+          browser_enabled: false,
+          recommended_default: { in_app_enabled: true, browser_enabled: false },
+        },
+      }),
+    );
     vi.stubGlobal("fetch", fetchMock);
     const settings = await fetchNotificationSettings(WORKSPACE);
     expect(settings).toMatchObject({
@@ -252,7 +248,14 @@ describe("Notification center view (S10)", () => {
     const muted: string[] = [];
     const html = renderToStaticMarkup(
       createElement(NotificationCenterView, {
-        rows: [row(), row({ notification_id: "note-apr-apr_1", kind: "approval_required", approval_id: "apr_1" })],
+        rows: [
+          row(),
+          row({
+            notification_id: "note-apr-apr_1",
+            kind: "approval_required",
+            approval_id: "apr_1",
+          }),
+        ],
         settings: undefined,
         surfaceState: "ready",
         safeErrorMessage: undefined,
@@ -276,7 +279,9 @@ describe("Notification center view (S10)", () => {
 
   it("the empty state carries the one-line value promise and a single primary CTA (E43)", () => {
     const html = renderCenter({ rows: [] });
-    expect(html).toContain("Notifications will appear here when a task finishes, fails, needs your approval, or hits a snag");
+    expect(html).toContain(
+      "Notifications will appear here when a task finishes, fails, needs your approval, or hits a snag",
+    );
     expect(html).toContain('data-testid="notification-empty-cta"');
   });
 

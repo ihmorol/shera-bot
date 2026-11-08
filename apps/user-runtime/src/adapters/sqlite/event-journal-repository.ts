@@ -173,7 +173,11 @@ export class EventJournalRepository {
    * preview derives from the LAST durable event — the runtime's own record,
    * never a client-side copy). Null when the stream has no events.
    */
-  lastStreamEvent(streamId: string, workspaceId: string, exec?: DatabaseSync): EventJournalRow | null {
+  lastStreamEvent(
+    streamId: string,
+    workspaceId: string,
+    exec?: DatabaseSync,
+  ): EventJournalRow | null {
     const db = exec ?? this.tx.connection();
     const row = db
       .prepare(

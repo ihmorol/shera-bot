@@ -1,7 +1,7 @@
 "use client";
 
 import { X } from "lucide-react";
-import { useEffect, useState, type KeyboardEvent } from "react";
+import { useState, type KeyboardEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useSessionIdentity } from "@/lib/container-connection";
@@ -42,14 +42,11 @@ export function OnboardingCardsView({
   onDismiss,
 }: OnboardingCardsViewProps) {
   const current = snapshot.steps.find((step) => step.step === snapshot.current_step);
+  // The chip focus + draft are KEYED to the current step: advancing the step
+  // remounts the card body (the key below), which resets both — no
+  // synchronous setState-in-effect cascade (the react-hooks rule).
   const [focusedChip, setFocusedChip] = useState(0);
   const [draft, setDraft] = useState("");
-
-  // Reset the chip focus + draft when the step advances (a new question).
-  useEffect(() => {
-    setFocusedChip(0);
-    setDraft("");
-  }, [snapshot.current_step]);
 
   if (snapshot.status !== "pending" || !current) {
     // Zero-config start: nothing blocks the product (D16). The interview
@@ -145,6 +142,7 @@ export function OnboardingCardsView({
       ) : null}
 
       <div
+        key={current.step}
         role="radiogroup"
         aria-label={current.question ?? current.title}
         onKeyDown={onChipKeyDown}
@@ -164,7 +162,7 @@ export function OnboardingCardsView({
             onClick={() => onAnswer(current.step, option.option_id, null)}
             className={cn(
               "flex items-start gap-2 rounded-lg border px-2.5 py-2 text-left transition-colors",
-                           focusedChip === index
+              focusedChip === index
                 ? "border-line-accent bg-surface text-text"
                 : "border-line bg-surface text-muted hover:bg-surface hover:text-text",
             )}

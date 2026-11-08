@@ -45,12 +45,31 @@ export class OnboardingServiceError extends Error {
 }
 
 /** The typed choice chips per step (E43: options are data). */
-const STEP_OPTIONS: Record<string, Array<{ option_id: string; label: string; description: string }>> = {
+const STEP_OPTIONS: Record<
+  string,
+  Array<{ option_id: string; label: string; description: string }>
+> = {
   welcome: [
-    { option_id: "research", label: "Research", description: "Papers, sources, citations, summaries." },
-    { option_id: "programming", label: "Programming", description: "Assignments, code review, debugging." },
-    { option_id: "exam_prep", label: "Exam preparation", description: "Study plans, practice questions, recaps." },
-    { option_id: "something_else", label: "Something else", description: "Tell us in your own words below." },
+    {
+      option_id: "research",
+      label: "Research",
+      description: "Papers, sources, citations, summaries.",
+    },
+    {
+      option_id: "programming",
+      label: "Programming",
+      description: "Assignments, code review, debugging.",
+    },
+    {
+      option_id: "exam_prep",
+      label: "Exam preparation",
+      description: "Study plans, practice questions, recaps.",
+    },
+    {
+      option_id: "something_else",
+      label: "Something else",
+      description: "Tell us in your own words below.",
+    },
   ],
   provider_check: [
     {
@@ -88,7 +107,8 @@ const STEP_OPTIONS: Record<string, Array<{ option_id: string; label: string; des
 };
 
 const STEP_QUESTIONS: Record<string, string | null> = {
-  welcome: "What do you mostly want help with? Pick whatever's closest — we can always expand from there.",
+  welcome:
+    "What do you mostly want help with? Pick whatever's closest — we can always expand from there.",
   provider_check: null,
   approvals_briefing: "Ready to see what pauses?",
   memory_briefing: "Should agents remember things automatically?",

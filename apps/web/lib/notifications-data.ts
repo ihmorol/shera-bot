@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 
 import {
   fetchNotificationSettings,
@@ -11,13 +12,7 @@ import {
 import { RuntimeApiError } from "@/lib/runtime-client";
 import type { NotificationCommand } from "@shera-bot/contracts";
 import type { NotificationView } from "@shera-bot/contracts";
-import {
-  broadcastTabEvent,
-  openTabSyncChannel,
-  subscribeTabEvents,
-  type TabSyncChannel,
-} from "@/lib/tab-sync";
-import { useEffect, useRef } from "react";
+import { broadcastTabEvent, openTabSyncChannel, subscribeTabEvents } from "@/lib/tab-sync";
 
 /**
  * S30 — the notification center data hooks (the approvals-data idiom). The
@@ -135,7 +130,8 @@ export function useNotificationCommands(workspaceId: string | null): {
 } {
   const queryClient = useQueryClient();
   const mutation = useMutation({
-    mutationFn: (command: NotificationCommand) => submitNotificationCommand(workspaceId as string, command),
+    mutationFn: (command: NotificationCommand) =>
+      submitNotificationCommand(workspaceId as string, command),
     onSuccess: (_result, command) => {
       void queryClient.invalidateQueries({ queryKey: ["notifications", workspaceId] });
       void queryClient.invalidateQueries({ queryKey: ["notification-settings", workspaceId] });
@@ -144,6 +140,12 @@ export function useNotificationCommands(workspaceId: string | null): {
         void queryClient.invalidateQueries({ queryKey: ["approval-mutes", workspaceId] });
         void queryClient.invalidateQueries({ queryKey: ["approval-due-reminders", workspaceId] });
       }
+      // The cross-tab hint (client convenience UNDER the server truth): the
+      // other tabs' polls converge immediately instead of waiting a tick.
+      // A short-lived channel per hint — stateless, no refs.
+      const channel = openTabSyncChannel();
+      broadcastTabEvent(channel, { kind: "notifications-changed" });
+      channel?.close();
     },
   });
   return {
@@ -156,7 +158,6 @@ export function useNotificationCommands(workspaceId: string | null): {
       : undefined,
   };
 }
-
 
 /**
  * The receiving side of the hint layer: another tab's settled command

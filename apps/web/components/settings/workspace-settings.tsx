@@ -19,9 +19,9 @@ export function WorkspaceSettingsView() {
         </div>
         <p className="mt-2 text-sm font-medium text-text">student pack v1</p>
         <p className="mt-1 text-xs text-muted">
-          Every Agent and Operation in this workspace comes from this versioned pack. Tasks keep
-          the pack version that created them; upgrades are explicit and compatibility-checked
-          (D19, D40).
+          Every Agent and Operation in this workspace comes from this versioned pack. Tasks keep the
+          pack version that created them; upgrades are explicit and compatibility-checked (D19,
+          D40).
         </p>
       </section>
 
@@ -36,8 +36,8 @@ export function WorkspaceSettingsView() {
           </h3>
         </div>
         <p className="mt-2 text-sm text-text">
-          One workspace per account, one pinned pack per workspace — read-only by decision: there
-          is no workspace or pack switcher to build (D40, D19).
+          One workspace per account, one pinned pack per workspace — read-only by decision: there is
+          no workspace or pack switcher to build (D40, D19).
         </p>
         <p className="mt-1 text-xs text-muted">
           Agents from different packs never silently collaborate; cross-pack work needs an explicit

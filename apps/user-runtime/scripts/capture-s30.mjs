@@ -99,9 +99,21 @@ const seedLifecycle = (eventId, eventType, taskId, toState, at) => {
     correlation_id: `corr_${eventId}`,
   });
 };
-seedLifecycle("evt_cap_done", "task.succeeded", "task_cap_done", "SUCCEEDED", "2026-11-08T09:00:00.000Z");
+seedLifecycle(
+  "evt_cap_done",
+  "task.succeeded",
+  "task_cap_done",
+  "SUCCEEDED",
+  "2026-11-08T09:00:00.000Z",
+);
 seedLifecycle("evt_cap_fail", "task.failed", "task_cap_fail", "FAILED", "2026-11-08T09:05:00.000Z");
-seedLifecycle("evt_cap_rec", "task.recovery_required", "task_cap_rec", "RECOVERY_REQUIRED", "2026-11-08T09:10:00.000Z");
+seedLifecycle(
+  "evt_cap_rec",
+  "task.recovery_required",
+  "task_cap_rec",
+  "RECOVERY_REQUIRED",
+  "2026-11-08T09:10:00.000Z",
+);
 console.log("lifecycle events seeded");
 
 // (b) Direct-chat history for the roster activity lines (E43 idea 4) — the
@@ -112,7 +124,9 @@ for (const [agentSlug, agentId] of [
   ["researcher", "agent_researcher"],
   ["developer", "agent_developer"],
 ]) {
-  const detail = await fetch(`${origin}/v1/agents/${agentId}?workspace_id=${WS}`).then((r) => r.json());
+  const detail = await fetch(`${origin}/v1/agents/${agentId}?workspace_id=${WS}`).then((r) =>
+    r.json(),
+  );
   chatBinds.push({ agentId, chatId: detail.direct_chat_id });
   runtime.journal.append({
     stream_id: `conversation:${detail.direct_chat_id}`,
@@ -174,8 +188,9 @@ console.log("capture run started", runStart.task_id, runStart.state);
 // The pending approval comes from the approvals module's OWN record (the
 // D9 request the runtime created — or, when this composition runs without
 // the scripted delegate, the typed proposal seam the service exposes).
-const pendingApprovals = await fetch(`${origin}/v1/approvals/pending?workspace_id=${WS}`)
-  .then((r) => r.json());
+const pendingApprovals = await fetch(`${origin}/v1/approvals/pending?workspace_id=${WS}`).then(
+  (r) => r.json(),
+);
 console.log("pending approvals:", pendingApprovals.approvals.length);
 const approvalId = pendingApprovals.approvals[0]?.approval_id ?? null;
 if (!approvalId) {
@@ -219,21 +234,33 @@ if (!approvalId) {
 
 // The runtime's OWN records at capture time — the truth legs compare
 // against THESE reads, never against local expectations.
-const truthNotifications = await fetch(`${origin}/v1/notifications?workspace_id=${WS}`)
-  .then((r) => r.json());
-const truthSettings = await fetch(`${origin}/v1/notifications/settings?workspace_id=${WS}`)
-  .then((r) => r.json());
-const truthOnboarding = await fetch(`${origin}/v1/onboarding?workspace_id=${WS}`)
-  .then((r) => r.json());
+const truthNotifications = await fetch(`${origin}/v1/notifications?workspace_id=${WS}`).then((r) =>
+  r.json(),
+);
+const truthSettings = await fetch(`${origin}/v1/notifications/settings?workspace_id=${WS}`).then(
+  (r) => r.json(),
+);
+const truthOnboarding = await fetch(`${origin}/v1/onboarding?workspace_id=${WS}`).then((r) =>
+  r.json(),
+);
 const truthRoster = await fetch(`${origin}/v1/agents?workspace_id=${WS}`).then((r) => r.json());
-writeFileSync(join(CAPTURE_OUT, "s30-notifications-truth.json"), JSON.stringify({
-  notifications: truthNotifications,
-  settings: truthSettings,
-  onboarding: truthOnboarding,
-  roster: truthRoster,
-}, null, 2));
+writeFileSync(
+  join(CAPTURE_OUT, "s30-notifications-truth.json"),
+  JSON.stringify(
+    {
+      notifications: truthNotifications,
+      settings: truthSettings,
+      onboarding: truthOnboarding,
+      roster: truthRoster,
+    },
+    null,
+    2,
+  ),
+);
 const expectedNoteIds = truthNotifications.notifications.map((row) => row.notification_id);
-const expectedUnread = truthNotifications.notifications.filter((row) => row.read_at === null).length;
+const expectedUnread = truthNotifications.notifications.filter(
+  (row) => row.read_at === null,
+).length;
 console.log("expected notification rows:", expectedNoteIds.length, "unread:", expectedUnread);
 
 // ---------------------------------------------------------------------------
@@ -436,16 +463,33 @@ for (const [name, viewport] of [
       (p.textContent ?? "").includes("Read-only by decision"),
     ).length,
   }));
-  const missing = ["account", "agents", "providers", "credits", "tools", "permissions",
-    "workspace", "files", "memory", "schedules", "notifications", "privacy", "runtime", "git",
-    "backups"].filter((slug) => !rendered.categoryLinks.includes(`/app/settings/${slug}`));
+  const missing = [
+    "account",
+    "agents",
+    "providers",
+    "credits",
+    "tools",
+    "permissions",
+    "workspace",
+    "files",
+    "memory",
+    "schedules",
+    "notifications",
+    "privacy",
+    "runtime",
+    "git",
+    "backups",
+  ].filter((slug) => !rendered.categoryLinks.includes(`/app/settings/${slug}`));
   if (missing.length > 0) {
     console.error("SETTINGS REGISTER TRUTH LEG FAILED:", missing);
     process.exitCode = 1;
   } else {
     console.log("settings register truth leg OK: fifteen categories linked");
   }
-  evidence.truthLegs[`overview_${viewport.width}`] = { categoryLinks: rendered.categoryLinks, missing };
+  evidence.truthLegs[`overview_${viewport.width}`] = {
+    categoryLinks: rendered.categoryLinks,
+    missing,
+  };
   await snap(page, name);
   await page.close();
   await context.close();
@@ -456,7 +500,10 @@ for (const [name, viewport] of [
 // ---------------------------------------------------------------------------
 
 {
-  const { context, page } = await openApp("/app/settings/notifications", { width: 1440, height: 900 });
+  const { context, page } = await openApp("/app/settings/notifications", {
+    width: 1440,
+    height: 900,
+  });
   await page.waitForSelector('[data-testid="notifications-in-app-toggle"]', { timeout: 30000 });
   await page.waitForTimeout(800);
   // The pending onboarding dock overlays the lower-right content — dismiss
@@ -466,8 +513,12 @@ for (const [name, viewport] of [
     await page.waitForTimeout(1500);
   }
   const before = await page.evaluate(() => ({
-    inApp: document.querySelector('[data-testid="notifications-in-app-toggle"]')?.getAttribute("aria-pressed"),
-    browser: document.querySelector('[data-testid="notifications-browser-toggle"]')?.getAttribute("aria-pressed"),
+    inApp: document
+      .querySelector('[data-testid="notifications-in-app-toggle"]')
+      ?.getAttribute("aria-pressed"),
+    browser: document
+      .querySelector('[data-testid="notifications-browser-toggle"]')
+      ?.getAttribute("aria-pressed"),
   }));
   await snap(page, "s30-notifications-settings-1440");
 
@@ -476,10 +527,13 @@ for (const [name, viewport] of [
   await page.click('[data-testid="notifications-browser-toggle"]');
   await page.waitForTimeout(2000);
   const after = await page.evaluate(() => ({
-    browser: document.querySelector('[data-testid="notifications-browser-toggle"]')?.getAttribute("aria-pressed"),
+    browser: document
+      .querySelector('[data-testid="notifications-browser-toggle"]')
+      ?.getAttribute("aria-pressed"),
   }));
-  const runtimeSettings = await fetch(`${origin}/v1/notifications/settings?workspace_id=${WS}`)
-    .then((r) => r.json());
+  const runtimeSettings = await fetch(
+    `${origin}/v1/notifications/settings?workspace_id=${WS}`,
+  ).then((r) => r.json());
   const persisted = runtimeSettings.settings.browser_enabled === true;
   const ok = after.browser === "true" && persisted;
   if (!ok) {
@@ -495,8 +549,9 @@ for (const [name, viewport] of [
   await page.waitForTimeout(400);
   await page.getByRole("button", { name: "Confirm reset" }).click();
   await page.waitForTimeout(2000);
-  const resetSettings = await fetch(`${origin}/v1/notifications/settings?workspace_id=${WS}`)
-    .then((r) => r.json());
+  const resetSettings = await fetch(`${origin}/v1/notifications/settings?workspace_id=${WS}`).then(
+    (r) => r.json(),
+  );
   const resetOk = resetSettings.settings.browser_enabled === false;
   if (!resetOk) {
     console.error("NOTIFICATION RESET LEG FAILED:", resetSettings);
@@ -542,16 +597,23 @@ for (const [name, viewport] of [
     freeText: document.querySelector('[data-testid="onboarding-free-text"]') !== null,
     dismiss: document.querySelector('[data-testid="onboarding-dismiss"]') !== null,
   }));
-  const runtimeSnapshot = await fetch(`${origin}/v1/onboarding?workspace_id=${WS}`).then((r) => r.json());
+  const runtimeSnapshot = await fetch(`${origin}/v1/onboarding?workspace_id=${WS}`).then((r) =>
+    r.json(),
+  );
   const ok =
     runtimeSnapshot.onboarding.status === "pending" &&
     runtimeSnapshot.onboarding.current_step === "welcome" &&
     JSON.stringify(rendered.chips) ===
       JSON.stringify(
-        runtimeSnapshot.onboarding.steps.find((step) => step.step === "welcome").options.map((o) => o.option_id),
+        runtimeSnapshot.onboarding.steps
+          .find((step) => step.step === "welcome")
+          .options.map((o) => o.option_id),
       );
   if (!ok) {
-    console.error("ONBOARDING TRUTH LEG FAILED:", { rendered, snapshot: runtimeSnapshot.onboarding });
+    console.error("ONBOARDING TRUTH LEG FAILED:", {
+      rendered,
+      snapshot: runtimeSnapshot.onboarding,
+    });
     process.exitCode = 1;
   } else {
     console.log("onboarding truth leg OK: the card renders the runtime's typed step");
@@ -562,10 +624,12 @@ for (const [name, viewport] of [
   await page.keyboard.press("Tab");
   const trail = [];
   for (let i = 0; i < 8; i += 1) {
-    const focused = await page.evaluate(() =>
-      document.activeElement?.getAttribute("data-option-id") ??
-      document.activeElement?.getAttribute("data-testid") ??
-      document.activeElement?.tagName ?? "none",
+    const focused = await page.evaluate(
+      () =>
+        document.activeElement?.getAttribute("data-option-id") ??
+        document.activeElement?.getAttribute("data-testid") ??
+        document.activeElement?.tagName ??
+        "none",
     );
     trail.push(String(focused));
     await page.keyboard.press("Tab");
@@ -605,7 +669,11 @@ for (const [name, viewport] of [
   } else {
     console.log("onboarding dismiss leg OK: dismissed, persisted, the dock renders nothing");
   }
-  evidence.interactiveLegs.onboardingDismiss = { status: dismissed.onboarding.status, dockGone, ok: dismissOk };
+  evidence.interactiveLegs.onboardingDismiss = {
+    status: dismissed.onboarding.status,
+    dockGone,
+    ok: dismissOk,
+  };
 
   // The Account surface's reopen control: the interview comes back (D16).
   await page.goto(webOrigin + "/app/settings/account", { waitUntil: "domcontentloaded" });
@@ -646,7 +714,11 @@ for (const [name, viewport] of [
     console.error("ROSTER ACTIVITY LEG FAILED:", { roster, expectedLines });
     process.exitCode = 1;
   } else {
-    console.log("roster activity leg OK:", roster.activityLines.length, "preview lines from the runtime's records");
+    console.log(
+      "roster activity leg OK:",
+      roster.activityLines.length,
+      "preview lines from the runtime's records",
+    );
   }
   evidence.truthLegs.rosterActivity = { roster, expectedLines, ok };
   await snap(page, "s30-sidebar-roster-activity-1440");

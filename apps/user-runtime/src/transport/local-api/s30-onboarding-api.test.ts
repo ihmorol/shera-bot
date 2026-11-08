@@ -149,10 +149,7 @@ describe("S30 onboarding: the D16 state machine", () => {
 
     // The recommended defaults are ALREADY active with no user action: the
     // product works immediately (D16 zero-config start).
-    const noteSettings = await get(
-      origin,
-      `/v1/notifications/settings?workspace_id=${WORKSPACE}`,
-    );
+    const noteSettings = await get(origin, `/v1/notifications/settings?workspace_id=${WORKSPACE}`);
     expect(noteSettings.body["settings"]).toMatchObject({
       in_app_enabled: true,
       browser_enabled: false,
@@ -170,8 +167,9 @@ describe("S30 onboarding: the D16 state machine", () => {
 
     // A fresh workspace has NO provider configured: the step renders the
     // honest configuration state (G4/D17), never an invented default.
-    const fresh = (await get(origin, `/v1/onboarding?workspace_id=${WORKSPACE}`))
-      .body["onboarding"] as OnboardingSnapshot;
+    const fresh = (await get(origin, `/v1/onboarding?workspace_id=${WORKSPACE}`)).body[
+      "onboarding"
+    ] as OnboardingSnapshot;
     const freshCheck = fresh.steps.find((step) => step.step === "provider_check")!;
     expect(fresh.provider_summary).toMatchObject({ configured: false });
     expect(freshCheck.options.map((option) => option.option_id)).toEqual(["keep_default"]);
@@ -192,8 +190,9 @@ describe("S30 onboarding: the D16 state machine", () => {
       request_params: {},
     });
     expect(configure.status).toBe(201);
-    const after = (await get(origin, `/v1/onboarding?workspace_id=${WORKSPACE}`))
-      .body["onboarding"] as OnboardingSnapshot;
+    const after = (await get(origin, `/v1/onboarding?workspace_id=${WORKSPACE}`)).body[
+      "onboarding"
+    ] as OnboardingSnapshot;
     expect(after.provider_summary).toMatchObject({
       configured: true,
       provider_id: (configure.body as Record<string, unknown>)["id"],
@@ -213,8 +212,9 @@ describe("S30 onboarding: the D16 state machine", () => {
     );
     expect(welcome.status).toBe(200);
 
-    let snapshot = (await get(origin, `/v1/onboarding?workspace_id=${WORKSPACE}`))
-      .body["onboarding"] as OnboardingSnapshot;
+    let snapshot = (await get(origin, `/v1/onboarding?workspace_id=${WORKSPACE}`)).body[
+      "onboarding"
+    ] as OnboardingSnapshot;
     expect(snapshot.current_step).toBe("provider_check");
     expect(snapshot.answers["welcome"]).toMatchObject({ option_id: "research" });
 
@@ -232,11 +232,16 @@ describe("S30 onboarding: the D16 state machine", () => {
     const approvals = await post(
       origin,
       "/v1/onboarding/commands",
-      onboardingCommand({ type: "onboarding.answer", step: "approvals_briefing", option_id: "got_it" }),
+      onboardingCommand({
+        type: "onboarding.answer",
+        step: "approvals_briefing",
+        option_id: "got_it",
+      }),
     );
     expect(approvals.status).toBe(200);
-    snapshot = (await get(origin, `/v1/onboarding?workspace_id=${WORKSPACE}`))
-      .body["onboarding"] as OnboardingSnapshot;
+    snapshot = (await get(origin, `/v1/onboarding?workspace_id=${WORKSPACE}`)).body[
+      "onboarding"
+    ] as OnboardingSnapshot;
     expect(snapshot.current_step).toBe("memory_briefing");
 
     // The memory briefing's auto-memory choice goes through the SAME typed
@@ -245,7 +250,11 @@ describe("S30 onboarding: the D16 state machine", () => {
     const memoryOff = await post(
       origin,
       "/v1/onboarding/commands",
-      onboardingCommand({ type: "onboarding.answer", step: "memory_briefing", option_id: "memory_auto_off" }),
+      onboardingCommand({
+        type: "onboarding.answer",
+        step: "memory_briefing",
+        option_id: "memory_auto_off",
+      }),
     );
     expect(memoryOff.status).toBe(200);
     const memoryView = await get(origin, `/v1/memory?workspace_id=${WORKSPACE}`);
@@ -266,8 +275,9 @@ describe("S30 onboarding: the D16 state machine", () => {
       enabled: true,
     });
     expect(memoryOn.status).toBe(200);
-    snapshot = (await get(origin, `/v1/onboarding?workspace_id=${WORKSPACE}`))
-      .body["onboarding"] as OnboardingSnapshot;
+    snapshot = (await get(origin, `/v1/onboarding?workspace_id=${WORKSPACE}`)).body[
+      "onboarding"
+    ] as OnboardingSnapshot;
     expect(snapshot.answers["memory_briefing"]).toMatchObject({ option_id: "memory_auto_off" });
     // The step view carries the CURRENT effective auto-memory state — the
     // runtime's own record, not a stale local copy.
@@ -281,8 +291,9 @@ describe("S30 onboarding: the D16 state machine", () => {
       onboardingCommand({ type: "onboarding.answer", step: "done", option_id: "finish" }),
     );
     expect(done.status).toBe(200);
-    snapshot = (await get(origin, `/v1/onboarding?workspace_id=${WORKSPACE}`))
-      .body["onboarding"] as OnboardingSnapshot;
+    snapshot = (await get(origin, `/v1/onboarding?workspace_id=${WORKSPACE}`)).body[
+      "onboarding"
+    ] as OnboardingSnapshot;
     expect(snapshot.status).toBe("completed");
   });
 
@@ -303,7 +314,11 @@ describe("S30 onboarding: the D16 state machine", () => {
     const skipAhead = await post(
       origin,
       "/v1/onboarding/commands",
-      onboardingCommand({ type: "onboarding.answer", step: "memory_briefing", option_id: "memory_auto_on" }),
+      onboardingCommand({
+        type: "onboarding.answer",
+        step: "memory_briefing",
+        option_id: "memory_auto_on",
+      }),
     );
     expect(skipAhead.status).toBe(400);
 
@@ -314,8 +329,9 @@ describe("S30 onboarding: the D16 state machine", () => {
       onboardingCommand({ type: "onboarding.dismiss" }),
     );
     expect(dismiss.status).toBe(200);
-    let snapshot = (await get(origin, `/v1/onboarding?workspace_id=${WORKSPACE}`))
-      .body["onboarding"] as OnboardingSnapshot;
+    let snapshot = (await get(origin, `/v1/onboarding?workspace_id=${WORKSPACE}`)).body[
+      "onboarding"
+    ] as OnboardingSnapshot;
     expect(snapshot.status).toBe("dismissed");
 
     // Reopen: pending again, resumable at the first unanswered step.
@@ -325,8 +341,9 @@ describe("S30 onboarding: the D16 state machine", () => {
       onboardingCommand({ type: "onboarding.reopen" }),
     );
     expect(reopen.status).toBe(200);
-    snapshot = (await get(origin, `/v1/onboarding?workspace_id=${WORKSPACE}`))
-      .body["onboarding"] as OnboardingSnapshot;
+    snapshot = (await get(origin, `/v1/onboarding?workspace_id=${WORKSPACE}`)).body[
+      "onboarding"
+    ] as OnboardingSnapshot;
     expect(snapshot.status).toBe("pending");
     expect(snapshot.current_step).toBe("welcome");
 
@@ -341,13 +358,10 @@ describe("S30 onboarding: the D16 state machine", () => {
       "/v1/onboarding/commands",
       onboardingCommand({ type: "onboarding.dismiss" }),
     );
-    await post(
-      origin,
-      "/v1/onboarding/commands",
-      onboardingCommand({ type: "onboarding.reopen" }),
-    );
-    snapshot = (await get(origin, `/v1/onboarding?workspace_id=${WORKSPACE}`))
-      .body["onboarding"] as OnboardingSnapshot;
+    await post(origin, "/v1/onboarding/commands", onboardingCommand({ type: "onboarding.reopen" }));
+    snapshot = (await get(origin, `/v1/onboarding?workspace_id=${WORKSPACE}`)).body[
+      "onboarding"
+    ] as OnboardingSnapshot;
     expect(snapshot.current_step).toBe("provider_check");
     expect(snapshot.answers["welcome"]).toMatchObject({ option_id: "exam_prep" });
   });

@@ -88,7 +88,11 @@ export class NotificationsRepository {
   // Per-notification state (read / mute stamps)
   // -------------------------------------------------------------------------
 
-  getState(workspaceId: string, notificationId: string, exec?: DatabaseSync): NotificationStateRow | null {
+  getState(
+    workspaceId: string,
+    notificationId: string,
+    exec?: DatabaseSync,
+  ): NotificationStateRow | null {
     const db = exec ?? this.tx.connection();
     const row = db
       .prepare(
@@ -115,7 +119,12 @@ export class NotificationsRepository {
    * Stamp the read time (idempotent: an already-read row keeps its FIRST
    * read stamp — the moment the user actually read it, not a re-read).
    */
-  stampRead(workspaceId: string, notificationId: string, readAt: string, exec?: DatabaseSync): NotificationStateRow {
+  stampRead(
+    workspaceId: string,
+    notificationId: string,
+    readAt: string,
+    exec?: DatabaseSync,
+  ): NotificationStateRow {
     const db = exec ?? this.tx.connection();
     const existing = this.getState(workspaceId, notificationId, db);
     if (existing?.read_at) {
@@ -128,13 +137,7 @@ export class NotificationsRepository {
        ON CONFLICT (workspace_id, notification_id) DO UPDATE SET
          read_at = COALESCE(notification_state.read_at, excluded.read_at),
          updated_at = excluded.updated_at`,
-    ).run(
-      workspaceId,
-      notificationId,
-      readAt,
-      existing?.muted_at ?? null,
-      readAt,
-    );
+    ).run(workspaceId, notificationId, readAt, existing?.muted_at ?? null, readAt);
     const row = this.getState(workspaceId, notificationId, db);
     if (!row) {
       throw new Error("notification state: stampRead reported success but the row is absent");
@@ -146,7 +149,12 @@ export class NotificationsRepository {
    * Stamp the mute (E3: delivery suppression only — the row stays listed and
    * its source record never changes). Idempotent on the same stamp rule.
    */
-  stampMuted(workspaceId: string, notificationId: string, mutedAt: string, exec?: DatabaseSync): NotificationStateRow {
+  stampMuted(
+    workspaceId: string,
+    notificationId: string,
+    mutedAt: string,
+    exec?: DatabaseSync,
+  ): NotificationStateRow {
     const db = exec ?? this.tx.connection();
     const existing = this.getState(workspaceId, notificationId, db);
     if (existing?.muted_at) {
@@ -159,13 +167,7 @@ export class NotificationsRepository {
        ON CONFLICT (workspace_id, notification_id) DO UPDATE SET
          muted_at = COALESCE(notification_state.muted_at, excluded.muted_at),
          updated_at = excluded.updated_at`,
-    ).run(
-      workspaceId,
-      notificationId,
-      existing?.read_at ?? null,
-      mutedAt,
-      mutedAt,
-    );
+    ).run(workspaceId, notificationId, existing?.read_at ?? null, mutedAt, mutedAt);
     const row = this.getState(workspaceId, notificationId, db);
     if (!row) {
       throw new Error("notification state: stampMuted reported success but the row is absent");

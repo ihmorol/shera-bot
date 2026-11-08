@@ -72,10 +72,7 @@ import {
   registerNotificationsRoutes,
   type NotificationsApiHandle,
 } from "./s30-notifications-api.ts";
-import {
-  registerOnboardingRoutes,
-  type OnboardingApiHandle,
-} from "./s30-onboarding-api.ts";
+import { registerOnboardingRoutes, type OnboardingApiHandle } from "./s30-onboarding-api.ts";
 
 export const SUBMIT_CONVERSATION_COMMAND_PATH = "/v1/conversations/commands" as const;
 export const LIST_CONVERSATION_EVENTS_PATH = "/v1/conversations/:conversation_id/events" as const;
@@ -411,10 +408,7 @@ export interface LocalApiDeps {
    * transport never touches SQL). Null where the history is quiet: the UI
    * renders the honest quiet line, never an invented activity.
    */
-  rosterActivity?: (
-    workspaceId: string,
-    agentId: string,
-  ) => { at: string; preview: string } | null;
+  rosterActivity?: (workspaceId: string, agentId: string) => { at: string; preview: string } | null;
   /**
    * S13: the operations seam — the whole Operation chat surface goes through
    * the operations module's service (records, roster commands, coordinator,
@@ -635,13 +629,12 @@ export function createLocalApi(deps: LocalApiDeps): Express {
     res.status(200).json({
       agents: deps.agents
         .listAgents(query.data.workspace_id)
-        .map(
-          (row) =>
-            agentSummary(
-              row,
-              presenceOf(query.data.workspace_id, row.agent_id),
-              deps.rosterActivity?.(query.data.workspace_id, row.agent_id) ?? null,
-            ),
+        .map((row) =>
+          agentSummary(
+            row,
+            presenceOf(query.data.workspace_id, row.agent_id),
+            deps.rosterActivity?.(query.data.workspace_id, row.agent_id) ?? null,
+          ),
         ),
     });
   });

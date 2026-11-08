@@ -31,7 +31,9 @@ import {
   type TabSyncEvent,
 } from "../lib/tab-sync";
 
-function decisionInput(overrides: Partial<BrowserNotificationInput> = {}): BrowserNotificationInput {
+function decisionInput(
+  overrides: Partial<BrowserNotificationInput> = {},
+): BrowserNotificationInput {
   return {
     permission: "granted",
     browserEnabled: true,
@@ -107,12 +109,16 @@ describe("TabSync events (the hint layer under the server cursor)", () => {
 
     // No conversation history rides this channel: the payload vocabulary has
     // no text/message/event-body field at all.
-    const vocabulary = JSON.stringify(parseTabSyncEvent(tabSyncEventBody({ kind: "approvals-changed" })));
+    const vocabulary = JSON.stringify(
+      parseTabSyncEvent(tabSyncEventBody({ kind: "approvals-changed" })),
+    );
     expect(vocabulary).not.toMatch(/text|message|body|summary/);
   });
 
   it("a foreign payload is refused — the channel carries only this slice's hints", () => {
-    expect(parseTabSyncEvent(JSON.stringify({ kind: "conversation-history", messages: [] }))).toBeNull();
+    expect(
+      parseTabSyncEvent(JSON.stringify({ kind: "conversation-history", messages: [] })),
+    ).toBeNull();
     expect(parseTabSyncEvent("not json")).toBeNull();
     expect(TAB_SYNC_EVENT).toContain("notifications-changed");
     expect(TAB_SYNC_EVENT).toContain("approvals-changed");

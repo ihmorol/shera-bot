@@ -10,7 +10,10 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { OnboardingCardsView, type OnboardingCardSnapshot } from "../components/onboarding/onboarding-cards";
+import {
+  OnboardingCardsView,
+  type OnboardingCardSnapshot,
+} from "../components/onboarding/onboarding-cards";
 
 function snapshot(overrides: Partial<OnboardingCardSnapshot> = {}): OnboardingCardSnapshot {
   return {
@@ -23,12 +26,29 @@ function snapshot(overrides: Partial<OnboardingCardSnapshot> = {}): OnboardingCa
         step: "welcome",
         title: "Welcome to Shera",
         body: "Shera works right away with safe defaults — nothing here blocks you.",
-        question: "What do you mostly want help with? Pick whatever's closest — we can always expand from there.",
+        question:
+          "What do you mostly want help with? Pick whatever's closest — we can always expand from there.",
         options: [
-          { option_id: "research", label: "Research", description: "Papers, sources, citations, summaries." },
-          { option_id: "programming", label: "Programming", description: "Assignments, code review, debugging." },
-          { option_id: "exam_prep", label: "Exam preparation", description: "Study plans, practice questions, recaps." },
-          { option_id: "something_else", label: "Something else", description: "Tell us in your own words below." },
+          {
+            option_id: "research",
+            label: "Research",
+            description: "Papers, sources, citations, summaries.",
+          },
+          {
+            option_id: "programming",
+            label: "Programming",
+            description: "Assignments, code review, debugging.",
+          },
+          {
+            option_id: "exam_prep",
+            label: "Exam preparation",
+            description: "Study plans, practice questions, recaps.",
+          },
+          {
+            option_id: "something_else",
+            label: "Something else",
+            description: "Tell us in your own words below.",
+          },
         ],
         accepts_free_text: true,
         free_text_placeholder: "Tell us in your own words…",
@@ -40,7 +60,11 @@ function snapshot(overrides: Partial<OnboardingCardSnapshot> = {}): OnboardingCa
         body: "Shera uses the deployment's default provider and model.",
         question: null,
         options: [
-          { option_id: "keep_default", label: "Keep the deployment default", description: "Change anytime in Settings." },
+          {
+            option_id: "keep_default",
+            label: "Keep the deployment default",
+            description: "Change anytime in Settings.",
+          },
         ],
         accepts_free_text: false,
         free_text_placeholder: null,
@@ -87,12 +111,15 @@ describe("Onboarding cards (E43 in-chat interview)", () => {
   it("renders the composer-style free-text answer only where the step accepts it", () => {
     const html = renderCards();
     expect(html).toContain('data-testid="onboarding-free-text"');
-    const noText = renderCards({}, snapshot({
-      current_step: "provider_check",
-      steps: snapshot().steps.map((step) =>
-        step.step === "provider_check" ? { ...step, answer: null } : step,
-      ),
-    }));
+    const noText = renderCards(
+      {},
+      snapshot({
+        current_step: "provider_check",
+        steps: snapshot().steps.map((step) =>
+          step.step === "provider_check" ? { ...step, answer: null } : step,
+        ),
+      }),
+    );
     expect(noText).toContain('data-option-id="keep_default"');
     expect(noText).not.toContain('data-testid="onboarding-free-text"');
   });
@@ -118,8 +145,16 @@ describe("Onboarding cards (E43 in-chat interview)", () => {
         body: "Agents can remember useful facts automatically.",
         question: "Should agents remember things automatically?",
         options: [
-          { option_id: "memory_auto_on", label: "Keep auto-memory on", description: "Inspectable, forgettable." },
-          { option_id: "memory_auto_off", label: "Turn auto-memory off", description: "Re-enable in Settings." },
+          {
+            option_id: "memory_auto_on",
+            label: "Keep auto-memory on",
+            description: "Inspectable, forgettable.",
+          },
+          {
+            option_id: "memory_auto_off",
+            label: "Turn auto-memory off",
+            description: "Re-enable in Settings.",
+          },
         ],
         accepts_free_text: false,
         free_text_placeholder: null,
@@ -140,7 +175,13 @@ describe("Onboarding cards (E43 in-chat interview)", () => {
       {},
       snapshot({
         steps,
-        answers: { welcome: { option_id: "research", free_text: null, answered_at: "2026-11-08T10:00:00.000Z" } },
+        answers: {
+          welcome: {
+            option_id: "research",
+            free_text: null,
+            answered_at: "2026-11-08T10:00:00.000Z",
+          },
+        },
         current_step: "provider_check",
       }),
     );

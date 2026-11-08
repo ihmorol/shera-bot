@@ -26,7 +26,11 @@ export interface FilesSettingsViewProps {
   safeErrorMessage?: string | undefined;
 }
 
-export function FilesSettingsView({ projects, surfaceState, safeErrorMessage }: FilesSettingsViewProps) {
+export function FilesSettingsView({
+  projects,
+  surfaceState,
+  safeErrorMessage,
+}: FilesSettingsViewProps) {
   if (surfaceState === "loading") {
     return (
       <div aria-busy="true" aria-hidden="true" className="space-y-3">

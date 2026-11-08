@@ -69,7 +69,10 @@ export function AccountSettingsView(props: AccountSettingsViewProps) {
 
   return (
     <div className="space-y-4">
-      <section aria-label="Google identity" className="rounded-xl border border-line bg-surface p-4">
+      <section
+        aria-label="Google identity"
+        className="rounded-xl border border-line bg-surface p-4"
+      >
         <h3 className="font-mono text-xs uppercase tracking-[0.16em] text-muted">Signed in</h3>
         <p className="mt-2 text-sm font-medium text-text">{props.displayName}</p>
         <p className="text-sm text-muted">{props.email}</p>
@@ -99,7 +102,10 @@ export function AccountSettingsView(props: AccountSettingsViewProps) {
         </p>
       ) : null}
 
-      <section aria-label="Welcome interview" className="rounded-xl border border-line bg-surface p-4">
+      <section
+        aria-label="Welcome interview"
+        className="rounded-xl border border-line bg-surface p-4"
+      >
         <h3 className="font-mono text-xs uppercase tracking-[0.16em] text-muted">
           Welcome interview
         </h3>
@@ -162,7 +168,10 @@ export function AccountSettingsSurface() {
   }
   if (session.isError || !session.data) {
     return (
-      <div role="status" className="mx-auto my-8 max-w-md rounded-xl border border-line bg-surface p-6 text-center text-sm text-text">
+      <div
+        role="status"
+        className="mx-auto my-8 max-w-md rounded-xl border border-line bg-surface p-6 text-center text-sm text-text"
+      >
         Account settings read your signed-in session. Start your workspace and come back.
       </div>
     );

@@ -80,8 +80,7 @@ export interface E2eMockRuntimeOptions {
    * machinery instead of seeding rows (G2).
    */
   scriptedToolProposal?:
-    | import("../transport/local-api/s20-approvals-api.ts").ScriptedToolProposalConfig
-    | undefined;
+    import("../transport/local-api/s20-approvals-api.ts").ScriptedToolProposalConfig | undefined;
 }
 
 export interface E2eMockRuntime {
@@ -123,9 +122,7 @@ export async function startE2eMockRuntime(
     // the scriptedToolProposal config — an explicit adapter here would
     // override the proposal-emitting one and the gate would never pause
     // (the S20 E2E posture).
-    ...(options.scriptedToolProposal
-      ? {}
-      : { harnessAdapter: new FakeHarnessAdapter({ now }) }),
+    ...(options.scriptedToolProposal ? {} : { harnessAdapter: new FakeHarnessAdapter({ now }) }),
     // The fixed clock must reach the JOURNAL too — the service stamps every
     // harness-run envelope with it (adapter proposals alone are not enough).
     now,

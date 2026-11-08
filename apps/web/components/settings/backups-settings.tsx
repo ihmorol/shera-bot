@@ -3,7 +3,7 @@
 import { AlertTriangle, DatabaseBackup } from "lucide-react";
 
 import { ErrorState } from "@/components/shell/states";
-import { useContainerResolution, useSessionIdentity } from "@/lib/container-connection";
+import { useSessionIdentity } from "@/lib/container-connection";
 import { useRecoveryStatus } from "@/lib/recovery-data";
 
 /**
@@ -49,11 +49,16 @@ export function BackupsSettingsView({
     <div className="space-y-4">
       {surfaceState === "error" ? (
         <div role="alert">
-          <ErrorState safeMessage={safeErrorMessage ?? "The recovery status could not be loaded."} />
+          <ErrorState
+            safeMessage={safeErrorMessage ?? "The recovery status could not be loaded."}
+          />
         </div>
       ) : null}
 
-      <section aria-label="Recovery status" className="rounded-xl border border-line bg-surface p-4">
+      <section
+        aria-label="Recovery status"
+        className="rounded-xl border border-line bg-surface p-4"
+      >
         <h3 className="font-mono text-xs uppercase tracking-[0.16em] text-muted">
           Current recovery status
         </h3>
@@ -76,20 +81,21 @@ export function BackupsSettingsView({
         </p>
       </section>
 
-      <section aria-label="Snapshot posture" className="rounded-xl border border-line bg-surface p-4">
+      <section
+        aria-label="Snapshot posture"
+        className="rounded-xl border border-line bg-surface p-4"
+      >
         <div className="flex items-center gap-3">
           <DatabaseBackup className="size-4 text-sky" aria-hidden="true" />
-          <h3 className="font-mono text-xs uppercase tracking-[0.16em] text-muted">
-            Snapshots
-          </h3>
+          <h3 className="font-mono text-xs uppercase tracking-[0.16em] text-muted">Snapshots</h3>
         </div>
         <p className="mt-2 text-sm text-text">
           Your persistent volume is snapshotted every six hours, and the latest seven snapshots are
           retained (PRD §12).
         </p>
         <p className="mt-1 text-xs text-muted">
-          Restoring a snapshot is administrator-triggered — read-only information on this surface
-          by that recorded decision, never a self-service button.
+          Restoring a snapshot is administrator-triggered — read-only information on this surface by
+          that recorded decision, never a self-service button.
         </p>
       </section>
     </div>
@@ -109,9 +115,7 @@ export function BackupsSettingsSurface() {
         surfaceState={
           recovery.isPending ? "loading" : recovery.isError ? "error" : status ? "ready" : "error"
         }
-        safeErrorMessage={
-          recovery.isError ? "The recovery status could not be loaded." : undefined
-        }
+        safeErrorMessage={recovery.isError ? "The recovery status could not be loaded." : undefined}
       />
     </div>
   );

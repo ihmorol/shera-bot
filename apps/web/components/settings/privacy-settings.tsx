@@ -15,9 +15,7 @@ export function PrivacySettingsView() {
       <section aria-label="Redaction" className="rounded-xl border border-line bg-surface p-4">
         <div className="flex items-center gap-3">
           <EyeOff className="size-4 text-sky" aria-hidden="true" />
-          <h3 className="font-mono text-xs uppercase tracking-[0.16em] text-muted">
-            Redaction
-          </h3>
+          <h3 className="font-mono text-xs uppercase tracking-[0.16em] text-muted">Redaction</h3>
         </div>
         <p className="mt-2 text-sm text-text">
           Secret-shaped material is redacted before it is stored or shown: credentials never enter

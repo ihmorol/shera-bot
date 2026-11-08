@@ -13,7 +13,12 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { NotificationsSettingsView } from "../components/settings/notifications-settings";
+import {
+  currentPermissionState,
+  NotificationsSettingsView,
+  notifyPermissionChanged,
+  subscribePermissionState,
+} from "../components/settings/notifications-settings";
 
 const SETTINGS = {
   in_app_enabled: true,
@@ -86,5 +91,46 @@ describe("Notifications settings view (S9 Notifications, D16)", () => {
       safeErrorMessage: "The notification settings could not be loaded.",
     });
     expect(failed).toContain("The notification settings could not be loaded.");
+  });
+
+  it("an unsupported browser renders its honest state", () => {
+    const html = renderView({ permissionState: "unsupported" });
+    expect(html).toContain("does not expose the Notifications API");
+    expect(html).toContain("in-app notifications still work");
+  });
+});
+
+describe("The browser permission store (the mount-time honest read)", () => {
+  const globalWithNotification = globalThis as { Notification?: unknown; window?: unknown };
+
+  it("reads the browser's own permission — the truth before any toggle (G4)", () => {
+    // The node test env has no window/Notification — stub the browser's own
+    // globals the same way the decision-matrix tests stub the API.
+    globalWithNotification.window = globalWithNotification;
+    globalWithNotification.Notification = { permission: "denied" };
+    expect(currentPermissionState()).toBe("denied");
+    globalWithNotification.Notification = { permission: "granted" };
+    expect(currentPermissionState()).toBe("granted");
+    globalWithNotification.Notification = { permission: "default" };
+    expect(currentPermissionState()).toBe("default");
+    delete globalWithNotification.Notification;
+    delete globalWithNotification.window;
+  });
+
+  it("a browser without the Notifications API is honestly unsupported", () => {
+    delete globalWithNotification.Notification;
+    expect(currentPermissionState()).toBe("unsupported");
+  });
+
+  it("subscribe notifies subscribers when a decision lands; unsubscribe stops it", () => {
+    let calls = 0;
+    const unsubscribe = subscribePermissionState(() => {
+      calls += 1;
+    });
+    notifyPermissionChanged();
+    expect(calls).toBe(1);
+    unsubscribe();
+    notifyPermissionChanged();
+    expect(calls).toBe(1);
   });
 });

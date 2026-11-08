@@ -225,12 +225,7 @@
     "onboardingCard": {
       "rendered": {
         "step": "Step 1 of 5",
-        "chips": [
-          "research",
-          "programming",
-          "exam_prep",
-          "something_else"
-        ],
+        "chips": ["research", "programming", "exam_prep", "something_else"],
         "freeText": true,
         "dismiss": true
       },
@@ -274,16 +269,7 @@
       },
       "ok": true
     },
-    "keyboardTrailOnboarding": [
-      "A",
-      "A",
-      "BUTTON",
-      "A",
-      "A",
-      "A",
-      "A",
-      "A"
-    ],
+    "keyboardTrailOnboarding": ["A", "A", "BUTTON", "A", "A", "A", "A", "A"],
     "onboardingKeyboardAnswer": {
       "answers": {
         "welcome": {

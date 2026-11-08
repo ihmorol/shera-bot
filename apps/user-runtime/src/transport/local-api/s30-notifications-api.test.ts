@@ -123,11 +123,14 @@ function notificationCommand(extra: Record<string, unknown>) {
  * second connection (the S20 test's arrangement pattern — writes stay inside
  * the repository, no SQL here).
  */
-function seedPendingApproval(dbPath: string, fields: {
-  approval_id: string;
-  task_id: string;
-  conversation_id: string;
-}): void {
+function seedPendingApproval(
+  dbPath: string,
+  fields: {
+    approval_id: string;
+    task_id: string;
+    conversation_id: string;
+  },
+): void {
   const conn = openDatabase(dbPath);
   try {
     new ApprovalsRepository(new SqliteTransactions(conn.db)).insertRequest({
@@ -145,8 +148,6 @@ function seedPendingApproval(dbPath: string, fields: {
       requested_by: { type: "agent", id: "agent_developer" },
       requested_at: "2026-11-08T09:20:00.000Z",
       status: "pending",
-      resolved_at: null,
-      resolved_by_choice: null,
     });
   } finally {
     conn.close();
@@ -166,9 +167,6 @@ interface NotificationView {
   muted: boolean;
   deep_link: string;
 }
-
-const ids = (body: Record<string, unknown>): string[] =>
-  ((body["notifications"] as NotificationView[]) ?? []).map((row) => row.notification_id);
 
 afterAll(async () => {
   await cleanupTempResources();
@@ -287,7 +285,7 @@ describe("S30 notifications: the runtime-derived center records", () => {
     const replay = await post(origin, "/v1/notifications/commands", command);
     expect(replay.status).toBe(200);
     const afterReplay = await get(origin, `/v1/notifications?workspace_id=${WORKSPACE}`);
-    expect(((afterReplay.body["notifications"] as NotificationView[])[0]!).read_at).not.toBeNull();
+    expect((afterReplay.body["notifications"] as NotificationView[])[0]!.read_at).not.toBeNull();
   });
 
   it("the in-app/browser toggles persist through the settings command and reset to the recommended defaults (D16)", async () => {

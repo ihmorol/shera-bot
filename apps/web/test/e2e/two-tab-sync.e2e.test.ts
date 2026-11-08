@@ -25,8 +25,11 @@ import { join } from "node:path";
 
 import { afterAll, describe, expect, it } from "vitest";
 
-import type { ChatMessage } from "@/lib/fixtures";
-import { ensureGaConversation, sendConversationMessage, type RuntimeEvent } from "@/lib/runtime-client";
+import {
+  ensureGaConversation,
+  sendConversationMessage,
+  type RuntimeEvent,
+} from "@/lib/runtime-client";
 import {
   advanceLiveThread,
   assembleLiveTimeline,
@@ -35,11 +38,7 @@ import {
   type LiveThreadState,
 } from "@/lib/runtime-live";
 import { proxyToLocalApi } from "@/lib/server/proxies";
-import {
-  openTabSyncChannel,
-  subscribeTabEvents,
-  type TabSyncEvent,
-} from "@/lib/tab-sync";
+import { openTabSyncChannel, subscribeTabEvents, type TabSyncEvent } from "@/lib/tab-sync";
 import { RuntimeSocket } from "@/lib/ws-socket";
 
 import {
@@ -58,7 +57,10 @@ interface Harness {
 }
 
 async function startHarness(
-  options: { scriptedToolProposal?: NonNullable<Parameters<typeof startE2eMockRuntime>[0]>["scriptedToolProposal"] | undefined } = {},
+  options: {
+    scriptedToolProposal?:
+      NonNullable<Parameters<typeof startE2eMockRuntime>[0]>["scriptedToolProposal"] | undefined;
+  } = {},
 ): Promise<Harness> {
   const mock = await startE2eMockRuntime({ scriptedReplies: false, ...options });
   WORKSPACE = mock.workspace_id;
@@ -226,10 +228,7 @@ function messagesOf(state: LiveThreadState): Array<{ id: string; klass: string; 
     }));
 }
 
-async function subscribe(
-  socket: RuntimeSocket,
-  conversationId: string,
-): Promise<void> {
+async function subscribe(socket: RuntimeSocket, conversationId: string): Promise<void> {
   await socket.request("stream.subscribe", {
     workspace_id: WORKSPACE,
     stream_id: conversationStreamId(conversationId),
@@ -300,11 +299,23 @@ describe("S30 two-tab honesty E2E (PRD §14)", () => {
       });
 
       // BOTH tabs receive the durable event; each renders it EXACTLY ONCE.
-      await waitForEvent(tabA.events, (event) => JSON.stringify(event).includes("Two-tab dedupe probe."), "tab A durable message");
-      await waitForEvent(tabB.events, (event) => JSON.stringify(event).includes("Two-tab dedupe probe."), "tab B durable message");
+      await waitForEvent(
+        tabA.events,
+        (event) => JSON.stringify(event).includes("Two-tab dedupe probe."),
+        "tab A durable message",
+      );
+      await waitForEvent(
+        tabB.events,
+        (event) => JSON.stringify(event).includes("Two-tab dedupe probe."),
+        "tab B durable message",
+      );
 
-      const aRows = messagesOf(tabA.state).filter((message) => message.text === "Two-tab dedupe probe.");
-      const bRows = messagesOf(tabB.state).filter((message) => message.text === "Two-tab dedupe probe.");
+      const aRows = messagesOf(tabA.state).filter(
+        (message) => message.text === "Two-tab dedupe probe.",
+      );
+      const bRows = messagesOf(tabB.state).filter(
+        (message) => message.text === "Two-tab dedupe probe.",
+      );
       expect(aRows).toHaveLength(1);
       expect(bRows).toHaveLength(1);
       // The same durable id in both tabs — one journal event, two views.
@@ -344,7 +355,11 @@ describe("S30 two-tab honesty E2E (PRD §14)", () => {
         displayName: SESSION_USER,
         idempotencyKey: key,
       });
-      await waitForEvent(tabA.events, (event) => JSON.stringify(event).includes("Missed while tab B was asleep."), "tab A missed-window message");
+      await waitForEvent(
+        tabA.events,
+        (event) => JSON.stringify(event).includes("Missed while tab B was asleep."),
+        "tab A missed-window message",
+      );
       acknowledge(tabA.state);
 
       // Tab B reconnects with its OWN acknowledged cursor — the S07 server
@@ -440,15 +455,18 @@ describe("S30 two-tab honesty E2E (PRD §14)", () => {
 
       // Tab A decides (through the REAL proxy — the session-actor binding
       // rewrites decided_by server-side).
-      const decision = await fetch(`${harness.proxyOrigin}/api/runtime/v1/approvals/${approvalId}/decision`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          workspace_id: WORKSPACE,
-          choice: "approve-this-execution-only",
-          decided_by: { type: "user", id: "client-asserted-identity" },
-        }),
-      });
+      const decision = await fetch(
+        `${harness.proxyOrigin}/api/runtime/v1/approvals/${approvalId}/decision`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            workspace_id: WORKSPACE,
+            choice: "approve-this-execution-only",
+            decided_by: { type: "user", id: "client-asserted-identity" },
+          }),
+        },
+      );
       expect(decision.status).toBe(200);
 
       // Tab B reads the SERVER truth: the approval is decided — the decision
@@ -465,10 +483,10 @@ describe("S30 two-tab honesty E2E (PRD §14)", () => {
       const notes = await fetch(
         `${harness.proxyOrigin}/api/runtime/v1/notifications?workspace_id=${WORKSPACE}`,
       );
-      const notesBody = (await notes.json()) as { notifications: Array<{ approval_id: string | null }> };
-      expect(
-        notesBody.notifications.some((row) => row.approval_id === approvalId),
-      ).toBe(false);
+      const notesBody = (await notes.json()) as {
+        notifications: Array<{ approval_id: string | null }>;
+      };
+      expect(notesBody.notifications.some((row) => row.approval_id === approvalId)).toBe(false);
 
       // The S30 hint layer: tab A's surfaces broadcast notifications-changed
       // after settled commands; tab B subscribes. (The E2E asserts the

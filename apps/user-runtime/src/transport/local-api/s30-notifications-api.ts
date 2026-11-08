@@ -94,7 +94,10 @@ export function registerNotificationsRoutes(app: Express, deps: NotificationsApi
   // The ONE typed commands envelope (G2). The proxy binds the actor from the
   // authenticated session (G6) — the browser never asserts an identity. The
   // service validates the body's workspace_id against THIS runtime's.
-  const submit = (req: { body: unknown }, res: { status(code: number): { json(body: unknown): void } }): void => {
+  const submit = (
+    req: { body: unknown },
+    res: { status(code: number): { json(body: unknown): void } },
+  ): void => {
     try {
       deps.notifications.submitCommand(deps.workspaceId, req.body);
       res.status(200).json({ accepted: true });

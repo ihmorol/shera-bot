@@ -16,10 +16,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { SETTINGS_CATEGORIES, SETTINGS_CATEGORY_SLUGS } from "../lib/settings-categories";
 import { submitOnboardingCommand } from "../lib/onboarding-api";
-import {
-  AccountSettingsView,
-  storageUsageLine,
-} from "../components/settings/account-settings";
+import { AccountSettingsView, storageUsageLine } from "../components/settings/account-settings";
 import { WorkspaceSettingsView } from "../components/settings/workspace-settings";
 import { FilesSettingsView } from "../components/settings/files-settings";
 import { PrivacySettingsView } from "../components/settings/privacy-settings";

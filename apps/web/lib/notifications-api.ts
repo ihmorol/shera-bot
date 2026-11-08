@@ -61,9 +61,8 @@ export function submitNotificationSettingsCommand(
   workspaceId: string,
   command: z.infer<typeof NotificationCommand>,
 ): Promise<unknown> {
-  return requestRuntime(
-    "/api/runtime/v1/notifications/settings/commands",
-    (payload) => payload,
-    { method: "POST", body: JSON.stringify(command) },
-  );
+  return requestRuntime("/api/runtime/v1/notifications/settings/commands", (payload) => payload, {
+    method: "POST",
+    body: JSON.stringify(command),
+  });
 }

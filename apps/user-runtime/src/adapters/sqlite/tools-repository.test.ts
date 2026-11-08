@@ -94,8 +94,7 @@ describe("tool inventory storage (S21 migration v15)", () => {
     expect(MIGRATIONS.at(-3)?.version).toBe(22);
     const conn = openTempDatabase();
     expect(appliedMigrationVersions(conn.db)).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
-      24,
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
     ]);
     expect(sqliteTableExists(conn.db, "tool_inventory")).toBe(true);
     expect(sqliteTableExists(conn.db, "tool_execution_history")).toBe(true);

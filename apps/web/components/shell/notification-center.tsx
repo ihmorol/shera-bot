@@ -17,7 +17,6 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import {
-  safeNotificationsMessage,
   useNotificationCommands,
   useNotifications,
   useNotificationSettings,
@@ -26,10 +25,7 @@ import {
 import { useSessionIdentity } from "@/lib/container-connection";
 import { routes } from "@/lib/routes";
 import { useRouter } from "next/navigation";
-import {
-  browserNotificationDecision,
-  fireBrowserNotification,
-} from "@/lib/desktop-notifications";
+import { browserNotificationDecision, fireBrowserNotification } from "@/lib/desktop-notifications";
 import type { NotificationView } from "@shera-bot/contracts";
 import { cn } from "@/lib/utils";
 
@@ -92,17 +88,20 @@ function KindGlyph({ kind }: { kind: NotificationRow["kind"] }) {
   }
 }
 
-/** Relative time in whole minutes/hours from the record's own timestamp. */
-function relativeTime(occurredAt: string, nowMs: number): string {
-  const occurred = Date.parse(occurredAt);
-  const deltaMs = Math.max(0, nowMs - occurred);
-  const minutes = Math.floor(deltaMs / 60_000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days} d ago`;
+/**
+ * The record's own UTC timestamp, formatted for display — the schedules
+ * surface's precedent: the truthful value from the runtime's record, no
+ * local math, no render-time impure call.
+ */
+function utcStamp(occurredAt: string): string {
+  const occurred = new Date(occurredAt);
+  if (Number.isNaN(occurred.getTime())) return occurredAt;
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${occurred.getUTCDate()} ${
+    ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][
+      occurred.getUTCMonth()
+    ]
+  } ${occurred.getUTCFullYear()}, ${pad(occurred.getUTCHours())}:${pad(occurred.getUTCMinutes())} UTC`;
 }
 
 function RowSkeleton() {
@@ -137,7 +136,6 @@ export interface NotificationCenterViewProps {
  */
 export function NotificationCenterView(props: NotificationCenterViewProps) {
   const { rows, settings, surfaceState, safeErrorMessage } = props;
-  const nowMs = Date.now();
 
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="notification-center">
@@ -157,7 +155,10 @@ export function NotificationCenterView(props: NotificationCenterViewProps) {
       </div>
 
       {settings ? (
-        <p className="border-b border-line px-4 py-2 text-xs text-muted" data-testid="notification-delivery-line">
+        <p
+          className="border-b border-line px-4 py-2 text-xs text-muted"
+          data-testid="notification-delivery-line"
+        >
           In-app delivery {settings.in_app_enabled ? "on" : "off"} · browser notifications{" "}
           {settings.browser_enabled ? "on" : "off"} (unfocused tab only)
         </p>
@@ -240,9 +241,9 @@ export function NotificationCenterView(props: NotificationCenterViewProps) {
                         <ExternalLink className="size-3" aria-hidden="true" />
                         Open conversation
                       </Link>
-                      <span className="font-mono text-[11px] text-muted">
-                        {relativeTime(row.occurred_at, nowMs)}
-                      </span>
+                      <time dateTime={row.occurred_at} className="font-mono text-[11px] text-muted">
+                        {utcStamp(row.occurred_at)}
+                      </time>
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
@@ -384,15 +385,15 @@ function NotificationCenterHost({
   // the trigger to ARRIVALS (a re-render never re-fires), and the body is
   // the runtime's bounded summary only (G3).
   const deliveredIdsRef = useRef<Set<string>>(new Set());
-  const rowsRef = useRef<readonly NotificationRow[]>([]);
-  rowsRef.current = query.rows;
+  // ONE delivery interval, re-armed when the rows/settings identity changes
+  // (the 5s poll cadence) — no refs written outside the interval callback,
+  // no render-time impurity: the closure reads the committed values.
   useEffect(() => {
     if (!workspaceId) return;
     const id = window.setInterval(() => {
-      const browserEnabled = settingsRef.current?.browser_enabled ?? false;
-      const permission =
-        typeof Notification === "undefined" ? "denied" : Notification.permission;
-      for (const row of rowsRef.current) {
+      const browserEnabled = settings.settings?.browser_enabled ?? false;
+      const permission = typeof Notification === "undefined" ? "denied" : Notification.permission;
+      for (const row of query.rows) {
         if (deliveredIdsRef.current.has(row.notification_id)) continue;
         // Arrivals seed the seen set: only rows arriving AFTER mount can
         // fire (a fresh page load never spams the history).
@@ -409,37 +410,34 @@ function NotificationCenterHost({
       }
     }, 5_000);
     return () => window.clearInterval(id);
-  }, [workspaceId]);
-
-  const settingsRef = useRef(settings.settings);
-  settingsRef.current = settings.settings;
+    // The interval re-arms on the committed rows/settings identity — the
+    // closure reads exactly what this render committed.
+  }, [workspaceId, query.rows, settings.settings]);
 
   const markRead = (notificationId: string) => {
     if (!workspaceId) return;
-    commands.submit(
-      {
-        command_id: `cmd_${crypto.randomUUID()}`,
-        idempotency_key: `idem_${crypto.randomUUID()}`,
-        workspace_id: workspaceId,
-        actor: { type: "user", id: actorId },
-        issued_at: new Date().toISOString(),
-        type: "notifications.mark_read",
-        notification_id: notificationId,
-      });
+    commands.submit({
+      command_id: `cmd_${crypto.randomUUID()}`,
+      idempotency_key: `idem_${crypto.randomUUID()}`,
+      workspace_id: workspaceId,
+      actor: { type: "user", id: actorId },
+      issued_at: new Date().toISOString(),
+      type: "notifications.mark_read",
+      notification_id: notificationId,
+    });
   };
 
   const mute = (notificationId: string) => {
     if (!workspaceId) return;
-    commands.submit(
-      {
-        command_id: `cmd_${crypto.randomUUID()}`,
-        idempotency_key: `idem_${crypto.randomUUID()}`,
-        workspace_id: workspaceId,
-        actor: { type: "user", id: actorId },
-        issued_at: new Date().toISOString(),
-        type: "notifications.mute",
-        notification_id: notificationId,
-      });
+    commands.submit({
+      command_id: `cmd_${crypto.randomUUID()}`,
+      idempotency_key: `idem_${crypto.randomUUID()}`,
+      workspace_id: workspaceId,
+      actor: { type: "user", id: actorId },
+      issued_at: new Date().toISOString(),
+      type: "notifications.mute",
+      notification_id: notificationId,
+    });
   };
 
   const surfaceState: "loading" | "ready" | "error" = query.loading

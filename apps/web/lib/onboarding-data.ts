@@ -9,8 +9,7 @@ import {
 } from "@/lib/onboarding-api";
 import { RuntimeApiError } from "@/lib/runtime-client";
 import type { OnboardingCommand } from "@shera-bot/contracts";
-import { broadcastTabEvent, openTabSyncChannel, type TabSyncChannel } from "@/lib/tab-sync";
-import { useEffect, useRef } from "react";
+import { broadcastTabEvent, openTabSyncChannel } from "@/lib/tab-sync";
 
 /**
  * S30 — the onboarding data hooks (the notifications-data idiom): the
@@ -87,23 +86,19 @@ export interface OnboardingCommands {
 export function useOnboardingCommands(workspaceId: string | null): OnboardingCommands {
   const queryClient = useQueryClient();
   const snapshot = useOnboarding(workspaceId);
-  const tabChannelRef = useRef<TabSyncChannel | null>(null);
-  useEffect(() => {
-    tabChannelRef.current = openTabSyncChannel();
-    return () => {
-      tabChannelRef.current?.close();
-      tabChannelRef.current = null;
-    };
-  }, []);
 
   const mutation = useMutation({
-    mutationFn: (command: OnboardingCommand) => submitOnboardingCommand(workspaceId as string, command),
+    mutationFn: (command: OnboardingCommand) =>
+      submitOnboardingCommand(workspaceId as string, command),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["onboarding", workspaceId] });
       void queryClient.invalidateQueries({ queryKey: ["memory", workspaceId] });
       // D16: onboarding and settings share commands — a memory choice here
-      // changed the settings surface's data too. The hint reaches other tabs.
-      broadcastTabEvent(tabChannelRef.current, { kind: "settings-changed", section: "onboarding" });
+      // changed the settings surface's data too. The hint reaches other tabs
+      // (a short-lived channel per hint — stateless, no refs).
+      const channel = openTabSyncChannel();
+      broadcastTabEvent(channel, { kind: "settings-changed", section: "onboarding" });
+      channel?.close();
     },
   });
 

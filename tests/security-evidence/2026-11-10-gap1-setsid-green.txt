@@ -1,0 +1,32 @@
+# S27-GAP-1 / issue #83 GREEN evidence — the setsid leg under the escape sweep (2026-11-10)
+#
+# The fix under test: apps/user-runtime/src/adapters/process/escape-sweep.ts +
+# the killTree()/reap wiring in execution-process-spawn.ts — at cancel (and at
+# the wall clock, and again in the post-exit reap) the termination seam sweeps
+# session-escaped descendants: NEW-in-the-window processes that are their own
+# session leader (the setsid shape) INSIDE the execution's own user namespace
+# (uid_map-anchored — a private "0 <uid> 1" map under the D27 unshare
+# envelope; the HOST map means no namespace and the sweep does not run).
+# Collected candidates are SIGKILLed pid-verified against the spawn-time
+# starttime snapshot (the pidfd-reuse-safety stand-in — Node exposes no pidfd
+# syscall surface; recorded in E48). The PPid-chain walk runs BEFORE the group
+# kill while the chain is intact.
+#
+# Command: pnpm vitest run tests/security/s27-st04-process-tree-escape.test.ts
+# Observed: 2/2 — the pre-existing group-kill leg stays GREEN and the detached
+# (setsid) leg passes: the session-escaped grandchild is dead on the live
+# process list after the typed cancellation.
+
+
+ RUN  v5.0.1 /home/emon-morol/projects/github-cloud-projects/shera-bot-s35
+
+ ✓ tests/security/s27-st04-process-tree-escape.test.ts (2 tests) 4366ms
+   ✓ S27 ST-04 — cancellation terminates the whole process tree (D27/D14) (2)
+     ✓ a forking payload's group descendants are ALL dead after cancel() — walked on the live process list 2058ms
+     ✓ a setsid grandchild that sheds the group AND session is ALSO dead after cancel() — the S27-GAP-1 escape sweep (issue #83) 2302ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  02:55:47
+   Duration  4.82s (tests 96%, transform 3%, import 1%)
+

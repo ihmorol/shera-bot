@@ -36,7 +36,14 @@
  *   4. WALL CLOCK + PROCESS-TREE TERMINATION — the child runs detached (its
  *      own process group); the wall-clock ceiling and cancel() both
  *      SIGKILL the WHOLE group (`kill(-pid)`, the S19 detached+group-kill
- *      pattern with its post-exit reap), so no descendant survives.
+ *      pattern with its post-exit reap). S27-GAP-1 closure (issue #83, E48):
+ *      the same seams ALSO sweep session-escaped descendants — a `setsid`
+ *      grandchild is outside every group's reach, so before the group kill
+ *      the PPid chain is walked (while intact) and /proc is scanned for NEW
+ *      session leaders inside this execution's OWN user namespace
+ *      (uid_map-anchored — see escape-sweep.ts); everything collected is
+ *      SIGKILLed pid-verified against the spawn-time starttime snapshot.
+ *      The sweep re-runs in the post-exit reap for late escapees.
  *
  * Child output discipline (G3): this adapter forwards RAW stdout/stderr
  * chunks through the request's sink and interprets nothing; the binding owns
@@ -54,6 +61,16 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { accessSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+
+import {
+  collectEscapeCandidates,
+  collectGroupDescendants,
+  HOST_UID_MAP,
+  killVerified,
+  readUidMap,
+  snapshotProcStarttimes,
+  type ProcSample,
+} from "./escape-sweep.ts";
 
 /** util-linux unshare install locations probed in order (Ubuntu: /usr/bin). */
 export const UNSHARE_BIN_CANDIDATES: readonly string[] = [
@@ -373,6 +390,11 @@ export function spawnSandboxedExecution(
     argv.push(...request.command);
   }
 
+  // The S27-GAP-1 escape-sweep anchor taken BEFORE the spawn (issue #83):
+  // every pid's /proc starttime now — what counts as NEW in this execution's
+  // window at the termination seams.
+  const spawnSnapshot = snapshotProcStarttimes();
+
   let child: ChildProcess | null = null;
   if (spawnErrorMessage === null) {
     child = spawn(argv[0]!, argv.slice(1), {
@@ -393,6 +415,49 @@ export function spawnSandboxedExecution(
   }
 
   const pid = child?.pid ?? 0;
+
+  // The sweep's second anchor: the leader's user-namespace map — what scopes
+  // the sweep to THIS execution. A private map ("0 <uid> 1" under the D27
+  // unshare envelope) names the namespace every payload descendant lives in;
+  // the HOST map means no namespace exists and the sweep does not run (a
+  // control that cannot scope itself does not run — G5, the recorded honest
+  // degradation; the D27 networkDisabled posture makes the private map the
+  // production norm). Read LAZILY at sweep time, cached once private: at
+  // spawn-return the fork may still be pre-exec (the host map — probed live),
+  // and the map only exists after unshare(2) has run.
+  let leaderUidMap: string | null = null;
+  const leaderSweepMap = (): string | null => {
+    if (leaderUidMap !== null) return leaderUidMap;
+    if (child === null || child.pid === undefined) return null;
+    const map = readUidMap(child.pid);
+    if (map !== null && map !== HOST_UID_MAP) leaderUidMap = map;
+    return map;
+  };
+  const sweepEnabled = (): boolean => {
+    const map = leaderSweepMap();
+    return map !== null && map !== HOST_UID_MAP;
+  };
+
+  /**
+   * The S27-GAP-1 sweep at the termination seams: collect the still-parented
+   * descendants (PPid chain, intact NOW — before the group dies) and the
+   * session-escaped candidates (the setsid shape: NEW in the window, own
+   * session leader, this execution's namespace), then the group kill, then
+   * the verified kills (starttime-matched — pid reuse between the walk and
+   * the kill is spared).
+   */
+  const sweepAndKill = (): void => {
+    if (child === null || child.pid === undefined) return;
+    const leaderPid: number = child.pid;
+    const chained: ProcSample[] = collectGroupDescendants(leaderPid).filter(
+      (sample) => sample.pid !== leaderPid,
+    );
+    const escaped = sweepEnabled()
+      ? collectEscapeCandidates(leaderPid, spawnSnapshot, leaderSweepMap())
+      : [];
+    killGroup();
+    killVerified([...chained, ...escaped]);
+  };
 
   // The cgroup layer moves the ALREADY-spawned child into its leaf (the
   // pre-move window is covered by the prlimit layer, which was active from
@@ -446,7 +511,8 @@ export function spawnSandboxedExecution(
     child.stderr?.on("data", (chunk: string) => forward("stderr", chunk));
   }
 
-  const killTree = (): void => {
+  /** The recorded group kill: the whole process group, direct-kill fallback. */
+  const killGroup = (): void => {
     if (child === null || child.pid === undefined) return;
     try {
       // The whole group: unshare/prlimit exec'd into the command (same pid),
@@ -460,6 +526,26 @@ export function spawnSandboxedExecution(
         // already dead
       }
     }
+  };
+
+  /**
+   * The termination seam (cancel() and the wall clock): the D27/D14 group
+   * kill PLUS the S27-GAP-1 escape sweep — the group kill alone leaves a
+   * setsid'd grandchild alive (live-reproduced, ST-04's detached leg). The
+   * sweep runs BEFORE the group kill so the PPid chain is still intact, and
+   * again from the post-exit reap for late escapees.
+   */
+  const killTree = (): void => {
+    sweepAndKill();
+  };
+
+  /** The escape sweep alone (no group kill) — the reap's late-escapee pass. */
+  const sweepOnly = (): void => {
+    if (child === null || child.pid === undefined) return;
+    const escaped = sweepEnabled()
+      ? collectEscapeCandidates(child.pid, spawnSnapshot, leaderSweepMap())
+      : [];
+    killVerified(escaped);
   };
 
   const wallClockTimer =
@@ -541,14 +627,19 @@ export function spawnSandboxedExecution(
     // Post-exit reap (the S19 pattern): stragglers of the group holding no
     // stdio would otherwise survive the close. One extra group SIGKILL after
     // a short sweep, then the group is checked by the callers' own probes.
+    // The S27-GAP-1 escape sweep re-runs here too — a payload's dying gasp
+    // can fork a late setsid escapee between cancel and exit, and a group
+    // that is already gone must not mean a sweep that never happens.
     const reap = (): void => {
+      let groupAlive = false;
       try {
         process.kill(-pid, 0);
-        // Group still has members: kill again.
-        killTree();
+        groupAlive = true;
       } catch {
         // ESRCH — the group is gone.
       }
+      if (groupAlive) killTree();
+      else sweepOnly();
     };
     setTimeout(() => {
       reap();

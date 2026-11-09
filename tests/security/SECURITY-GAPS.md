@@ -47,6 +47,30 @@ over-claim.
   namespace at spawn (the S35 compose deployment owns this surface) or a
   cgroup-delegation sweep; neither is buildable on the recorded host.
 
+- **DISPOSITION (S35, issue #83, E48 — recorded 2026-11-10, nothing above is
+  erased):** the fix family's cancel-side half LANDED on this host after all —
+  a /proc-side escape sweep that needs neither a PID namespace nor cgroup
+  delegation: at cancel()/wall-clock (and again in the post-exit reap) the
+  termination seam walks the PPid chain while intact and sweeps NEW session
+  leaders (sid === pid, the only shape setsid(2) can produce) born during the
+  execution window INSIDE the execution's own user namespace (the leader's
+  PRIVATE uid_map under the D27 `unshare --user` envelope — the host-map case
+  disables the sweep, an honest degradation, recorded), and SIGKILLs every
+  candidate pid-verified against the spawn-time starttime snapshot (the
+  pidfd-reuse-safety stand-in — Node exposes no pidfd surface, a native FFI
+  dependency was rejected). The DETACHED leg is now a pinned green in
+  `s27-st04-process-tree-escape.test.ts` (red/green evidence pair
+  `2026-11-10-gap1-setsid-{red,green}.txt` — the red run on the unfixed tree
+  shows the grandchild surviving exactly as this section records). The
+  REMAINING residual that still needs the deployment host: (a) a double-fork
+  orphan whose intermediate parent exits inside one sweep window without ever
+  calling setsid (leader's session, chain broken — invisible to a post-hoc
+  walk); (b) an escapee that nests its OWN user namespace (no longer
+  uid_map-matched); (c) a leader without a private uid_map (no D27 namespace —
+  sweep disabled). These close with PID-namespace containment at spawn in the
+  S35 Compose posture — recorded as the deployment-host item in the runbook
+  §hardening.
+
 ## S27-GAP-2 — the cgroup memory layer is unavailable on the recorded host (limits ride RLIMIT_DATA only)
 
 - **Threat:** TM-2.2 (container resource exhaustion); threat model §5 ST-05's

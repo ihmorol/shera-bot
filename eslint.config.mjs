@@ -20,6 +20,7 @@ export default tseslint.config(
       "mockup/**",
       "business-landing-portfolio/**",
       ".agents/**",
+      ".browsers-cache/**",
       ".codegraph/**",
       ".gstack/**",
       ".omo/**",

@@ -12,6 +12,7 @@ import {
 
 import { SidebarContent } from "./sidebar-content";
 import { Wordmark } from "./wordmark";
+import { NotificationBell } from "./notification-center";
 
 /**
  * App shell (UI_DESIGN §2.2): desktop = sidebar (280px) + chat column
@@ -41,7 +42,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Mobile chrome row */}
+        {/* Mobile chrome row (§3.2: the same bell the sidebar carries) */}
         <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-surface px-3 lg:hidden">
           <button
             type="button"
@@ -52,6 +53,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Menu className="size-5" aria-hidden="true" />
           </button>
           <Wordmark />
+          <div className="ml-auto">
+            <NotificationBell workspaceId={null} onNavigate={undefined} />
+          </div>
         </header>
 
         <Group orientation="horizontal" className="min-h-0 flex-1">

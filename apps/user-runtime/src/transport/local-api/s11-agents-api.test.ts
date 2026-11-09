@@ -171,7 +171,9 @@ describe("S11 agent API (typed local API routes)", () => {
       );
       // Summary payloads are exactly the allowlisted fields — no capabilities,
       // no memory, no provider internals, nothing beyond one Agent's identity
-      // plus the S12 session-presence read (supervisor disabled here → "none").
+      // plus the S12 session-presence read (supervisor disabled here → "none")
+      // and the S30 roster-activity record (E43 idea 4; null on the fresh
+      // workspace's quiet history).
       for (const agent of agents) {
         expect(Object.keys(agent).sort()).toEqual([
           "agent_id",
@@ -179,9 +181,11 @@ describe("S11 agent API (typed local API routes)", () => {
           "display_name",
           "has_user_instructions",
           "initial_glyph",
+          "last_activity",
           "role_description",
           "session",
         ]);
+        expect(agent["last_activity"]).toBeNull();
         expect(agent["has_user_instructions"]).toBe(false);
         expect(agent["session"]).toEqual({ presence: "none" });
       }

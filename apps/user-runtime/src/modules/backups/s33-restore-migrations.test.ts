@@ -101,14 +101,17 @@ describe("S33 migration after restore (D24)", () => {
     if (!taken.taken) return;
 
     // The snapshot's schema is the OLDER head: the head version's table is
-    // absent (v22's backup_snapshots is the one the older runtime misses).
+    // absent (v25's onboarding_state is the one the older runtime misses —
+    // the S30 integration moved the head behind main's landed v23/v24
+    // entries; the pin tracks the head).
     const snapshotDb = openDatabase(join(taken.snapshot_dir, "runtime.db"));
     connections.push(snapshotDb);
     expect(appliedMigrationVersions(snapshotDb.db)).toEqual(olderVersions);
-    expect(sqliteTableExists(snapshotDb.db, "backup_snapshots")).toBe(false);
+    expect(sqliteTableExists(snapshotDb.db, "backup_snapshots")).toBe(true);
+    expect(sqliteTableExists(snapshotDb.db, "onboarding_state")).toBe(false);
     snapshotDb.close();
 
-    // ── The restore: the walk's D24 migration leg runs the missing v22. ──
+    // ── The restore: the walk's D24 migration leg runs the missing v25. ──
     const restoredDataDir = join(parent, "restored", "data");
     mkdirSync(restoredDataDir, { recursive: true });
     const restore = new RestoreService({
@@ -136,6 +139,7 @@ describe("S33 migration after restore (D24)", () => {
     connections.push(restoredDb);
     expect(appliedMigrationVersions(restoredDb.db)).toEqual(MIGRATIONS.map((m) => m.version));
     expect(sqliteTableExists(restoredDb.db, "backup_snapshots")).toBe(true);
+    expect(sqliteTableExists(restoredDb.db, "onboarding_state")).toBe(true);
     expect(verifySnapshotIntegrity(join(restoredDataDir, "runtime.db")).ok).toBe(true);
   });
 });

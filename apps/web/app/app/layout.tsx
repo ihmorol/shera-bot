@@ -6,6 +6,7 @@ import { Providers } from "@/components/providers";
 import { ContainerGate } from "@/components/shell/container-gate";
 import { RecoveryBannerHost } from "@/components/shell/recovery-banner-host";
 import { WorkspacePanelHostProvider } from "@/components/workspace/workspace-panel";
+import { OnboardingDock } from "@/components/onboarding/onboarding-cards";
 
 export const metadata: Metadata = {
   title: "Dashboard",
@@ -22,6 +23,10 @@ export const metadata: Metadata = {
  * above the whole shell (sidebar included), because recovery is a workspace
  * fact, not a surface fact. A strip, never a modal: reading stays possible
  * through recovery, and an idle workspace renders nothing at all.
+ *
+ * S30 (E43): the onboarding dock mounts over the conversation area — the
+ * first-run interview as a chat-bubble card, never a wizard, never a modal.
+ * A non-pending interview renders nothing (zero-config start, D16).
  */
 export default function AppLayout({ children }: { children: ReactNode }) {
   return (
@@ -35,6 +40,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             </AppShell>
           </WorkspacePanelHostProvider>
         </div>
+        <OnboardingDock />
       </div>
     </Providers>
   );

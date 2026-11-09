@@ -58,6 +58,11 @@ const AgentRosterSummarySchema = z.strictObject({
   initial_glyph: z.string().min(1),
   has_user_instructions: z.boolean(),
   session: AgentSessionStateSchema,
+  // S30 (E43 idea 4): the Agent's last durable direct-chat line + when —
+  // derived by the runtime from its own journal; null when quiet (G4).
+  last_activity: z
+    .strictObject({ at: z.string().min(1), preview: z.string().min(1).max(120) })
+    .nullable(),
 });
 export type AgentRosterSummary = z.infer<typeof AgentRosterSummarySchema>;
 

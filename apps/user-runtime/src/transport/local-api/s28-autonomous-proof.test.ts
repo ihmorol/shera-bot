@@ -35,15 +35,6 @@ const WS = DEFAULT_WORKSPACE_ID;
 const FIXTURE_KEY = "sk-fixture-0123456789abcdefSECRET";
 const USER = { type: "user", id: "emon" };
 
-// The runtime's clock is PINNED at the occurrence instant the test fires
-// (the dueAt below). The scheduler computes the next occurrence strictly
-// after max(now, dueAt) — without a pinned clock that max falls back to the
-// wall clock and the next-Monday expectation drifts past every real date
-// (observed 2026-11-09 → 2026-11-16). Pinning at the dueAt also makes the
-// trigger's bookkeeping truthful: last_fired_at/updated_at record exactly
-// when the test's firing happened in the runtime's own time.
-const NOW = "2026-11-02T09:00:00.000Z";
-
 // The LOCAL fake OpenAI-compatible endpoint (the S23 fixture pattern): it
 // answers ONE fixed completion for the right key and counts every request —
 // the model-call leg's proof is the counter, not a mock.
@@ -104,13 +95,26 @@ interface ProofRuntime {
   close(): Promise<void>;
 }
 
+/**
+ * The proof's clock is FROZEN just after the fired occurrence
+ * (2026-11-02T09:00:00.000Z) and before the asserted next one
+ * (2026-11-09T09:00:00.000Z) — the `scheduler-reconcile` suite's own
+ * clock-injection idiom. The proof previously ran on the real wall clock,
+ * which made the `next_occurrence_at` expectation a time bomb: the first
+ * archive run after 2026-11-09T09:00:00Z UTC landed red (the weekly
+ * `0 9 * * 1` occurrence had rolled to 2026-11-16 — the runtime's math was
+ * correct; the test's real-clock frame was not). The expectation is
+ * UNCHANGED; only the frame is deterministic now.
+ */
+const PROOF_NOW = "2026-11-02T10:00:00.000Z";
+
 async function composeProof(): Promise<ProofRuntime> {
   const dbPath = join(makeTempDir("shera-s28-proof-"), "runtime.db");
   const runtime = composeRuntime({
     dbPath,
     packsRoot: PACKS_ROOT,
     providerEnforcement: true,
-    now: () => NOW,
+    now: () => PROOF_NOW,
   });
   trackConnection(runtime);
   await new Promise<void>((resolveListen) =>

@@ -56,7 +56,7 @@
  *
  * Governing records: D27, D14, E36, E45 (S27-GAP-1), E48, G3/G5.
  */
-import { readdirSync, readFileSync, readlinkSync } from "node:fs";
+import { openSync, readdirSync, readFileSync, readlinkSync } from "node:fs";
 
 /** One /proc/<pid>/stat sample: the fields the sweep and the walk need. */
 export interface ProcSample {
@@ -99,10 +99,41 @@ function readStat(pid: number): string {
  * so every `unshare --user` execution gets its OWN identity even though
  * every map STRING looks alike (the F1 finding). null when unreadable
  * (the process is gone, or a kernel without namespace links).
+ *
+ * REUSE CAVEAT (found live in the F1 fix round): an ns/user inode is
+ * kernel-global and REUSED after the namespace is destroyed — a sweep
+ * comparing a live process's inode against a DEAD leader's identity string
+ * can match a NEW execution whose unshare drew the same inode. The sound
+ * form pins the leader's namespace with an OPEN fd (openNsUser below):
+ * nsfs semantics keep the namespace (and its inode) alive while the fd is
+ * held, so the comparison is exact for the sweep's lifetime.
  */
 export function readNsUser(pid: number): string | null {
   try {
     return readlinkSync(`/proc/${pid}/ns/user`);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * OPEN the process's user namespace — the returned fd PINS it: the
+ * namespace and its inode stay alive until the fd closes, even if every
+ * process inside exits. Resolve the pinned identity with
+ * nsIdentityFromFd(fd). null when unreadable (gone / permission).
+ */
+export function openNsUser(pid: number): number | null {
+  try {
+    return openSync(`/proc/${pid}/ns/user`, "r");
+  } catch {
+    return null;
+  }
+}
+
+/** The identity of the namespace a held fd pins (see openNsUser). */
+export function nsIdentityFromFd(fd: number): string | null {
+  try {
+    return readlinkSync(`/proc/self/fd/${fd}`);
   } catch {
     return null;
   }

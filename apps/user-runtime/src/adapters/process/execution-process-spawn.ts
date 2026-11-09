@@ -59,13 +59,23 @@
  * Governing records: D23 rule 2, D27, E1 (prlimit precedent), E13, G3, G4.
  */
 import { spawn, type ChildProcess } from "node:child_process";
-import { accessSync, mkdirSync, rmdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  accessSync,
+  closeSync,
+  mkdirSync,
+  rmdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 
 import {
   collectEscapeCandidates,
   collectGroupDescendants,
   killVerified,
+  nsIdentityFromFd,
+  openNsUser,
   readNsUser,
   snapshotProcStarttimes,
   type ProcSample,
@@ -452,20 +462,64 @@ export function spawnSandboxedExecution(
   // cached once private: at spawn-return the fork may still be pre-exec, and
   // the namespace only exists after unshare(2) has run.
   const runtimeNsIdentity = readNsUser(process.pid);
-  let leaderNsIdentity: string | null = null;
-  const leaderSweepIdentity = (): string | null => {
-    if (leaderNsIdentity !== null) return leaderNsIdentity;
-    if (child === null || child.pid === undefined) return null;
-    const identity = readNsUser(child.pid);
-    if (identity !== null && runtimeNsIdentity !== null && identity !== runtimeNsIdentity) {
-      leaderNsIdentity = identity;
+  // The leader's namespace identity is held as an OPEN fd (openNsUser): the
+  // fd PINS the namespace — its inode cannot be freed and reused by a
+  // concurrent execution's unshare while the sweep might still compare
+  // against it. A plain identity STRING read from a dead leader is racy
+  // (found live in this fix round: the inode is kernel-global and reused
+  // after destruction — a co-run sweep matched a NEW execution that drew
+  // the same inode and killed it; the pinned fd is the sound form).
+  let leaderNsFd: number | null = null;
+  const closeLeaderNsFd = (): void => {
+    if (leaderNsFd !== null) {
+      try {
+        closeSync(leaderNsFd);
+      } catch {
+        // already closed — best effort
+      }
+      leaderNsFd = null;
     }
-    return identity;
   };
-  const sweepEnabled = (): boolean => {
-    const identity = leaderSweepIdentity();
-    return identity !== null && runtimeNsIdentity !== null && identity !== runtimeNsIdentity;
+  const leaderSweepIdentity = (): string | null => {
+    if (leaderNsFd !== null) return nsIdentityFromFd(leaderNsFd);
+    return null;
   };
+  const sweepEnabled = (): boolean => leaderNsFd !== null;
+  // The identity is PRIMED while the leader LIVES (the F2 review finding):
+  // on the clean-exit path the post-exit reap fires 50 ms after close, by
+  // which time the leader's /proc entry is gone and a lazily-opened
+  // namespace is unopenable — the reap's sweep would disable itself and a
+  // daemonized survivor would outlive the execution the record says it
+  // cannot. The prime is a bounded non-blocking poll (unshare(2) execs
+  // within milliseconds of spawn; 40 x 25 ms is generous); the OPEN pins
+  // the namespace for the sweep's whole lifetime (F1's identity soundness).
+  const primeNsIdentity = (): void => {
+    if (child === null || child.pid === undefined) return;
+    const leaderPid: number = child.pid;
+    let attempts = 0;
+    const tick = (): void => {
+      if (leaderNsFd !== null) return; // captured
+      const identity = readNsUser(leaderPid);
+      if (identity === null) return; // the leader is gone
+      if (runtimeNsIdentity === null || identity === runtimeNsIdentity) {
+        // No private envelope on this leader (or the runtime's own
+        // identity is unreadable) — the sweep stays disabled (G5, the
+        // recorded honest degradation).
+        return;
+      }
+      const fd = openNsUser(leaderPid);
+      if (fd !== null) leaderNsFd = fd; // PINNED — the inode cannot be reused
+      return;
+    };
+    const poll = (): void => {
+      if (leaderNsFd !== null) return;
+      const before = attempts++;
+      tick();
+      if (leaderNsFd === null && before < 40) setTimeout(poll, 25);
+    };
+    setTimeout(poll, 25);
+  };
+  primeNsIdentity();
 
   /**
    * The S27-GAP-1 sweep at the termination seams: collect the still-parented
@@ -486,6 +540,7 @@ export function spawnSandboxedExecution(
       : [];
     killGroup();
     killVerified([...chained, ...escaped]);
+    closeLeaderNsFd();
   };
 
   // The cgroup layer moves the ALREADY-spawned child into its leaf (the
@@ -575,6 +630,7 @@ export function spawnSandboxedExecution(
       ? collectEscapeCandidates(child.pid, spawnSnapshot, leaderSweepIdentity(), runtimeNsIdentity)
       : [];
     killVerified(escaped);
+    closeLeaderNsFd();
   };
 
   const wallClockTimer =
@@ -650,6 +706,7 @@ export function spawnSandboxedExecution(
       spawnError: error.message,
     });
     if (cgroupLeaf !== null) teardownCgroupLeaf(cgroupLeaf);
+    closeLeaderNsFd();
   });
 
   child.on("close", (code, signal) => {

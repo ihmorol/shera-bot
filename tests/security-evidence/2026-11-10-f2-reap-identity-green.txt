@@ -1,0 +1,33 @@
+# F2 (PR #86 review, P2) GREEN evidence — the reap's sweep carries the identity captured while the leader lived (2026-11-10)
+#
+# The fix under test, in two moves:
+#   1. A bounded non-blocking post-spawn prime (40 x 25 ms) OPENS the
+#      leader's /proc/<pid>/ns/user while the leader is alive — the reap's
+#      sweepOnly() now has the identity on the clean-exit path.
+#   2. The identity is held as an OPEN fd (openNsUser), not a string: nsfs
+#      semantics PIN the namespace (its inode cannot be freed and reused
+#      while the fd is held). The string form was found UNSOUND live during
+#      this fix round — the previously-deterministic co-run failure
+#      (adapters/process + ST-05, twice reproduced: the adapter's /bin/sleep
+#      child killed mid-run, exit.code null) traced to ns/user INODE REUSE:
+#      a destroyed namespace's kernel-global inode is redrawn by a NEW
+#      execution's unshare, and a sweep comparing against a dead leader's
+#      identity STRING matched it. The pinned fd makes the comparison exact
+#      for the sweep's lifetime; the fd closes at settle (both paths).
+#
+# Command: pnpm vitest run tests/security/s27-st04-process-tree-escape.test.ts
+#          (4/4) — and the co-run combination that failed deterministically
+#          twice now passes three consecutive runs (20/20 each).
+
+ ✓ tests/security/s27-st04-process-tree-escape.test.ts (4 tests) 8830ms
+   ✓ S27 ST-04 — cancellation terminates the whole process tree (D27/D14) (4)
+     ✓ a forking payload's group descendants are ALL dead after cancel() — walked on the live process list 2030ms
+     ✓ a setsid grandchild that sheds the group AND session is ALSO dead after cancel() — the S27-GAP-1 escape sweep (issue #83) 2303ms
+     ✓ a concurrent execution's tree is UNTOUCHED by another execution's cancel — the sweep scopes by namespace IDENTITY, not a shared map string (F1, PR #86 review) 3652ms
+     ✓ a payload that setsids a daemon then EXITS 0 leaves NO survivor — the reap's sweep carries the identity captured while the leader lived (F2, PR #86 review) 837ms
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  04:56:17
+   Duration  9.35s (tests 97%, transform 2%, import 1%)
+

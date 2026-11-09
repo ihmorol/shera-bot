@@ -331,6 +331,67 @@ describe("S27 ST-04 — cancellation terminates the whole process tree (D27/D14)
     reapMarkerPids(markerA);
     reapMarkerPids(markerB);
   }, 60_000);
+
+  it("a payload that setsids a daemon then EXITS 0 leaves NO survivor — the reap's sweep carries the identity captured while the leader lived (F2, PR #86 review)", async () => {
+    // The hostile shape: the payload daemonizes (setsid) a long-lived child
+    // and exits cleanly — no cancel(), no wall clock, the exit is 0. The
+    // post-exit reap fires 50 ms after close, by which time the LEADER is
+    // gone: an identity read lazily AT reap time is unreadable, the sweep
+    // disables itself, and the daemon survives while the reap comment claims
+    // coverage. The identity must be captured while the leader LIVES.
+    const work = mkdtempSync(join(tmpdir(), "shera-s27-st04-f2-"));
+    tempDirs.push(work);
+    const marker = join(work, "daemon.pids");
+    writeFileSync(marker, "", "utf8");
+
+    const payload = [
+      `const { spawn } = require("node:child_process");`,
+      `const fs = require("node:fs");`,
+      `const c = spawn("setsid", [process.execPath, "-e",`,
+      `  'const fs=require("node:fs");' +`,
+      `  'fs.appendFileSync(${JSON.stringify(marker)}, String(process.pid) + "\\\\n");' +`,
+      `  'setTimeout(() => process.exit(0), 40000);'`,
+      `], { stdio: "ignore", detached: true });`,
+      `c.on("error", () => process.exit(1));`,
+      `setTimeout(() => process.exit(0), 400); // the payload exits CLEANLY after the daemonizing spawn`,
+    ].join("\n");
+
+    const request: SandboxSpawnRequest = {
+      command: [process.execPath, "-e", payload],
+      cwd: work,
+      env: { PATH: "/usr/local/bin:/usr/bin:/bin", HOME: work },
+      networkDisabled: true,
+      limits: {
+        memoryBytes: 2 * 1024 * 1024 * 1024,
+        cpuSeconds: 50,
+        maxProcesses: 64,
+        diskBytes: 64 * 1024 * 1024,
+      },
+      wallClockMs: null, // the reap is the seam under test — not the wall clock, not cancel()
+    };
+    const handle = spawnSandboxedExecution(request, {});
+    const exit = await handle.waitForExit();
+    expect(exit.code).toBe(0); // the clean exit is the shape's premise
+
+    // The daemon registered itself; the reap's sweep (which fired inside
+    // waitForExit's close path) must have collected and killed it.
+    const daemon = readFileSync(marker, "utf8")
+      .split("\n")
+      .map((line) => Number(line.trim()))
+      .filter((pid) => Number.isInteger(pid) && pid > 0);
+    expect(
+      daemon.length,
+      "the payload must have registered its setsid'd daemon",
+    ).toBeGreaterThanOrEqual(1);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    for (const pid of daemon) {
+      expect(
+        processAlive(pid),
+        `the daemonized child ${pid} SURVIVED a clean exit — the reap's sweep ran without the leader's identity (F2)`,
+      ).toBe(false);
+    }
+    reapMarkerPids(marker); // defense in depth for the suite's own hygiene
+  }, 60_000);
 });
 
 afterAll(() => {

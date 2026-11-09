@@ -24,3 +24,11 @@ README.md
 # Prettier must never touch them or the --check reproducibility gate would drift.
 packages/clients/openapi.json
 packages/clients/src/generated/
+
+.browsers-cache/
+
+# S34 criteria runner output: generated evidence reports and run artifacts
+# (dated, timestamped — reformatting them would corrupt the archive).
+tests/acceptance/evidence/
+tests/acceptance/browser/test-results/
+tests/acceptance/browser/playwright-report/

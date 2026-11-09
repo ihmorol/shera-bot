@@ -1,0 +1,36 @@
+
+ RUN  v5.0.1 /home/emon-morol/projects/github-cloud-projects/shera-bot-s34
+
+ ❯ apps/user-runtime/src/transport/local-api/s28-autonomous-proof.test.ts (2 tests | 1 failed) 1090ms
+   ❯ AC12: one autonomous scheduled task completes with no user action (2)
+     × fires end to end: model call, tool use, and artifact — with zero user input 812ms
+     ✓ refuses an unconfigured trigger through the D17 gate and records the state 271ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/user-runtime/src/transport/local-api/s28-autonomous-proof.test.ts > AC12: one autonomous scheduled task completes with no user action > fires end to end: model call, tool use, and artifact — with zero user input
+AssertionError: expected '2026-11-16T09:00:00.000Z' to be '2026-11-09T09:00:00.000Z' // Object.is equality
+
+Expected: "2026-11-09T09:00:00.000Z"
+Received: "2026-11-16T09:00:00.000Z"
+
+ ❯ apps/user-runtime/src/transport/local-api/s28-autonomous-proof.test.ts:278:38
+    276|     const view = runtime.schedules.getTriggerView(WS, triggerId);
+    277|     expect(view?.last_fired_at).toBeTruthy();
+    278|     expect(view?.next_occurrence_at).toBe("2026-11-09T09:00:00.000Z");
+       |                                      ^
+    279|     expect(view?.recent_firings[0]).toMatchObject({ outcome: "fired", …
+    280|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+   Start at  00:06:40
+   Duration  11.44s (transform 54%, import 36%, tests 10%)
+
+  Transform  transforming modules took 5.85s · 54% of tracked time, re-done on every run
+             persist transforms across runs with fsModuleCache: true
+             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns
+

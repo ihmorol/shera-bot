@@ -1,0 +1,59 @@
+{
+  "recorded": "2026-11-09T19:10:00Z (2026-11-10 +0600)",
+  "recorder": "S34 acceptance builder (continuation)",
+  "toolchain": {
+    "@playwright/test": "1.64.1 (exact-pinned, Apache-2.0)",
+    "axe-core": "4.14.0 (exact-pinned, MPL-2.0, on the S01 allowlist)",
+    "registry": "node_modules/.pnpm/playwright-core@1.64.1/node_modules/playwright-core/browsers.json"
+  },
+  "installTarget": ".browsers-cache/ (worktree-local, gitignored; the official `playwright install` installer; the shared user cache never widened)",
+  "browsers": [
+    {
+      "project": "chromium",
+      "revision": 1248,
+      "browserVersion": "156.0.8078.4",
+      "binary": ".browsers-cache/chromium-1248/chrome-linux64/chrome",
+      "sha256": "377a9fc07b495c3b8d0ab8ec1fdfd153641759f9756fea34d8dfce4de82f5025"
+    },
+    {
+      "project": "chromium-headless-shell",
+      "revision": 1248,
+      "browserVersion": "156.0.8078.4",
+      "binary": ".browsers-cache/chromium_headless_shell-1248/chrome-headless-shell-linux64/chrome-headless-shell",
+      "sha256": "4fa61f0ba0b4f89b7bec242c32ca16d3bccf69dbfef0651924a9ba8fede5f9d6"
+    },
+    {
+      "project": "firefox",
+      "revision": 1555,
+      "browserVersion": "157.0",
+      "binary": ".browsers-cache/firefox-1555/firefox/firefox",
+      "sha256": "1f637a7cfe8f1a3ec814a7da7e38c360a3e3c39553b8c7245ac5d6643fd495eb"
+    },
+    {
+      "project": "webkit",
+      "revision": 2370,
+      "browserVersion": "27.2",
+      "binary": ".browsers-cache/webkit-2370/minibrowser-gtk/MiniBrowser",
+      "sha256": "98384046ffbca250cfb254be6849210749f6455b0a5f18ebae022daf6bd39382"
+    },
+    {
+      "project": "ffmpeg",
+      "revision": 1013,
+      "browserVersion": null,
+      "binary": ".browsers-cache/ffmpeg-1013/ffmpeg-linux",
+      "sha256": "e829f7f8c497178109f4a388247b778a86637bf075d7bba5834c797a9d61a269"
+    },
+    {
+      "project": "chrome",
+      "revision": null,
+      "browserVersion": null,
+      "binary": "/usr/bin/google-chrome (system binary via the Playwright channel seam; version not pinned by this repo)",
+      "sha256": null
+    }
+  ],
+  "verification": {
+    "matrixRun": "88/88 spec runs passed across chromium, chrome, firefox, webkit (22 tests x 4 projects: journeys, layout, keyboard/axe) — see acceptance-report.json rows AC13/AC20",
+    "edge": "NOT-VERIFIED: no Microsoft Edge binary in this environment (no Docker to provision one); the chromium project covers the Chrome/Edge rendering engine family",
+    "safari": "NOT-VERIFIED as macOS/iOS Safari (no Apple hardware); covered through the WebKit engine project only"
+  }
+}

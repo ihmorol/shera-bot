@@ -47,7 +47,8 @@ The product UI reuses the identity already approved on the marketing site so the
 | `--surface` | `#08111f` | Sidebar, panels, cards |
 | `--surface-elevated` | `#101d31` | Modals, dropdowns, composer |
 | `--brand` | `#3b82f6` | Primary actions, active states |
-| `--brand-deep` | `#2563eb` | Hover/pressed |
+| `--brand-deep` | `#2563eb` | Default action rest state (S34: white-on-`#3b82f6` is 3.42:1 — axe color-contrast serious; `#2563eb` is 5.16:1), hover/pressed |
+| `--brand-deepest` | `#1d4ed8` | Pressed/active brand step (6.7:1) — added by the S34 browser-matrix QA |
 | `--sky` | `#7dd3fc` | Accents, eyebrows, links |
 | `--cool-highlight` | `#dcebff` | Gradient text ends, highlights |
 | `--text` | `#ffffff` | Primary text |

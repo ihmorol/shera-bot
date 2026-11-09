@@ -1,0 +1,18 @@
+# S27 ST-11 GREEN-with-control proof (2026-11-09)
+#
+# The D35 ladder RESTORED (git checkout — no bypass in the tree). All five
+# legs pass: the unknown tool refuses typed, the injected write PAUSES with
+# zero side effects, the agent self-decision is refused, the user's approve
+# executes exactly once (replay is already_decided), and the digest tie holds.
+#
+# Command: pnpm vitest run tests/security/s27-st11-injection-ungranted-tool.test.ts
+
+ RUN  v5.0.1 /home/emon-morol/projects/github-cloud-projects/shera-bot-s27
+
+ ✓ tests/security/s27-st11-injection-ungranted-tool.test.ts (5 tests) 1069ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  22:31:30
+   Duration  2.27s (tests 52%, transform 33%, import 15%)
+

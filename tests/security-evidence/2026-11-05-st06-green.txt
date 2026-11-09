@@ -1,0 +1,20 @@
+# S27 ST-06 GREEN-with-control proof (2026-11-05)
+#
+# The D27 network posture RESTORED (git checkout — no bypass in the tree): the spawn runs
+# inside the user+net namespace again (networkDisabled: true — the production default).
+#
+# Command: SHERA_PG_BIN=/usr/lib/postgresql/16/bin pnpm vitest run tests/security/s27-st06-network-bypass.test.ts
+# Expected: ALL PASS (the suite that failed in the red run — both probes refused by the
+# namespace, the internal listener records zero connections).
+
+
+ RUN  v5.0.1 /home/emon-morol/projects/github-cloud-projects/shera-bot-s27
+
+ ✓ tests/security/s27-st06-network-bypass.test.ts (1 test) 152ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  02:37:17
+   Duration  608ms (tests 38%, transform 38%, import 22%, worker 2%)
+
+exit=0

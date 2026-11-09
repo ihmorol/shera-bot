@@ -1,0 +1,46 @@
+# S27 ST-04 RED-without-control proof (2026-11-05)
+#
+# The D27/D14 process-tree termination was TEMPORARILY DISABLED (reverted before commit):
+# apps/user-runtime/src/adapters/process/execution-process-spawn.ts — killTree() returns
+# immediately (cancel() and the wall clock no longer kill the process group).
+#
+# Command: SHERA_PG_BIN=/usr/lib/postgresql/16/bin pnpm vitest run tests/security/s27-st04-process-tree-escape.test.ts
+# Expected with the control present: ALL PASS. Observed with it removed: the forked group
+# descendants SURVIVE on the live process list after cancel — the tree termination is gone.
+# (The suite's own marker-file reaper cleans the survivors up after the assertions.)
+
+
+ RUN  v5.0.1 /home/emon-morol/projects/github-cloud-projects/shera-bot-s27
+
+ ❯ tests/security/s27-st04-process-tree-escape.test.ts (1 test | 1 failed) 10918ms
+   ❯ S27 ST-04 — cancellation terminates the whole process tree (D27/D14) (1)
+     × a forking payload's group descendants are ALL dead after cancel() — walked on the live process list 10899ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/security/s27-st04-process-tree-escape.test.ts > S27 ST-04 — cancellation terminates the whole process tree (D27/D14) > a forking payload's group descendants are ALL dead after cancel() — walked on the live process list
+AssertionError: descendant 176195 SURVIVED cancellation — the D27 tree termination failed: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ tests/security/s27-st04-process-tree-escape.test.ts:141:9
+    139|         processAlive(pid),
+    140|         `descendant ${pid} SURVIVED cancellation — the D27 tree termin…
+    141|       ).toBe(false);
+       |         ^
+    142|     }
+    143|     reapMarkerPids(marker); // defense in depth for the suite's own hy…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  02:36:30
+   Duration  11.28s (tests 99%, transform 1%)
+
+exit=1

@@ -1,0 +1,80 @@
+# S27 ST-11 RED-without-control proof (2026-11-09)
+#
+# The executor's D35 gate was TEMPORARILY BYPASSED (reverted before commit):
+# apps/user-runtime/src/modules/tools/tool-executor.service.ts — the ladder
+# read from RISK_CLASS_LADDER[definition.risk_class] replaced by a constant
+# { execution: "automatic" } (EVERY class executes un-gated; the proposal's
+# story becomes authority).
+#
+# Command: pnpm vitest run tests/security/s27-st11-injection-ungranted-tool.test.ts
+# Expected with the control present: ALL PASS. Observed with it removed (3 failed):
+# the injected LOCAL_MUTATION write EXECUTED un-gated (paused -> executed), the
+# side-effect sentinel was polluted, and the self-approval/refusal legs lost
+# their pause to gate against.
+
+ RUN  v5.0.1 /home/emon-morol/projects/github-cloud-projects/shera-bot-s27
+
+ ❯ tests/security/s27-st11-injection-ungranted-tool.test.ts (5 tests | 3 failed) 959ms
+   ❯ S27 ST-11 — the injected tool call is refused on typed grounds (5)
+     ✓ the injected publish tool is TOOL_NOT_REGISTERED: no history row, no effect 210ms
+     × the injected write PAUSES (risk read from the DEFINITION, not the injected benign capability string) 187ms
+     × the injection cannot complete itself: the proposing Agent's decision on its own request is refused 189ms
+     × the gate is a gate, not a dead end: the user's approve executes once; replaying it double-executes nothing 194ms
+     ✓ a tampered call whose raw args do not match the journalled digest is TOOL_ARGS_DIGEST_MISMATCH 171ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/security/s27-st11-injection-ungranted-tool.test.ts > S27 ST-11 — the injected tool call is refused on typed grounds > the injected write PAUSES (risk read from the DEFINITION, not the injected benign capability string)
+AssertionError: expected 'executed' to be 'paused_for_approval' // Object.is equality
+
+Expected: "paused_for_approval"
+Received: "executed"
+
+ ❯ tests/security/s27-st11-injection-ungranted-tool.test.ts:234:30
+    232|     try {
+    233|       const result = proposeInjected(rt, { capability: "notes.read" });
+    234|       expect(result.outcome).toBe("paused_for_approval");
+       |                              ^
+    235|       if (result.outcome !== "paused_for_approval") throw new Error("e…
+    236|       expect(result.run.state).toBe("WAITING_FOR_APPROVAL");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  tests/security/s27-st11-injection-ungranted-tool.test.ts > S27 ST-11 — the injected tool call is refused on typed grounds > the injection cannot complete itself: the proposing Agent's decision on its own request is refused
+AssertionError: expected 'executed' to be 'paused_for_approval' // Object.is equality
+
+Expected: "paused_for_approval"
+Received: "executed"
+
+ ❯ tests/security/s27-st11-injection-ungranted-tool.test.ts:262:30
+    260|     try {
+    261|       const paused = proposeInjected(rt);
+    262|       expect(paused.outcome).toBe("paused_for_approval");
+       |                              ^
+    263|       if (paused.outcome !== "paused_for_approval") throw new Error("e…
+    264|       // The typed refusal THROWS (nothing persists).
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  tests/security/s27-st11-injection-ungranted-tool.test.ts > S27 ST-11 — the injected tool call is refused on typed grounds > the gate is a gate, not a dead end: the user's approve executes once; replaying it double-executes nothing
+AssertionError: expected 'executed' to be 'paused_for_approval' // Object.is equality
+
+Expected: "paused_for_approval"
+Received: "executed"
+
+ ❯ tests/security/s27-st11-injection-ungranted-tool.test.ts:287:30
+    285|     try {
+    286|       const paused = proposeInjected(rt);
+    287|       expect(paused.outcome).toBe("paused_for_approval");
+       |                              ^
+    288|       if (paused.outcome !== "paused_for_approval") throw new Error("e…
+    289|       const decided = rt.approvals.applyDecision({
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 2 passed (5)
+   Start at  22:31:10
+   Duration  2.16s (tests 49%, transform 33%, import 17%)
+

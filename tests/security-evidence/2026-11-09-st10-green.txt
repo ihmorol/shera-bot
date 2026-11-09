@@ -1,0 +1,28 @@
+# S27 ST-10 GREEN-with-control proof (2026-11-09)
+#
+# The tenant gate RESTORED (git checkout — no bypass in the tree). All seven
+# legs pass: every adversarial selector shape refused at the binding, the
+# proxy answers the typed RUNTIME_TENANT_MISMATCH 403 with ZERO upstream
+# calls on both foreign shapes, B's own workspace forwards, B's store never
+# resolves A's rows or bytes, and A's provider key exists only as a sealed
+# ciphertext in A's store (never plaintext anywhere).
+#
+# Command: pnpm vitest run tests/security/s27-st10-cross-user.test.ts
+
+ RUN  v5.0.1 /home/emon-morol/projects/github-cloud-projects/shera-bot-s27
+
+ ✓ tests/security/s27-st10-cross-user.test.ts (7 tests) 1584ms
+   ✓ S27 ST-10 — two accounts, two stores: B's runtime never resolves A's rows (1)
+     ✓ rows written through A's adapters are invisible to B's adapters and B's store bytes 726ms
+   ✓ S27 ST-10 — A's provider credential is sealed and absent from B's runtime bytes (D22/E9) (1)
+     ✓ the sealed custody row lives in A's store only; neither store carries the plaintext 628ms
+
+ Test Files  1 passed (1)
+      Tests  7 passed (7)
+   Start at  22:58:39
+   Duration  6.53s (transform 50%, tests 29%, import 20%, worker 1%)
+
+  Transform  transforming modules took 2.69s · 50% of tracked time, re-done on every run
+             persist transforms across runs with fsModuleCache: true
+             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns
+

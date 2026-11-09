@@ -1,0 +1,27 @@
+# S27 ST-05 GREEN-with-control proof (2026-11-05, re-run 2026-11-09 after the main integration)
+#
+# The kernel-limit envelope RESTORED (git checkout — no bypass in the tree):
+# --nproc/--fsize pushed again, the wall-clock timer live. All five legs pass:
+# the disk boundary is the typed SIGXFSZ, the wall clock kills the infinite
+# loop, the fork storm is refused at the cap, and the allocator is contained.
+#
+# Command: pnpm vitest run tests/security/s27-st05-resource-exhaustion.test.ts
+
+ RUN  v5.0.1 /home/emon-morol/projects/github-cloud-projects/shera-bot-s27
+
+ ✓ tests/security/s27-st05-resource-exhaustion.test.ts (5 tests) 40317ms
+   ✓ S27 ST-05 — disk fill dies at RLIMIT_FSIZE (typed SIGXFSZ) (1)
+     ✓ a loop appending past the 1 MiB cap is killed at the boundary and the file stays bounded 335ms
+   ✓ S27 ST-05 — the wall clock kills an infinite computation (1)
+     ✓ an infinite loop is SIGKILLed at the ceiling; the group is dead; wall_clock typed 1556ms
+   ✓ S27 ST-05 — a fork storm is bounded by RLIMIT_NPROC (2)
+     ✓ 40 spawn attempts against an 8-process cap: the kernel refuses the excess; the tree stays bounded 4081ms
+     ✓ NEGATIVE CONTROL: the same storm with no nproc limit spawns most of its children (what the cap prevents) 4073ms
+   ✓ S27 ST-05 — a runaway allocator is contained (RLIMIT_DATA; cgroup = GAP-2, honest) (1)
+     ✓ a loop allocating beyond the data ceiling either refuses allocation or dies at a limit — never grows unbounded 30262ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  22:50:17
+   Duration  40.85s (tests 99%)
+

@@ -110,11 +110,7 @@
       "rendered": {
         "rows": [
           {
-            "title": "Recovery review needed",
-            "deepLink": "/app"
-          },
-          {
-            "title": "Task failed",
+            "title": "Approval required",
             "deepLink": "/app"
           },
           {
@@ -122,7 +118,11 @@
             "deepLink": "/app"
           },
           {
-            "title": "Approval required",
+            "title": "Recovery review needed",
+            "deepLink": "/app"
+          },
+          {
+            "title": "Task failed",
             "deepLink": "/app"
           },
           {
@@ -135,11 +135,11 @@
         "emptyCta": false
       },
       "expectedNoteIds": [
+        "note-apr-apr_c5b88c41-6e2d-430d-8b33-e4078f318cc8",
+        "note-evt_cmd_complete_task_evt_cap_trig",
         "note-evt_cap_rec",
         "note-evt_cap_fail",
-        "note-evt_cap_done",
-        "note-apr-apr_b62a4b51-d870-4e3f-976a-7762ebddca9a",
-        "note-evt_cmd_complete_task_evt_cap_trig"
+        "note-evt_cap_done"
       ],
       "expectedUnread": 5,
       "mismatches": []
@@ -225,7 +225,12 @@
     "onboardingCard": {
       "rendered": {
         "step": "Step 1 of 5",
-        "chips": ["research", "programming", "exam_prep", "something_else"],
+        "chips": [
+          "research",
+          "programming",
+          "exam_prep",
+          "something_else"
+        ],
         "freeText": true,
         "dismiss": true
       },
@@ -269,13 +274,22 @@
       },
       "ok": true
     },
-    "keyboardTrailOnboarding": ["A", "A", "BUTTON", "A", "A", "A", "A", "A"],
+    "keyboardTrailOnboarding": [
+      "A",
+      "A",
+      "BUTTON",
+      "A",
+      "A",
+      "A",
+      "A",
+      "A"
+    ],
     "onboardingKeyboardAnswer": {
       "answers": {
         "welcome": {
           "option_id": "programming",
           "free_text": null,
-          "answered_at": "2026-11-08T02:57:33.465Z"
+          "answered_at": "2026-11-09T16:51:18.070Z"
         }
       },
       "current": "provider_check",

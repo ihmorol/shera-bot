@@ -166,11 +166,12 @@ export function NotificationsSettingsView(props: NotificationsSettingsViewProps)
         onToggle={props.onToggleInApp}
       >
         <p className="text-sm text-text">
-          Completion, failure, approval-required, and recovery notices, always in the bell panel.
+          Completion, failure, approval-required, and recovery notices — the bell panel lists them
+          either way.
         </p>
         <WhyLine>
-          the bell badge and the notification center are built on these records — turning them off
-          silences delivery, it never hides a pending approval.
+          the records never disappear: turning this off silences the bell&apos;s unread badge (the
+          attention signal), it never hides a pending approval.
         </WhyLine>
         <p className="text-xs text-muted">
           Recommended default: <span className="font-mono text-sky">on</span>

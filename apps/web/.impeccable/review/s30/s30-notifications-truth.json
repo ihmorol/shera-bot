@@ -2,6 +2,34 @@
   "notifications": {
     "notifications": [
       {
+        "notification_id": "note-apr-apr_c5b88c41-6e2d-430d-8b33-e4078f318cc8",
+        "workspace_id": "ws-local-default",
+        "kind": "approval_required",
+        "title": "Approval required",
+        "summary": "repo.push on workspace://notes/draft.md — tool_repo_push@1.2.0",
+        "conversation_id": "conv_capture_apr",
+        "task_id": "task_evt_cap_trig",
+        "approval_id": "apr_c5b88c41-6e2d-430d-8b33-e4078f318cc8",
+        "occurred_at": "2026-11-09T16:50:48.615Z",
+        "read_at": null,
+        "muted": false,
+        "deep_link": "/app"
+      },
+      {
+        "notification_id": "note-evt_cmd_complete_task_evt_cap_trig",
+        "workspace_id": "ws-local-default",
+        "kind": "completion",
+        "title": "Task completed",
+        "summary": "Task run task_evt_cap_trig completed",
+        "conversation_id": null,
+        "task_id": "task_evt_cap_trig",
+        "approval_id": null,
+        "occurred_at": "2026-11-09T16:50:48.599Z",
+        "read_at": null,
+        "muted": false,
+        "deep_link": "/app"
+      },
+      {
         "notification_id": "note-evt_cap_rec",
         "workspace_id": "ws-local-default",
         "kind": "recovery",
@@ -39,34 +67,6 @@
         "task_id": "task_cap_done",
         "approval_id": null,
         "occurred_at": "2026-11-08T09:00:00.000Z",
-        "read_at": null,
-        "muted": false,
-        "deep_link": "/app"
-      },
-      {
-        "notification_id": "note-apr-apr_b62a4b51-d870-4e3f-976a-7762ebddca9a",
-        "workspace_id": "ws-local-default",
-        "kind": "approval_required",
-        "title": "Approval required",
-        "summary": "repo.push on workspace://notes/draft.md — tool_repo_push@1.2.0",
-        "conversation_id": "conv_capture_apr",
-        "task_id": "task_evt_cap_trig",
-        "approval_id": "apr_b62a4b51-d870-4e3f-976a-7762ebddca9a",
-        "occurred_at": "2026-11-08T02:57:05.534Z",
-        "read_at": null,
-        "muted": false,
-        "deep_link": "/app"
-      },
-      {
-        "notification_id": "note-evt_cmd_complete_task_evt_cap_trig",
-        "workspace_id": "ws-local-default",
-        "kind": "completion",
-        "title": "Task completed",
-        "summary": "Task run task_evt_cap_trig completed",
-        "conversation_id": null,
-        "task_id": "task_evt_cap_trig",
-        "approval_id": null,
-        "occurred_at": "2026-11-08T02:57:05.522Z",
         "read_at": null,
         "muted": false,
         "deep_link": "/app"

@@ -63,25 +63,32 @@ export function registerOnboardingRoutes(app: Express, deps: OnboardingApiHandle
   });
 
   // The ONE typed commands envelope (G2); the proxy binds the actor (G6).
-  app.post(ONBOARDING_COMMANDS_PATH, (req, res) => {
-    try {
-      deps.onboarding.submitCommand(deps.workspaceId, req.body);
-      res.status(200).json({ accepted: true });
-    } catch (error) {
-      const typed = error as OnboardingServiceError;
-      if (typed instanceof Error && typed.name === "OnboardingServiceError") {
-        res.status(typed.status).json({
-          code: typed.code,
-          category: typed.category,
-          safe_message: typed.message,
-          retryable: false,
-          user_action: null,
-          internal_details: null,
-          correlation_id: null,
-        });
-        return;
-      }
-      throw error;
-    }
+  // The command is AWAITED (the memory briefing's shared-command effect is
+  // async, D16): a fault — the memory surface's own typed refusal or an
+  // untyped one — propagates through the shared typed-error middleware
+  // instead of being swallowed, so the caller's 200 answers a command whose
+  // effect really happened (the review round's F3).
+  app.post(ONBOARDING_COMMANDS_PATH, (req, res, next) => {
+    deps.onboarding
+      .submitCommand(deps.workspaceId, req.body)
+      .then(() => {
+        res.status(200).json({ accepted: true });
+      })
+      .catch((error: unknown) => {
+        if (error instanceof Error && error.name === "OnboardingServiceError") {
+          const typed = error as OnboardingServiceError;
+          res.status(typed.status).json({
+            code: typed.code,
+            category: typed.category,
+            safe_message: typed.message,
+            retryable: false,
+            user_action: null,
+            internal_details: null,
+            correlation_id: null,
+          });
+          return;
+        }
+        next(error);
+      });
   });
 }

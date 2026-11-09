@@ -26,6 +26,7 @@ import {
   submitNotificationSettingsCommand,
 } from "../lib/notifications-api";
 import {
+  bellBadgeCount,
   NotificationCenterView,
   notificationBadgeCount,
   type NotificationRow,
@@ -297,5 +298,39 @@ describe("Notification center view (S10)", () => {
   it("loading renders the skeleton state", () => {
     const html = renderCenter({ surfaceState: "loading" });
     expect(html).toContain("aria-busy");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 3. The bell's attention signal: the in-app delivery gate (the review
+//    round's F4 — the badge is the observable thing the in-app toggle gates;
+//    the center's records view is NEVER gated, E3)
+// ---------------------------------------------------------------------------
+
+describe("The bell's attention signal (the in-app delivery gate)", () => {
+  it("the in-app toggle gates the bell's unread badge — off silences the attention signal (D16/E3)", () => {
+    const rows = [row(), row({ notification_id: "note-2" })];
+    expect(bellBadgeCount(rows, true)).toBe(2);
+    expect(bellBadgeCount(rows, false)).toBe(0);
+    // The center's own record count is NOT gated — the records view is E3's.
+    expect(notificationBadgeCount(rows)).toBe(2);
+    expect(bellBadgeCount([], true)).toBe(0);
+  });
+
+  it("with in-app delivery off the center still renders every record — never a hidden pending approval (E3)", () => {
+    const html = renderCenter({
+      rows: [
+        row({
+          notification_id: "note-apr-gate_1",
+          kind: "approval_required",
+          title: "Approval required",
+          approval_id: "apr_gate_1",
+        }),
+      ],
+      settings: { in_app_enabled: false, browser_enabled: false },
+    });
+    expect(html).toContain("Approval required");
+    expect(html).toContain('data-testid="notification-row"');
+    expect(html).toContain("In-app delivery off");
   });
 });

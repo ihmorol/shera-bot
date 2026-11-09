@@ -42,10 +42,17 @@ export function OnboardingCardsView({
   onDismiss,
 }: OnboardingCardsViewProps) {
   const current = snapshot.steps.find((step) => step.step === snapshot.current_step);
-  // The chip focus + draft are KEYED to the current step: advancing the step
-  // remounts the card body (the key below), which resets both — no
-  // synchronous setState-in-effect cascade (the react-hooks rule).
-  const [focusedChip, setFocusedChip] = useState(0);
+  // The roving focus STARTS at the recorded answer (the radiogroup pattern:
+  // the tab stop lands on the checked radio) and stays independent of the
+  // selection below — aria-checked mirrors the step's STORED answer, never
+  // focus (the review round's P3: a screen reader announces what was
+  // answered). The chip focus + draft are KEYED to the current step:
+  // advancing the step remounts the card body (the key below), which resets
+  // both — no synchronous setState-in-effect cascade (the react-hooks rule).
+  const answeredIndex = current
+    ? current.options.findIndex((option) => option.option_id === current.answer?.option_id)
+    : -1;
+  const [focusedChip, setFocusedChip] = useState(answeredIndex >= 0 ? answeredIndex : 0);
   const [draft, setDraft] = useState("");
 
   if (snapshot.status !== "pending" || !current) {
@@ -153,7 +160,7 @@ export function OnboardingCardsView({
             key={option.option_id}
             type="button"
             role="radio"
-            aria-checked={focusedChip === index}
+            aria-checked={current.answer?.option_id === option.option_id}
             data-testid="onboarding-chip"
             data-option-id={option.option_id}
             tabIndex={focusedChip === index ? 0 : -1}

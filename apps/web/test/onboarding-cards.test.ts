@@ -206,4 +206,39 @@ describe("Onboarding cards (E43 in-chat interview)", () => {
     const failed = renderCards({ commandSafeError: "The onboarding command was not accepted." });
     expect(failed).toContain("The onboarding command was not accepted.");
   });
+
+  it("the radiogroup's aria-checked mirrors the RECORDED answer, never the roving focus (a11y)", () => {
+    const chipTag = (html: string, optionId: string): string =>
+      html.match(new RegExp(`<button[^>]*data-option-id="${optionId}"[^>]*>`))?.[0] ?? "";
+
+    // The recorded answer (programming, NOT the first chip) is the checked
+    // radio — a screen reader announces what was answered, not where focus
+    // happens to sit (the review round's P3). The fixture records it the way
+    // the runtime delivers it: on the step's own answer view.
+    const answeredAt = "2026-11-08T10:00:00.000Z";
+    const answered = renderCards(
+      {},
+      snapshot({
+        answers: {
+          welcome: { option_id: "programming", free_text: null, answered_at: answeredAt },
+        },
+        steps: snapshot().steps.map((step) =>
+          step.step === "welcome"
+            ? {
+                ...step,
+                answer: { option_id: "programming", free_text: null, answered_at: answeredAt },
+              }
+            : step,
+        ),
+      }),
+    );
+    expect(chipTag(answered, "programming")).toContain('aria-checked="true"');
+    expect(chipTag(answered, "research")).toContain('aria-checked="false"');
+    expect(chipTag(answered, "exam_prep")).toContain('aria-checked="false"');
+
+    // No answer yet: NOTHING announces checked — focus is not selection.
+    const fresh = renderCards();
+    expect(chipTag(fresh, "research")).toContain('aria-checked="false"');
+    expect(fresh).not.toContain('aria-checked="true"');
+  });
 });

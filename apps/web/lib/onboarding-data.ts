@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 
 import {
   fetchOnboarding,
@@ -9,7 +10,7 @@ import {
 } from "@/lib/onboarding-api";
 import { RuntimeApiError } from "@/lib/runtime-client";
 import type { OnboardingCommand } from "@shera-bot/contracts";
-import { broadcastTabEvent, openTabSyncChannel } from "@/lib/tab-sync";
+import { broadcastTabEvent, openTabSyncChannel, subscribeTabEvents } from "@/lib/tab-sync";
 
 /**
  * S30 — the onboarding data hooks (the notifications-data idiom): the
@@ -68,6 +69,34 @@ export function useOnboarding(workspaceId: string | null): {
   };
 }
 
+/**
+ * The receiving side of the settings half of the hint vocabulary (the review
+ * round's P3 — `settings-changed` was broadcast here but no surface
+ * subscribed): another tab's settled onboarding/settings command (the D16
+ * shared surface — the memory briefing's choice is a memory change too)
+ * invalidates THIS tab's onboarding and memory reads immediately. The
+ * poll/refetch remains the truth; the hint only removes the wait. A tab
+ * never hears itself (BroadcastChannel does not echo), so the broadcaster in
+ * useOnboardingCommands never self-invalidates. Never carries content; the
+ * re-read answers from the runtime.
+ */
+export function useTabSyncSettings(workspaceId: string | null): void {
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    const channel = openTabSyncChannel();
+    const unsubscribe = subscribeTabEvents(channel, (event) => {
+      if (event.kind === "settings-changed") {
+        void queryClient.invalidateQueries({ queryKey: ["onboarding", workspaceId] });
+        void queryClient.invalidateQueries({ queryKey: ["memory", workspaceId] });
+      }
+    });
+    return () => {
+      unsubscribe();
+      channel?.close();
+    };
+  }, [queryClient, workspaceId]);
+}
+
 export interface OnboardingCommands {
   submit: (command: OnboardingCommand) => void;
   submitReopen: () => void;
@@ -86,6 +115,9 @@ export interface OnboardingCommands {
 export function useOnboardingCommands(workspaceId: string | null): OnboardingCommands {
   const queryClient = useQueryClient();
   const snapshot = useOnboarding(workspaceId);
+  // Every consumer of the onboarding commands also RECEIVES the settings
+  // hints (the vocabulary's subscriber half lives with its broadcaster).
+  useTabSyncSettings(workspaceId);
 
   const mutation = useMutation({
     mutationFn: (command: OnboardingCommand) =>

@@ -26,7 +26,10 @@ import {
   type OnboardingStepView,
 } from "@shera-bot/contracts";
 
-import type { OnboardingRepository } from "../../adapters/sqlite/onboarding-repository.ts";
+import type {
+  OnboardingRepository,
+  OnboardingStateRow,
+} from "../../adapters/sqlite/onboarding-repository.ts";
 import type { CommandReceiptsRepository } from "../../adapters/sqlite/command-receipts-repository.ts";
 import type { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import type { MemoryService } from "../memory/memory.service.ts";
@@ -261,7 +264,54 @@ export class OnboardingService {
   // Commands (G2: typed, receipted; the actor is the session-bound user)
   // -------------------------------------------------------------------------
 
-  submitCommand(workspaceId: string, command: unknown): { accepted: true } {
+  /**
+   * The shared validation for an onboarding.answer command (G2): only the
+   * CURRENT step accepts an answer, only one of ITS declared options, and
+   * free text only where the step declares `accepts_free_text` (the review
+   * round's P3 — a crafted free_text on a no-free-text step is refused).
+   */
+  private assertAnswerable(
+    row: OnboardingStateRow | null,
+    typed: Extract<OnboardingCommand, { type: "onboarding.answer" }>,
+  ): void {
+    const answers = this.parseAnswers(row?.answers_json ?? "{}");
+    const status = row?.status ?? "pending";
+    if (status !== "pending") {
+      throw new OnboardingServiceError(
+        "ONBOARDING_NOT_ACTIVE",
+        "state",
+        "The onboarding is not active — reopen it first.",
+        409,
+      );
+    }
+    const current = this.currentStepOf("pending", row?.current_step ?? null, answers);
+    if (current !== typed.step) {
+      throw new OnboardingServiceError(
+        "ONBOARDING_STEP_OUT_OF_ORDER",
+        "validation",
+        `The onboarding is ordered — ${typed.step} is not the current step.`,
+      );
+    }
+    const option = (STEP_OPTIONS[typed.step] ?? []).find(
+      (candidate) => candidate.option_id === typed.option_id,
+    );
+    if (!option) {
+      throw new OnboardingServiceError(
+        "ONBOARDING_OPTION_INVALID",
+        "validation",
+        "That choice is not one of this step's options.",
+      );
+    }
+    if (typed.free_text !== null && !(STEP_FREE_TEXT[typed.step]?.accepts ?? false)) {
+      throw new OnboardingServiceError(
+        "ONBOARDING_FREE_TEXT_NOT_ACCEPTED",
+        "validation",
+        "This step does not accept a free-text answer — pick one of its options.",
+      );
+    }
+  }
+
+  async submitCommand(workspaceId: string, command: unknown): Promise<{ accepted: true }> {
     const parsed = OnboardingCommand.safeParse(command);
     if (!parsed.success) {
       throw new OnboardingServiceError(
@@ -285,10 +335,38 @@ export class OnboardingService {
     }
 
     const now = this.nowIso();
+
+    // The memory briefing's recorded effect rides the SHARED settings
+    // command surface (D16): the choice IS the memory.set_auto_memory
+    // contract command, applied through the memory service's own command
+    // path with the SAME actor. That path is ASYNC and the SQLite unit below
+    // is SYNCHRONOUS, so the effect runs BEFORE the receipted transaction,
+    // after validating the answer on the current read — a refused command
+    // has no effect, and a FAULTED command fails the step honestly: the
+    // receipt below never claims accepted for a command whose effect did
+    // not happen (the review round's F3 — the fire-and-forget
+    // `void ... .catch(() => {})` inside the transaction committed
+    // `{accepted: true}` even when the effect faulted). The derived
+    // idempotency key keeps the TWO receipts (onboarding + memory) distinct
+    // while staying deterministic: a replayed onboarding key re-derives the
+    // same memory key, whose receipt answers first (idempotent), then the
+    // transaction re-records the answer.
+    if (typed.type === "onboarding.answer" && typed.step === "memory_briefing") {
+      this.assertAnswerable(this.deps.onboarding.get(workspaceId), typed);
+      await this.deps.memory.applyCommand({
+        command_id: `${typed.command_id}-memory`,
+        idempotency_key: `${typed.idempotency_key}-memory`,
+        workspace_id: workspaceId,
+        actor: typed.actor,
+        issued_at: typed.issued_at,
+        type: "memory.set_auto_memory",
+        enabled: typed.option_id === "memory_auto_on",
+      });
+    }
+
     this.deps.tx.transaction((exec) => {
       const row = this.deps.onboarding.get(workspaceId, exec);
       const answers = this.parseAnswers(row?.answers_json ?? "{}");
-      const status = row?.status ?? "pending";
 
       if (typed.type === "onboarding.dismiss") {
         // Skippable (D16): the progress is preserved for the reopen.
@@ -312,59 +390,11 @@ export class OnboardingService {
           exec,
         );
       } else {
-        // onboarding.answer — the ordered interview: only the CURRENT step
-        // accepts an answer, and only one of ITS declared options (G2: the
-        // options are data, the runtime refuses anything else).
-        if (status !== "pending") {
-          throw new OnboardingServiceError(
-            "ONBOARDING_NOT_ACTIVE",
-            "state",
-            "The onboarding is not active — reopen it first.",
-            409,
-          );
-        }
-        const current = this.currentStepOf("pending", row?.current_step ?? null, answers);
-        if (current !== typed.step) {
-          throw new OnboardingServiceError(
-            "ONBOARDING_STEP_OUT_OF_ORDER",
-            "validation",
-            `The onboarding is ordered — ${typed.step} is not the current step.`,
-          );
-        }
-        const option = (STEP_OPTIONS[typed.step] ?? []).find(
-          (candidate) => candidate.option_id === typed.option_id,
-        );
-        if (!option) {
-          throw new OnboardingServiceError(
-            "ONBOARDING_OPTION_INVALID",
-            "validation",
-            "That choice is not one of this step's options.",
-          );
-        }
-
-        // The step's recorded effect rides the SHARED settings command
-        // surface (D16): the memory briefing's choice IS the
-        // memory.set_auto_memory contract command, applied through the
-        // memory service's own command path with the SAME actor. The derived
-        // idempotency key keeps the TWO receipts (onboarding + memory)
-        // distinct while staying deterministic: a replayed onboarding key
-        // re-derives the same memory key, whose receipt answers first.
-        if (typed.step === "memory_briefing") {
-          void this.deps.memory
-            .applyCommand({
-              command_id: `${typed.command_id}-memory`,
-              idempotency_key: `${typed.idempotency_key}-memory`,
-              workspace_id: workspaceId,
-              actor: typed.actor,
-              issued_at: typed.issued_at,
-              type: "memory.set_auto_memory",
-              enabled: typed.option_id === "memory_auto_on",
-            })
-            .catch(() => {
-              // The memory command validates typed — a refusal here is the
-              // shared surface's own typed answer, surfaced on the next read.
-            });
-        }
+        // onboarding.answer — re-validated on the TRANSACTIONAL read: the
+        // atomic unit commits only an answer that is valid NOW (the memory
+        // effect above ran outside the unit; a fault or an interleaved
+        // writer leaves the interview exactly where it was, resumable).
+        this.assertAnswerable(row, typed);
 
         const nextAnswers: Record<string, OnboardingAnswerRecord> = {
           ...answers,

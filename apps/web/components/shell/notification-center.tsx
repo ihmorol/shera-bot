@@ -25,7 +25,7 @@ import {
 import { useSessionIdentity } from "@/lib/container-connection";
 import { routes } from "@/lib/routes";
 import { useRouter } from "next/navigation";
-import { browserNotificationDecision, fireBrowserNotification } from "@/lib/desktop-notifications";
+import { deliveryTick, fireBrowserNotification } from "@/lib/desktop-notifications";
 import type { NotificationView } from "@shera-bot/contracts";
 import { cn } from "@/lib/utils";
 
@@ -52,6 +52,18 @@ export type NotificationRow = NotificationView;
 /** The bell badge: the unread rows' count (mirrors the sidebar states). */
 export function notificationBadgeCount(rows: readonly NotificationRow[]): number {
   return rows.filter((row) => row.read_at === null).length;
+}
+
+/**
+ * The bell's ATTENTION signal (§3.2), gated by the in-app delivery toggle
+ * (D16; the review round's F4): with in-app notifications explicitly off the
+ * badge and the unread label stay silent — the center itself keeps every
+ * record listed (E3: a pending approval is never hidden, only its attention
+ * signal is). Before the settings read lands the recommended default (on)
+ * stands, so the badge does not blink off during load.
+ */
+export function bellBadgeCount(rows: readonly NotificationRow[], inAppEnabled: boolean): number {
+  return inAppEnabled ? notificationBadgeCount(rows) : 0;
 }
 
 /** One kind's glyph + accessible label (color is never the only signal). */
@@ -321,17 +333,24 @@ export function NotificationBell({
   );
 }
 
-/** The live badge: the unread count of the runtime's derived rows. */
-function NotificationBadge({ workspaceId }: { workspaceId: string | null }) {
+/** The live badge: the gated attention signal of the runtime's derived rows. */
+function NotificationBadge({
+  workspaceId,
+  inAppEnabled,
+}: {
+  workspaceId: string | null;
+  inAppEnabled: boolean;
+}) {
   const query = useNotifications(workspaceId);
-  if (!workspaceId || query.rows.length === 0) return null;
-  return <BellBadge count={notificationBadgeCount(query.rows)} />;
+  const count = bellBadgeCount(query.rows, inAppEnabled);
+  if (!workspaceId || count === 0) return null;
+  return <BellBadge count={count} />;
 }
 
 /**
  * The bell with its §2.3 honest label: the visual badge is decorative, so
  * the accessible name carries the unread count (color/position is never the
- * only signal).
+ * only signal) — gated by the in-app toggle like the badge itself.
  */
 function BellButton({
   workspaceId,
@@ -343,7 +362,9 @@ function BellButton({
   onOpen: () => void;
 }) {
   const query = useNotifications(workspaceId);
-  const unread = workspaceId ? notificationBadgeCount(query.rows) : 0;
+  const settings = useNotificationSettings(workspaceId);
+  const inAppEnabled = settings.settings?.in_app_enabled ?? true;
+  const unread = workspaceId ? bellBadgeCount(query.rows, inAppEnabled) : 0;
   return (
     <Button
       variant="ghost"
@@ -353,7 +374,7 @@ function BellButton({
       onClick={onOpen}
     >
       <Bell className="size-4" aria-hidden="true" />
-      <NotificationBadge workspaceId={workspaceId} />
+      <NotificationBadge workspaceId={workspaceId} inAppEnabled={inAppEnabled} />
     </Button>
   );
 }
@@ -381,38 +402,41 @@ function NotificationCenterHost({
   // The browser-notification delivery (PRD §14; E15 embed). The 5s poll is
   // the arrival mechanism; the decision logic (desktop-notifications) fires
   // ONLY when the tab is open but unfocused, permission granted, and the
-  // toggle on — the focused case produces NO notification. Seen-ids bound
-  // the trigger to ARRIVALS (a re-render never re-fires), and the body is
-  // the runtime's bounded summary only (G3).
+  // toggle on — the focused case produces NO notification. The schedule is
+  // the PURE deliveryTick: the first ready rows snapshot is the MOUNT-SEEN
+  // pass (seeded without deciding — a fresh page load, even a background tab
+  // holding the whole unread history, never fires the backlog), and only
+  // ARRIVALS after it are decided, each exactly once (a re-render never
+  // re-fires). The body is the runtime's bounded summary only (G3).
   const deliveredIdsRef = useRef<Set<string>>(new Set());
-  // ONE delivery interval, re-armed when the rows/settings identity changes
-  // (the 5s poll cadence) — no refs written outside the interval callback,
-  // no render-time impurity: the closure reads the committed values.
+  const primedRef = useRef(false);
+  // ONE delivery interval, re-armed when the committed rows/settings identity
+  // changes (the 5s poll cadence) — no refs written outside the interval
+  // callback, no render-time impurity: the closure reads the committed values.
   useEffect(() => {
     if (!workspaceId) return;
     const id = window.setInterval(() => {
       const browserEnabled = settings.settings?.browser_enabled ?? false;
       const permission = typeof Notification === "undefined" ? "denied" : Notification.permission;
-      for (const row of query.rows) {
-        if (deliveredIdsRef.current.has(row.notification_id)) continue;
-        // Arrivals seed the seen set: only rows arriving AFTER mount can
-        // fire (a fresh page load never spams the history).
-        deliveredIdsRef.current.add(row.notification_id);
-        if (row.read_at !== null || row.muted) continue;
-        const decision = browserNotificationDecision({
-          permission: permission as NotificationPermission,
-          browserEnabled,
-          documentHidden: document.hidden,
-        });
-        if (decision.action === "fire") {
-          fireBrowserNotification({ title: row.title, body: row.summary });
-        }
+      const tick = deliveryTick({
+        primed: primedRef.current,
+        rowsReady: !query.loading,
+        seenIds: deliveredIdsRef.current,
+        rows: query.rows,
+        permission: permission as NotificationPermission,
+        browserEnabled,
+        documentHidden: document.hidden,
+      });
+      primedRef.current = tick.primed;
+      deliveredIdsRef.current = tick.seenIds;
+      for (const row of tick.fired) {
+        fireBrowserNotification({ title: row.title, body: row.summary });
       }
     }, 5_000);
     return () => window.clearInterval(id);
     // The interval re-arms on the committed rows/settings identity — the
     // closure reads exactly what this render committed.
-  }, [workspaceId, query.rows, settings.settings]);
+  }, [workspaceId, query.rows, query.loading, settings.settings]);
 
   const markRead = (notificationId: string) => {
     if (!workspaceId) return;

@@ -19,6 +19,7 @@ import {
 import { RuntimeApiError } from "@/lib/runtime-client";
 import { useSessionIdentity } from "@/lib/container-connection";
 import type { Actor } from "@shera-bot/contracts";
+import { broadcastTabEvent, openTabSyncChannel } from "@/lib/tab-sync";
 
 /**
  * S20 chunk 5 — the approvals data hooks (lib/operation-data.ts idiom): the
@@ -29,7 +30,12 @@ import type { Actor } from "@shera-bot/contracts";
  * There is NO approval-event WebSocket fanout in this slice, so the reads POLL
  * on the app's established 5s cadence (presence, D32) and pause while the tab
  * is hidden — a decision made in another tab (or by another surface) lands on
- * the next visible tick. Cross-tab propagation is the poll, honestly stated.
+ * the next visible tick. A settled DECISION also broadcasts the
+ * `approvals-changed` hint (the review round's P3 — the vocabulary's other
+ * half now has its broadcaster; the subscriber lives in notifications-data's
+ * useTabSyncNotifications): the OTHER tabs' pending-approval read re-derives
+ * immediately instead of waiting a tick. The SERVER truth stays authoritative
+ * — the hint is a client convenience under the poll, never a data carrier.
  * Failures ARE states: no retry behind the user's back, no fixture fallback.
  */
 
@@ -203,10 +209,17 @@ export function useApprovalDecision(workspaceId: string) {
     onSuccess: () => {
       // The decision's effects (request status, run state, grants, mutes
       // untouched) land through the invalidated reads — including the OTHER
-      // tabs' polls, which pick the same rows up on their next tick.
+      // tabs, whose pending read is additionally nudged by the
+      // approvals-changed hint below (the poll stays the truth).
       void queryClient.invalidateQueries({ queryKey: ["approval-pending", workspaceId] });
       void queryClient.invalidateQueries({ queryKey: ["approval-detail", workspaceId] });
       void queryClient.invalidateQueries({ queryKey: ["approval-grants", workspaceId] });
+      // The cross-tab hint (client convenience UNDER the server truth): a
+      // short-lived channel per hint — stateless, no refs. A tab never hears
+      // itself (BroadcastChannel does not echo).
+      const channel = openTabSyncChannel();
+      broadcastTabEvent(channel, { kind: "approvals-changed" });
+      channel?.close();
     },
   });
 }

@@ -45,7 +45,10 @@ import { afterAll, describe, expect, it } from "vitest";
 import type { ApprovalChoice, TaskRun } from "@shera-bot/contracts";
 
 import { ApprovalsRepository } from "../../apps/user-runtime/src/adapters/sqlite/approvals-repository.ts";
-import { openDatabase, type SqliteConnection } from "../../apps/user-runtime/src/adapters/sqlite/connection.ts";
+import {
+  openDatabase,
+  type SqliteConnection,
+} from "../../apps/user-runtime/src/adapters/sqlite/connection.ts";
 import { EventJournalRepository } from "../../apps/user-runtime/src/adapters/sqlite/event-journal-repository.ts";
 import { applyMigrations } from "../../apps/user-runtime/src/adapters/sqlite/migrations.ts";
 import { OperationsRepository } from "../../apps/user-runtime/src/adapters/sqlite/operations-repository.ts";
@@ -53,7 +56,10 @@ import { ToolsRepository } from "../../apps/user-runtime/src/adapters/sqlite/too
 import { SqliteTransactions } from "../../apps/user-runtime/src/adapters/sqlite/transactions.ts";
 import { ApprovalsService } from "../../apps/user-runtime/src/modules/approvals/approvals.service.ts";
 import { EventsService } from "../../apps/user-runtime/src/modules/events/events.service.ts";
-import { canonicalArgsDigest, ToolExecutor } from "../../apps/user-runtime/src/modules/tools/tool-executor.service.ts";
+import {
+  canonicalArgsDigest,
+  ToolExecutor,
+} from "../../apps/user-runtime/src/modules/tools/tool-executor.service.ts";
 import { ToolRegistry } from "../../apps/user-runtime/src/modules/tools/tool-registry.ts";
 import { makeNoteBindings } from "../../apps/user-runtime/src/modules/tools/tool-binding.ts";
 

@@ -168,9 +168,7 @@ describe("S27 ST-06 — network-disabled code execution (D27 namespace)", () => 
     }
     // The namespace's interface reality: no default route, lo down — the
     // child sees the kernel's own boundary, not a runtime filter.
-    const ifacesLine = result.text
-      .split("\n")
-      .find((line: string) => line.startsWith("IFACES "));
+    const ifacesLine = result.text.split("\n").find((line: string) => line.startsWith("IFACES "));
     expect(ifacesLine).toBeDefined();
     const ifaces: string[] = JSON.parse(ifacesLine!.slice("IFACES ".length));
     expect(ifaces).toContain("lo");

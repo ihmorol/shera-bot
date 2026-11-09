@@ -41,7 +41,10 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import type { TaskRun } from "@shera-bot/contracts";
 
-import { openDatabase, type SqliteConnection } from "../../apps/user-runtime/src/adapters/sqlite/connection.ts";
+import {
+  openDatabase,
+  type SqliteConnection,
+} from "../../apps/user-runtime/src/adapters/sqlite/connection.ts";
 import { applyMigrations } from "../../apps/user-runtime/src/adapters/sqlite/migrations.ts";
 import { SqliteTransactions } from "../../apps/user-runtime/src/adapters/sqlite/transactions.ts";
 import { EventJournalRepository } from "../../apps/user-runtime/src/adapters/sqlite/event-journal-repository.ts";
@@ -51,7 +54,10 @@ import { OperationsRepository } from "../../apps/user-runtime/src/adapters/sqlit
 import { ApprovalsService } from "../../apps/user-runtime/src/modules/approvals/approvals.service.ts";
 import { ToolsRepository } from "../../apps/user-runtime/src/adapters/sqlite/tools-repository.ts";
 import { ToolRegistry } from "../../apps/user-runtime/src/modules/tools/tool-registry.ts";
-import { ToolsInventoryService, type ToolCreationInput } from "../../apps/user-runtime/src/modules/tools/tools-inventory.service.ts";
+import {
+  ToolsInventoryService,
+  type ToolCreationInput,
+} from "../../apps/user-runtime/src/modules/tools/tools-inventory.service.ts";
 import { ToolExecutor } from "../../apps/user-runtime/src/modules/tools/tool-executor.service.ts";
 import { makeNoteBindings } from "../../apps/user-runtime/src/modules/tools/tool-binding.ts";
 import { canonicalArgsDigest } from "../../apps/user-runtime/src/modules/tools/tool-executor.service.ts";
@@ -197,8 +203,9 @@ describe("S27 ST-08 — the D38 intersection at creation (no widening)", () => {
         expect(preview.layer).toBe("platform");
       }
       // Create re-derives the verdict — the same hostile creation refused.
-      expect(() => rt.inventory.createTool(creationInput({ capabilities: ["credential.access"] })))
-        .toThrow(/TOOL_CAPABILITY_NOT_ALLOWED/);
+      expect(() =>
+        rt.inventory.createTool(creationInput({ capabilities: ["credential.access"] })),
+      ).toThrow(/TOOL_CAPABILITY_NOT_ALLOWED/);
       // NOTHING landed: the registry resolves nothing, no inventory row exists.
       expect(rt.registry.resolve(WS, "tool_st08_probe", "1.0.0")).toBeNull();
       expect(rt.repo.getAgentTool(WS, "tool_st08_probe", "1.0.0")).toBeNull();

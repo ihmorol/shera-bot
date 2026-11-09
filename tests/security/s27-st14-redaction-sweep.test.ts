@@ -38,7 +38,10 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import type { TaskRun } from "@shera-bot/contracts";
 
-import { openDatabase, type SqliteConnection } from "../../apps/user-runtime/src/adapters/sqlite/connection.ts";
+import {
+  openDatabase,
+  type SqliteConnection,
+} from "../../apps/user-runtime/src/adapters/sqlite/connection.ts";
 import { applyMigrations } from "../../apps/user-runtime/src/adapters/sqlite/migrations.ts";
 import { SqliteTransactions } from "../../apps/user-runtime/src/adapters/sqlite/transactions.ts";
 import { EventJournalRepository } from "../../apps/user-runtime/src/adapters/sqlite/event-journal-repository.ts";
@@ -49,8 +52,14 @@ import { OperationsRepository } from "../../apps/user-runtime/src/adapters/sqlit
 import { ToolsRepository } from "../../apps/user-runtime/src/adapters/sqlite/tools-repository.ts";
 import { EventsService } from "../../apps/user-runtime/src/modules/events/events.service.ts";
 import { TerminalRecorder } from "../../apps/user-runtime/src/modules/terminals/terminal-recorder.service.ts";
-import { MemoryService, MemoryServiceError } from "../../apps/user-runtime/src/modules/memory/memory.service.ts";
-import { ToolExecutor, canonicalArgsDigest } from "../../apps/user-runtime/src/modules/tools/tool-executor.service.ts";
+import {
+  MemoryService,
+  MemoryServiceError,
+} from "../../apps/user-runtime/src/modules/memory/memory.service.ts";
+import {
+  ToolExecutor,
+  canonicalArgsDigest,
+} from "../../apps/user-runtime/src/modules/tools/tool-executor.service.ts";
 import { ToolRegistry } from "../../apps/user-runtime/src/modules/tools/tool-registry.ts";
 import { toSheraErrorResponse } from "../../apps/user-runtime/src/transport/http/typed-errors.ts";
 
@@ -168,7 +177,13 @@ function buildHarness(): St14Harness {
     max_response_bytes: 32_768,
     bindingName: "s27-st14-echo",
   });
-  const executor = new ToolExecutor({ registry, tools: repo, tx, now: () => NOW, nowMs: () => 1_000 });
+  const executor = new ToolExecutor({
+    registry,
+    tools: repo,
+    tx,
+    now: () => NOW,
+    nowMs: () => 1_000,
+  });
   return {
     dbPath,
     conn,
@@ -238,7 +253,9 @@ describe("S27 ST-14 — the terminal boundary redacts every fixture class", () =
       }
       // The start row's command line: the credential URL is redacted there.
       const start = h.conn.db
-        .prepare("SELECT command FROM terminal_events WHERE terminal_id = ? AND command IS NOT NULL")
+        .prepare(
+          "SELECT command FROM terminal_events WHERE terminal_id = ? AND command IS NOT NULL",
+        )
         .get(terminalId) as { command: string };
       expect(start.command).not.toContain("s27-SYNTHETIC-repo-credential-NOT-REAL");
       expect(start.command).toContain("[REDACTED]");
@@ -271,7 +288,9 @@ describe("S27 ST-14 — tool history redacts the leaky client's echo", () => {
       });
       expect(result.outcome).toBe("executed");
       const rows = h.conn.db
-        .prepare("SELECT args_summary, result_summary FROM tool_execution_history WHERE workspace_id = ? AND task_id = ?")
+        .prepare(
+          "SELECT args_summary, result_summary FROM tool_execution_history WHERE workspace_id = ? AND task_id = ?",
+        )
         .all(WS, TASK) as Array<{ args_summary: string; result_summary: string | null }>;
       expect(rows).toHaveLength(1);
       const stored = `${rows[0]?.args_summary ?? ""}\n${rows[0]?.result_summary ?? ""}`;

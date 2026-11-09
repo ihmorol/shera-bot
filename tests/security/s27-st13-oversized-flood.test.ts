@@ -32,13 +32,18 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import type { TaskRun } from "@shera-bot/contracts";
 
-import { openDatabase, type SqliteConnection } from "../../apps/user-runtime/src/adapters/sqlite/connection.ts";
+import {
+  openDatabase,
+  type SqliteConnection,
+} from "../../apps/user-runtime/src/adapters/sqlite/connection.ts";
 import { applyMigrations } from "../../apps/user-runtime/src/adapters/sqlite/migrations.ts";
 import { SqliteTransactions } from "../../apps/user-runtime/src/adapters/sqlite/transactions.ts";
 import { ToolsRepository } from "../../apps/user-runtime/src/adapters/sqlite/tools-repository.ts";
 import { spawnSandboxedExecution } from "../../apps/user-runtime/src/adapters/process/execution-process-spawn.ts";
-import { canonicalArgsDigest, ToolExecutor } from "../../apps/user-runtime/src/modules/tools/tool-executor.service.ts";
-import type { ToolBinding, ToolExecutionContext } from "../../apps/user-runtime/src/modules/tools/tool-binding.ts";
+import {
+  canonicalArgsDigest,
+  ToolExecutor,
+} from "../../apps/user-runtime/src/modules/tools/tool-executor.service.ts";
 import { ToolRegistry } from "../../apps/user-runtime/src/modules/tools/tool-registry.ts";
 
 const WS = "ws_s27_st13";
@@ -82,14 +87,12 @@ function buildRuntimeWithFloodTool(maxResponseBytes: number): {
   const repo = new ToolsRepository(conn.db);
   const registry = new ToolRegistry();
   const floodText = `${FLOOD_MARKER} ${"x".repeat(64 * 1024)} ${FLOOD_MARKER}`;
-  let calls = 0;
   registry.registerBinding("s27-st13-flood", {
     name: "s27-st13-flood",
     preview() {
       return null;
     },
-    execute(_args, _ctx) {
-      calls += 1;
+    execute() {
       return { ok: true, text: floodText };
     },
   });
@@ -224,7 +227,13 @@ describe("S27 ST-13 — the tool's own response budget is enforced by the execut
         max_response_bytes: 4_096,
         bindingName: "s27-st13-flood",
       });
-      const executor = new ToolExecutor({ registry, tools: repo, tx, now: () => NOW, nowMs: () => 1_000 });
+      const executor = new ToolExecutor({
+        registry,
+        tools: repo,
+        tx,
+        now: () => NOW,
+        nowMs: () => 1_000,
+      });
       const emptyArgs = {};
       const result = executor.executeProposal({
         proposal: {
@@ -260,7 +269,11 @@ describe("S27 ST-13 — the streaming forward cap bounds a flooding child (D11)"
     let truncationFired = 0;
     const handle = spawnSandboxedExecution(
       {
-        command: ["/bin/sh", "-c", `i=0; while [ $i -lt 4096 ]; do printf '%1024s' '${FLOOD_MARKER}'; i=$((i+1)); done`],
+        command: [
+          "/bin/sh",
+          "-c",
+          `i=0; while [ $i -lt 4096 ]; do printf '%1024s' '${FLOOD_MARKER}'; i=$((i+1)); done`,
+        ],
         cwd: work,
         env: { PATH: "/usr/local/bin:/usr/bin:/bin", HOME: work },
         networkDisabled: true,
@@ -282,7 +295,9 @@ describe("S27 ST-13 — the streaming forward cap bounds a flooding child (D11)"
     // handed to any sink (one chunk's slack).
     expect(forwardedBytes).toBeLessThanOrEqual(CAP + 2048);
     expect(forwardedBytes).toBeGreaterThan(0);
-    expect(processAlive(process.pid), "the runtime gateway stays healthy after the flood").toBe(true);
+    expect(processAlive(process.pid), "the runtime gateway stays healthy after the flood").toBe(
+      true,
+    );
     expect(exit).toBeDefined();
   }, 45_000);
 });
@@ -333,7 +348,11 @@ describe("S27 ST-13 — hostile oversized ARGUMENTS are bounded in the recorded 
       max_response_bytes: 4_096,
       bindingName: "s27-st13-flood",
     });
-    const rt = { executor: new ToolExecutor({ registry, tools: repo, tx, now: () => NOW, nowMs: () => 1_000 }), repo, conn };
+    const rt = {
+      executor: new ToolExecutor({ registry, tools: repo, tx, now: () => NOW, nowMs: () => 1_000 }),
+      repo,
+      conn,
+    };
     try {
       const hugeArg = `${FLOOD_MARKER}-${"y".repeat(1024 * 1024)}-${FLOOD_MARKER}`;
       const rawArgs = { payload: hugeArg };

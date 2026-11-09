@@ -51,7 +51,7 @@ function processAlive(pid: number): boolean {
 
 /** Best-effort cleanup so a RED-run survivor never outlives the suite. */
 function reapMarkerPids(markerPath: string): void {
-  let pids: number[] = [];
+  let pids: number[];
   try {
     pids = readFileSync(markerPath, "utf8")
       .split("\n")

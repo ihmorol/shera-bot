@@ -222,7 +222,13 @@ describe("S27 ST-02 — D39 private-folder denial (Agent B vs agent://agent_alph
 describe("S27 ST-02 — E12 workspace scoping (the same URI, two workspaces)", () => {
   it("a secret written in workspace A is invisible from workspace B", () => {
     const { files } = newStore();
-    files.write(WS_A, "workspace://projects/alpha/secret.env", userA, Buffer.from("ALPHA-ONLY"), "text/plain");
+    files.write(
+      WS_A,
+      "workspace://projects/alpha/secret.env",
+      userA,
+      Buffer.from("ALPHA-ONLY"),
+      "text/plain",
+    );
     // B's tree has no such node — not a content leak, an independent tree.
     expect(() => files.read(WS_B, "workspace://projects/alpha/secret.env", agentB)).toThrow(
       WorkspaceNodeNotFoundError,

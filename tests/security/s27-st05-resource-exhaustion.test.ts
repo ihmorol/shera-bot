@@ -41,7 +41,10 @@ import {
 
 const tempDirs: string[] = [];
 
-function baseRequest(work: string, overrides: Partial<SandboxSpawnRequest> = {}): SandboxSpawnRequest {
+function baseRequest(
+  work: string,
+  overrides: Partial<SandboxSpawnRequest> = {},
+): SandboxSpawnRequest {
   return {
     command: ["/bin/sh", "-c", "echo noop"],
     cwd: work,

@@ -36,7 +36,15 @@
  * Governing records: THREAT_MODEL §5 ST-01, D27, D23 rule 2 (the spawn seam),
  * E36, G3/G5.
  */
-import { mkdirSync, mkdtempSync, readFileSync, existsSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  existsSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -158,9 +166,7 @@ describe("S27 ST-01 — filesystem scope: traversal and symlink escape (D27)", (
 
   it("refuses a planted FILE symlink pointing outside; the target is never read", () => {
     symlinkSync(join(outside, "canary.txt"), join(workspaceRoot, "innocent.txt"));
-    expect(() => resolveFileInsideScope(workspaceRoot, "innocent.txt")).toThrow(
-      SandboxPolicyError,
-    );
+    expect(() => resolveFileInsideScope(workspaceRoot, "innocent.txt")).toThrow(SandboxPolicyError);
     // The planted link itself is untouched (the runtime never deletes hostile
     // material to make a check pass).
     expect(existsSync(join(workspaceRoot, "innocent.txt"))).toBe(true);
@@ -283,10 +289,22 @@ describe("S27 ST-01 — the row-based file store refuses hostile URIs (S17 surfa
   });
 
   it("a refused write leaves the database with no smuggled row (byte-level count unchanged)", () => {
-    files.write("ws_s27", "workspace://keep.txt", { type: "user", id: "user_alice" }, Buffer.from("ok"), null);
+    files.write(
+      "ws_s27",
+      "workspace://keep.txt",
+      { type: "user", id: "user_alice" },
+      Buffer.from("ok"),
+      null,
+    );
     const nodesBefore = countNodes(dbPath);
     try {
-      files.write("ws_s27", "workspace://../escape.txt", { type: "user", id: "user_alice" }, Buffer.from("x"), null);
+      files.write(
+        "ws_s27",
+        "workspace://../escape.txt",
+        { type: "user", id: "user_alice" },
+        Buffer.from("x"),
+        null,
+      );
       expect.unreachable("the hostile URI must be refused");
     } catch (error) {
       expect(error).toBeInstanceOf(WorkspacePathError);

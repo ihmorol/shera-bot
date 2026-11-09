@@ -40,7 +40,6 @@ import {
 } from "../../apps/user-runtime/src/adapters/sqlite/workspace-files-repository.ts";
 import {
   LeaseConflictError,
-  LeaseExpiredError,
   WriteLeaseRequiredError,
   WriteLeasesRepository,
 } from "../../apps/user-runtime/src/adapters/sqlite/write-leases-repository.ts";
@@ -86,11 +85,25 @@ describe("S27 ST-09 — concurrent writes on a leased path (no silent overwrite)
   it("task B's write over task A's leased path is refused naming the foreign holder; content stays byte-identical", () => {
     const h = buildHarness();
     holdLease(h, "workspace://reports/report.md", TASK_A, AGENT_A);
-    h.files.write(WS, "workspace://reports/report.md", agentA, Buffer.from("A's version"), "text/plain", { task_id: TASK_A });
+    h.files.write(
+      WS,
+      "workspace://reports/report.md",
+      agentA,
+      Buffer.from("A's version"),
+      "text/plain",
+      { task_id: TASK_A },
+    );
 
     let conflictingTask: string | null = null;
     try {
-      h.files.write(WS, "workspace://reports/report.md", agentB, Buffer.from("B's overwrite"), "text/plain", { task_id: TASK_B });
+      h.files.write(
+        WS,
+        "workspace://reports/report.md",
+        agentB,
+        Buffer.from("B's overwrite"),
+        "text/plain",
+        { task_id: TASK_B },
+      );
       expect.unreachable("the cross-task write must be refused");
     } catch (error) {
       expect(error).toBeInstanceOf(WriteLeaseRequiredError);
@@ -106,9 +119,22 @@ describe("S27 ST-09 — concurrent writes on a leased path (no silent overwrite)
   it("the user panel is equally blocked by an agent-held lease (the tooltip data rides the conflict)", () => {
     const h = buildHarness();
     holdLease(h, "workspace://reports/report.md", TASK_A, AGENT_A);
-    h.files.write(WS, "workspace://reports/report.md", agentA, Buffer.from("A's version"), "text/plain", { task_id: TASK_A });
+    h.files.write(
+      WS,
+      "workspace://reports/report.md",
+      agentA,
+      Buffer.from("A's version"),
+      "text/plain",
+      { task_id: TASK_A },
+    );
     expect(() =>
-      h.files.write(WS, "workspace://reports/report.md", { type: "user", id: "user_alice" }, Buffer.from("panel overwrite"), "text/plain"),
+      h.files.write(
+        WS,
+        "workspace://reports/report.md",
+        { type: "user", id: "user_alice" },
+        Buffer.from("panel overwrite"),
+        "text/plain",
+      ),
     ).toThrow(/is editing/); // WriteLeaseConflictError's message carries the holding Agent + task
     const after = h.files.read(WS, "workspace://reports/report.md", agentA);
     expect(Buffer.from(after.content).toString("utf8")).toBe("A's version");
@@ -120,7 +146,9 @@ describe("S27 ST-09 — a lease is per EXACT path (no foreign-path authorization
     const h = buildHarness();
     holdLease(h, "workspace://reports/owned.md", TASK_A, AGENT_A);
     expect(() =>
-      h.files.write(WS, "workspace://reports/other.md", agentA, Buffer.from("x"), "text/plain", { task_id: TASK_A }),
+      h.files.write(WS, "workspace://reports/other.md", agentA, Buffer.from("x"), "text/plain", {
+        task_id: TASK_A,
+      }),
     ).toThrow(WriteLeaseRequiredError);
     // path2 has no node at all — the hostile write created nothing.
     expect(h.files.resolve(WS, "workspace://reports/other.md", agentA)).toBeNull();
@@ -133,26 +161,54 @@ describe("S27 ST-09 — expired leases authorize NOTHING", () => {
     const h = buildHarness(() => new Date(clock));
     // Task A acquires with a 1-second TTL.
     holdLease(h, "workspace://reports/report.md", TASK_A, AGENT_A, 1_000);
-    h.files.write(WS, "workspace://reports/report.md", agentA, Buffer.from("A's version"), "text/plain", { task_id: TASK_A });
+    h.files.write(
+      WS,
+      "workspace://reports/report.md",
+      agentA,
+      Buffer.from("A's version"),
+      "text/plain",
+      { task_id: TASK_A },
+    );
 
     // Time passes; the lease lapses.
     clock += 5_000;
 
     // A's own write is NOW REFUSED: a lapsed lease authorizes nothing.
     expect(() =>
-      h.files.write(WS, "workspace://reports/report.md", agentA, Buffer.from("A's stale write"), "text/plain", { task_id: TASK_A }),
+      h.files.write(
+        WS,
+        "workspace://reports/report.md",
+        agentA,
+        Buffer.from("A's stale write"),
+        "text/plain",
+        { task_id: TASK_A },
+      ),
     ).toThrow(WriteLeaseRequiredError);
     // A cannot renew the lapsed lease either — the path must be re-acquired.
     const lapsed = h.leases.listActiveLeases(WS).find((lease) => lease.task_id === TASK_A);
     expect(lapsed).toBeUndefined(); // an expired lease is not ACTIVE
     // B re-acquires (steal-by-expiry) and writes; the queue-then-stop shape.
     holdLease(h, "workspace://reports/report.md", TASK_B, AGENT_B, 60_000);
-    h.files.write(WS, "workspace://reports/report.md", agentB, Buffer.from("B's version"), "text/plain", { task_id: TASK_B });
+    h.files.write(
+      WS,
+      "workspace://reports/report.md",
+      agentB,
+      Buffer.from("B's version"),
+      "text/plain",
+      { task_id: TASK_B },
+    );
     const after = h.files.read(WS, "workspace://reports/report.md", agentB);
     expect(Buffer.from(after.content).toString("utf8")).toBe("B's version");
     // A's write attempt AFTER B holds it: refused again, naming B's task.
     expect(() =>
-      h.files.write(WS, "workspace://reports/report.md", agentA, Buffer.from("A again"), "text/plain", { task_id: TASK_A }),
+      h.files.write(
+        WS,
+        "workspace://reports/report.md",
+        agentA,
+        Buffer.from("A again"),
+        "text/plain",
+        { task_id: TASK_A },
+      ),
     ).toThrow(/task_beta/);
   });
 });
@@ -163,12 +219,12 @@ describe("S27 ST-09 — equivalent spellings collide into ONE exclusivity domain
     holdLease(h, "workspace://reports/report file.md", TASK_A, AGENT_A);
     // The SAME canonical path, spelled differently — percent-encoding and a
     // trailing slash cannot create a second exclusivity domain.
-    expect(() =>
-      holdLease(h, "workspace://reports/report%20file.md/", TASK_B, AGENT_B),
-    ).toThrow(LeaseConflictError);
-    expect(() =>
-      holdLease(h, "workspace://reports/report%20file.md", TASK_B, AGENT_B),
-    ).toThrow(LeaseConflictError);
+    expect(() => holdLease(h, "workspace://reports/report%20file.md/", TASK_B, AGENT_B)).toThrow(
+      LeaseConflictError,
+    );
+    expect(() => holdLease(h, "workspace://reports/report%20file.md", TASK_B, AGENT_B)).toThrow(
+      LeaseConflictError,
+    );
   });
 });
 

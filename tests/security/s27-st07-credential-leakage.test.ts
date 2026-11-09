@@ -57,7 +57,8 @@ import {
  */
 const FIXTURES = {
   bearerHeader: "Authorization: Bearer s27-SYNTHETIC-provider-token-NOT-REAL",
-  gitRemoteUrl: "https://shera-bot:s27-SYNTHETIC-repo-credential-NOT-REAL@example.com/owner/repo.git",
+  gitRemoteUrl:
+    "https://shera-bot:s27-SYNTHETIC-repo-credential-NOT-REAL@example.com/owner/repo.git",
   envDump: "SHERA_S27_API_KEY=s27-SYNTHETIC-key-value-NOT-REAL",
   cookieHeader: "set-cookie: shera_session=s27-SYNTHETIC-cookie-value-NOT-REAL; Path=/; HttpOnly",
   pemBlock: [

@@ -43,7 +43,10 @@ import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 
 import { runtimeWorkspaceMatches, Session } from "@shera-bot/contracts";
 
-import { openDatabase, type SqliteConnection } from "../../apps/user-runtime/src/adapters/sqlite/connection.ts";
+import {
+  openDatabase,
+  type SqliteConnection,
+} from "../../apps/user-runtime/src/adapters/sqlite/connection.ts";
 import { applyMigrations } from "../../apps/user-runtime/src/adapters/sqlite/migrations.ts";
 import { SqliteTransactions } from "../../apps/user-runtime/src/adapters/sqlite/transactions.ts";
 import { TerminalEventsRepository } from "../../apps/user-runtime/src/adapters/sqlite/terminal-events-repository.ts";
@@ -57,7 +60,6 @@ import { proxyToLocalApi } from "../../apps/web/lib/server/proxies";
 
 const WS_A = "ws_account_a";
 const WS_B = "ws_account_b";
-const SUB_A = "google-account-a";
 const SUB_B = "google-account-b";
 const NOW = "2026-11-09T12:00:00.000Z";
 
@@ -99,10 +101,7 @@ interface FetchCall {
 }
 
 /** A fetch stub recording every call; /api/session answers with `session`. */
-function stubFetch(
-  respond: () => Response,
-  session: () => Response,
-): { calls: FetchCall[] } {
+function stubFetch(respond: () => Response, session: () => Response): { calls: FetchCall[] } {
   const calls: FetchCall[] = [];
   vi.stubGlobal(
     "fetch",
@@ -142,7 +141,7 @@ async function proxied(
     const json = (await response.json()) as { code?: string };
     code = json.code ?? null;
   } catch {
-    code = null;
+    // A non-JSON body (the transparent forward path) carries no typed code.
   }
   // `forwarded` counts the calls AFTER the session lookup — i.e. whether the
   // proxy passed the request to the runtime.
@@ -203,7 +202,14 @@ function scanStoreBytes(dbPath: string): string {
 describe("S27 ST-10 — the tenant binding refuses every foreign selector shape", () => {
   it("a foreign workspace in the QUERY is refused; duplicates where one matches are refused", () => {
     // B's session, A's workspace in the query: refused.
-    expect(runtimeWorkspaceMatches("GET", new URL(`http://x/v1/terminals/state?workspace_id=${WS_A}`).searchParams, null, WS_B)).toBe(false);
+    expect(
+      runtimeWorkspaceMatches(
+        "GET",
+        new URL(`http://x/v1/terminals/state?workspace_id=${WS_A}`).searchParams,
+        null,
+        WS_B,
+      ),
+    ).toBe(false);
     // Duplicate selectors — one matches B, one names A: refused (both must match).
     expect(
       runtimeWorkspaceMatches(
@@ -224,26 +230,55 @@ describe("S27 ST-10 — the tenant binding refuses every foreign selector shape"
     ).toBe(false);
     // A percent-encoded foreign selector never equals the session's id.
     expect(
-      runtimeWorkspaceMatches("GET", new URL(`http://x/v1/credits?workspace_id=${WS_A}%2f..%2f`).searchParams, null, WS_B),
+      runtimeWorkspaceMatches(
+        "GET",
+        new URL(`http://x/v1/credits?workspace_id=${WS_A}%2f..%2f`).searchParams,
+        null,
+        WS_B,
+      ),
     ).toBe(false);
     // A GET with NO selector: refused (the workspace binding is mandatory).
-    expect(runtimeWorkspaceMatches("GET", new URL("http://x/v1/credits").searchParams, null, WS_B)).toBe(false);
+    expect(
+      runtimeWorkspaceMatches("GET", new URL("http://x/v1/credits").searchParams, null, WS_B),
+    ).toBe(false);
     // A POST whose BODY names the foreign workspace: refused.
     expect(
-      runtimeWorkspaceMatches("POST", new URL("http://x/v1/conversations/commands").searchParams, { workspace_id: WS_A }, WS_B),
+      runtimeWorkspaceMatches(
+        "POST",
+        new URL("http://x/v1/conversations/commands").searchParams,
+        { workspace_id: WS_A },
+        WS_B,
+      ),
     ).toBe(false);
     // A body with NO workspace_id at all: refused.
     expect(
-      runtimeWorkspaceMatches("POST", new URL("http://x/v1/conversations/commands").searchParams, { type: "conversation.create" }, WS_B),
+      runtimeWorkspaceMatches(
+        "POST",
+        new URL("http://x/v1/conversations/commands").searchParams,
+        { type: "conversation.create" },
+        WS_B,
+      ),
     ).toBe(false);
   });
 
   it("the positive controls: the session's OWN workspace passes (the gate is not a dead end)", () => {
     // B's own workspace in the query (GET): allowed.
-    expect(runtimeWorkspaceMatches("GET", new URL(`http://x/v1/credits?workspace_id=${WS_B}`).searchParams, null, WS_B)).toBe(true);
+    expect(
+      runtimeWorkspaceMatches(
+        "GET",
+        new URL(`http://x/v1/credits?workspace_id=${WS_B}`).searchParams,
+        null,
+        WS_B,
+      ),
+    ).toBe(true);
     // B's own workspace in the body (POST): allowed.
     expect(
-      runtimeWorkspaceMatches("POST", new URL("http://x/v1/conversations/commands").searchParams, { workspace_id: WS_B }, WS_B),
+      runtimeWorkspaceMatches(
+        "POST",
+        new URL("http://x/v1/conversations/commands").searchParams,
+        { workspace_id: WS_B },
+        WS_B,
+      ),
     ).toBe(true);
     // The parsed session carries the account identity (the binding's input).
     const session = Session.safeParse(sessionBody(WS_B, SUB_B));
@@ -257,7 +292,12 @@ describe("S27 ST-10 — the tenant binding refuses every foreign selector shape"
 
 describe("S27 ST-10 — the proxy enforces the binding (nothing forwarded on a mismatch)", () => {
   it("B's session calling with A's workspace in the QUERY: 403 RUNTIME_TENANT_MISMATCH, ZERO upstream calls", async () => {
-    const result = await proxied("GET", `/v1/terminals/state?workspace_id=${WS_A}`, null, sessionBody(WS_B, SUB_B));
+    const result = await proxied(
+      "GET",
+      `/v1/terminals/state?workspace_id=${WS_A}`,
+      null,
+      sessionBody(WS_B, SUB_B),
+    );
     expect(result.status).toBe(403);
     expect(result.code).toBe("RUNTIME_TENANT_MISMATCH");
     expect(result.forwarded).toBe(0);
@@ -267,7 +307,12 @@ describe("S27 ST-10 — the proxy enforces the binding (nothing forwarded on a m
     const result = await proxied(
       "POST",
       "/v1/conversations/commands",
-      { type: "conversation.create", workspace_id: WS_A, idempotency_key: "idem_st10", payload: { title: "A's workspace" } },
+      {
+        type: "conversation.create",
+        workspace_id: WS_A,
+        idempotency_key: "idem_st10",
+        payload: { title: "A's workspace" },
+      },
       sessionBody(WS_B, SUB_B),
     );
     expect(result.status).toBe(403);
@@ -279,7 +324,12 @@ describe("S27 ST-10 — the proxy enforces the binding (nothing forwarded on a m
     const result = await proxied(
       "POST",
       "/v1/conversations/commands",
-      { type: "conversation.create", workspace_id: WS_B, idempotency_key: "idem_st10_ok", payload: { title: "B's own" } },
+      {
+        type: "conversation.create",
+        workspace_id: WS_B,
+        idempotency_key: "idem_st10_ok",
+        payload: { title: "B's own" },
+      },
       sessionBody(WS_B, SUB_B),
     );
     expect(result.status).toBe(200);

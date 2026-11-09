@@ -247,11 +247,12 @@ function applyCgroupLayer(
     if (limits.memoryBytes !== null) {
       writeFileSync(join(leaf, "memory.max"), String(limits.memoryBytes));
       memoryMax = String(limits.memoryBytes);
-      // NO swap headroom (the S06 container posture — MemorySwap = Memory):
-      // without this the kernel reclaims tmpfs/shared pages through swap and
-      // memory.max never becomes a HARD boundary — the S27-GAP-2
-      // re-verification's tmpfs hog survived a live memory.max until the
-      // swap door was closed (E48, live-verified 2026-11-10).
+      // NO swap headroom (the S06 container posture: the memory cap and the
+      // swap cap set EQUAL — swap never extends the envelope): without this
+      // the kernel reclaims tmpfs/shared pages through swap and memory.max
+      // never becomes a HARD boundary — the S27-GAP-2 re-verification's
+      // tmpfs hog survived a live memory.max until the swap door was closed
+      // (E48, live-verified 2026-11-10).
       try {
         writeFileSync(join(leaf, "memory.swap.max"), "0");
       } catch {

@@ -254,30 +254,49 @@ describe("sandbox containment through the executor (S26 chunk 5)", () => {
     await expectGatewayHealthy(rt);
   }, 120_000);
 
-  it("AC3: a memory hog is killed at the cgroup memory.max (typed memory_oom) where delegation exists", async () => {
+  it("AC3: a memory hog is contained at the memory ceiling where delegation exists", async () => {
+    // The cap MUST sit at/above node's boot floor (E36: node v24 boots at
+    // data >= 1 GiB — the original 256 here SIGTRAP'd node AT BOOT before
+    // the payload ever ran; that branch was unreachable until the S35 probe
+    // fix exposed it, E48) and the hog must attempt WELL past it.
     const rt = buildRuntime({
-      max_memory_mb: 256,
+      max_memory_mb: 1024,
       max_cpu_seconds: 30,
       max_processes: 32,
       max_disk_mb: 64,
     });
     const result = propose(
       rt,
-      `const chunks=[]; try { for (let i=0;i<600;i++) chunks.push(Buffer.alloc(1024*1024,1)); console.log("ALLOC-BAD"); } catch { console.log("alloc refused"); }`,
+      `const chunks=[]; try { for (let i=0;i<3000;i++) chunks.push(Buffer.alloc(1024*1024,1)); console.log("ALLOC-BAD"); } catch { console.log("alloc refused"); }`,
       "node",
     );
     if (result.outcome !== "dispatched") throw new Error(`got ${result.outcome}`);
     const settled = await result.completion;
-    if (cgroupBase !== null) {
-      // The kernel OOM kill is the typed limit death.
-      expect(settled.outcome).toBe("execution_failed");
-      if (settled.outcome === "execution_failed") {
-        expect(settled.error_code).toBe("SANDBOX_LIMIT_EXCEEDED");
-      }
-    } else {
-      // No delegated subtree: RLIMIT_DATA refusal contains the hog instead —
-      // the honest fallback posture (G4): contained, honestly classified.
-      expect(["executed", "execution_failed"]).toContain(settled.outcome);
+    // THE INVARIANT (either kernel boundary, every honest recorded shape):
+    // the hog NEVER completes its 3000 allocations ("ALLOC-BAD" never
+    // printed) and the record shows the ceiling — the clean in-payload
+    // refusal ("alloc refused"), the process dying AT the cap with its
+    // signal recorded (the cgroup OOM's SIGKILL, or node's own heap abort
+    // SIGABRT/SIGTRAP at the data cap — observed live, E48), or the typed
+    // limit-death classification. This test's engaged branch was UNREACHABLE
+    // until the S35 probe fix (E48: the probe's own cleanup masked every
+    // delegated host); the cgroup boundary's EXCLUSIVE proof — a hog
+    // invisible to RLIMIT_DATA dying with the typed memory_oom — is the
+    // ST-05 tmpfs leg (issue #84), because here RLIMIT_DATA caps at the
+    // SAME size and wins the in-process race.
+    expect(settled.result_summary).not.toMatch(/ALLOC-BAD/);
+    expect(
+      /alloc refused/.test(settled.result_summary) ||
+        /signal=/.test(settled.result_summary) ||
+        (settled.outcome === "execution_failed" && settled.error_code === "SANDBOX_LIMIT_EXCEEDED"),
+      `the hog must be contained at the ceiling (outcome=${settled.outcome}, summary=${settled.result_summary.slice(0, 200)})`,
+    ).toBe(true);
+    if (cgroupBase === null) {
+      // No delegated subtree: RLIMIT_DATA alone contains the hog — the
+      // honest fallback posture (G4), unchanged by this branch.
+      console.log(
+        "AC3: no delegated cgroup subtree on this host — containment rode RLIMIT_DATA alone (S27-GAP-2 posture)",
+      );
     }
     await expectGatewayHealthy(rt);
   }, 180_000);

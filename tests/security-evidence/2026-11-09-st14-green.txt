@@ -1,0 +1,22 @@
+# S27 ST-14 GREEN-with-control proof (2026-11-09)
+#
+# The redaction authority RESTORED (git checkout — no bypass in the tree).
+# All five legs pass: terminal rows and tool-history summaries carry
+# [REDACTED], the error taxonomy crosses only the static safe message with
+# internal_details null, the memory write is rejected typed with nothing
+# stored, and the whole-store byte sweep finds zero raw fixture values with
+# the marker present.
+#
+# Command: pnpm vitest run tests/security/s27-st14-redaction-sweep.test.ts
+
+ RUN  v5.0.1 /home/emon-morol/projects/github-cloud-projects/shera-bot-s27
+
+ ✓ tests/security/s27-st14-redaction-sweep.test.ts (5 tests) 982ms
+   ✓ S27 ST-14 — the terminal boundary redacts every fixture class (1)
+     ✓ all five classes + PEM through the recorder: rows + journal carry [REDACTED], never a raw value 342ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  22:46:12
+   Duration  3.28s (transform 48%, tests 32%, import 19%)
+

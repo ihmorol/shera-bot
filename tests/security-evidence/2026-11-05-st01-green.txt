@@ -1,0 +1,20 @@
+# S27 ST-01 GREEN-with-control proof (2026-11-05)
+#
+# Both D27 controls RESTORED (git checkout of the two bypassed files — the working tree
+# carries no bypass): the sandbox-policy containment + planted-symlink refusal and the
+# workspace-files URI-parser segment checks are live again.
+#
+# Command: SHERA_PG_BIN=/usr/lib/postgresql/16/bin pnpm vitest run tests/security/s27-st01-path-traversal.test.ts
+# Expected: ALL PASS (the suite that failed 13/20 in the red run).
+
+
+ RUN  v5.0.1 /home/emon-morol/projects/github-cloud-projects/shera-bot-s27
+
+ ✓ tests/security/s27-st01-path-traversal.test.ts (20 tests) 2053ms
+
+ Test Files  1 passed (1)
+      Tests  20 passed (20)
+   Start at  02:22:17
+   Duration  2.56s (tests 87%, transform 10%, import 2%)
+
+exit=0

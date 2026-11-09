@@ -1,0 +1,89 @@
+# S27 ST-09 RED-without-control proof (2026-11-05)
+#
+# The D6 write gate was TEMPORARILY DISABLED (reverted before commit):
+# apps/user-runtime/src/adapters/sqlite/write-leases-repository.ts — assertWriteAllowed
+# returns immediately (every write lands without consulting the lease table).
+#
+# Command: SHERA_PG_BIN=/usr/lib/postgresql/16/bin pnpm vitest run tests/security/s27-st09-lease-violation.test.ts
+# Expected with the control present: ALL PASS. Observed with it removed: task B SILENTLY
+# OVERWRITES task A's leased content, the panel overwrites too, and a lease on path1
+# authorizes a write to path2 — exactly the ST-09 failure the threat model names.
+
+
+ RUN  v5.0.1 /home/emon-morol/projects/github-cloud-projects/shera-bot-s27
+
+ ❯ tests/security/s27-st09-lease-violation.test.ts (5 tests | 4 failed) 901ms
+   ❯ S27 ST-09 — concurrent writes on a leased path (no silent overwrite) (2)
+     × task B's write over task A's leased path is refused naming the foreign holder; content stays byte-identical 204ms
+     × the user panel is equally blocked by an agent-held lease (the tooltip data rides the conflict) 187ms
+   ❯ S27 ST-09 — a lease is per EXACT path (no foreign-path authorization) (1)
+     × a task holding path1's lease cannot write path2 under it 170ms
+   ❯ S27 ST-09 — expired leases authorize NOTHING (1)
+     × after expiry the holder's own write is refused until re-acquisition; the new acquirer wins 174ms
+   ✓ S27 ST-09 — equivalent spellings collide into ONE exclusivity domain (1)
+     ✓ a second ACTIVE lease under a percent-encoded/trailing-slash spelling is the typed LEASE_CONFLICT 158ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/security/s27-st09-lease-violation.test.ts > S27 ST-09 — concurrent writes on a leased path (no silent overwrite) > task B's write over task A's leased path is refused naming the foreign holder; content stays byte-identical
+AssertionError: expected AssertionError: expected "the cross-task … { …(3) } to be an instance of WriteLeaseRequiredError
+ ❯ tests/security/s27-st09-lease-violation.test.ts:96:21
+     94|       expect.unreachable("the cross-task write must be refused");
+     95|     } catch (error) {
+     96|       expect(error).toBeInstanceOf(WriteLeaseRequiredError);
+       |                     ^
+     97|       conflictingTask = (error as WriteLeaseRequiredError).conflicting…
+     98|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tests/security/s27-st09-lease-violation.test.ts > S27 ST-09 — concurrent writes on a leased path (no silent overwrite) > the user panel is equally blocked by an agent-held lease (the tooltip data rides the conflict)
+AssertionError: expected [Function] to throw an error
+
+- Expected:
+null
+
++ Received:
+undefined
+
+ ❯ tests/security/s27-st09-lease-violation.test.ts:112:7
+    110|     expect(() =>
+    111|       h.files.write(WS, "workspace://reports/report.md", { type: "user…
+    112|     ).toThrow(/is editing/); // WriteLeaseConflictError's message carr…
+       |       ^
+    113|     const after = h.files.read(WS, "workspace://reports/report.md", ag…
+    114|     expect(Buffer.from(after.content).toString("utf8")).toBe("A's vers…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  tests/security/s27-st09-lease-violation.test.ts > S27 ST-09 — a lease is per EXACT path (no foreign-path authorization) > a task holding path1's lease cannot write path2 under it
+AssertionError: expected function to throw an error, but it didn't
+ ❯ tests/security/s27-st09-lease-violation.test.ts:124:7
+    122|     expect(() =>
+    123|       h.files.write(WS, "workspace://reports/other.md", agentA, Buffer…
+    124|     ).toThrow(WriteLeaseRequiredError);
+       |       ^
+    125|     // path2 has no node at all — the hostile write created nothing.
+    126|     expect(h.files.resolve(WS, "workspace://reports/other.md", agentA)…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  tests/security/s27-st09-lease-violation.test.ts > S27 ST-09 — expired leases authorize NOTHING > after expiry the holder's own write is refused until re-acquisition; the new acquirer wins
+AssertionError: expected function to throw an error, but it didn't
+ ❯ tests/security/s27-st09-lease-violation.test.ts:144:7
+    142|     expect(() =>
+    143|       h.files.write(WS, "workspace://reports/report.md", agentA, Buffe…
+    144|     ).toThrow(WriteLeaseRequiredError);
+       |       ^
+    145|     // A cannot renew the lapsed lease either — the path must be re-ac…
+    146|     const lapsed = h.leases.listActiveLeases(WS).find((lease) => lease…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 1 passed (5)
+   Start at  02:51:16
+   Duration  1.46s (tests 72%, transform 21%, import 6%, worker 1%)
+
+exit=1

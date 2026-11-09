@@ -1,0 +1,19 @@
+# S27 ST-09 GREEN-with-control proof (2026-11-05)
+#
+# The D6 write gate RESTORED (git checkout — no bypass in the tree): every write consults
+# the lease table again — conflicts queue, expired/foreign leases authorize nothing.
+#
+# Command: SHERA_PG_BIN=/usr/lib/postgresql/16/bin pnpm vitest run tests/security/s27-st09-lease-violation.test.ts
+# Expected: ALL PASS (the suite that failed 4/5 in the red run).
+
+
+ RUN  v5.0.1 /home/emon-morol/projects/github-cloud-projects/shera-bot-s27
+
+ ✓ tests/security/s27-st09-lease-violation.test.ts (5 tests) 818ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  02:51:25
+   Duration  1.37s (tests 72%, transform 22%, import 5%, worker 1%)
+
+exit=0

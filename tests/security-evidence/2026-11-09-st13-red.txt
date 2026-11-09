@@ -1,0 +1,49 @@
+# S27 ST-13 RED-without-control proof (2026-11-09)
+#
+# The executor's response-budget check was TEMPORARILY REMOVED (reverted
+# before commit): apps/user-runtime/src/modules/tools/tool-executor.service.ts
+# — BOTH enforcement points (the sync tail and the dispatched settle) changed
+# to `if (false && Buffer.byteLength(...) > max_response_bytes)`.
+#
+# Command: pnpm vitest run tests/security/s27-st13-oversized-flood.test.ts
+# Expected with the control present: ALL PASS. Observed with it removed
+# (1 failed): the 64 KiB result against the 1 KiB tool budget EXECUTED (the
+# typed TOOL_RESPONSE_TOO_LARGE refusal disappeared; the summary survives only
+# because the SEPARATE redaction/bounding layer capped it — the budget check
+# is the control this suite pins).
+
+ RUN  v5.0.1 /home/emon-morol/projects/github-cloud-projects/shera-bot-s27
+
+ ❯ tests/security/s27-st13-oversized-flood.test.ts (4 tests | 1 failed) 886ms
+   ❯ S27 ST-13 — the tool's own response budget is enforced by the executor (AC5) (2)
+     × a 64 KiB result against a 1 KiB tool budget is TOOL_RESPONSE_TOO_LARGE; nothing oversized persisted 311ms
+     ✓ a result INSIDE the budget still executes (the budget is not a blanket denial) 177ms
+   ✓ S27 ST-13 — the streaming forward cap bounds a flooding child (D11) (1)
+     ✓ a child streaming far past the 256 KiB cap has its forward stopped AT the cap; the runtime stays healthy 107ms
+   ✓ S27 ST-13 — hostile oversized ARGUMENTS are bounded in the recorded surfaces (AC9) (1)
+     ✓ a 1 MiB argument string lands as a bounded, marker-free summary in the history row 284ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/security/s27-st13-oversized-flood.test.ts > S27 ST-13 — the tool's own response budget is enforced by the executor (AC5) > a 64 KiB result against a 1 KiB tool budget is TOOL_RESPONSE_TOO_LARGE; nothing oversized persisted
+AssertionError: expected 'executed' to be 'execution_failed' // Object.is equality
+
+Expected: "execution_failed"
+Received: "executed"
+
+ ❯ tests/security/s27-st13-oversized-flood.test.ts:164:30
+    162|     try {
+    163|       const result = proposeFlood(rt);
+    164|       expect(result.outcome).toBe("execution_failed");
+       |                              ^
+    165|       if (result.outcome === "execution_failed") {
+    166|         expect(result.error_code).toBe("TOOL_RESPONSE_TOO_LARGE");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 3 passed (4)
+   Start at  22:41:05
+   Duration  1.90s (tests 53%, transform 32%, import 15%)
+

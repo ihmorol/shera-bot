@@ -1,0 +1,73 @@
+# S27 ST-12 RED-without-control proof (2026-11-09)
+#
+# BOTH layers of the G6 grant boundary were TEMPORARILY NEUTERED (reverted
+# before commit):
+#   (a) apps/user-runtime/src/modules/approvals/approvals.service.ts — the
+#       agent-actor refusal made dead code (`if (false && decidedBy.type === "agent")`);
+#   (b) apps/user-runtime/src/modules/tasks/task-transitions.ts — the
+#       approval_granted D8 row's actors widened ["user"] -> ["user", "agent"].
+#
+# Command: pnpm vitest run tests/security/s27-st12-self-approval.test.ts
+# Expected with the controls present: ALL PASS. Observed with both removed
+# (2 failed): the Agent's self-approval decision RESOLVED the approval, a grant
+# row appeared whose created_by is the AGENT actor, and the withheld effect
+# executed — exactly the threat model's observable failure. (With only layer
+# (a) neutered, layer (b) still refuses — defense in depth; the suite's typed
+# refusal assertion is what detects the single-layer removal.)
+
+ RUN  v5.0.1 /home/emon-morol/projects/github-cloud-projects/shera-bot-s27
+
+ ❯ tests/security/s27-st12-self-approval.test.ts (5 tests | 2 failed) 1125ms
+   ❯ S27 ST-12 — an Agent cannot approve its own action (D9/G6) (5)
+     × the proposing Agent's self-approval is refused; the request stays pending; no grant; no effect 259ms
+     × any other Agent actor is refused on any choice — including cancel-the-task 217ms
+     ✓ the ONE grant-creating path is the user's decision; the grant's creator is the user and the principal is the requester's own 216ms
+     ✓ decisions are immutable: replay is already_decided, a different choice is APPROVAL_ALREADY_RESOLVED, no second grant 207ms
+     ✓ the consumed one-time grant authorizes nothing: a second proposal of the same tool pauses again (AC26) 219ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/security/s27-st12-self-approval.test.ts > S27 ST-12 — an Agent cannot approve its own action (D9/G6) > the proposing Agent's self-approval is refused; the request stays pending; no grant; no effect
+AssertionError: expected [Function] to throw an error
+
+- Expected:
+null
+
++ Received:
+undefined
+
+ ❯ tests/security/s27-st12-self-approval.test.ts:210:9
+    208|           },
+    209|         }),
+    210|       ).toThrow(/AGENT_CANNOT_SELF_APPROVE/);
+       |         ^
+    211|       // NOTHING moved: the request is pending, no grant exists, the e…
+    212|       // (the real append) never happened.
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/security/s27-st12-self-approval.test.ts > S27 ST-12 — an Agent cannot approve its own action (D9/G6) > any other Agent actor is refused on any choice — including cancel-the-task
+AssertionError: expected [Function] to throw an error
+
+- Expected:
+null
+
++ Received:
+undefined
+
+ ❯ tests/security/s27-st12-self-approval.test.ts:237:9
+    235|           },
+    236|         }),
+    237|       ).toThrow(/AGENT_CANNOT_DECIDE_APPROVAL/);
+       |         ^
+    238|       // A decision that is not an approve is equally an Agent-actor r…
+    239|       expect(() =>
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 3 passed (5)
+   Start at  22:32:22
+   Duration  2.42s (tests 51%, transform 33%, import 16%)
+

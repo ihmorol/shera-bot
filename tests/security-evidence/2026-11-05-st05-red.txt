@@ -1,0 +1,77 @@
+# S27 ST-05 RED-without-control proof (2026-11-05, re-run 2026-11-09 after the main integration)
+#
+# The kernel-limit envelope was TEMPORARILY STRIPPED (reverted before commit):
+# apps/user-runtime/src/adapters/process/execution-process-spawn.ts —
+#   (a) the `--nproc` and `--fsize` argv pushes removed (RLIMIT_NPROC / RLIMIT_FSIZE gone);
+#   (b) the wall-clock timer disabled (`false && request.wallClockMs !== null ...`).
+# RLIMIT_CPU stayed ENABLED as the run's safety net, so every hostile child still
+# DIED during the red run (SIGXCPU at its cpuSeconds ceiling) — no runaway survivor.
+#
+# Command: pnpm vitest run tests/security/s27-st05-resource-exhaustion.test.ts
+# Expected with the controls present: ALL PASS. Observed with them removed:
+# the disk-fill loop died at the CPU ceiling (limitDeath "cpu", NOT the typed
+# "disk"/SIGXFSZ boundary); the infinite loop outlived its wall clock (the same
+# untyped CPU death); the fork storm spawned every child (REFUSED=0).
+
+ RUN  v5.0.1 /home/emon-morol/projects/github-cloud-projects/shera-bot-s27
+
+ ❯ tests/security/s27-st05-resource-exhaustion.test.ts (5 tests | 3 failed) 106363ms
+   ❯ S27 ST-05 — disk fill dies at RLIMIT_FSIZE (typed SIGXFSZ) (1)
+     × a loop appending past the 1 MiB cap is killed at the boundary and the file stays bounded 34690ms
+   ❯ S27 ST-05 — the wall clock kills an infinite computation (1)
+     × an infinite loop is SIGKILLed at the ceiling; the group is dead; wall_clock typed 30031ms
+   ❯ S27 ST-05 — a fork storm is bounded by RLIMIT_NPROC (2)
+     × 40 spawn attempts against an 8-process cap: the kernel refuses the excess; the tree stays bounded 4122ms
+     ✓ NEGATIVE CONTROL: the same storm with no nproc limit spawns most of its children (what the cap prevents) 4125ms
+   ✓ S27 ST-05 — a runaway allocator is contained (RLIMIT_DATA; cgroup = GAP-2, honest) (1)
+     ✓ a loop allocating beyond the data ceiling either refuses allocation or dies at a limit — never grows unbounded 33335ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/security/s27-st05-resource-exhaustion.test.ts > S27 ST-05 — disk fill dies at RLIMIT_FSIZE (typed SIGXFSZ) > a loop appending past the 1 MiB cap is killed at the boundary and the file stays bounded
+AssertionError: the disk-fill loop must die at a TYPED limit boundary: expected 'cpu' to be 'disk' // Object.is equality
+
+Expected: "disk"
+Received: "cpu"
+
+ ❯ tests/security/s27-st05-resource-exhaustion.test.ts:91:86
+     89|     );
+     90|     const exit = await handle.waitForExit();
+     91|     expect(exit.limitDeath, "the disk-fill loop must die at a TYPED li…
+       |                                                                                      ^
+     92|     expect(exit.signal).toBe("SIGXFSZ");
+     93|     // The file never crossed the cap (plus one write's slack).
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  tests/security/s27-st05-resource-exhaustion.test.ts > S27 ST-05 — the wall clock kills an infinite computation > an infinite loop is SIGKILLed at the ceiling; the group is dead; wall_clock typed
+Error: Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ tests/security/s27-st05-resource-exhaustion.test.ts:101:3
+     99|
+    100| describe("S27 ST-05 — the wall clock kills an infinite computation", (…
+    101|   it("an infinite loop is SIGKILLed at the ceiling; the group is dead;…
+       |   ^
+    102|     const work = mkdtempSync(join(tmpdir(), "shera-s27-st05-clock-"));
+    103|     tempDirs.push(work);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  tests/security/s27-st05-resource-exhaustion.test.ts > S27 ST-05 — a fork storm is bounded by RLIMIT_NPROC > 40 spawn attempts against an 8-process cap: the kernel refuses the excess; the tree stays bounded
+AssertionError: expected 40 to be less than or equal to 20
+ ❯ tests/security/s27-st05-resource-exhaustion.test.ts:153:23
+    151|       const refused = Number(accounting!.match(/REFUSED=(\d+)/)![1]);
+    152|       expect(spawned + refused).toBe(40);
+    153|       expect(spawned).toBeLessThanOrEqual(20);
+       |                       ^
+    154|       expect(refused).toBeGreaterThan(0);
+    155|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 2 passed (5)
+   Start at  22:47:51
+   Duration  106.75s (tests 100%)
+

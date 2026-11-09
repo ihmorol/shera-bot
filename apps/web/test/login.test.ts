@@ -6,7 +6,13 @@ import LoginPage from "../app/login/page";
 import AppLayout from "../app/app/layout";
 import { routes } from "../lib/routes";
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/app/settings" }));
+// The app chrome's next/navigation surface: the active path (the nav
+// highlight) and the router the notification center's Settings jump
+// soft-navigates through (the taste-pass fix — never a full reload).
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/app/settings",
+  useRouter: () => ({ push: () => undefined, replace: () => undefined, refresh: () => undefined }),
+}));
 
 describe("production entry", () => {
   it("offers a working control-plane sign-in link without pretending to authenticate", () => {

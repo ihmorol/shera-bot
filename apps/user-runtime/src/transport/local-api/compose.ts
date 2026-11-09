@@ -51,6 +51,10 @@ import { CreditLedgerRepository } from "../../adapters/sqlite/credit-ledger-repo
 import { CreditLedgerService } from "../../modules/credits/credit-ledger.service.ts";
 import { MemoryRepository } from "../../adapters/sqlite/memory-repository.ts";
 import { MemoryService } from "../../modules/memory/memory.service.ts";
+import { NotificationsRepository } from "../../adapters/sqlite/notifications-repository.ts";
+import { NotificationsService } from "../../modules/notifications/notifications.service.ts";
+import { OnboardingRepository } from "../../adapters/sqlite/onboarding-repository.ts";
+import { OnboardingService } from "../../modules/onboarding/onboarding.service.ts";
 import { TaskWorkersRepository } from "../../adapters/sqlite/task-workers-repository.ts";
 import { TerminalEventsRepository } from "../../adapters/sqlite/terminal-events-repository.ts";
 import { WorkspaceFilesRepository } from "../../adapters/sqlite/workspace-files-repository.ts";
@@ -323,6 +327,12 @@ export interface LocalApiHandle {
   /** S29: the memory seam — the D37-scoped entries, the publication boundary
    * (AC27), and the provenance/version machinery (the tests consult it). */
   memory: MemoryService;
+  /** S30: the notification center seam — the runtime-derived rows, the read/
+   * mute state, and the delivery toggles (the tests consult it). */
+  notifications: NotificationsService;
+  /** S30: the D16 onboarding seam — the resumable interview state whose
+   * effects ride the shared settings command surfaces. */
+  onboarding: OnboardingService;
   /**
    * S18 chunk 2: the shared browser profile service seam when configured;
    * undefined otherwise (G4 — no browser process ever spawns without it).
@@ -590,6 +600,12 @@ export interface RuntimeHandle {
   scheduler: SchedulerService;
   /** S29: the memory seam (the AC27 publication boundary; the tests consult it). */
   memory: MemoryService;
+  /** S30: the notification center seam — the runtime-derived rows, the read/
+   * mute state, and the delivery toggles (PRD §14; the tests consult it). */
+  notifications: NotificationsService;
+  /** S30: the D16 onboarding seam — the resumable interview state whose
+   * effects ride the shared settings command surfaces (the tests consult it). */
+  onboarding: OnboardingService;
   /**
    * S28: the demo note store the built-in note tools read/write — exposed
    * so tests and capture harnesses can seed real state (the tools' storage
@@ -642,6 +658,8 @@ interface Wired {
   schedules: SchedulesService;
   scheduler: SchedulerService;
   memory: MemoryService;
+  notifications: NotificationsService;
+  onboarding: OnboardingService;
   wakeManager: SchedulerWakeManager;
   noteStore: Map<string, string>;
   setPublisher(publisher: ConversationPublisher): void;
@@ -1621,6 +1639,35 @@ function wire(
     events,
     ...(options.now ? { now: options.now } : {}),
   });
+  // S30: the notification center service (issue #31; PRD §14, D16, E3) — the
+  // rows DERIVE from the runtime's own records (the journal's task
+  // lifecycles + the approvals module's pending requests), the read/mute
+  // state and delivery toggles are durable v24 rows, and muting an approval
+  // rides the approvals module's ONE mute family (E3).
+  const notificationsRepository = new NotificationsRepository(tx);
+  const notifications = new NotificationsService({
+    journal,
+    notifications: notificationsRepository,
+    approvals: approvalsRepository,
+    operations: operationsRepository,
+    receipts,
+    tx,
+    ...(options.now ? { now: options.now } : {}),
+  });
+  // S30: the D16 onboarding service — the resumable interview whose ONLY
+  // configuration effect rides the shared settings command surfaces (the
+  // memory briefing issues the memory.set_auto_memory contract command; the
+  // provider check reads the registry's rows).
+  const onboardingRepository = new OnboardingRepository(tx);
+  const onboarding = new OnboardingService({
+    onboarding: onboardingRepository,
+    memory,
+    providers,
+    receipts,
+    tx,
+    workspaceId: wireWorkspaceId,
+    ...(options.now ? { now: options.now } : {}),
+  });
   const schedulerWatcherSources: SchedulerWatcherSources = {
     files: workspaceFiles,
     artifacts: workspaceArtifacts,
@@ -1865,6 +1912,32 @@ function wire(
       memory,
       workspaceId: wireWorkspaceId,
     },
+    // S30: the notification center surface (the derived rows, the ONE typed
+    // commands envelope, the settings toggles).
+    notifications: {
+      notifications,
+      workspaceId: wireWorkspaceId,
+    },
+    onboarding: {
+      onboarding,
+      workspaceId: wireWorkspaceId,
+    },
+    // S30 (E43 idea 4): the roster activity preview — the Agent's LAST
+    // durable direct-chat message, derived here from the journal (the
+    // transport stays SQL-free). Bounded to 120 chars; null when quiet.
+    rosterActivity: (workspaceId: string, agentId: string) => {
+      const chatId = agentsRepository.findDirectChat(workspaceId, agentId);
+      if (!chatId) return null;
+      const last = journal.lastStreamEvent(`conversation:${chatId}`, workspaceId);
+      if (!last || last.event_type !== "message.appended") return null;
+      try {
+        const payload = JSON.parse(last.payload) as { text?: unknown };
+        if (typeof payload.text !== "string" || payload.text.length === 0) return null;
+        return { at: last.occurred_at, preview: payload.text.slice(0, 120) };
+      } catch {
+        return null;
+      }
+    },
     ...(options.logUntypedFault ? { logUntypedFault: options.logUntypedFault } : {}),
   });
   return {
@@ -1901,6 +1974,8 @@ function wire(
     schedules,
     scheduler,
     memory,
+    notifications,
+    onboarding,
     wakeManager,
     noteStore: noteBindings.notes,
     setPublisher(next) {
@@ -1926,6 +2001,8 @@ export function composeLocalApi(options: ComposeLocalApiOptions): LocalApiHandle
     providers: wired.providers,
     credits: wired.credits,
     memory: wired.memory,
+    notifications: wired.notifications,
+    onboarding: wired.onboarding,
     browser: wired.browser,
     close: () => {
       // S33: the six-hour backup cadence never outlives the composition.
@@ -2197,6 +2274,8 @@ export function composeRuntime(options: ComposeRuntimeOptions): RuntimeHandle {
     schedules: wired.schedules,
     scheduler: wired.scheduler,
     memory: wired.memory,
+    notifications: wired.notifications,
+    onboarding: wired.onboarding,
     noteStore: wired.noteStore,
     tx: wired.tx,
     close: async () => {

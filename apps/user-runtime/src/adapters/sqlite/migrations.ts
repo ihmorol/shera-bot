@@ -1710,6 +1710,87 @@ export const MIGRATIONS: readonly SqliteMigration[] = [
         ON backup_snapshots (workspace_id, taken_at);
     `,
   },
+
+  /**
+   * S30 (issue #31; PRD §14, D16, E3) — the notification center's durable
+   * state. The center's ROWS are not stored here: they are DERIVED at read
+   * time from the runtime's own records (the journal's task-lifecycle events
+   * and the approvals module's pending requests — the AC9 truth posture).
+   * What IS durable:
+   *
+   * notification_settings: the per-workspace delivery toggles (PRD §14
+   * "Users can enable/disable browser and in-app notifications"). In-app
+   * defaults ON (the center is always usable); browser defaults OFF —
+   * browser notifications ride an explicit permission decision.
+   *
+   * notification_state: the per-notification read/mute stamps, keyed by the
+   * deterministic notification ids the derivation mints from the source
+   * records. Muted rows stay listed (E3: muting affects delivery only).
+   *
+   * No FOREIGN KEY is declared (the v4/v5/v6 discipline): writers validate
+   * referenced rows in the same transaction. Every table is workspace-scoped
+   * at the storage layer (E12). No secret ever enters a row (G3): the
+   * derived summaries are bounded runtime-computed lines.
+   */
+  {
+    version: 24,
+    name: "notifications",
+    // Authored as v23 on the s30-settings branch; the integration merge with
+    // main-with-S33 renumbered it to v24 — main's landed v23 backup-snapshots
+    // keeps its slot (the S31/S33 integration precedent: the chain is
+    // append-only and each slice's entries never move once merged).
+    sql: `
+      CREATE TABLE IF NOT EXISTS notification_settings (
+        workspace_id        TEXT    NOT NULL,
+        in_app_enabled      INTEGER NOT NULL CHECK (in_app_enabled IN (0, 1)),
+        browser_enabled     INTEGER NOT NULL CHECK (browser_enabled IN (0, 1)),
+        updated_at          TEXT    NOT NULL,
+        PRIMARY KEY (workspace_id)
+      ) STRICT;
+
+      CREATE TABLE IF NOT EXISTS notification_state (
+        workspace_id        TEXT    NOT NULL,
+        notification_id     TEXT    NOT NULL,
+        read_at             TEXT,
+        muted_at            TEXT,
+        updated_at          TEXT    NOT NULL,
+        PRIMARY KEY (workspace_id, notification_id)
+      ) STRICT;
+
+      CREATE INDEX IF NOT EXISTS notification_state_unread_idx
+        ON notification_state (workspace_id, read_at);
+    `,
+  },
+
+  /**
+   * S30 (issue #31; D16, E43) — the onboarding state. Resumable, dismissible,
+   * reopenable progress for the D16 interview: one row per workspace with
+   * the status (pending → completed | dismissed), the current step, and the
+   * recorded answers JSON (typed option ids + optional free text — answers
+   * are DATA the runtime validates, never prose it interprets). Zero-config
+   * start needs NO row: an absent row IS the pending fresh account whose
+   * recommended defaults are already active.
+   *
+   * No FOREIGN KEY (the v4/v5/v6 discipline); workspace-scoped (E12); no
+   * secret ever enters a row (G3 — the answers are UI-vocabulary choices).
+   */
+  {
+    version: 25,
+    name: "onboarding",
+    // Authored as v24 on the s30-settings branch; the integration merge with
+    // main-with-S33 renumbered it to v25 behind the renumbered notifications
+    // entry (the same S31/S33 integration precedent).
+    sql: `
+      CREATE TABLE IF NOT EXISTS onboarding_state (
+        workspace_id        TEXT    NOT NULL,
+        status              TEXT    NOT NULL CHECK (status IN ('pending', 'completed', 'dismissed')),
+        current_step        TEXT,
+        answers_json        TEXT    NOT NULL CHECK (json_valid(answers_json)),
+        updated_at          TEXT    NOT NULL,
+        PRIMARY KEY (workspace_id)
+      ) STRICT;
+    `,
+  },
 ];
 
 /**

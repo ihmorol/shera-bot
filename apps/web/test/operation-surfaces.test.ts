@@ -82,6 +82,8 @@ const IDENTITIES: AgentRosterSummary[] = STUDENT_MANIFEST.agents.map((agent) => 
   // S12: the roster summary carries the supervised session's presence; the
   // supervisor is not configured in these fixtures, so every Agent is "none".
   session: { presence: "none" },
+  // S30 (E43 idea 4): the runtime's own last-activity record (null = quiet).
+  last_activity: null,
 }));
 
 const GA = IDENTITIES[0]!;

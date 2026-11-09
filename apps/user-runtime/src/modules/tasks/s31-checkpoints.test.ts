@@ -190,7 +190,7 @@ function streamEvents(rt: CheckpointRuntime, taskId: string): Array<{ type: stri
 }
 
 describe("S31 migration v21 (run-checkpoints)", () => {
-  it("keeps the S31 v21 run-checkpoints entry (v22 memory and v23 backup-snapshots follow; the head moves with each integration) and creates the STRICT D33 table", () => {
+  it("keeps the S31 v21 run-checkpoints entry (v22 memory and v23 backup-snapshots landed; the S30 v24/v25 entries behind them) and creates the STRICT D33 table", () => {
     const dir = track(mkdtempSync(join(tmpdir(), "shera-s31-mig-")));
     const conn = openDatabase(join(dir, "runtime.db"));
     applyMigrations(conn.db);
@@ -202,10 +202,11 @@ describe("S31 migration v21 (run-checkpoints)", () => {
     // S29 integration renumbered the memory tables, authored v21, to v22
     // the same way — run-checkpoints keeps its landed v21 slot; the S33
     // integration renumbered backup-snapshots, authored v22, to v23 —
-    // memory keeps its landed v22 slot).
-    expect(versions[versions.length - 1]).toBe(23);
+    // memory keeps its landed v22 slot; the S30 integration renumbered the
+    // S30 entries, authored v23/v24, to v24/v25 behind the landed v23).
+    expect(versions[versions.length - 1]).toBe(25);
     expect(new Set(versions).size).toBe(versions.length);
-    expect(versions).not.toContain(24);
+    expect(versions).not.toContain(26);
     expect(sqliteTableExists(conn.db, "run_checkpoints")).toBe(true);
     // The exact D33 column set (field-for-field, D33) — through the
     // adapter's column helper (the table introspection never leaves

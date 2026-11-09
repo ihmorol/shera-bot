@@ -68,6 +68,11 @@ import { registerRecoveryRoutes, type RecoveryApiHandle } from "./s31-recovery-a
 import { registerSchedulesRoutes, type SchedulesApiHandle } from "./s28-schedules-api.ts";
 import { registerCreditsRoutes, type CreditsApiHandle } from "./s24-credits-api.ts";
 import { registerMemoryRoutes, type MemoryApiHandle } from "./s29-memory-api.ts";
+import {
+  registerNotificationsRoutes,
+  type NotificationsApiHandle,
+} from "./s30-notifications-api.ts";
+import { registerOnboardingRoutes, type OnboardingApiHandle } from "./s30-onboarding-api.ts";
 
 export const SUBMIT_CONVERSATION_COMMAND_PATH = "/v1/conversations/commands" as const;
 export const LIST_CONVERSATION_EVENTS_PATH = "/v1/conversations/:conversation_id/events" as const;
@@ -270,9 +275,15 @@ interface AgentSummaryPayload {
   initial_glyph: string;
   has_user_instructions: boolean;
   session: { presence: AgentSessionPresence };
+  /** S30 (E43 idea 4): the journal-derived last activity; null when quiet. */
+  last_activity: { at: string; preview: string } | null;
 }
 
-function agentSummary(row: AgentRow, presence: AgentSessionPresence): AgentSummaryPayload {
+function agentSummary(
+  row: AgentRow,
+  presence: AgentSessionPresence,
+  lastActivity: { at: string; preview: string } | null = null,
+): AgentSummaryPayload {
   return {
     agent_id: row.agent_id,
     display_name: row.display_name,
@@ -281,6 +292,9 @@ function agentSummary(row: AgentRow, presence: AgentSessionPresence): AgentSumma
     initial_glyph: row.initial_glyph,
     has_user_instructions: row.user_instructions !== null,
     session: { presence },
+    // S30 (E43 idea 4): what the Agent last did + when, from the journal —
+    // null when the history is quiet (never an invented line, G4).
+    last_activity: lastActivity,
   };
 }
 
@@ -388,6 +402,13 @@ export interface LocalApiDeps {
    * reports "none" (G4 — the transport never guesses a presence).
    */
   sessionPresence?: (workspaceId: string, agentId: string) => AgentSessionPresence;
+  /**
+   * S30 (E43 idea 4): the roster activity preview — the Agent's LAST durable
+   * direct-chat event, derived by the composition from the journal (the
+   * transport never touches SQL). Null where the history is quiet: the UI
+   * renders the honest quiet line, never an invented activity.
+   */
+  rosterActivity?: (workspaceId: string, agentId: string) => { at: string; preview: string } | null;
   /**
    * S13: the operations seam — the whole Operation chat surface goes through
    * the operations module's service (records, roster commands, coordinator,
@@ -514,6 +535,17 @@ export interface LocalApiDeps {
    */
   memory?: MemoryApiHandle;
   /**
+   * S30: the notification center surface — the derived rows (the runtime's
+   * own records), the ONE typed commands envelope, and the delivery toggles
+   * (PRD §14, D16, E3).
+   */
+  notifications?: NotificationsApiHandle;
+  /**
+   * S30: the onboarding surface — the resumable D16 interview snapshot and
+   * the ONE typed commands envelope (answer / dismiss / reopen).
+   */
+  onboarding?: OnboardingApiHandle;
+  /**
    * S23: the provider registry seam — the masked catalog CRUD, credential
    * revoke/replace, enable/disable, the connection test, the AC11 override,
    * the effective readout, and the E9 platform-provisioning route. Present
@@ -597,7 +629,13 @@ export function createLocalApi(deps: LocalApiDeps): Express {
     res.status(200).json({
       agents: deps.agents
         .listAgents(query.data.workspace_id)
-        .map((row) => agentSummary(row, presenceOf(query.data.workspace_id, row.agent_id))),
+        .map((row) =>
+          agentSummary(
+            row,
+            presenceOf(query.data.workspace_id, row.agent_id),
+            deps.rosterActivity?.(query.data.workspace_id, row.agent_id) ?? null,
+          ),
+        ),
     });
   });
 
@@ -1319,6 +1357,20 @@ export function createLocalApi(deps: LocalApiDeps): Express {
   // silently lose the surface — the G4 silent-drop class).
   if (deps.memory !== undefined) {
     registerMemoryRoutes(app, deps.memory);
+  }
+
+  // S30: the notification center surface — the derived rows, the ONE typed
+  // commands envelope, and the delivery toggles (PRD §14). Registered
+  // INDEPENDENTLY of the memory option (the G4 silent-drop class).
+  if (deps.notifications !== undefined) {
+    registerNotificationsRoutes(app, deps.notifications);
+  }
+
+  // S30: the onboarding surface — the resumable D16 interview (E43 chat
+  // cards client-side). Registered INDEPENDENTLY of the notifications option
+  // (the G4 silent-drop class).
+  if (deps.onboarding !== undefined) {
+    registerOnboardingRoutes(app, deps.onboarding);
   }
 
   // Typed failures and unknown routes: the SheraError taxonomy, never an

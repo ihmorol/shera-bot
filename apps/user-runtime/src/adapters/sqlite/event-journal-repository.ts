@@ -133,6 +133,32 @@ export class EventJournalRepository {
     return rows.map((row) => row.stream_id);
   }
 
+  /**
+   * The workspace's most recent events of the given types, newest first
+   * (S30: the notification center's derivation read — the derived rows come
+   * from the durable journal, never a parallel store). `limit` bounds the
+   * read; strictly a read, the journal is append-only.
+   */
+  listByTypes(
+    workspaceId: string,
+    eventTypes: readonly string[],
+    limit: number,
+    exec?: DatabaseSync,
+  ): EventJournalRow[] {
+    const db = exec ?? this.tx.connection();
+    const placeholders = eventTypes.map(() => "?").join(", ");
+    return db
+      .prepare(
+        `SELECT stream_id, sequence, event_id, event_type, schema_version,
+                payload, workspace_id, occurred_at, correlation_id
+         FROM event_journal
+         WHERE workspace_id = ? AND event_type IN (${placeholders})
+         ORDER BY occurred_at DESC, sequence DESC
+         LIMIT ?`,
+      )
+      .all(...[workspaceId, ...eventTypes, limit]) as unknown as EventJournalRow[];
+  }
+
   countStream(streamId: string, workspaceId: string, exec?: DatabaseSync): number {
     const db = exec ?? this.tx.connection();
     const row = db
@@ -140,6 +166,30 @@ export class EventJournalRepository {
       .get(streamId, workspaceId) as { n: number | bigint } | undefined;
     const n = row?.n;
     return typeof n === "bigint" ? Number(n) : (n ?? 0);
+  }
+
+  /**
+   * The highest-sequence event of one stream (S30: the roster activity
+   * preview derives from the LAST durable event — the runtime's own record,
+   * never a client-side copy). Null when the stream has no events.
+   */
+  lastStreamEvent(
+    streamId: string,
+    workspaceId: string,
+    exec?: DatabaseSync,
+  ): EventJournalRow | null {
+    const db = exec ?? this.tx.connection();
+    const row = db
+      .prepare(
+        `SELECT stream_id, sequence, event_id, event_type, schema_version,
+                payload, workspace_id, occurred_at, correlation_id
+         FROM event_journal
+         WHERE stream_id = ? AND workspace_id = ?
+         ORDER BY sequence DESC
+         LIMIT 1`,
+      )
+      .get(streamId, workspaceId) as EventJournalRow | undefined;
+    return row ?? null;
   }
 
   /**

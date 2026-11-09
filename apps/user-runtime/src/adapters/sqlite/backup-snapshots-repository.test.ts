@@ -71,15 +71,20 @@ function snapshotInput(overrides: Partial<BackupSnapshotInsert> = {}): BackupSna
   };
 }
 
-describe("the v23 backup_snapshots migration (chain head)", () => {
-  it("is the migration-chain head and creates the STRICT ledger table", () => {
+describe("the v23 backup_snapshots migration", () => {
+  it("creates the STRICT ledger table at its landed slot (the S30 entries append behind it)", () => {
     const { conn } = newDb();
     const versions = appliedMigrationVersions(conn.db);
     expect(versions).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     ]);
-    expect(versions.at(-1)).toBe(23);
-    expect(MIGRATIONS.at(-1)?.name).toBe("backup-snapshots");
+    // The S30 integration renumbered the S30 entries (notifications authored
+    // v23 -> v24, onboarding authored v24 -> v25) behind main's landed v23
+    // backup-snapshots — each slice's entries never move once merged.
+    expect(versions.at(-3)).toBe(23);
+    expect(MIGRATIONS.at(-3)?.name).toBe("backup-snapshots");
+    expect(MIGRATIONS.at(-2)?.name).toBe("notifications");
+    expect(MIGRATIONS.at(-1)?.name).toBe("onboarding");
     expect(sqliteTableExists(conn.db, "backup_snapshots")).toBe(true);
   });
 

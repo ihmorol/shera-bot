@@ -67,6 +67,7 @@ const IDENTITIES: AgentRosterSummary[] = STUDENT_MANIFEST.agents.map((agent) => 
   initial_glyph: agent.ui_identity.initial_glyph,
   has_user_instructions: false,
   session: { presence: "none" },
+  last_activity: null,
 }));
 
 const GA = IDENTITIES[0]!;

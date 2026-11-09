@@ -241,6 +241,8 @@ function rosterRow(presence: AgentSessionPresence): Record<string, unknown> {
     initial_glyph: "G",
     has_user_instructions: false,
     session: { presence },
+    // S30 (E43 idea 4): the runtime's own last-activity record (null = quiet).
+    last_activity: null,
   };
 }
 

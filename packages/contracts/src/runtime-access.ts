@@ -114,7 +114,20 @@ export function isBrowserRuntimePath(method: string, path: string): boolean {
       // is an explicit user decision the runtime enforces (agents never
       // self-approve), and secret-shaped content is refused at the write
       // boundary BEFORE anything is stored.
-      path === "/v1/memory/commands"
+      path === "/v1/memory/commands" ||
+      // S30 (PRD §14, D16, E3, G6): the notification center's ONE typed
+      // commands envelope — mark-read, the per-item mute (an approval item's
+      // mute creates the S20 approval-scope mute; E3: delivery suppressed,
+      // the approval stays pending), and the delivery toggles. The acting
+      // user is bound SERVER-SIDE by the proxy's session-actor binding.
+      path === "/v1/notifications/commands" ||
+      path === "/v1/notifications/settings/commands" ||
+      // S30 (D16, E43, G6): the onboarding's ONE typed commands envelope —
+      // the interview answers (typed option ids), dismiss, and reopen. The
+      // acting user is bound SERVER-SIDE by the proxy's session-actor
+      // binding; the memory step's effect rides the memory commands surface
+      // (D16: onboarding and settings share commands and schemas).
+      path === "/v1/onboarding/commands"
     );
   }
   if (method === "PUT") {
@@ -137,6 +150,15 @@ export function isBrowserRuntimePath(method: string, path: string): boolean {
       // runtime-internal acting-Agent reads (the S11 folder-route posture),
       // and no browser path may select another Agent's private memory.
       path === "/v1/memory" ||
+      // S30 (PRD §14, D16): the notification center's derived rows (the
+      // runtime's own records) and the delivery toggles read. Strictly GET —
+      // every mutation rides the POST command envelopes above.
+      path === "/v1/notifications" ||
+      path === "/v1/notifications/settings" ||
+      // S30 (D16, E43): the onboarding snapshot — the resumable interview
+      // state, the typed steps, and the deployment default read. Strictly
+      // GET; every mutation rides the POST command envelope above.
+      path === "/v1/onboarding" ||
       // S23: the masked provider list and the AC11 effective readout (the
       // chat header's data source). Both answer masked views only (G3).
       path === "/v1/providers" ||

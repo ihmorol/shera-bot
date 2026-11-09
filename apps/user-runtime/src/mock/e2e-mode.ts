@@ -74,6 +74,13 @@ export interface E2eMockRuntimeOptions {
    * produces no replies at all).
    */
   scriptedReplies?: boolean;
+  /**
+   * S30: the S20 scripted-tool proposal config, passed through to the
+   * composition — the approval E2E legs drive the REAL pause/decision
+   * machinery instead of seeding rows (G2).
+   */
+  scriptedToolProposal?:
+    import("../transport/local-api/s20-approvals-api.ts").ScriptedToolProposalConfig | undefined;
 }
 
 export interface E2eMockRuntime {
@@ -106,10 +113,16 @@ export async function startE2eMockRuntime(
   const workspaceId = options.workspaceId ?? DEFAULT_WORKSPACE_ID;
   const now = options.now ?? (() => E2E_MOCK_FIXED_EPOCH);
 
+  const scriptedToolProposal = options.scriptedToolProposal;
   const runtime: RuntimeHandle = composeRuntime({
     dbPath,
     workspaceId,
-    harnessAdapter: new FakeHarnessAdapter({ now }),
+    // WITHOUT a scripted tool proposal the plain adapter stands (the reply
+    // leg needs it); WITH one the composition builds its OWN adapter from
+    // the scriptedToolProposal config — an explicit adapter here would
+    // override the proposal-emitting one and the gate would never pause
+    // (the S20 E2E posture).
+    ...(options.scriptedToolProposal ? {} : { harnessAdapter: new FakeHarnessAdapter({ now }) }),
     // The fixed clock must reach the JOURNAL too — the service stamps every
     // harness-run envelope with it (adapter proposals alone are not enough).
     now,
@@ -119,6 +132,7 @@ export async function startE2eMockRuntime(
     ...(options.scriptedReplies === false
       ? {}
       : { scriptedReplies: { ...DEFAULT_SCRIPTED_REPLY, deltaIntervalMs: 15 } }),
+    ...(scriptedToolProposal ? { scriptedToolProposal } : {}),
   });
 
   await new Promise<void>((resolve, reject) => {

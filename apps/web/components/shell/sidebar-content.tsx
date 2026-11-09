@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { AgentRosterSection } from "@/components/shell/agent-roster";
 import { CreditsPill } from "@/components/shell/credits-pill";
 import { LiveOperationChatsSection } from "@/components/shell/operation-chats-section";
+import { NotificationBell } from "@/components/shell/notification-center";
 import { AgentAvatar } from "@/components/chat/agent-avatar";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -173,14 +174,17 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* Global chrome row */}
+      {/* Global chrome row (§3.2: bell | gear) */}
       <div className="flex h-14 shrink-0 items-center justify-between px-4">
         <Wordmark />
-        <Button variant="ghost" size="icon" asChild>
-          <Link href={routes.settings()} aria-label="Open settings" {...linkProps}>
-            <Settings2 className="size-4" />
-          </Link>
-        </Button>
+        <div className="flex items-center gap-1">
+          <NotificationBell workspaceId={readyWorkspaceId} onNavigate={onNavigate} />
+          <Button variant="ghost" size="icon" asChild>
+            <Link href={routes.settings()} aria-label="Open settings" {...linkProps}>
+              <Settings2 className="size-4" />
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <Separator />

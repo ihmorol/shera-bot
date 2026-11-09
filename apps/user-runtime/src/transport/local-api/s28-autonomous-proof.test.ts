@@ -95,12 +95,26 @@ interface ProofRuntime {
   close(): Promise<void>;
 }
 
+/**
+ * The proof's clock is FROZEN just after the fired occurrence
+ * (2026-11-02T09:00:00.000Z) and before the asserted next one
+ * (2026-11-09T09:00:00.000Z) — the `scheduler-reconcile` suite's own
+ * clock-injection idiom. The proof previously ran on the real wall clock,
+ * which made the `next_occurrence_at` expectation a time bomb: the first
+ * archive run after 2026-11-09T09:00:00Z UTC landed red (the weekly
+ * `0 9 * * 1` occurrence had rolled to 2026-11-16 — the runtime's math was
+ * correct; the test's real-clock frame was not). The expectation is
+ * UNCHANGED; only the frame is deterministic now.
+ */
+const PROOF_NOW = "2026-11-02T10:00:00.000Z";
+
 async function composeProof(): Promise<ProofRuntime> {
   const dbPath = join(makeTempDir("shera-s28-proof-"), "runtime.db");
   const runtime = composeRuntime({
     dbPath,
     packsRoot: PACKS_ROOT,
     providerEnforcement: true,
+    now: () => PROOF_NOW,
   });
   trackConnection(runtime);
   await new Promise<void>((resolveListen) =>

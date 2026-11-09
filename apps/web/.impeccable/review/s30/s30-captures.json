@@ -1,0 +1,303 @@
+{
+  "captures": [
+    {
+      "name": "s30-notification-center-1440",
+      "file": "s30-notification-center-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      }
+    },
+    {
+      "name": "s30-settings-overview-1440",
+      "file": "s30-settings-overview-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      }
+    },
+    {
+      "name": "s30-settings-overview-768",
+      "file": "s30-settings-overview-768.png",
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      }
+    },
+    {
+      "name": "s30-settings-overview-360",
+      "file": "s30-settings-overview-360.png",
+      "viewport": {
+        "width": 360,
+        "height": 740
+      }
+    },
+    {
+      "name": "s30-notifications-settings-1440",
+      "file": "s30-notifications-settings-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      }
+    },
+    {
+      "name": "s30-notifications-settings-after-reset",
+      "file": "s30-notifications-settings-after-reset.png",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      }
+    },
+    {
+      "name": "s30-onboarding-card-1440",
+      "file": "s30-onboarding-card-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      }
+    },
+    {
+      "name": "s30-onboarding-card-after-answer",
+      "file": "s30-onboarding-card-after-answer.png",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      }
+    },
+    {
+      "name": "s30-account-reopen",
+      "file": "s30-account-reopen.png",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      }
+    },
+    {
+      "name": "s30-sidebar-roster-activity-1440",
+      "file": "s30-sidebar-roster-activity-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      }
+    },
+    {
+      "name": "s30-mobile-360",
+      "file": "s30-mobile-360.png",
+      "viewport": {
+        "width": 360,
+        "height": 740
+      }
+    },
+    {
+      "name": "s30-keyboard-trail",
+      "file": "s30-keyboard-trail.png",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      }
+    },
+    {
+      "name": "s30-reduced-motion",
+      "file": "s30-reduced-motion.png",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      }
+    }
+  ],
+  "truthLegs": {
+    "notifications": {
+      "rendered": {
+        "rows": [
+          {
+            "title": "Approval required",
+            "deepLink": "/app"
+          },
+          {
+            "title": "Task completed",
+            "deepLink": "/app"
+          },
+          {
+            "title": "Recovery review needed",
+            "deepLink": "/app"
+          },
+          {
+            "title": "Task failed",
+            "deepLink": "/app"
+          },
+          {
+            "title": "Task completed",
+            "deepLink": "/app"
+          }
+        ],
+        "badge": "5",
+        "muted": 0,
+        "emptyCta": false
+      },
+      "expectedNoteIds": [
+        "note-apr-apr_c5b88c41-6e2d-430d-8b33-e4078f318cc8",
+        "note-evt_cmd_complete_task_evt_cap_trig",
+        "note-evt_cap_rec",
+        "note-evt_cap_fail",
+        "note-evt_cap_done"
+      ],
+      "expectedUnread": 5,
+      "mismatches": []
+    },
+    "overview_1440": {
+      "categoryLinks": [
+        "/app/settings/agents/citation-manager",
+        "/app/settings/agents/developer",
+        "/app/settings/agents/general-assistant",
+        "/app/settings/agents/programming-tutor",
+        "/app/settings/agents/researcher",
+        "/app/settings/agents/study-planner",
+        "/app/settings/account",
+        "/app/settings/agents",
+        "/app/settings/providers",
+        "/app/settings/credits",
+        "/app/settings/tools",
+        "/app/settings/permissions",
+        "/app/settings/workspace",
+        "/app/settings/files",
+        "/app/settings/memory",
+        "/app/settings/schedules",
+        "/app/settings/notifications",
+        "/app/settings/privacy",
+        "/app/settings/runtime",
+        "/app/settings/git",
+        "/app/settings/backups"
+      ],
+      "missing": []
+    },
+    "overview_768": {
+      "categoryLinks": [
+        "/app/settings/agents/citation-manager",
+        "/app/settings/agents/developer",
+        "/app/settings/agents/general-assistant",
+        "/app/settings/agents/programming-tutor",
+        "/app/settings/agents/researcher",
+        "/app/settings/agents/study-planner",
+        "/app/settings/account",
+        "/app/settings/agents",
+        "/app/settings/providers",
+        "/app/settings/credits",
+        "/app/settings/tools",
+        "/app/settings/permissions",
+        "/app/settings/workspace",
+        "/app/settings/files",
+        "/app/settings/memory",
+        "/app/settings/schedules",
+        "/app/settings/notifications",
+        "/app/settings/privacy",
+        "/app/settings/runtime",
+        "/app/settings/git",
+        "/app/settings/backups"
+      ],
+      "missing": []
+    },
+    "overview_360": {
+      "categoryLinks": [
+        "/app/settings/agents/citation-manager",
+        "/app/settings/agents/developer",
+        "/app/settings/agents/general-assistant",
+        "/app/settings/agents/programming-tutor",
+        "/app/settings/agents/researcher",
+        "/app/settings/agents/study-planner",
+        "/app/settings/account",
+        "/app/settings/agents",
+        "/app/settings/providers",
+        "/app/settings/credits",
+        "/app/settings/tools",
+        "/app/settings/permissions",
+        "/app/settings/workspace",
+        "/app/settings/files",
+        "/app/settings/memory",
+        "/app/settings/schedules",
+        "/app/settings/notifications",
+        "/app/settings/privacy",
+        "/app/settings/runtime",
+        "/app/settings/git",
+        "/app/settings/backups"
+      ],
+      "missing": []
+    },
+    "onboardingCard": {
+      "rendered": {
+        "step": "Step 1 of 5",
+        "chips": ["research", "programming", "exam_prep", "something_else"],
+        "freeText": true,
+        "dismiss": true
+      },
+      "ok": true
+    },
+    "rosterActivity": {
+      "roster": {
+        "activityLines": [
+          "Capture seed: developer last line for the roster preview.",
+          "Capture seed: general-assistant last line for the roster preview.",
+          "Capture seed: researcher last line for the roster preview."
+        ]
+      },
+      "expectedLines": 3,
+      "ok": true
+    },
+    "mobileBell": {
+      "bell": true
+    }
+  },
+  "interactiveLegs": {
+    "toggleBrowser": {
+      "before": {
+        "inApp": "true",
+        "browser": "false"
+      },
+      "after": {
+        "browser": "true"
+      },
+      "persisted": true,
+      "ok": true
+    },
+    "resetSettings": {
+      "persisted": {
+        "in_app_enabled": true,
+        "browser_enabled": false,
+        "recommended_default": {
+          "in_app_enabled": true,
+          "browser_enabled": false
+        }
+      },
+      "ok": true
+    },
+    "keyboardTrailOnboarding": ["A", "A", "BUTTON", "A", "A", "A", "A", "A"],
+    "onboardingKeyboardAnswer": {
+      "answers": {
+        "welcome": {
+          "option_id": "programming",
+          "free_text": null,
+          "answered_at": "2026-11-09T16:51:18.070Z"
+        }
+      },
+      "current": "provider_check",
+      "ok": true
+    },
+    "onboardingDismiss": {
+      "status": "dismissed",
+      "dockGone": true,
+      "ok": true
+    },
+    "onboardingReopen": {
+      "status": "pending",
+      "ok": true
+    },
+    "keyboardOnlyCenter": {
+      "reached": true,
+      "panelOpen": true,
+      "ok": true
+    },
+    "reducedMotion": {
+      "matched": true
+    }
+  },
+  "tastePass": {}
+}

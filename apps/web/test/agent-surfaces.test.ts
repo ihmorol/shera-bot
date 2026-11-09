@@ -58,6 +58,7 @@ function rosterEntry(manifestAgent: (typeof STUDENT_MANIFEST.agents)[number]): A
     display_name: manifestAgent.display_name,
     role_description: manifestAgent.role_description,
     avatar_hue: manifestAgent.ui_identity.avatar_hue,
+    last_activity: null,
     initial_glyph: manifestAgent.ui_identity.initial_glyph,
     has_user_instructions: false,
   };
@@ -476,7 +477,16 @@ describe("agent settings client (proxy paths)", () => {
     // The wire payload carries the S12 session-presence read on every row.
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse(200, {
-        agents: ROSTER.map((agent) => ({ ...agent, session: { presence: "none" } })),
+        agents: ROSTER.map((agent, index) => ({
+          ...agent,
+          session: { presence: "none" },
+          // S30 (E43 idea 4): the runtime's own last-activity record — null
+          // for a quiet Agent, the bounded preview for an active one.
+          last_activity:
+            index === 0
+              ? { at: "2026-11-08T09:15:00.000Z", preview: "Drafted the methodology sweep." }
+              : null,
+        })),
       }),
     );
     vi.stubGlobal("fetch", fetchMock);
@@ -487,7 +497,9 @@ describe("agent settings client (proxy paths)", () => {
       agent_id: "agent_general_assistant",
       avatar_hue: 217,
       session: { presence: "none" },
+      last_activity: { preview: "Drafted the methodology sweep." },
     });
+    expect(agents[1]!.last_activity).toBeNull();
 
     const [path] = fetchMock.mock.calls[0] as [string];
     expect(path).toBe("/api/runtime/v1/agents?workspace_id=ws_account-1");

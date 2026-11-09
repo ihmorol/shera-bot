@@ -1,0 +1,286 @@
+{
+  "notifications": {
+    "notifications": [
+      {
+        "notification_id": "note-apr-apr_c5b88c41-6e2d-430d-8b33-e4078f318cc8",
+        "workspace_id": "ws-local-default",
+        "kind": "approval_required",
+        "title": "Approval required",
+        "summary": "repo.push on workspace://notes/draft.md — tool_repo_push@1.2.0",
+        "conversation_id": "conv_capture_apr",
+        "task_id": "task_evt_cap_trig",
+        "approval_id": "apr_c5b88c41-6e2d-430d-8b33-e4078f318cc8",
+        "occurred_at": "2026-11-09T16:50:48.615Z",
+        "read_at": null,
+        "muted": false,
+        "deep_link": "/app"
+      },
+      {
+        "notification_id": "note-evt_cmd_complete_task_evt_cap_trig",
+        "workspace_id": "ws-local-default",
+        "kind": "completion",
+        "title": "Task completed",
+        "summary": "Task run task_evt_cap_trig completed",
+        "conversation_id": null,
+        "task_id": "task_evt_cap_trig",
+        "approval_id": null,
+        "occurred_at": "2026-11-09T16:50:48.599Z",
+        "read_at": null,
+        "muted": false,
+        "deep_link": "/app"
+      },
+      {
+        "notification_id": "note-evt_cap_rec",
+        "workspace_id": "ws-local-default",
+        "kind": "recovery",
+        "title": "Recovery review needed",
+        "summary": "Task run task_cap_rec needs a recovery review",
+        "conversation_id": null,
+        "task_id": "task_cap_rec",
+        "approval_id": null,
+        "occurred_at": "2026-11-08T09:10:00.000Z",
+        "read_at": null,
+        "muted": false,
+        "deep_link": "/app"
+      },
+      {
+        "notification_id": "note-evt_cap_fail",
+        "workspace_id": "ws-local-default",
+        "kind": "failure",
+        "title": "Task failed",
+        "summary": "Task run task_cap_fail failed — review the run timeline",
+        "conversation_id": null,
+        "task_id": "task_cap_fail",
+        "approval_id": null,
+        "occurred_at": "2026-11-08T09:05:00.000Z",
+        "read_at": null,
+        "muted": false,
+        "deep_link": "/app"
+      },
+      {
+        "notification_id": "note-evt_cap_done",
+        "workspace_id": "ws-local-default",
+        "kind": "completion",
+        "title": "Task completed",
+        "summary": "Task run task_cap_done completed",
+        "conversation_id": null,
+        "task_id": "task_cap_done",
+        "approval_id": null,
+        "occurred_at": "2026-11-08T09:00:00.000Z",
+        "read_at": null,
+        "muted": false,
+        "deep_link": "/app"
+      }
+    ]
+  },
+  "settings": {
+    "settings": {
+      "in_app_enabled": true,
+      "browser_enabled": false,
+      "recommended_default": {
+        "in_app_enabled": true,
+        "browser_enabled": false
+      }
+    }
+  },
+  "onboarding": {
+    "onboarding": {
+      "workspace_id": "ws-local-default",
+      "status": "pending",
+      "current_step": "welcome",
+      "steps": [
+        {
+          "step": "welcome",
+          "title": "Welcome to Shera",
+          "body": "Shera works right away with safe defaults — nothing here blocks you. Answer what you like, skip the rest.",
+          "question": "What do you mostly want help with? Pick whatever's closest — we can always expand from there.",
+          "options": [
+            {
+              "option_id": "research",
+              "label": "Research",
+              "description": "Papers, sources, citations, summaries."
+            },
+            {
+              "option_id": "programming",
+              "label": "Programming",
+              "description": "Assignments, code review, debugging."
+            },
+            {
+              "option_id": "exam_prep",
+              "label": "Exam preparation",
+              "description": "Study plans, practice questions, recaps."
+            },
+            {
+              "option_id": "something_else",
+              "label": "Something else",
+              "description": "Tell us in your own words below."
+            }
+          ],
+          "accepts_free_text": true,
+          "free_text_placeholder": "Tell us in your own words…",
+          "answer": null
+        },
+        {
+          "step": "provider_check",
+          "title": "Provider and model",
+          "body": "Shera uses the deployment's default provider and model for new conversations. You can change this anytime in Settings → Providers & models — no credentials are asked for or stored here.",
+          "question": null,
+          "options": [
+            {
+              "option_id": "keep_default",
+              "label": "Keep the deployment default",
+              "description": "You can change the provider or model anytime in Settings."
+            }
+          ],
+          "accepts_free_text": false,
+          "free_text_placeholder": null,
+          "answer": null
+        },
+        {
+          "step": "approvals_briefing",
+          "title": "What pauses for your approval",
+          "body": "Risky actions pause for your approval: file changes outside the workspace, external writes, deployments. Read-only work runs automatically; you see the five choices on every pause.",
+          "question": "Ready to see what pauses?",
+          "options": [
+            {
+              "option_id": "got_it",
+              "label": "Got it",
+              "description": "You'll see exactly what pauses before anything risky runs."
+            }
+          ],
+          "accepts_free_text": false,
+          "free_text_placeholder": null,
+          "answer": null
+        },
+        {
+          "step": "memory_briefing",
+          "title": "Memory briefing — Auto-memory is on",
+          "body": "Agents can remember useful facts automatically. Everything is inspectable, editable, and forgettable in Settings → Memory — and secrets are never stored.",
+          "question": "Should agents remember things automatically?",
+          "options": [
+            {
+              "option_id": "memory_auto_on",
+              "label": "Keep auto-memory on",
+              "description": "Agents remember what you allow; you can always inspect or forget."
+            },
+            {
+              "option_id": "memory_auto_off",
+              "label": "Turn auto-memory off",
+              "description": "Nothing is remembered automatically; you can re-enable it in Settings."
+            }
+          ],
+          "accepts_free_text": false,
+          "free_text_placeholder": null,
+          "answer": null
+        },
+        {
+          "step": "done",
+          "title": "You're set",
+          "body": "Your answers are saved and the recommended defaults stayed active throughout. You can reopen this interview anytime from Settings → Account.",
+          "question": null,
+          "options": [
+            {
+              "option_id": "finish",
+              "label": "Finish",
+              "description": "Open your workspace — the defaults keep working either way."
+            }
+          ],
+          "accepts_free_text": false,
+          "free_text_placeholder": null,
+          "answer": null
+        }
+      ],
+      "provider_summary": {
+        "configured": false,
+        "provider_id": null,
+        "model": null
+      },
+      "answers": {}
+    }
+  },
+  "roster": {
+    "agents": [
+      {
+        "agent_id": "agent_citation_manager",
+        "display_name": "Citation Manager",
+        "role_description": "The Citation Manager maintains source indexes, reference metadata, and citation formats across research work. It checks citations for consistency, preserves provenance for every source, and supports the Research Paper Operation; where Exam Preparation needs syllabus source indexing, it is triggered there as a subagent.",
+        "avatar_hue": 32,
+        "initial_glyph": "C",
+        "has_user_instructions": false,
+        "session": {
+          "presence": "none"
+        },
+        "last_activity": null
+      },
+      {
+        "agent_id": "agent_developer",
+        "display_name": "Developer",
+        "role_description": "The Developer inspects repositories, creates and modifies code, runs tests/linters/type checks/builds, diagnoses regressions, creates scripts and integrations, runs technical experiments, operates browsers and terminals, manages branches/worktrees/commits/patches, generates documentation, monitors repositories/files/builds/webhooks, and creates reusable tools.",
+        "avatar_hue": 262,
+        "initial_glyph": "D",
+        "has_user_instructions": false,
+        "session": {
+          "presence": "none"
+        },
+        "last_activity": {
+          "at": "2026-11-08T09:20:00.000Z",
+          "preview": "Capture seed: developer last line for the roster preview."
+        }
+      },
+      {
+        "agent_id": "agent_general_assistant",
+        "display_name": "General Assistant",
+        "role_description": "The General Assistant handles general questions, planning, coordination, user-facing synthesis, memory, task creation, and Operation coordination. It clarifies goals, chooses whether one or multiple Agents are needed, delegates to Researcher and Developer, combines results, writes and formats content, manages notes/checklists/documents, tracks approvals, and produces final answers/artifacts. It is the default coordinator of every Operation and is removable; pack definitions may name a different coordinator Agent or none.",
+        "avatar_hue": 217,
+        "initial_glyph": "G",
+        "has_user_instructions": false,
+        "session": {
+          "presence": "none"
+        },
+        "last_activity": {
+          "at": "2026-11-08T09:20:00.000Z",
+          "preview": "Capture seed: general-assistant last line for the roster preview."
+        }
+      },
+      {
+        "agent_id": "agent_programming_tutor",
+        "display_name": "Programming Tutor",
+        "role_description": "The Programming Tutor helps students understand code and assignments: it explains concepts, reviews solutions, guides practice, and produces study-oriented explanations and exercises for the Programming Assignment Operation; Exam Preparation past-paper drills run as its subagent work.",
+        "avatar_hue": 161,
+        "initial_glyph": "P",
+        "has_user_instructions": false,
+        "session": {
+          "presence": "none"
+        },
+        "last_activity": null
+      },
+      {
+        "agent_id": "agent_researcher",
+        "display_name": "Researcher",
+        "role_description": "The Researcher investigates questions and produces evidence-backed outputs. It searches and reads public web sources, compares authority and recency, extracts claims and quotations, reads uploaded PDFs/documents/spreadsheets/images, creates literature reviews and reports, manages citations and source indexes, monitors configured sources, and delegates coding/data work to Developer or synthesis work to General Assistant.",
+        "avatar_hue": 192,
+        "initial_glyph": "R",
+        "has_user_instructions": false,
+        "session": {
+          "presence": "none"
+        },
+        "last_activity": {
+          "at": "2026-11-08T09:20:00.000Z",
+          "preview": "Capture seed: researcher last line for the roster preview."
+        }
+      },
+      {
+        "agent_id": "agent_study_planner",
+        "display_name": "Study Planner",
+        "role_description": "The Study Planner turns courses, deadlines, and exam dates into study schedules, tracks progress against them, and adjusts plans as work completes, supporting the Exam Preparation Operation.",
+        "avatar_hue": 333,
+        "initial_glyph": "S",
+        "has_user_instructions": false,
+        "session": {
+          "presence": "none"
+        },
+        "last_activity": null
+      }
+    ]
+  }
+}

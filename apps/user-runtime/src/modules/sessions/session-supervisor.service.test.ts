@@ -371,7 +371,19 @@ describe("SessionSupervisor protocol-failure policy (D14)", () => {
           : { invalidJsonLine: true, heartbeatMs: 25 },
       policy: { maxProtocolViolations: 2 },
     });
-    await h.supervisor.ensureStarted(WS, AGENT);
+    // Child 1 violates on its FIRST stdout line, so the whole cascade (both
+    // violations, the post-cap restart, the third violation, terminal
+    // failed) can win the race against the initial start handshake — the
+    // first ensureStarted then honestly answers the supervisor's typed
+    // terminal refusal (D14) instead of resolving. Both orders are legal;
+    // the invariants below pin the outcome either way. (Observed flaking
+    // both ways under co-run AND solo load — the S30 review-round gate's
+    // archive run caught it.)
+    try {
+      await h.supervisor.ensureStarted(WS, AGENT);
+    } catch (error) {
+      expect(error).toBeInstanceOf(AgentSessionFailedError);
+    }
 
     // The post-cap restart child (index 1) may briefly be `active` (its
     // violating line arriving in a separate burst) or skip straight from

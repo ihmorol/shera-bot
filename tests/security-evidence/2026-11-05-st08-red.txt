@@ -1,0 +1,108 @@
+# S27 ST-08 RED-without-control proof (2026-11-05)
+#
+# TWO controls were TEMPORARILY DISABLED (reverted before commit):
+#  1. apps/user-runtime/src/modules/tools/tools-inventory.service.ts — checkIntersection
+#     returns null (the D38 platform∩pack intersection accepts everything);
+#  2. apps/user-runtime/src/modules/tools/tool-executor.service.ts — the agent-created
+#     lifecycle gate (activation + sharing checks) skipped.
+#
+# Command: SHERA_PG_BIN=/usr/lib/postgresql/16/bin pnpm vitest run tests/security/s27-st08-tool-escalation.test.ts
+# Expected with the controls present: ALL PASS. Observed with them removed: the hostile
+# credential/pack-escalation creations are ACCEPTED and registered, and the unactivated
+# tool reaches the approval machinery instead of the typed lifecycle refusal.
+
+
+ RUN  v5.0.1 /home/emon-morol/projects/github-cloud-projects/shera-bot-s27
+
+ ❯ tests/security/s27-st08-tool-escalation.test.ts (7 tests | 4 failed) 1261ms
+   ❯ S27 ST-08 — the D38 intersection at creation (no widening) (2)
+     × a tool declaring CREDENTIAL_ACCESS-shaped capability is refused at the PLATFORM layer — nothing registered 194ms
+     × a tool declaring a platform capability the PACK does not allow is refused at the PACK layer 151ms
+   ✓ S27 ST-08 — activation is a user-only runtime grant (G6) (1)
+     ✓ the creating Agent cannot self-activate; a user decision records the grant 190ms
+   ❯ S27 ST-08 — the executor honors the lifecycle (no grant, no effect) (3)
+     × execution before activation is TOOL_NOT_ACTIVATED; the effect sentinel never moved 189ms
+     ✓ disabling beats activation: a disabled tool refuses even the activated owner (AC6) 182ms
+     × a private tool is TOOL_NOT_SHARED for another Agent — the creator's scope is not a kit others assemble 168ms
+   ✓ S27 ST-08 — no bypass: the effect only exists through the executor (1)
+     ✓ the created tool's binding is the RUNTIME's binding, and it refuses a direct sync execute (AC1) 177ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/security/s27-st08-tool-escalation.test.ts > S27 ST-08 — the D38 intersection at creation (no widening) > a tool declaring CREDENTIAL_ACCESS-shaped capability is refused at the PLATFORM layer — nothing registered
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ tests/security/s27-st08-tool-escalation.test.ts:194:26
+    192|         creationInput({ capabilities: ["credential.access"] }),
+    193|       );
+    194|       expect(preview.ok).toBe(false);
+       |                          ^
+    195|       if (!preview.ok) {
+    196|         expect(preview.error_code).toBe("TOOL_CAPABILITY_NOT_ALLOWED");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tests/security/s27-st08-tool-escalation.test.ts > S27 ST-08 — the D38 intersection at creation (no widening) > a tool declaring a platform capability the PACK does not allow is refused at the PACK layer
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ tests/security/s27-st08-tool-escalation.test.ts:216:26
+    214|       // allow-list does not carry it: the pack layer refuses.
+    215|       const preview = rt.inventory.previewCreation(creationInput({ cap…
+    216|       expect(preview.ok).toBe(false);
+       |                          ^
+    217|       if (!preview.ok) {
+    218|         expect(preview.error_code).toBe("TOOL_CAPABILITY_NOT_ALLOWED");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  tests/security/s27-st08-tool-escalation.test.ts > S27 ST-08 — the executor honors the lifecycle (no grant, no effect) > execution before activation is TOOL_NOT_ACTIVATED; the effect sentinel never moved
+AssertionError: expected 'paused_for_approval' to be 'blocked' // Object.is equality
+
+Expected: "blocked"
+Received: "paused_for_approval"
+
+ ❯ tests/security/s27-st08-tool-escalation.test.ts:284:31
+    282|       );
+    283|       const blocked = propose(rt, AGENT, "tool_st08_unactivated");
+    284|       expect(blocked.outcome).toBe("blocked");
+       |                               ^
+    285|       if (blocked.outcome === "blocked") {
+    286|         expect(blocked.error_code).toBe("TOOL_NOT_ACTIVATED");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  tests/security/s27-st08-tool-escalation.test.ts > S27 ST-08 — the executor honors the lifecycle (no grant, no effect) > a private tool is TOOL_NOT_SHARED for another Agent — the creator's scope is not a kit others assemble
+AssertionError: expected 'paused_for_approval' to be 'blocked' // Object.is equality
+
+Expected: "blocked"
+Received: "paused_for_approval"
+
+ ❯ tests/security/s27-st08-tool-escalation.test.ts:337:36
+    335|       // is refused for the SCOPE before any activation consult matter…
+    336|       const blockedOther = propose(rt, AGENT_OTHER, "tool_st08_private…
+    337|       expect(blockedOther.outcome).toBe("blocked");
+       |                                    ^
+    338|       if (blockedOther.outcome === "blocked") {
+    339|         expect(blockedOther.error_code).toBe("TOOL_NOT_SHARED");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 3 passed (7)
+   Start at  02:50:55
+   Duration  2.34s (tests 59%, transform 28%, import 13%)
+
+exit=1

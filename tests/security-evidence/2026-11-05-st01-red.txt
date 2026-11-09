@@ -1,0 +1,135 @@
+# S27 ST-01 RED-without-control proof (2026-11-05)
+#
+# The D27 controls were TEMPORARILY DISABLED (reverted before commit; git diff never
+# carries them):
+#  1. apps/user-runtime/src/modules/execution/sandbox-policy.ts — assertInsideScope and
+#     assertNoSymlinkEscape turned into no-ops (containment + planted-symlink refusal off);
+#  2. apps/user-runtime/src/adapters/sqlite/workspace-files-repository.ts — parseSegments
+#     stopped refusing '.', '..', separators, control characters (the URI-parser
+#     traversal checks off).
+#
+# Command: SHERA_PG_BIN=/usr/lib/postgresql/16/bin pnpm vitest run tests/security/s27-st01-path-traversal.test.ts
+# Expected with the control present: ALL PASS. Observed with it removed: FAILURES below —
+# the traversal workdir is created outside the scope, planted symlinks resolve, hostile
+# URIs are accepted.
+
+
+ RUN  v5.0.1 /home/emon-morol/projects/github-cloud-projects/shera-bot-s27
+
+ ❯ tests/security/s27-st01-path-traversal.test.ts (20 tests | 13 failed) 2043ms
+   ❯ S27 ST-01 — filesystem scope: traversal and symlink escape (D27) (5)
+     ✓ refuses a ../ traversal workdir and creates NOTHING outside the scope 6ms
+     ✓ refuses an absolute host path workdir (everything is scope-relative) 2ms
+     × refuses a planted FILE symlink pointing outside; the target is never read 8ms
+     × refuses a planted DIRECTORY symlink mid-path (escape through a created prefix) 2ms
+     ✓ refuses a traversal that walks out through a symlinked scope root's REAL location 3ms
+   ✓ S27 ST-01 — the terminal-execution binding refuses before its spawn seam (2)
+     ✓ a traversal workdir is the typed SANDBOX_PATH_ESCAPE and NOTHING spawns 7ms
+     ✓ an absolute host-path workdir never reaches the spawn seam 1ms
+   ❯ S27 ST-01 — the row-based file store refuses hostile URIs (S17 surface) (13)
+     × refuses and materializes NOTHING: raw traversal 168ms
+     × refuses and materializes NOTHING: mid-path traversal 148ms
+     × refuses and materializes NOTHING: encoded traversal (%2e%2e) 153ms
+     × refuses and materializes NOTHING: mixed-encoded traversal 154ms
+     × refuses and materializes NOTHING: encoded separator (%2F) 148ms
+     × refuses and materializes NOTHING: encoded backslash (%5C) 147ms
+     × refuses and materializes NOTHING: encoded null (%00) 162ms
+     × refuses and materializes NOTHING: agent-scope traversal 151ms
+     × refuses and materializes NOTHING: malformed escape (%ZZ) 160ms
+     ✓ refuses and materializes NOTHING: foreign scheme 158ms
+     × refuses and materializes NOTHING: absolute-ish root escape 148ms
+     ✓ positive control: an in-scope percent-encoded name still works (the parser refuses escape, not encoding) 153ms
+     × a refused write leaves the database with no smuggled row (byte-level count unchanged) 160ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 13 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/security/s27-st01-path-traversal.test.ts > S27 ST-01 — filesystem scope: traversal and symlink escape (D27) > refuses a planted FILE symlink pointing outside; the target is never read
+AssertionError: expected function to throw an error, but it didn't
+ ❯ tests/security/s27-st01-path-traversal.test.ts:150:73
+    148|   it("refuses a planted FILE symlink pointing outside; the target is n…
+    149|     symlinkSync(join(outside, "canary.txt"), join(workspaceRoot, "inno…
+    150|     expect(() => resolveFileInsideScope(workspaceRoot, "innocent.txt")…
+       |                                                                         ^
+    151|       SandboxPolicyError,
+    152|     );
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/13]⎯
+
+ FAIL  tests/security/s27-st01-path-traversal.test.ts > S27 ST-01 — filesystem scope: traversal and symlink escape (D27) > refuses a planted DIRECTORY symlink mid-path (escape through a created prefix)
+AssertionError: expected function to throw an error, but it didn't
+ ❯ tests/security/s27-st01-path-traversal.test.ts:162:85
+    160|     mkdirSync(join(workspaceRoot, "sub"), { recursive: true });
+    161|     symlinkSync(join(outside, "deepr"), join(workspaceRoot, "sub", "li…
+    162|     expect(() => prepareDirectoryInsideScope(workspaceRoot, "sub/link/…
+       |                                                                                     ^
+    163|       SandboxPolicyError,
+    164|     );
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/13]⎯
+
+ FAIL  tests/security/s27-st01-path-traversal.test.ts > S27 ST-01 — the row-based file store refuses hostile URIs (S17 surface) > refuses and materializes NOTHING: raw traversal
+ FAIL  tests/security/s27-st01-path-traversal.test.ts > S27 ST-01 — the row-based file store refuses hostile URIs (S17 surface) > refuses and materializes NOTHING: mid-path traversal
+ FAIL  tests/security/s27-st01-path-traversal.test.ts > S27 ST-01 — the row-based file store refuses hostile URIs (S17 surface) > refuses and materializes NOTHING: encoded traversal (%2e%2e)
+ FAIL  tests/security/s27-st01-path-traversal.test.ts > S27 ST-01 — the row-based file store refuses hostile URIs (S17 surface) > refuses and materializes NOTHING: mixed-encoded traversal
+ FAIL  tests/security/s27-st01-path-traversal.test.ts > S27 ST-01 — the row-based file store refuses hostile URIs (S17 surface) > refuses and materializes NOTHING: encoded separator (%2F)
+ FAIL  tests/security/s27-st01-path-traversal.test.ts > S27 ST-01 — the row-based file store refuses hostile URIs (S17 surface) > refuses and materializes NOTHING: encoded backslash (%5C)
+ FAIL  tests/security/s27-st01-path-traversal.test.ts > S27 ST-01 — the row-based file store refuses hostile URIs (S17 surface) > refuses and materializes NOTHING: agent-scope traversal
+ FAIL  tests/security/s27-st01-path-traversal.test.ts > S27 ST-01 — the row-based file store refuses hostile URIs (S17 surface) > refuses and materializes NOTHING: absolute-ish root escape
+AssertionError: expected error to be instance of WorkspacePathError
+
+- Expected:
+[Function WorkspacePathError]
+
++ Received:
+Error {
+  "message": "CHECK constraint failed: length(name) BETWEEN 1 AND 255
+          AND name NOT IN ('.', '..')
+          AND instr(name, '/') = 0
+          AND instr(name, char(92)) = 0",
+  "code": "ERR_SQLITE_ERROR",
+  "errcode": 275,
+  "errstr": "constraint failed",
+}
+
+ ❯ tests/security/s27-st01-path-traversal.test.ts:247:9
+    245|       expect(() =>
+    246|         files.write("ws_s27", uri, { type: "user", id: "user_alice" },…
+    247|       ).toThrow(WorkspacePathError);
+       |         ^
+    248|       // The hostile URI is equally unresolvable: both the write and t…
+    249|       // surface are typed refusals — the URI can never address anythi…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/13]⎯
+
+ FAIL  tests/security/s27-st01-path-traversal.test.ts > S27 ST-01 — the row-based file store refuses hostile URIs (S17 surface) > refuses and materializes NOTHING: encoded null (%00)
+ FAIL  tests/security/s27-st01-path-traversal.test.ts > S27 ST-01 — the row-based file store refuses hostile URIs (S17 surface) > refuses and materializes NOTHING: malformed escape (%ZZ)
+AssertionError: expected function to throw an error, but it didn't
+ ❯ tests/security/s27-st01-path-traversal.test.ts:247:9
+    245|       expect(() =>
+    246|         files.write("ws_s27", uri, { type: "user", id: "user_alice" },…
+    247|       ).toThrow(WorkspacePathError);
+       |         ^
+    248|       // The hostile URI is equally unresolvable: both the write and t…
+    249|       // surface are typed refusals — the URI can never address anythi…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/13]⎯
+
+ FAIL  tests/security/s27-st01-path-traversal.test.ts > S27 ST-01 — the row-based file store refuses hostile URIs (S17 surface) > a refused write leaves the database with no smuggled row (byte-level count unchanged)
+AssertionError: expected Error: CHECK constraint failed: length(na… { …(3) } to be an instance of WorkspacePathError
+ ❯ tests/security/s27-st01-path-traversal.test.ts:279:21
+    277|       expect.unreachable("the hostile URI must be refused");
+    278|     } catch (error) {
+    279|       expect(error).toBeInstanceOf(WorkspacePathError);
+       |                     ^
+    280|     }
+    281|     expect(countNodes(dbPath)).toBe(nodesBefore);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/13]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  13 failed | 7 passed (20)
+   Start at  02:21:26
+   Duration  2.57s (tests 87%, transform 10%, import 3%)
+
+exit=1

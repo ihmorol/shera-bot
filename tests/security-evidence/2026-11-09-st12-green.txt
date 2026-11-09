@@ -1,0 +1,19 @@
+# S27 ST-12 GREEN-with-control proof (2026-11-09)
+#
+# Both layers RESTORED (git checkout — no bypass in the tree). All five legs
+# pass: self-approval refused, any agent actor refused (any choice), the only
+# grant-creating path is the user's decision (created_by the user, one-time,
+# consumed post-effect), decisions are immutable/idempotent, and the consumed
+# grant authorizes nothing (a second proposal pauses afresh).
+#
+# Command: pnpm vitest run tests/security/s27-st12-self-approval.test.ts
+
+ RUN  v5.0.1 /home/emon-morol/projects/github-cloud-projects/shera-bot-s27
+
+ ✓ tests/security/s27-st12-self-approval.test.ts (5 tests) 1046ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  22:32:41
+   Duration  2.26s (tests 51%, transform 33%, import 15%)
+

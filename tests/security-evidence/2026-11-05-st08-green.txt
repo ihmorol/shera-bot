@@ -1,0 +1,19 @@
+# S27 ST-08 GREEN-with-control proof (2026-11-05)
+#
+# Both controls RESTORED (git checkout — no bypass in the tree): the D38 intersection and
+# the executor's agent-created lifecycle gate are live again.
+#
+# Command: SHERA_PG_BIN=/usr/lib/postgresql/16/bin pnpm vitest run tests/security/s27-st08-tool-escalation.test.ts
+# Expected: ALL PASS (the suite that failed 4/7 in the red run).
+
+
+ RUN  v5.0.1 /home/emon-morol/projects/github-cloud-projects/shera-bot-s27
+
+ ✓ tests/security/s27-st08-tool-escalation.test.ts (7 tests) 1195ms
+
+ Test Files  1 passed (1)
+      Tests  7 passed (7)
+   Start at  02:51:05
+   Duration  2.26s (tests 58%, transform 29%, import 13%)
+
+exit=0

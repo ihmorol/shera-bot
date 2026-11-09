@@ -1,0 +1,21 @@
+# S27 ST-02 GREEN-with-control proof (2026-11-05)
+#
+# The D39 scope guards RESTORED (git checkout of the two bypassed files): the
+# files-repository assertScopeAccess guard and the write-leases private-scope refusal
+# are live again.
+#
+# Command: SHERA_PG_BIN=/usr/lib/postgresql/16/bin pnpm vitest run tests/security/s27-st02-workspace-boundary.test.ts
+# Expected: ALL PASS (the suite that failed 4/8 in the red run — agent B's cross-private
+# read and overwrite refused again).
+
+
+ RUN  v5.0.1 /home/emon-morol/projects/github-cloud-projects/shera-bot-s27
+
+ ✓ tests/security/s27-st02-workspace-boundary.test.ts (8 tests) 1244ms
+
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
+   Start at  02:22:20
+   Duration  1.78s (tests 79%, transform 16%, import 4%, worker 1%)
+
+exit=0

@@ -1,0 +1,21 @@
+# S27 ST-13 GREEN-with-control proof (2026-11-09)
+#
+# The budget check RESTORED at both enforcement points (git checkout). All
+# four legs pass: the over-budget tool fails typed with nothing oversized
+# persisted, the in-budget result still executes, the streaming flood stops
+# AT the forward cap (truncation fired, runtime healthy), and a 1 MiB hostile
+# argument lands as a bounded marker-free summary.
+#
+# Command: pnpm vitest run tests/security/s27-st13-oversized-flood.test.ts
+
+ RUN  v5.0.1 /home/emon-morol/projects/github-cloud-projects/shera-bot-s27
+
+ ✓ tests/security/s27-st13-oversized-flood.test.ts (4 tests) 924ms
+   ✓ S27 ST-13 — hostile oversized ARGUMENTS are bounded in the recorded surfaces (AC9) (1)
+     ✓ a 1 MiB argument string lands as a bounded, marker-free summary in the history row 317ms
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  22:41:16
+   Duration  2.21s (tests 46%, transform 35%, import 18%)
+

@@ -16,7 +16,7 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-brand text-text hover:bg-brand-deep",
+        default: "bg-brand-deep text-text hover:bg-brand-deepest",
         outline:
           "border border-line bg-transparent hover:border-line-accent hover:bg-surface-elevated",
         ghost: "text-muted hover:bg-surface-elevated hover:text-text",

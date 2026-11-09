@@ -513,7 +513,14 @@
       "id": "AC13",
       "criterion": "Risky actions pause and display the defined approval choices and reminder sequence.",
       "slices": ["S20"],
-      "records": ["E30", "E3", "D9", "PR #63", "TRACEABILITY"],
+      "records": [
+        "E30",
+        "E3",
+        "D9",
+        "PR #63",
+        "TRACEABILITY",
+        "S34 browser-matrix (journeys spec)"
+      ],
       "automated": [
         {
           "kind": "vitest",
@@ -534,6 +541,11 @@
           "kind": "vitest",
           "file": "apps/user-runtime/src/modules/approvals/approvals.service.test.ts",
           "covers": "E3 reminders: durable rows scanned on the injected clock across all five reminder slots, none after 24h"
+        },
+        {
+          "kind": "browser-matrix",
+          "file": "tests/acceptance/browser/journeys.spec.ts",
+          "covers": "the approval card/modal journey leg in real §18 browsers (the five verbatim choices decide from the real shipped card + decision modal); the same spec walks the login entry, chat send, artifact visibility, settings and provider-failure journeys"
         }
       ],
       "manual": [
@@ -807,9 +819,9 @@
       "manual": [
         {
           "ranBy": "agent",
-          "when": "2026-11-08",
-          "what": "S34 browser-matrix run of the layout + keyboard/axe specs on the obtainable projects, JSON+markdown report archived under tests/acceptance/evidence/",
-          "result": "See the dated acceptance report for the per-project outcome; only obtainable browser projects count",
+          "when": "2026-11-10",
+          "what": "S34 browser-matrix run of the journeys + layout + keyboard/axe specs on every obtainable §18 project (chromium, chrome, firefox, webkit — 88/88), JSON+markdown report archived under tests/acceptance/evidence/",
+          "result": "All four obtainable projects green. The run found three serious axe defects red-first (color-contrast on the shipped default Button rest state, label-content-name-mismatch on the Wordmark) — all three fixed, not waived; one moderate heading-order finding recorded on providers-settings (a harness-scope artifact: the real page renders the preceding h2)",
           "evidenceLocation": "tests/acceptance/evidence/"
         },
         {

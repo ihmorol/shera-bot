@@ -17,6 +17,12 @@
   /* Brand + accents */
   --color-brand: #3b82f6;
   --color-brand-deep: #2563eb;
+  /* Pressed/active brand step. Added by S34's browser-matrix QA: white text
+   * on --color-brand (3.42:1) — the shipped default Button's rest state —
+   * failed axe color-contrast (serious) on the login sign-in and approval
+   * review buttons; the default Button therefore rests on --color-brand-deep
+   * (5.16:1) and presses into this deeper step (6.7:1). UI_DESIGN §2.1. */
+  --color-brand-deepest: #1d4ed8;
   --color-sky: #7dd3fc;
   --color-cool-highlight: #dcebff;
 

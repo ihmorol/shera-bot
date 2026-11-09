@@ -230,6 +230,107 @@ describe("S27 ST-04 — cancellation terminates the whole process tree (D27/D14)
     }
     reapMarkerPids(marker); // defense in depth for the suite's own hygiene
   }, 60_000);
+
+  it("a concurrent execution's tree is UNTOUCHED by another execution's cancel — the sweep scopes by namespace IDENTITY, not a shared map string (F1, PR #86 review)", async () => {
+    // The hostile shape the review identified: EVERY networkDisabled
+    // execution runs `unshare --user --map-root-user`, so EVERY execution's
+    // leader carries the IDENTICAL uid_map string ("0 1000 1") in a DISTINCT
+    // namespace. A sweep that scopes by the map STRING collects a concurrent
+    // execution's leader (new in A's spawn-window, its own session leader,
+    // map-string-equal) and SIGKILLs execution B's legitimate running tree
+    // when A is cancelled. The identity must be the namespace ITSELF
+    // (/proc/<pid>/ns/user — the inode), which differs per unshare.
+    const workA = mkdtempSync(join(tmpdir(), "shera-s27-st04-f1-a-"));
+    const workB = mkdtempSync(join(tmpdir(), "shera-s27-st04-f1-b-"));
+    tempDirs.push(workA, workB);
+    const markerA = join(workA, "children.pids");
+    const markerB = join(workB, "children.pids");
+    writeFileSync(markerA, "", "utf8");
+    writeFileSync(markerB, "", "utf8");
+
+    const forkAndIdle = (marker: string, idleMs: number): string =>
+      [
+        `const { spawn } = require("node:child_process");`,
+        `const fs = require("node:fs");`,
+        `for (let i = 0; i < 2; i++) {`,
+        `  const c = spawn(process.execPath, ["-e",`,
+        `    'const fs=require("node:fs");' +`,
+        `    'fs.appendFileSync(${JSON.stringify(marker)}, String(process.pid) + "\\\\n");' +`,
+        `    'const t=Date.now(); while(Date.now()-t<40000){}'`,
+        `  ], { stdio: "ignore" });`,
+        `  c.on("error", () => {});`,
+        `}`,
+        `setTimeout(() => process.exit(0), ${idleMs});`,
+      ].join("\n");
+
+    const makeRequest = (work: string, marker: string): SandboxSpawnRequest => ({
+      command: [process.execPath, "-e", forkAndIdle(marker, 30_000)],
+      cwd: work,
+      env: { PATH: "/usr/local/bin:/usr/bin:/bin", HOME: work },
+      networkDisabled: true,
+      limits: {
+        memoryBytes: 2 * 1024 * 1024 * 1024,
+        cpuSeconds: 50,
+        maxProcesses: 64,
+        diskBytes: 64 * 1024 * 1024,
+      },
+      wallClockMs: null,
+    });
+
+    // A first, then B — B's leader is new in A's spawn-window BY CONSTRUCTION.
+    const handleA = spawnSandboxedExecution(makeRequest(workA, markerA), {});
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    const handleB = spawnSandboxedExecution(makeRequest(workB, markerB), {});
+    await new Promise((resolve) => setTimeout(resolve, 1_100));
+
+    const childrenA = readFileSync(markerA, "utf8")
+      .split("\n")
+      .map((line) => Number(line.trim()))
+      .filter((pid) => Number.isInteger(pid) && pid > 0);
+    const childrenB = readFileSync(markerB, "utf8")
+      .split("\n")
+      .map((line) => Number(line.trim()))
+      .filter((pid) => Number.isInteger(pid) && pid > 0);
+    expect(childrenA.length, "execution A must have forked its children").toBeGreaterThanOrEqual(2);
+    expect(childrenB.length, "execution B must have forked its children").toBeGreaterThanOrEqual(2);
+    for (const pid of [...childrenA, ...childrenB, handleB.pid]) {
+      expect(processAlive(pid), `pid ${pid} must be alive BEFORE A's cancel`).toBe(true);
+    }
+
+    handleA.cancel(); // A's termination seam — B is a CONCURRENT execution
+    const exitA = await handleA.waitForExit();
+    expect(exitA.cancelled).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 700));
+
+    // A's tree is dead (the control holding), and B's tree is UNTOUCHED —
+    // the red here is B: today the map-string sweep collects B's leader.
+    for (const pid of childrenA) {
+      expect(processAlive(pid), `A's descendant ${pid} must be dead after A's cancel`).toBe(false);
+    }
+    expect(
+      processAlive(handleB.pid),
+      "execution B's LEADER must SURVIVE another execution's cancel — the sweep must scope by namespace identity, not the shared map string (F1)",
+    ).toBe(true);
+    for (const pid of childrenB) {
+      expect(
+        processAlive(pid),
+        `execution B's descendant ${pid} must SURVIVE another execution's cancel (F1)`,
+      ).toBe(true);
+    }
+
+    // Cleanup: cancel B too; its own tree dies by its own seam.
+    handleB.cancel();
+    const exitB = await handleB.waitForExit();
+    expect(exitB.cancelled).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    for (const pid of childrenB) {
+      expect(processAlive(pid), `B's descendant ${pid} must be dead after B's own cancel`).toBe(
+        false,
+      );
+    }
+    reapMarkerPids(markerA);
+    reapMarkerPids(markerB);
+  }, 60_000);
 });
 
 afterAll(() => {

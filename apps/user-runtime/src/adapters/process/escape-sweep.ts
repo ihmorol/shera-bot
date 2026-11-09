@@ -18,16 +18,22 @@
  *   2. THE SWEEP AT CANCEL — walk /proc and collect processes that are
  *      (a) NEW in the window, (b) their OWN session leader (sid === pid —
  *      the setsid shape; a session is only created by setsid(2)), and
- *      (c) inside the execution's OWN user namespace (/proc/<pid>/uid_map
- *      equals the leader's PRIVATE map — "0 <uid> 1" under the D27
- *      `unshare --user` envelope). Condition (c) is what makes the sweep
- *      safe next to concurrent executions and test workers: processes
- *      outside the namespace carry the HOST map ("0 0 4294967295") and are
- *      never collected. When the leader has no private map (no unshare —
- *      the D27 fail-closed posture refuses such spawns anyway when
- *      networkDisabled), the sweep is skipped entirely: without the
- *      namespace boundary the sweep cannot scope itself, and a control that
- *      cannot scope itself does not run (G5 — recorded, never approximated).
+ *      (c) inside the execution's OWN user NAMESPACE — /proc/<pid>/ns/user
+ *      (the namespace INODE via readlink(2)), equal to the leader's. The
+ *      identity is the NAMESPACE ITSELF, never the uid_map STRING: every
+ *      `unshare --user --map-root-user` execution produces the identical
+ *      map text ("0 1000 1") in a DISTINCT namespace, and a map-string
+ *      compare let one execution's cancel SIGKILL a concurrent execution's
+ *      legitimate running tree (live-reproduced red:
+ *      tests/security-evidence/2026-11-10-f1-ns-identity-red.txt — fixed in
+ *      the same slice, PR #86 review F1). Condition (c) is what makes the
+ *      sweep safe next to concurrent executions and test workers: processes
+ *      outside the namespace carry a different ns/user inode and are never
+ *      collected. When the leader has no private namespace (its ns/user
+ *      equals the runtime's own — no unshare envelope), the sweep is skipped
+ *      entirely: without the namespace boundary the sweep cannot scope
+ *      itself, and a control that cannot scope itself does not run (G5 —
+ *      recorded, never approximated).
  *
  *   3. VERIFIED KILL — every collected pid is SIGKILLed only after its
  *      /proc starttime still matches the collection-time sample (a pid
@@ -50,7 +56,7 @@
  *
  * Governing records: D27, D14, E36, E45 (S27-GAP-1), E48, G3/G5.
  */
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, readlinkSync } from "node:fs";
 
 /** One /proc/<pid>/stat sample: the fields the sweep and the walk need. */
 export interface ProcSample {
@@ -86,19 +92,17 @@ function readStat(pid: number): string {
   return readFileSync(`/proc/${pid}/stat`, "utf8");
 }
 
-/** The host user-namespace map (a process NOT inside a private namespace). */
-export const HOST_UID_MAP = "0 0 4294967295";
-
 /**
- * First line of /proc/<pid>/uid_map, whitespace-normalized — the user
- * namespace the process runs in. null when unreadable (gone, or a kernel
- * without the file).
+ * The process's user-NAMESPACE identity: readlink(2) of
+ * /proc/<pid>/ns/user — "user:[<inode>]". Two processes share a user
+ * namespace iff the strings are equal; the inode is unique per namespace,
+ * so every `unshare --user` execution gets its OWN identity even though
+ * every map STRING looks alike (the F1 finding). null when unreadable
+ * (the process is gone, or a kernel without namespace links).
  */
-export function readUidMap(pid: number): string | null {
+export function readNsUser(pid: number): string | null {
   try {
-    const text = readFileSync(`/proc/${pid}/uid_map`, "utf8");
-    const first = text.split("\n")[0]?.trim();
-    return first === undefined || first === "" ? null : first.replace(/\s+/g, " ");
+    return readlinkSync(`/proc/${pid}/ns/user`);
   } catch {
     return null;
   }
@@ -170,12 +174,15 @@ export function collectGroupDescendants(rootPid: number): ProcSample[] {
 export function collectEscapeCandidates(
   leaderPid: number,
   spawnSnapshot: Map<number, string>,
-  leaderUidMap: string | null,
+  leaderNsIdentity: string | null,
+  runtimeNsIdentity: string | null,
 ): ProcSample[] {
-  // No private namespace on the leader — the sweep cannot scope itself and
-  // does not run (recorded honest degradation, G5; the D27 envelope makes
-  // this the networkDisabled norm, where the map is "0 <uid> 1").
-  if (leaderUidMap === null || leaderUidMap === HOST_UID_MAP) return [];
+  // No PRIVATE namespace on the leader (its ns/user equals the runtime's
+  // own, or either identity is unreadable) — the sweep cannot scope itself
+  // and does not run (recorded honest degradation, G5; the D27 envelope
+  // makes the private namespace the networkDisabled norm).
+  if (runtimeNsIdentity === null) return [];
+  if (leaderNsIdentity === null || leaderNsIdentity === runtimeNsIdentity) return [];
   const candidates: ProcSample[] = [];
   for (const sample of scanProcTable()) {
     if (sample.pid === leaderPid) continue;
@@ -185,8 +192,9 @@ export function collectEscapeCandidates(
     // The setsid shape: the process is its OWN session leader (a session is
     // only ever created by setsid(2)).
     if (sample.session !== sample.pid) continue;
-    // And it still runs inside THIS execution's user namespace.
-    if (readUidMap(sample.pid) !== leaderUidMap) continue;
+    // And it still runs inside THIS execution's user namespace — the
+    // NAMESPACE identity (ns/user inode), never a map string (F1).
+    if (readNsUser(sample.pid) !== leaderNsIdentity) continue;
     candidates.push(sample);
   }
   return candidates;

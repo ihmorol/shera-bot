@@ -1,0 +1,28 @@
+# F1 (PR #86 review, P1) GREEN evidence — the sweep scopes by NAMESPACE identity (2026-11-10)
+#
+# The fix under test: escape-sweep.ts's condition (c) is now /proc/<pid>/ns/user
+# (readlink(2) — the namespace INODE), compared against the leader's identity;
+# the uid_map STRING compare is gone. Every `unshare --user --map-root-user`
+# execution produces the identical map text in a DISTINCT namespace — the map
+# string could never scope an execution. The "no private namespace" case is
+# now "the leader's ns/user equals the RUNTIME's own ns/user" (no unshare
+# envelope ran) — the same honest degradation, correctly grounded.
+#
+# Command: pnpm vitest run tests/security/s27-st04-process-tree-escape.test.ts
+# Observed: 3/3 — the group-kill leg, the setsid sweep leg, AND the new
+# concurrent-execution leg: A cancelled → A's tree dead, B's leader AND B's
+# children UNTOUCHED, then B's own cancel kills B's tree.
+# Neighbors: adapters/process + modules/execution + ST-05 = 47/47.
+
+
+ ✓ tests/security/s27-st04-process-tree-escape.test.ts (3 tests) 8162ms
+   ✓ S27 ST-04 — cancellation terminates the whole process tree (D27/D14) (3)
+     ✓ a forking payload's group descendants are ALL dead after cancel() — walked on the live process list 2119ms
+     ✓ a setsid grandchild that sheds the group AND session is ALSO dead after cancel() — the S27-GAP-1 escape sweep (issue #83) 2301ms
+     ✓ a concurrent execution's tree is UNTOUCHED by another execution's cancel — the sweep scopes by namespace IDENTITY, not a shared map string (F1, PR #86 review) 3735ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  04:50:51
+   Duration  8.72s (tests 97%, transform 2%, import 1%)
+

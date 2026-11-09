@@ -65,9 +65,8 @@ import { join } from "node:path";
 import {
   collectEscapeCandidates,
   collectGroupDescendants,
-  HOST_UID_MAP,
   killVerified,
-  readUidMap,
+  readNsUser,
   snapshotProcStarttimes,
   type ProcSample,
 } from "./escape-sweep.ts";
@@ -439,26 +438,33 @@ export function spawnSandboxedExecution(
 
   const pid = child?.pid ?? 0;
 
-  // The sweep's second anchor: the leader's user-namespace map — what scopes
-  // the sweep to THIS execution. A private map ("0 <uid> 1" under the D27
-  // unshare envelope) names the namespace every payload descendant lives in;
-  // the HOST map means no namespace exists and the sweep does not run (a
-  // control that cannot scope itself does not run — G5, the recorded honest
-  // degradation; the D27 networkDisabled posture makes the private map the
-  // production norm). Read LAZILY at sweep time, cached once private: at
-  // spawn-return the fork may still be pre-exec (the host map — probed live),
-  // and the map only exists after unshare(2) has run.
-  let leaderUidMap: string | null = null;
-  const leaderSweepMap = (): string | null => {
-    if (leaderUidMap !== null) return leaderUidMap;
+  // The sweep's second anchor: the leader's user-NAMESPACE identity (the
+  // ns/user inode via readlink(2)) — what scopes the sweep to THIS
+  // execution. The identity is the NAMESPACE ITSELF, never the uid_map
+  // STRING: every `unshare --user --map-root-user` execution produces the
+  // identical map text in a DISTINCT namespace, and a map-string compare let
+  // one execution's cancel kill a concurrent execution's tree (the F1 red,
+  // tests/security-evidence/2026-11-10-f1-ns-identity-red.txt). A leader whose
+  // ns/user equals the RUNTIME's own has no private envelope and the sweep
+  // does not run (a control that cannot scope itself does not run — G5, the
+  // recorded honest degradation; the D27 networkDisabled posture makes the
+  // private namespace the production norm). Read LAZILY at sweep time,
+  // cached once private: at spawn-return the fork may still be pre-exec, and
+  // the namespace only exists after unshare(2) has run.
+  const runtimeNsIdentity = readNsUser(process.pid);
+  let leaderNsIdentity: string | null = null;
+  const leaderSweepIdentity = (): string | null => {
+    if (leaderNsIdentity !== null) return leaderNsIdentity;
     if (child === null || child.pid === undefined) return null;
-    const map = readUidMap(child.pid);
-    if (map !== null && map !== HOST_UID_MAP) leaderUidMap = map;
-    return map;
+    const identity = readNsUser(child.pid);
+    if (identity !== null && runtimeNsIdentity !== null && identity !== runtimeNsIdentity) {
+      leaderNsIdentity = identity;
+    }
+    return identity;
   };
   const sweepEnabled = (): boolean => {
-    const map = leaderSweepMap();
-    return map !== null && map !== HOST_UID_MAP;
+    const identity = leaderSweepIdentity();
+    return identity !== null && runtimeNsIdentity !== null && identity !== runtimeNsIdentity;
   };
 
   /**
@@ -476,7 +482,7 @@ export function spawnSandboxedExecution(
       (sample) => sample.pid !== leaderPid,
     );
     const escaped = sweepEnabled()
-      ? collectEscapeCandidates(leaderPid, spawnSnapshot, leaderSweepMap())
+      ? collectEscapeCandidates(leaderPid, spawnSnapshot, leaderSweepIdentity(), runtimeNsIdentity)
       : [];
     killGroup();
     killVerified([...chained, ...escaped]);
@@ -566,7 +572,7 @@ export function spawnSandboxedExecution(
   const sweepOnly = (): void => {
     if (child === null || child.pid === undefined) return;
     const escaped = sweepEnabled()
-      ? collectEscapeCandidates(child.pid, spawnSnapshot, leaderSweepMap())
+      ? collectEscapeCandidates(child.pid, spawnSnapshot, leaderSweepIdentity(), runtimeNsIdentity)
       : [];
     killVerified(escaped);
   };

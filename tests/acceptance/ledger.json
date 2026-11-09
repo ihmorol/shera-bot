@@ -846,40 +846,30 @@
       "criterion": "No critical cross-user isolation or credential-leak failure is observed.",
       "slices": ["S27", "S18", "S23"],
       "records": [
-        "s27-security-suite (UNMERGED branch — G5 surfaced, not silently resolved)",
+        "s27-security-suite (merged to main via PR #82, da3019b — the PENDING_MERGE pin recorded in the 2026-11-08 ledger state is resolved by the merge, not silently)",
         "E31",
         "E34",
+        "E45",
         "E9",
         "PR #38",
+        "PR #82",
         "TRACEABILITY"
       ],
       "automated": [
         {
           "kind": "vitest",
           "file": "tests/security/s27-st01-path-traversal.test.ts",
-          "covers": "ST-01 path traversal + symlink escape (D27): hostile URIs and planted symlinks refused with outside-scope sentinels",
-          "requires": {
-            "branch": "s27-security-suite",
-            "head": "4af4704190d07591000c512d8815ad7f7b6811fe"
-          }
+          "covers": "ST-01 path traversal + symlink escape (D27): hostile URIs and planted symlinks refused with outside-scope sentinels"
         },
         {
           "kind": "vitest",
           "file": "tests/security/s27-st02-workspace-boundary.test.ts",
-          "covers": "ST-02 workspace boundary escape (D39/E12): cross-Agent private-folder access refused (PRIVATE_SCOPE_DENIED)",
-          "requires": {
-            "branch": "s27-security-suite",
-            "head": "4af4704190d07591000c512d8815ad7f7b6811fe"
-          }
+          "covers": "ST-02 workspace boundary escape (D39/E12): cross-Agent private-folder access refused (PRIVATE_SCOPE_DENIED)"
         },
         {
           "kind": "vitest",
           "file": "tests/security/s27-st07-credential-leakage.test.ts",
-          "covers": "ST-07 credential leakage (D14/D22 redaction boundary): rows, journal, capture and whole-database byte scans carry [REDACTED], never raw values",
-          "requires": {
-            "branch": "s27-security-suite",
-            "head": "4af4704190d07591000c512d8815ad7f7b6811fe"
-          }
+          "covers": "ST-07 credential leakage (D14/D22 redaction boundary): rows, journal, capture and whole-database byte scans carry [REDACTED], never raw values"
         },
         {
           "kind": "vitest",
@@ -902,8 +892,8 @@
           "ranBy": "agent",
           "when": "2026-11-05",
           "what": "The S27 adversarial rounds: red/green outputs committed per family (ST-01/02, ST-03/04/06, ST-07/08/09)",
-          "result": "Red-first executed and archived on the s27-security-suite branch; the branch is NOT merged into main (G5 surfaced)",
-          "evidenceLocation": "tests/security-evidence/ (on s27-security-suite)"
+          "result": "Red-first executed and archived on the s27-security-suite branch; the branch merged to main (PR #82, da3019b) and the suites now run in this tree as ordinary ledger rows",
+          "evidenceLocation": "tests/security-evidence/ (on main since da3019b)"
         },
         {
           "ranBy": "pending-owner",
@@ -915,7 +905,7 @@
       ],
       "ownerVerdict": "open",
       "gaps": [
-        "s27-security-suite (head 4af4704190d07591000c512d8815ad7f7b6811fe) carries the adversarial suites and is NOT merged into main — the runner records these rows as PENDING_MERGE until it lands (G5: surfaced, never silently resolved)",
+        "History kept honestly: until 2026-11-10 these rows were PENDING_MERGE pinned to the unmerged s27-security-suite branch (head 4af4704) — the runner held the full-ledger run red, exactly per G5; the PR #82 merge (da3019b) resolves the pin and the suites run in-tree",
         "The s27 THREAT-COVERAGE matrix maps ST-05/ST-10..ST-14 to pinned-elsewhere suites and documented procedures per its own record; cross-ACCOUNT (five-tenant) isolation beyond the account-bound runtime evidence of E23 has not had a dedicated two-tenant adversarial run",
         "No real credential-leak bounty-style audit exists; 'no critical failure observed' is bounded by what the recorded suites and reviews cover"
       ]

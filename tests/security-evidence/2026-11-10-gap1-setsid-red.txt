@@ -1,0 +1,50 @@
+# S27-GAP-1 / issue #83 RED evidence — the setsid leg, pre-fix (2026-11-10)
+#
+# The DETACHED leg (a session-escaped setsid grandchild) was added to this suite
+# BEFORE the S35 escape-sweep fix existed. Observed on the unfixed tree: the
+# grandchild SURVIVES cancellation — alive on the live process list after the
+# typed cancellation returned, exactly the recorded S27-GAP-1 behavior (the
+# group kill reaches only the leader's process group; a setsid'd descendant in
+# its own session is outside it).
+#
+# Command: pnpm vitest run tests/security/s27-st04-process-tree-escape.test.ts
+# (the pre-existing group-kill leg stays GREEN — this run's failure is the new
+# detached leg only, the reproducer of the recorded gap).
+# The fix (the uid_map-anchored escape sweep at cancel) lands in the next commit;
+# its green run is archived beside this file.
+
+
+ RUN  v5.0.1 /home/emon-morol/projects/github-cloud-projects/shera-bot-s35
+
+ ❯ tests/security/s27-st04-process-tree-escape.test.ts (2 tests | 1 failed) 4263ms
+   ❯ S27 ST-04 — cancellation terminates the whole process tree (D27/D14) (2)
+     ✓ a forking payload's group descendants are ALL dead after cancel() — walked on the live process list 1982ms
+     × a setsid grandchild that sheds the group AND session is ALSO dead after cancel() — the S27-GAP-1 escape sweep (issue #83) 2274ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/security/s27-st04-process-tree-escape.test.ts > S27 ST-04 — cancellation terminates the whole process tree (D27/D14) > a setsid grandchild that sheds the group AND session is ALSO dead after cancel() — the S27-GAP-1 escape sweep (issue #83)
+AssertionError: session-escaped grandchild 201397 SURVIVED cancellation — the S27-GAP-1 escape sweep failed (issue #83): expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ tests/security/s27-st04-process-tree-escape.test.ts:229:9
+    227|         processAlive(pid),
+    228|         `session-escaped grandchild ${pid} SURVIVED cancellation — the…
+    229|       ).toBe(false);
+       |         ^
+    230|     }
+    231|     reapMarkerPids(marker); // defense in depth for the suite's own hy…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+   Start at  02:52:29
+   Duration  4.63s (tests 97%, transform 2%, import 1%)
+

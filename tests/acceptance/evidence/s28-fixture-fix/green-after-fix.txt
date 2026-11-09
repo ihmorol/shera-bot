@@ -1,0 +1,16 @@
+
+ RUN  v5.0.1 /home/emon-morol/projects/github-cloud-projects/shera-bot-s34
+
+ ✓ apps/user-runtime/src/transport/local-api/s28-autonomous-proof.test.ts (2 tests) 1176ms
+   ✓ AC12: one autonomous scheduled task completes with no user action (2)
+     ✓ fires end to end: model call, tool use, and artifact — with zero user input 879ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  00:07:28
+   Duration  10.40s (transform 52%, import 36%, tests 12%)
+
+  Transform  transforming modules took 5.18s · 52% of tracked time, re-done on every run
+             persist transforms across runs with fsModuleCache: true
+             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns
+

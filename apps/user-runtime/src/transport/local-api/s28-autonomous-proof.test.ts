@@ -35,6 +35,15 @@ const WS = DEFAULT_WORKSPACE_ID;
 const FIXTURE_KEY = "sk-fixture-0123456789abcdefSECRET";
 const USER = { type: "user", id: "emon" };
 
+// The runtime's clock is PINNED at the occurrence instant the test fires
+// (the dueAt below). The scheduler computes the next occurrence strictly
+// after max(now, dueAt) — without a pinned clock that max falls back to the
+// wall clock and the next-Monday expectation drifts past every real date
+// (observed 2026-11-09 → 2026-11-16). Pinning at the dueAt also makes the
+// trigger's bookkeeping truthful: last_fired_at/updated_at record exactly
+// when the test's firing happened in the runtime's own time.
+const NOW = "2026-11-02T09:00:00.000Z";
+
 // The LOCAL fake OpenAI-compatible endpoint (the S23 fixture pattern): it
 // answers ONE fixed completion for the right key and counts every request —
 // the model-call leg's proof is the counter, not a mock.
@@ -101,6 +110,7 @@ async function composeProof(): Promise<ProofRuntime> {
     dbPath,
     packsRoot: PACKS_ROOT,
     providerEnforcement: true,
+    now: () => NOW,
   });
   trackConnection(runtime);
   await new Promise<void>((resolveListen) =>

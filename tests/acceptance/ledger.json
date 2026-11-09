@@ -552,7 +552,7 @@
           "testNames": [
             "approvals service: a gated typed proposal pauses the run (S20 chunk 1) schedules all five reminder rows immediately on the injected clock (E3)",
             "approvals service: reminder firing on the fake clock (S20 chunk 3, E3) fires exactly five deliveries at 0/15m/45m/3h/24h — and NOTHING after 24h",
-            "approvals service: reminder firing on the fake clock (S20 chunk 3, E3) delivers nothing early — a slot not yet due stays undelivered (RED-PIN wrong-name)"
+            "approvals service: reminder firing on the fake clock (S20 chunk 3, E3) delivers nothing early — a slot not yet due stays undelivered"
           ]
         },
         {

@@ -366,7 +366,11 @@ function runBrowserMatrix(
     },
   });
   let parsed: {
-    stats?: { total?: number; passed?: number; failed?: number; skipped?: number };
+    // Playwright's JSON stats carry NO total/passed/failed — the real shape is
+    // expected/unexpected/flaky/skipped (+ startTime/duration). The pre-fix
+    // read of `stats.total` was always undefined, which is part of why the
+    // exit-0-with-zero-tests case could never be distinguished (E47 review F1d).
+    stats?: { expected?: number; unexpected?: number; flaky?: number; skipped?: number };
     suites?: Array<Record<string, unknown>>;
     errors?: string[];
   } = {};
@@ -462,8 +466,15 @@ function runBrowserMatrix(
   // reporting) OR an exit-0 run with zero tests (the pre-fix guard fired
   // only on non-zero exit, so exit-0-with-no-results looked green). A
   // non-zero exit WITH results is a legitimate red (the failures make the
-  // rows red; observed passes are real evidence and stay).
-  if ((parsed.stats?.total ?? 0) === 0) {
+  // rows red; observed passes are real evidence and stay). Total observed
+  // tests = expected + unexpected + flaky + skipped (Playwright's real stats
+  // shape — there is no `total` field).
+  const observedTests =
+    (parsed.stats?.expected ?? 0) +
+    (parsed.stats?.unexpected ?? 0) +
+    (parsed.stats?.flaky ?? 0) +
+    (parsed.stats?.skipped ?? 0);
+  if (observedTests === 0) {
     const note = `playwright ${
       spawn.status !== 0
         ? `exit ${spawn.status} with zero parsed results`

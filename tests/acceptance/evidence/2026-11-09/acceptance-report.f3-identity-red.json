@@ -1,0 +1,1044 @@
+{
+  "tool": "shera-bot acceptance runner (S34)",
+  "schemaVersion": 1,
+  "generatedAt": "2026-11-09T19:52:14.965Z",
+  "ledger": {
+    "version": 1,
+    "rows": 27
+  },
+  "browserProjects": [
+    {
+      "project": "chromium",
+      "available": true,
+      "detail": "binary present"
+    },
+    {
+      "project": "firefox",
+      "available": true,
+      "detail": "binary present"
+    },
+    {
+      "project": "webkit",
+      "available": true,
+      "detail": "binary present"
+    },
+    {
+      "project": "chrome",
+      "available": true,
+      "detail": "binary present"
+    }
+  ],
+  "summary": {
+    "rows": 27,
+    "pass": 25,
+    "partial": 0,
+    "fail": 2,
+    "missing": 0,
+    "pendingMerge": 0,
+    "notVerified": 0
+  },
+  "rows": [
+    {
+      "id": "AC1",
+      "ownerVerdict": "open",
+      "state": "pass",
+      "automated": [
+        {
+          "file": "apps/control-plane/test/auth-flow.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 7,
+          "testsFailed": 0,
+          "durationMs": 1463
+        },
+        {
+          "file": "apps/control-plane/test/signup-cap.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 3,
+          "testsFailed": 0,
+          "durationMs": 465
+        },
+        {
+          "file": "apps/web/test/login.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 2,
+          "testsFailed": 0,
+          "durationMs": 146
+        }
+      ],
+      "gaps": [
+        "Real Google OAuth has never been exercised end to end — the automated legs run the OAuth app shell with the provider link asserted, and E23's browser evidence used a seeded session",
+        "The five-account cap has been proven at the control-plane API layer only; the owner's personal sixth-signup attempt is still pending"
+      ]
+    },
+    {
+      "id": "AC2",
+      "ownerVerdict": "open",
+      "state": "pass",
+      "automated": [
+        {
+          "file": "apps/control-plane/test/runtime-provisioning.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 16,
+          "testsFailed": 0,
+          "durationMs": 1094
+        },
+        {
+          "file": "tests/integration/runtime-provisioning.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 6,
+          "testsFailed": 0,
+          "durationMs": 912
+        },
+        {
+          "file": "apps/control-plane/test/runtime-container-spec.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 9,
+          "testsFailed": 0,
+          "durationMs": 29
+        },
+        {
+          "file": "apps/control-plane/test/local-container-backend.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 4,
+          "testsFailed": 0,
+          "durationMs": 40
+        }
+      ],
+      "gaps": [
+        "Docker is NOT-VERIFIED in this environment (no daemon): every verified leg runs through the Docker-independent local container backend, which is the recorded S06 seam",
+        "Real cloud/VM container provisioning is a Stage-7 deployment concern (S35) and stays open"
+      ]
+    },
+    {
+      "id": "AC3",
+      "ownerVerdict": "open",
+      "state": "pass",
+      "automated": [
+        {
+          "file": "apps/user-runtime/src/transport/local-api/s11-agents-api.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 9,
+          "testsFailed": 0,
+          "durationMs": 3728
+        },
+        {
+          "file": "apps/web/test/agent-surfaces.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 32,
+          "testsFailed": 0,
+          "durationMs": 805
+        }
+      ],
+      "gaps": [
+        "The six-Agent roster is proven against the pinned pack fixture in tests and by captures; the owner's personal roster walk is pending"
+      ]
+    },
+    {
+      "id": "AC4",
+      "ownerVerdict": "open",
+      "state": "pass",
+      "automated": [
+        {
+          "file": "apps/user-runtime/src/transport/local-api/s11-agent-folder-api.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 6,
+          "testsFailed": 0,
+          "durationMs": 2467
+        },
+        {
+          "file": "apps/user-runtime/src/modules/sessions/session-supervisor.service.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 13,
+          "testsFailed": 0,
+          "durationMs": 12347
+        },
+        {
+          "file": "apps/user-runtime/src/modules/agents/agent-folders.service.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 12,
+          "testsFailed": 0,
+          "durationMs": 4318
+        }
+      ],
+      "gaps": [
+        "The real Pi binary is NOT-VERIFIED: every supervised-session leg runs against the fake Pi double (the D14 JSONL protocol is the exercised seam)",
+        "Hermes stays contract-defined only (D51): owner-supplied upstream source/license evidence is a recorded prerequisite before any Hermes code path (PRD §22 item 24); Pi is the only exercised harness value"
+      ]
+    },
+    {
+      "id": "AC5",
+      "ownerVerdict": "open",
+      "state": "pass",
+      "automated": [
+        {
+          "file": "apps/user-runtime/src/transport/local-api/s14-adhoc-api.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 9,
+          "testsFailed": 0,
+          "durationMs": 3640
+        },
+        {
+          "file": "apps/web/test/adhoc-operation.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 31,
+          "testsFailed": 0,
+          "durationMs": 404
+        }
+      ],
+      "gaps": [
+        "Roster membership in the captures ran against the seeded pack; a custom cross-Pack roster refusal path is covered by typed tests, not by a personal owner run"
+      ]
+    },
+    {
+      "id": "AC6",
+      "ownerVerdict": "open",
+      "state": "pass",
+      "automated": [
+        {
+          "file": "apps/user-runtime/src/transport/local-api/s15-preview-api.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 11,
+          "testsFailed": 0,
+          "durationMs": 4585
+        },
+        {
+          "file": "apps/web/test/launch-preview.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 41,
+          "testsFailed": 0,
+          "durationMs": 782
+        },
+        {
+          "file": "apps/user-runtime/src/modules/operations/operations.service.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 26,
+          "testsFailed": 0,
+          "durationMs": 8468
+        }
+      ],
+      "gaps": [
+        "Real run execution behind the preview confirm is the runtime gateway's legs (task/worker suites), not a browser-observed real model run; real pricing is S23's recorded posture (estimated credits come from the D20 RANGE)",
+        "The delegation leg is proven by typed tests over the journal; the owner has not watched a live delegation"
+      ]
+    },
+    {
+      "id": "AC7",
+      "ownerVerdict": "open",
+      "state": "pass",
+      "automated": [
+        {
+          "file": "apps/user-runtime/src/transport/local-api/s18-live-views-api.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 15,
+          "testsFailed": 0,
+          "durationMs": 7979
+        },
+        {
+          "file": "apps/web/test/live-views.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 18,
+          "testsFailed": 0,
+          "durationMs": 146
+        },
+        {
+          "file": "apps/web/test/runtime-live.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 20,
+          "testsFailed": 0,
+          "durationMs": 77
+        },
+        {
+          "file": "apps/web/test/e2e/mock-runtime-e2e.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 1,
+          "testsFailed": 0,
+          "durationMs": 2243
+        }
+      ],
+      "gaps": [
+        "WebSocket fanout for run-lifecycle and tool states is the recorded deferral — the panels poll on the 5s visible-tab cadence (E30/E33); the browser-matrix leg exercises the surfaces, not a live fanout",
+        "Approval-event visibility is proven at the component/API layers; the owner has not observed a real in-browser approval arrive during a live run"
+      ]
+    },
+    {
+      "id": "AC8",
+      "ownerVerdict": "open",
+      "state": "pass",
+      "automated": [
+        {
+          "file": "apps/user-runtime/src/modules/tools/tool-executor.service.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 14,
+          "testsFailed": 0,
+          "durationMs": 3422
+        },
+        {
+          "file": "apps/user-runtime/src/modules/research/s25-research-tools.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 5,
+          "testsFailed": 0,
+          "durationMs": 1089
+        },
+        {
+          "file": "apps/user-runtime/src/transport/local-api/s26-execution-api.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 3,
+          "testsFailed": 0,
+          "durationMs": 2011
+        }
+      ],
+      "gaps": [
+        "Live MCP-server wrapping stays scoped to the typed seam (E33 recorded; S25/S26 exercise the built-in families), and process-backed execution is covered by the S26 suites rather than real external services",
+        "The end-to-end leg runs on the mock/E8 runtime seams; a real provider-driven tool run is owner-run and opt-in (see AC10)"
+      ]
+    },
+    {
+      "id": "AC9",
+      "ownerVerdict": "open",
+      "state": "pass",
+      "automated": [
+        {
+          "file": "apps/user-runtime/src/transport/local-api/s21-tools-api.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 5,
+          "testsFailed": 0,
+          "durationMs": 2321
+        },
+        {
+          "file": "apps/user-runtime/src/modules/tools/tools-inventory.service.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 9,
+          "testsFailed": 0,
+          "durationMs": 2215
+        }
+      ],
+      "gaps": [
+        "Creation receipts are the typed already-exists refusal form (the full D23-rule-6 receipt shape is recorded as bounded, not silent)",
+        "A real agent-authored tool with live effects requires a real provider run — owner-run and opt-in"
+      ]
+    },
+    {
+      "id": "AC10",
+      "ownerVerdict": "open",
+      "state": "pass",
+      "automated": [
+        {
+          "file": "apps/user-runtime/src/modules/providers/provider-service.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 13,
+          "testsFailed": 0,
+          "durationMs": 3525
+        },
+        {
+          "file": "apps/user-runtime/src/modules/providers/connection-test.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 10,
+          "testsFailed": 0,
+          "durationMs": 255
+        },
+        {
+          "file": "apps/user-runtime/src/transport/local-api/s23-providers-api.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 6,
+          "testsFailed": 0,
+          "durationMs": 3013
+        }
+      ],
+      "gaps": [
+        "No real provider endpoint was ever called in the default runs: the live connection-test suite (apps/user-runtime/live/providers-live.test.ts) is OPT-IN ONLY behind the owner's env credentials (G7) and has not been run on record",
+        "Local providers (ollama-family) are contract-covered; a live local model has not been exercised on record"
+      ]
+    },
+    {
+      "id": "AC11",
+      "ownerVerdict": "open",
+      "state": "pass",
+      "automated": [
+        {
+          "file": "tests/contract/agent-settings-contract.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 7,
+          "testsFailed": 0,
+          "durationMs": 95
+        },
+        {
+          "file": "apps/user-runtime/src/modules/providers/provider-service.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 13,
+          "testsFailed": 0,
+          "durationMs": 3525
+        },
+        {
+          "file": "apps/user-runtime/src/transport/local-api/s23-providers-api.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 6,
+          "testsFailed": 0,
+          "durationMs": 3013
+        }
+      ],
+      "gaps": [
+        "Override behavior is proven by resolution tests and settings-command contracts; the owner has not personally exercised the override flow"
+      ]
+    },
+    {
+      "id": "AC12",
+      "ownerVerdict": "open",
+      "state": "pass",
+      "automated": [
+        {
+          "file": "apps/user-runtime/src/transport/local-api/s28-autonomous-proof.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 2,
+          "testsFailed": 0,
+          "durationMs": 1434
+        },
+        {
+          "file": "apps/user-runtime/src/modules/schedules/scheduler.service.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 8,
+          "testsFailed": 0,
+          "durationMs": 4026
+        },
+        {
+          "file": "apps/user-runtime/src/modules/schedules/scheduler-wake-manager.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 1,
+          "testsFailed": 0,
+          "durationMs": 1279
+        }
+      ],
+      "gaps": [
+        "The autonomous completion is proven against the mock/E8 runtime with the scripted harness; a real model-driven autonomous task is owner-run and opt-in"
+      ]
+    },
+    {
+      "id": "AC13",
+      "ownerVerdict": "open",
+      "state": "fail",
+      "automated": [
+        {
+          "file": "apps/user-runtime/src/modules/approvals/approvals.service.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "claimedTests": 6,
+          "verifiedTests": 6,
+          "testsPassed": 6,
+          "testsFailed": 0,
+          "durationMs": 12867
+        },
+        {
+          "file": "tests/contract/approval-contract.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 3,
+          "testsFailed": 0,
+          "durationMs": 11
+        },
+        {
+          "file": "apps/web/test/approvals-ui.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 34,
+          "testsFailed": 0,
+          "durationMs": 471
+        },
+        {
+          "file": "apps/user-runtime/src/modules/approvals/approvals.service.test.ts",
+          "kind": "vitest",
+          "status": "fail",
+          "claimedTests": 3,
+          "verifiedTests": 2,
+          "detail": "claimed test name(s) not found in the mapped file's results: \"approvals service: reminder firing on the fake clock (S20 chunk 3, E3) delivers nothing early — a slot not yet due stays undelivered (RED-PIN wrong-name)\" (F3 identity pin — G4)"
+        },
+        {
+          "file": "tests/acceptance/browser/journeys.spec.ts",
+          "kind": "browser-matrix",
+          "status": "fail",
+          "detail": "browser-matrix reported a failing project",
+          "browserProjects": {
+            "chromium": {
+              "status": "fail",
+              "detail": "playwright exited 0 but reported zero tests (dead-run guard): "
+            },
+            "firefox": {
+              "status": "fail",
+              "detail": "playwright exited 0 but reported zero tests (dead-run guard): "
+            },
+            "webkit": {
+              "status": "fail",
+              "detail": "playwright exited 0 but reported zero tests (dead-run guard): "
+            },
+            "chrome": {
+              "status": "fail",
+              "detail": "playwright exited 0 but reported zero tests (dead-run guard): "
+            }
+          },
+          "testsPassed": 24,
+          "testsFailed": 0
+        }
+      ],
+      "gaps": [
+        "The browser-matrix leg pins the approval card rendering; the reminder sequence's real-clock passage (waiting out the E3 slots) is the owner's personal observation",
+        "Real approval teeth depend on a real provider run executing the withheld effect — owner-run and opt-in"
+      ]
+    },
+    {
+      "id": "AC14",
+      "ownerVerdict": "open",
+      "state": "pass",
+      "automated": [
+        {
+          "file": "apps/user-runtime/src/modules/tasks/retry-policy.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 11,
+          "testsFailed": 0,
+          "durationMs": 22
+        },
+        {
+          "file": "apps/user-runtime/src/modules/tasks/retry-coordinator.service.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 8,
+          "testsFailed": 0,
+          "durationMs": 2748
+        }
+      ],
+      "gaps": [
+        "Retry behavior is proven by deterministic suites over the injected scheduler; the owner has not watched a live retry sequence against a real failing provider"
+      ]
+    },
+    {
+      "id": "AC15",
+      "ownerVerdict": "open",
+      "state": "pass",
+      "automated": [
+        {
+          "file": "apps/user-runtime/src/modules/tasks/run-cancellation.service.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 8,
+          "testsFailed": 0,
+          "durationMs": 2985
+        },
+        {
+          "file": "apps/user-runtime/src/modules/workers/worker-tree-cancellation.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 2,
+          "testsFailed": 0,
+          "durationMs": 1912
+        }
+      ],
+      "gaps": [
+        "The runs panel stop control is capture-covered at the component layer (S22 evidence); the owner's personal cancel of a live multi-run Operation is pending"
+      ]
+    },
+    {
+      "id": "AC16",
+      "ownerVerdict": "open",
+      "state": "pass",
+      "automated": [
+        {
+          "file": "apps/user-runtime/src/adapters/sqlite/workspace-files-repository.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 31,
+          "testsFailed": 0,
+          "durationMs": 10231
+        },
+        {
+          "file": "apps/user-runtime/src/modules/recovery/s31-restart-matrix.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 8,
+          "testsFailed": 0,
+          "durationMs": 7949
+        },
+        {
+          "file": "apps/user-runtime/src/modules/memory/memory.service.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 9,
+          "testsFailed": 0,
+          "durationMs": 2949
+        }
+      ],
+      "gaps": [
+        "Browser-state persistence across restart is exercised through the browser service seam; a real shared-Chromium-profile survival across a real restart has not been observed",
+        "The owner has not personally restarted a provisioned container to verify persistence"
+      ]
+    },
+    {
+      "id": "AC17",
+      "ownerVerdict": "open",
+      "state": "pass",
+      "automated": [
+        {
+          "file": "apps/user-runtime/src/modules/git/git.service.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 17,
+          "testsFailed": 0,
+          "durationMs": 11185
+        },
+        {
+          "file": "apps/user-runtime/src/modules/git/validation-runner.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 11,
+          "testsFailed": 0,
+          "durationMs": 9285
+        }
+      ],
+      "gaps": [
+        "The merge-review surface is capture-covered (S19 evidence); a real coding task proposed by a real model has not been owner-observed"
+      ]
+    },
+    {
+      "id": "AC18",
+      "ownerVerdict": "open",
+      "state": "pass",
+      "automated": [
+        {
+          "file": "apps/user-runtime/src/modules/backups/s33-backups.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 7,
+          "testsFailed": 0,
+          "durationMs": 3793
+        },
+        {
+          "file": "apps/user-runtime/src/modules/backups/s33-restore-service.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 7,
+          "testsFailed": 0,
+          "durationMs": 2238
+        },
+        {
+          "file": "apps/control-plane/test/s33-admin-backups.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 3,
+          "testsFailed": 0,
+          "durationMs": 360
+        }
+      ],
+      "gaps": [
+        "The restore drill and the S33 suites were run by the builder agents; the 'administrator restores one snapshot' clause wants the owner's personal run",
+        "Real six-hour cadence over a full day was not observed — the scheduler is proven by injected-clock suites"
+      ]
+    },
+    {
+      "id": "AC19",
+      "ownerVerdict": "open",
+      "state": "pass",
+      "automated": [
+        {
+          "file": "apps/user-runtime/src/modules/recovery/s31-recovery-classes.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 23,
+          "testsFailed": 0,
+          "durationMs": 3213
+        },
+        {
+          "file": "apps/user-runtime/test/recovery/kill9-recovery.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 1,
+          "testsFailed": 0,
+          "durationMs": 8738
+        },
+        {
+          "file": "apps/user-runtime/test/recovery/recovery-probes.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 5,
+          "testsFailed": 0,
+          "durationMs": 3186
+        },
+        {
+          "file": "apps/user-runtime/src/transport/local-api/s31-recovery-boot.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 2,
+          "testsFailed": 0,
+          "durationMs": 3214
+        }
+      ],
+      "gaps": [
+        "The browser-profile and schedules legs are covered through the service seams (browser.service, scheduler reconcile); a real container restart restoring a real browser profile is unobserved",
+        "Recovery surfaces are capture-covered (S31 evidence); the owner's personal kill-and-recover walk is pending"
+      ]
+    },
+    {
+      "id": "AC20",
+      "ownerVerdict": "open",
+      "state": "fail",
+      "automated": [
+        {
+          "file": "tests/acceptance/browser/layout.spec.ts",
+          "kind": "browser-matrix",
+          "status": "fail",
+          "detail": "browser-matrix reported a failing project",
+          "browserProjects": {
+            "chromium": {
+              "status": "fail",
+              "detail": "playwright exited 0 but reported zero tests (dead-run guard): "
+            },
+            "firefox": {
+              "status": "fail",
+              "detail": "playwright exited 0 but reported zero tests (dead-run guard): "
+            },
+            "webkit": {
+              "status": "fail",
+              "detail": "playwright exited 0 but reported zero tests (dead-run guard): "
+            },
+            "chrome": {
+              "status": "fail",
+              "detail": "playwright exited 0 but reported zero tests (dead-run guard): "
+            }
+          },
+          "testsPassed": 24,
+          "testsFailed": 0
+        },
+        {
+          "file": "tests/acceptance/browser/keyboard-a11y.spec.ts",
+          "kind": "browser-matrix",
+          "status": "fail",
+          "detail": "browser-matrix reported a failing project",
+          "browserProjects": {
+            "chromium": {
+              "status": "fail",
+              "detail": "playwright exited 0 but reported zero tests (dead-run guard): "
+            },
+            "firefox": {
+              "status": "fail",
+              "detail": "playwright exited 0 but reported zero tests (dead-run guard): "
+            },
+            "webkit": {
+              "status": "fail",
+              "detail": "playwright exited 0 but reported zero tests (dead-run guard): "
+            },
+            "chrome": {
+              "status": "fail",
+              "detail": "playwright exited 0 but reported zero tests (dead-run guard): "
+            }
+          },
+          "testsPassed": 40,
+          "testsFailed": 0
+        },
+        {
+          "file": "apps/web/test/design-tokens.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 3,
+          "testsFailed": 0,
+          "durationMs": 73
+        }
+      ],
+      "gaps": [
+        "Playwright's chromium project covers the Chrome/Edge rendering engine and the chrome channel runs the system Chrome; Microsoft Edge itself is NOT-VERIFIED here (not installed, no Docker)",
+        "Safari is covered through the WebKit engine project; real macOS/iOS Safari is NOT-VERIFIED (no Apple hardware in this environment)",
+        "The browser-matrix runs the REAL shipped components in a hermetic Vite harness (the S24-harness pattern) against frozen fixture state — it is surface QA, not a live-runtime journey; the owner's real-device pass is pending",
+        "opt-in: full live-runtime browser journeys stay out of the default matrix (G7 posture); the deterministic non-browser journey leg is AC7's E2E suite"
+      ]
+    },
+    {
+      "id": "AC21",
+      "ownerVerdict": "open",
+      "state": "pass",
+      "automated": [
+        {
+          "file": "tests/security/s27-st01-path-traversal.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 20,
+          "testsFailed": 0,
+          "durationMs": 3537
+        },
+        {
+          "file": "tests/security/s27-st02-workspace-boundary.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 8,
+          "testsFailed": 0,
+          "durationMs": 1751
+        },
+        {
+          "file": "tests/security/s27-st07-credential-leakage.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 3,
+          "testsFailed": 0,
+          "durationMs": 866
+        },
+        {
+          "file": "apps/user-runtime/src/modules/providers/custody-boundary.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 2,
+          "testsFailed": 0,
+          "durationMs": 832
+        },
+        {
+          "file": "tests/contract/runtime-access.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 13,
+          "testsFailed": 0,
+          "durationMs": 39
+        },
+        {
+          "file": "tests/contract/user-runtime-boundary.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 6,
+          "testsFailed": 0,
+          "durationMs": 186
+        }
+      ],
+      "gaps": [
+        "History kept honestly: until 2026-11-10 these rows were PENDING_MERGE pinned to the unmerged s27-security-suite branch (head 4af4704) — the runner held the full-ledger run red, exactly per G5; the PR #82 merge (da3019b) resolves the pin and the suites run in-tree",
+        "The s27 THREAT-COVERAGE matrix maps ST-05/ST-10..ST-14 to pinned-elsewhere suites and documented procedures per its own record; cross-ACCOUNT (five-tenant) isolation beyond the account-bound runtime evidence of E23 has not had a dedicated two-tenant adversarial run",
+        "No real credential-leak bounty-style audit exists; 'no critical failure observed' is bounded by what the recorded suites and reviews cover"
+      ]
+    },
+    {
+      "id": "AC22",
+      "ownerVerdict": "open",
+      "state": "pass",
+      "automated": [
+        {
+          "file": "apps/user-runtime/src/modules/runtime/pack-pin.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 5,
+          "testsFailed": 0,
+          "durationMs": 2246
+        },
+        {
+          "file": "packages/agent-pack-sdk/src/loader.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 14,
+          "testsFailed": 0,
+          "durationMs": 144
+        },
+        {
+          "file": "apps/user-runtime/src/adapters/sqlite/workspaces-repository.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 4,
+          "testsFailed": 0,
+          "durationMs": 832
+        }
+      ],
+      "gaps": [
+        "Version retention across a pack upgrade is proven by repository/migration tests; the owner's upgrade-and-compare walk is pending"
+      ]
+    },
+    {
+      "id": "AC23",
+      "ownerVerdict": "open",
+      "state": "pass",
+      "automated": [
+        {
+          "file": "apps/user-runtime/src/transport/local-api/s15-preview-api.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 11,
+          "testsFailed": 0,
+          "durationMs": 4585
+        },
+        {
+          "file": "apps/web/test/launch-preview.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 41,
+          "testsFailed": 0,
+          "durationMs": 782
+        }
+      ],
+      "gaps": [
+        "The preview's honest-null posture (no real pricing, connectors unconfigured) is the recorded G4 truth — a preview with REAL configured providers is part of the owner's live run"
+      ]
+    },
+    {
+      "id": "AC24",
+      "ownerVerdict": "open",
+      "state": "pass",
+      "automated": [
+        {
+          "file": "apps/user-runtime/src/modules/operations/operations.service.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 26,
+          "testsFailed": 0,
+          "durationMs": 8468
+        },
+        {
+          "file": "apps/user-runtime/src/transport/local-api/s13-operations-api.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 13,
+          "testsFailed": 0,
+          "durationMs": 5105
+        },
+        {
+          "file": "apps/user-runtime/src/modules/credits/credit-aggregation.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 4,
+          "testsFailed": 0,
+          "durationMs": 5083
+        }
+      ],
+      "gaps": [
+        "Run isolation is proven by integration suites (the E26 receipts and D34 vocabulary); the owner has not watched two live runs side by side"
+      ]
+    },
+    {
+      "id": "AC25",
+      "ownerVerdict": "open",
+      "state": "pass",
+      "automated": [
+        {
+          "file": "apps/user-runtime/src/modules/tasks/s31-checkpoints.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 14,
+          "testsFailed": 0,
+          "durationMs": 3378
+        },
+        {
+          "file": "apps/user-runtime/src/modules/workers/task-worker-supervisor.service.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 19,
+          "testsFailed": 0,
+          "durationMs": 15190
+        },
+        {
+          "file": "apps/user-runtime/src/modules/recovery/s31-restart-matrix.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 8,
+          "testsFailed": 0,
+          "durationMs": 7949
+        }
+      ],
+      "gaps": [
+        "Browser closure is simulated at the connection layer (the WebSocket drop suites); the AC25 hibernation-independence proof composes both supervisors over the same journal (E27) rather than a real browser being closed",
+        "A real long-running model task resuming from a semantic checkpoint is owner-run and opt-in"
+      ]
+    },
+    {
+      "id": "AC26",
+      "ownerVerdict": "open",
+      "state": "pass",
+      "automated": [
+        {
+          "file": "apps/user-runtime/src/modules/tools/tool-executor-approvals.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 6,
+          "testsFailed": 0,
+          "durationMs": 2291
+        },
+        {
+          "file": "apps/user-runtime/src/modules/tools/tool-executor.service.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 14,
+          "testsFailed": 0,
+          "durationMs": 3422
+        },
+        {
+          "file": "apps/user-runtime/src/modules/tools/tool-executor-cancellation.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 3,
+          "testsFailed": 0,
+          "durationMs": 861
+        }
+      ],
+      "gaps": [
+        "The grant fast-path is proven by revoke-mid-flight, version-change, args-change and post-restart refusal tests (E30/E33); the owner's personal grant-reuse observation is pending"
+      ]
+    },
+    {
+      "id": "AC27",
+      "ownerVerdict": "open",
+      "state": "pass",
+      "automated": [
+        {
+          "file": "apps/user-runtime/src/transport/local-api/s29-memory-api.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 4,
+          "testsFailed": 0,
+          "durationMs": 2127
+        },
+        {
+          "file": "apps/user-runtime/src/modules/memory/memory-controls.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 5,
+          "testsFailed": 0,
+          "durationMs": 2451
+        },
+        {
+          "file": "apps/user-runtime/src/modules/memory/memory-secrets.test.ts",
+          "kind": "vitest",
+          "status": "pass",
+          "testsPassed": 12,
+          "testsFailed": 0,
+          "durationMs": 6399
+        }
+      ],
+      "gaps": [
+        "The publication boundary is proven by the S29 integration suite and the E19 no-private-memory-inheritance rule; the owner's personal leak check is pending"
+      ]
+    }
+  ],
+  "leakFindings": [],
+  "exitCode": 1
+}

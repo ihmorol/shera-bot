@@ -37,7 +37,12 @@ NOT-verified list is the contract; this runbook is the bridge.
 ## 1. Pre-flight (one-time, exact commands)
 
 ```bash
-# 1.1 The host: Docker Engine + the Compose plugin on Ubuntu 24.04, and git.
+# 1.1 The host: Docker Engine + the Compose plugin on Ubuntu 24.04, git, and
+#     Node 24 + pnpm (corepack) — the smoke script's interaction legs point at
+#     `pnpm acceptance` and the S27-GAP-2 cgroup verification runs the ST-05
+#     suite, both of which need the repo toolchain ON the VM:
+curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash - && sudo apt-get install -y nodejs
+corepack enable   # pnpm, pinned by package.json#packageManager
 sudo apt-get update && sudo apt-get install -y ca-certificates curl git
 sudo install -m 0755 -d /etc/apt/keyrings
 sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
@@ -180,12 +185,20 @@ docker images --format '{{.Repository}}:{{.Tag}}' | grep shera-web
 # 5.2 Roll the stack to the previous SHA (the .env's GIT_SHA value + retag):
 export GIT_SHA=<previous-sha>     # edit .env's GIT_SHA to the previous SHA
 docker compose up -d --no-build   # recompose against the EXISTING previous images
-./smoke.sh "${PUBLIC_URL}"        # the smoke gate decides health — same legs
+./smoke.sh "${PUBLIC_URL}"        # the smoke gate decides health — same legs.
+#   The build-identity leg validates against the CONFIGURED GIT_SHA (env,
+#   else .env — THIS edit), never the checkout's HEAD: a healthy rolled-back
+#   deployment runs the previous image and must PASS its own gate (F4).
 
 # 5.3 If the previous image predates a schema change (forward-only rule):
 #     restore the central-PG data instead of rolling the schema —
 docker compose stop control-plane
-docker compose run --rm -v shera_backups:/backups:ro backup \
+#  EXEC the running backup service — it already mounts the backups volume at
+#  /backups and the postgres:16 image ships pg_restore (no --entrypoint
+#  override, no hand-spelled volume name: the compose volume `backups` is
+#  `<project>_backups` on the engine, and a hand-spelled `docker compose run
+#  -v` would create an EMPTY shadowing volume).
+docker compose exec -T backup \
   pg_restore --clean --if-exists --dbname "postgres://shera:<POSTGRES_PASSWORD>@postgres:5432/shera" \
   /backups/control-plane-<timestamp>.dump
 docker compose start control-plane
@@ -222,9 +235,11 @@ the building machine allowed:
    for the drill):
 
 ```bash
-# The DRILL (scratch DB — never the live one):
+# The DRILL (scratch DB — never the live one). EXEC the running backup
+# service for the same reason as §5.3 (the volume is already at /backups in
+# that container; the image ships pg_restore):
 docker compose exec postgres createdb -U shera shera_drill
-docker compose run --rm -v shera_backups:/backups:ro backup \
+docker compose exec -T backup \
   pg_restore --dbname "postgres://shera:<POSTGRES_PASSWORD>@postgres:5432/shera_drill" \
   /backups/control-plane-<timestamp>.dump
 docker compose exec postgres psql -U shera -d shera_drill -c "SELECT count(*) FROM accounts;"
@@ -341,9 +356,9 @@ docker image inspect shera-control-plane:$GIT_SHA --format '{{.Config.Env}}' | t
   grep -E 'SECRET|PASSWORD|TOKEN|CLIENT_ID' || echo "clean: no secret references baked into the image env"
 
 # 10.3 The running stack: the secrets live in .env (on the VM) and the
-#      engine's runtime config ONLY — never in logs:
-docker compose logs --since 1h | grep -iE "$(.env is not sourced here — spot-check by eye)" || true
-#   and the mechanical sweep of the visible logs for the actual values:
+#      engine's runtime config ONLY — the mechanical sweep of the visible
+#      logs for the ACTUAL values (the loop reads .env on the VM and greps
+#      every service's logs for each value; a hit is a LEAK, never noise):
 for v in AUTH_SECRET POSTGRES_PASSWORD GOOGLE_CLIENT_SECRET SEARXNG_SECRET; do
   val=$(grep "^$v=" .env | cut -d= -f2)
   docker compose logs 2>/dev/null | grep -qF "$val" && echo "LEAK: $v appears in logs" || echo "clean: $v not in logs"

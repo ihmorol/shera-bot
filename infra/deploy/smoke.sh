@@ -35,7 +35,9 @@ pass() { echo "smoke PASS: $1"; }
 fail() { echo "smoke FAIL: $1"; FAILURES=$((FAILURES + 1)); }
 
 http_code() {
-  curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$1" 2>/dev/null || echo 000
+  # curl's -w prints 000 itself when the transfer fails — no fallback echo
+  # (the old `|| echo 000` double-printed: 000000, the cosmetic review nit).
+  curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$1" 2>/dev/null
 }
 
 say "probing ${URL}"
@@ -64,24 +66,41 @@ case "${CODE}" in
 esac
 
 # 4. Build identity (the issue's criterion): the running images' revision
-#    labels match the VM's checked-out GIT_SHA. Requires the engine CLI AND
-#    a running stack — both absent on a non-VM box, where the leg SKIPS
-#    honestly (never faked as a pass).
+#    labels match the DEPLOYMENT'S CONFIGURED GIT_SHA — resolved in this
+#    order: the GIT_SHA environment reference, else the .env value next to
+#    this script, else (last resort) the checkout's HEAD. The configured
+#    value wins because a healthy ROLLED-BACK deployment runs the PREVIOUS
+#    image while the checkout stays on the merge commit — the gate must
+#    validate the deployment's identity, never fail a healthy rollback on
+#    its own checkout (the F4 review finding; the runbook's §5.2 edits
+#    .env's GIT_SHA to the previous SHA and this leg agrees).
 if command -v docker >/dev/null 2>&1; then
-  HEAD_SHA="$(git rev-parse HEAD 2>/dev/null || echo "")"
+  EXPECTED_SHA="${GIT_SHA:-}"
+  if [ -z "${EXPECTED_SHA}" ]; then
+    ENV_FILE="${SMOKE_ENV:-$(cd "$(dirname "$0")" && pwd)/.env}"
+    if [ -f "${ENV_FILE}" ]; then
+      EXPECTED_SHA="$(sed -n 's/^GIT_SHA=//p' "${ENV_FILE}" | head -1 | tr -d '\"' | tr -d '[:space:]')"
+    fi
+  fi
+  if [ -z "${EXPECTED_SHA}" ]; then
+    EXPECTED_SHA="$(git rev-parse HEAD 2>/dev/null || echo "")"
+    [ -n "${EXPECTED_SHA}" ] && EXPECTED_SOURCE="the checked-out HEAD (last resort — no configured GIT_SHA found)"
+  else
+    EXPECTED_SOURCE="the configured GIT_SHA"
+  fi
   RUNNING="$(docker ps --format '{{.Image}}' 2>/dev/null)" || RUNNING=""
   if [ -z "${RUNNING}" ]; then
     say "skipped the build-identity leg: no running containers on this host (the leg runs ON the VM)"
-  elif [ -z "${HEAD_SHA}" ]; then
-    say "skipped the build-identity leg: not a git checkout on this host (the runbook pins GIT_SHA at build time)"
+  elif [ -z "${EXPECTED_SHA}" ]; then
+    say "skipped the build-identity leg: no configured GIT_SHA and not a git checkout (the runbook pins GIT_SHA at build time)"
   else
     LABELS="$(docker ps --filter label=org.opencontainers.image.revision --format '{{.Image}} {{.Label "org.opencontainers.image.revision"}}' 2>/dev/null)" || LABELS=""
     if [ -z "${LABELS}" ]; then
       fail "running containers exist but none carries the revision label (built without GIT_SHA?)"
-    elif printf '%s\n' "${LABELS}" | grep -q "${HEAD_SHA}"; then
-      pass "the running images' revision labels match the checked-out GIT_SHA (${HEAD_SHA})"
+    elif printf '%s\n' "${LABELS}" | grep -q "${EXPECTED_SHA}"; then
+      pass "the running images' revision labels match ${EXPECTED_SOURCE} (${EXPECTED_SHA})"
     else
-      fail "the running images' revision labels do not match the checked-out GIT_SHA ${HEAD_SHA}: ${LABELS}"
+      fail "the running images' revision labels do not match ${EXPECTED_SOURCE} ${EXPECTED_SHA}: ${LABELS}"
     fi
   fi
 else

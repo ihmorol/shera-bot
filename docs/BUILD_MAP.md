@@ -9,7 +9,7 @@ Issue numbers below are GitHub issues in this repository (`https://github.com/ih
 
 - **Design: complete.** `docs/PRD.md` (D1–D50, E1–E14, acceptance criteria 1–27), `docs/decisions/`, `docs/TRACEABILITY.md`, `docs/GLOSSARY.md`, `docs/UI_DESIGN.md`.
 - **Existing code:** the static client mockup (`mockup/`) and the separate, git-ignored marketing site (`business-landing-portfolio/`). Both are reference evidence.
-- **Runtime behavior: not implemented.** S01's monorepo placeholders and CI landed via PR #37 (2026-09-19); no database or deployed runtime exists. The 35 slices below build the prototype in dependency order.
+- **ALL 35 SLICES LANDED (2026-11-10, final merge `e36c042a`):** S01–S35 merged in dependency order through 43 tracked pull requests, each with its engineering record (E22–E48 for the agent-built slices), fresh-context review rounds, and the fresh-archive gate evidence in its PR. The acceptance ledger (S34, E47) runs `pnpm acceptance`: 27/27 rows pass with the owner-verdict column open BY DESIGN. What remains is OPERATIONAL, not construction: the owner's 27 acceptance verdicts, the live VM deployment per `docs/s35-deploy-runbook.md`, the two filed hardening/verification items (#83 namespace containment on the host, #84 cgroup verdict), and the CI-environment fixes (#78).
 - **Pi fork identified (2026-09-17):** the owner supplied `ihmorol/shera-pi`. [`PI_FORK.md`](PI_FORK.md) supplies verified source/MIT-license evidence and proposed maintenance guidance for S01 review. No real-fork integration, runtime revision pin, dependency audit, or upstream test run is implied.
 
 ## 2. How to work a slice

@@ -155,7 +155,7 @@ export function OperationRosterPanel({
                 <span className="flex items-center gap-1.5">
                   <span className="truncate text-sm text-text">{displayName}</span>
                   {isCoordinator ? (
-                    <span className="rounded-full bg-brand px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-text">
+                    <span className="rounded-full bg-brand-deepest px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-text">
                       Coordinator
                     </span>
                   ) : null}
@@ -217,7 +217,7 @@ export function OperationRosterPanel({
                   <span className="min-w-0">
                     <span className="flex items-center gap-1.5">
                       <span className="truncate text-sm text-text">{displayName}</span>
-                      <span className="rounded-full bg-brand px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-text">
+                      <span className="rounded-full bg-brand-deepest px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-text">
                         Coordinator
                       </span>
                     </span>

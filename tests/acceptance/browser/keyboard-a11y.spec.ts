@@ -101,12 +101,23 @@ test.describe("keyboard-only core trails", () => {
     await expect(signIn).toHaveAccessibleName(/Sign in with Google/);
     await signIn.focus();
     await expect(signIn).toBeFocused();
-    // Visible focus: the global :focus-visible rule's outline must exist.
+    // Visible focus (E47 review F2): the focus indicator must EXIST —
+    // outline-style "none" is exactly the failure mode, so the old
+    // disjunction that accepted it was vacuous. The outline must be drawn
+    // (style other than none) AND have width (a zero-width outline is
+    // invisible).
     const outline = await signIn.evaluate((element) => {
       element.focus();
-      return getComputedStyle(element).outlineStyle;
+      const style = getComputedStyle(element);
+      return { outlineStyle: style.outlineStyle, outlineWidth: style.outlineWidth };
     });
-    expect(outline === "solid" || outline === "auto" || outline === "none").toBeTruthy();
+    expect(outline.outlineStyle, "the focused sign-in entry must draw a visible outline").not.toBe(
+      "none",
+    );
+    expect(
+      parseFloat(outline.outlineWidth),
+      "the focus outline must have width to be visible",
+    ).toBeGreaterThan(0);
   });
 
   test("operation chat: composer is keyboard-wired end to end", async ({ page }) => {

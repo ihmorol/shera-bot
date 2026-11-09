@@ -525,7 +525,15 @@
         {
           "kind": "vitest",
           "file": "apps/user-runtime/src/modules/approvals/approvals.service.test.ts",
-          "covers": "a gated typed proposal pauses the run (S20 chunk 1) and the five choices do exactly what they say (S20 chunk 2)"
+          "covers": "a gated typed proposal pauses the run (S20 chunk 1) and the five choices do exactly what they say (S20 chunk 2)",
+          "testNames": [
+            "approvals service: a gated typed proposal pauses the run (S20 chunk 1) records a pending request, journals approval.requested, and waits in WAITING_FOR_APPROVAL without executing",
+            "approvals service: the five choices do exactly what they say (S20 chunk 2) approve-this-execution-only: one-time Agent-principal grant, run resumed via approval_granted, callback executed",
+            "approvals service: the five choices do exactly what they say (S20 chunk 2) always-approve-this-tool: reusable grant scoped to the requesting TASK and the CURRENT conversation — 'any' is never implicit",
+            "approvals service: the five choices do exactly what they say (S20 chunk 2) always-approve-this-tool-for-this-agent: reusable grant bound to the requesting Agent",
+            "approvals service: the five choices do exactly what they say (S20 chunk 2) reject-this-action: request rejected, run resumed via approval_rejected, the action NEVER executes, no grant",
+            "approvals service: the five choices do exactly what they say (S20 chunk 2) cancel-the-task: request cancelled, run CANCELLING -> CANCELLED, child runs cancelled in the same transaction"
+          ]
         },
         {
           "kind": "vitest",
@@ -540,7 +548,12 @@
         {
           "kind": "vitest",
           "file": "apps/user-runtime/src/modules/approvals/approvals.service.test.ts",
-          "covers": "E3 reminders: durable rows scanned on the injected clock across all five reminder slots, none after 24h"
+          "covers": "E3 reminders: durable rows scanned on the injected clock across all five reminder slots, none after 24h",
+          "testNames": [
+            "approvals service: a gated typed proposal pauses the run (S20 chunk 1) schedules all five reminder rows immediately on the injected clock (E3)",
+            "approvals service: reminder firing on the fake clock (S20 chunk 3, E3) fires exactly five deliveries at 0/15m/45m/3h/24h — and NOTHING after 24h",
+            "approvals service: reminder firing on the fake clock (S20 chunk 3, E3) delivers nothing early — a slot not yet due stays undelivered (RED-PIN wrong-name)"
+          ]
         },
         {
           "kind": "browser-matrix",

@@ -68,7 +68,10 @@ const RUN_DATE = new Date().toISOString().slice(0, 10);
 const EVIDENCE_DIR = join(EVIDENCE_ROOT, RUN_DATE);
 
 type EntryStatus = "pass" | "fail" | "missing" | "pending_merge" | "not_verified";
-type RowState = "pass" | "fail" | "missing" | "pending_merge" | "partial";
+// "not_verified" is a ROW state too (E47 review P3a): a row with zero
+// automated outcomes (a declared manual-only row) is honestly NOT-VERIFIED by
+// the runner — never a fall-through "pass".
+type RowState = "pass" | "fail" | "missing" | "pending_merge" | "partial" | "not_verified";
 
 interface AutomatedOutcome {
   file: string;
@@ -79,13 +82,16 @@ interface AutomatedOutcome {
   durationMs?: number;
   /** Typed state detail — a branch name, a missing-file note, a reason. Never content. */
   detail?: string;
+  /** The claimed test identities this entry pinns (E47 review F3), each verified. */
+  claimedTests?: number;
+  verifiedTests?: number;
   browserProjects?: Record<string, { status: EntryStatus; detail?: string }>;
 }
 
 interface RowReport {
   id: string;
   ownerVerdict: string;
-  state: RowState | "manual_only" | "opt_in";
+  state: RowState;
   automated: AutomatedOutcome[];
   gaps: string[];
 }
@@ -146,12 +152,20 @@ function toRepoPath(absolutePath: string): string {
   return relative(REPO_ROOT, absolutePath).split(sep).join("/");
 }
 
+interface VitestAssertion {
+  title: string;
+  fullName: string;
+  status: string;
+}
+
 interface VitestFileResult {
   status: "passed" | "failed";
   passed: number;
   failed: number;
   durationMs: number;
   failureTail: string;
+  /** Per-test identities (title + fullName + status) for the F3 claim verification. */
+  assertions: VitestAssertion[];
 }
 
 /** Run ONE batched vitest invocation over all mapped files; map results by file. */
@@ -178,6 +192,7 @@ function runVitestBatch(files: string[]): Map<string, VitestFileResult> {
         failureTail: `vitest produced no JSON report (exit ${spawn.status}). stderr tail:\n${(
           spawn.stderr ?? ""
         ).slice(-2000)}`,
+        assertions: [],
       });
     }
     return results;
@@ -186,8 +201,9 @@ function runVitestBatch(files: string[]): Map<string, VitestFileResult> {
     testResults?: Array<{
       name?: string;
       status?: string;
-      duration?: number;
-      assertionResults?: Array<{ status?: string }>;
+      startTime?: number;
+      endTime?: number;
+      assertionResults?: Array<{ status?: string; title?: string; fullName?: string }>;
     }>;
   } = JSON.parse(readFileSync(jsonOut, "utf8"));
   for (const file of files) {
@@ -197,15 +213,27 @@ function runVitestBatch(files: string[]): Map<string, VitestFileResult> {
     const assertions = match?.assertionResults ?? [];
     const passed = assertions.filter((a) => a.status === "passed").length;
     const failed = assertions.filter((a) => a.status === "failed").length;
+    // E47 review P3d: the vitest JSON reporter carries no file-level
+    // `duration` — the real wall time is endTime - startTime (epoch ms);
+    // the pre-fix read of `duration` recorded 0 ms for every file.
+    const durationMs =
+      match && typeof match.startTime === "number" && typeof match.endTime === "number"
+        ? Math.max(0, Math.round(match.endTime - match.startTime))
+        : 0;
     results.set(file, {
       status: match?.status === "passed" ? "passed" : "failed",
       passed,
       failed,
-      durationMs: Math.round(match?.duration ?? 0),
+      durationMs,
       failureTail:
         match?.status === "passed"
           ? ""
           : `vitest exit ${spawn.status}; ${failed} failed assertion(s) — full output in the raw vitest-run.json evidence file`,
+      assertions: assertions.map((a) => ({
+        title: a.title ?? "",
+        fullName: a.fullName ?? "",
+        status: a.status ?? "unknown",
+      })),
     });
   }
   return results;
@@ -275,13 +303,21 @@ function runBrowserMatrix(
 ): Map<string, PlaywrightFileOutcome> {
   const outcomes = new Map<string, PlaywrightFileOutcome>();
   const available = probes.filter((p) => p.available).map((p) => p.project);
+  // E47 review F1: the seed is NOT a pass. Every available project starts at a
+  // typed fail carrying the zero-evidence guard detail and is overwritten ONLY
+  // by an observed test result from the Playwright JSON walk — a spec×project
+  // the runner cannot show a result for is never a pass (G4).
   for (const spec of specs) {
     outcomes.set(spec, {
       projects: Object.fromEntries(
         probes.map((p) => [
           p.project,
           p.available
-            ? { status: "pass" as EntryStatus }
+            ? {
+                status: "fail" as EntryStatus,
+                detail:
+                  "no observed test result (F1 zero-evidence guard — a pre-seeded pass stood here)",
+              }
             : { status: "not_verified" as EntryStatus, detail: p.detail },
         ]),
       ),
@@ -307,12 +343,15 @@ function runBrowserMatrix(
     return outcomes;
   }
   const jsonOut = join(EVIDENCE_DIR, "browser-run.json");
+  // No --reporter flag here: the config's reporter list (line + the JSON
+  // reporter keyed on SHERA_PW_JSON_OUT) must survive — a CLI --reporter
+  // CLOBBERS the config list, which is exactly how browser-run.json failed to
+  // materialize and the pre-seeded passes survived unverified (E47 review F1).
   const args = [
     "test",
     "--config=tests/acceptance/browser/playwright.config.ts",
     ...specs,
     ...available.map((project) => `--project=${project}`),
-    "--reporter=line",
     `--output=${join(BROWSER_DIR, "test-results")}`,
   ];
   const spawn = spawnSync(PLAYWRIGHT_BIN, args, {
@@ -326,11 +365,21 @@ function runBrowserMatrix(
       PLAYWRIGHT_JSON_OUTPUT_NAME: jsonOut,
     },
   });
-  const parsed: {
+  let parsed: {
     stats?: { total?: number; passed?: number; failed?: number; skipped?: number };
     suites?: Array<Record<string, unknown>>;
     errors?: string[];
-  } = existsSync(jsonOut) ? JSON.parse(readFileSync(jsonOut, "utf8")) : {};
+  } = {};
+  let parseNote: string | undefined;
+  if (!existsSync(jsonOut)) {
+    parseNote = "browser-run.json never materialized (reporter handoff failed)";
+  } else {
+    try {
+      parsed = JSON.parse(readFileSync(jsonOut, "utf8"));
+    } catch (error) {
+      parseNote = `browser-run.json unparseable: ${String(error).slice(0, 300)}`;
+    }
+  }
   // Walk the Playwright suite tree: file-level suites carry their specs; each
   // spec's tests know their project and outcome.
   interface PwTest {
@@ -346,17 +395,34 @@ function runBrowserMatrix(
     specs?: Array<{ title?: string; ok?: boolean; tests?: PwTest[] }>;
   }
   const walk = (suite: PwSuite): void => {
-    const file = suite.file ? toRepoPath(resolve(REPO_ROOT, suite.file)) : undefined;
+    // Playwright's JSON `file` can be absolute OR relative to the config's
+    // testDir (the recorded run carried "journeys.spec.ts") — match a mapped
+    // spec by suffix in either direction after normalizing what can be
+    // normalized. The pre-fix resolve-against-REPO_ROOT never matched the
+    // relative shape, so the walk observed zero tests even from a healthy
+    // JSON (caught by the F1 zero-test guard, never a silent pass).
+    const raw = suite.file;
+    const normalized = raw ? toRepoPath(resolve(REPO_ROOT, raw)) : undefined;
+    const matchesMapped = (mapped: string): boolean => {
+      if (!raw) return false;
+      return (
+        raw === mapped ||
+        normalized === mapped ||
+        mapped.endsWith(`/${raw}`) ||
+        raw.endsWith(`/${mapped}`) ||
+        mapped.endsWith(raw)
+      );
+    };
     for (const spec of suite.specs ?? []) {
-      if (!file || !specs.includes(file)) continue;
-      const outcome = outcomes.get(file);
+      if (!raw || !specs.some(matchesMapped)) continue;
+      const mapped = specs.find(matchesMapped);
+      const outcome = mapped ? outcomes.get(mapped) : undefined;
       if (!outcome) continue;
       for (const test of spec.tests ?? []) {
         const project = test.projectName ?? "unknown";
         const lastResult = test.results?.[(test.results?.length ?? 1) - 1]?.status;
         const passed =
           test.ok === true || (lastResult === "passed" && test.expectedStatus === "passed");
-        const slot = outcome.projects[project] ?? { status: "pass" as EntryStatus };
         outcome.projects[project] = passed
           ? { status: "pass" }
           : {
@@ -365,25 +431,54 @@ function runBrowserMatrix(
             };
         outcome.stats.total += 1;
         outcome.stats[passed ? "passed" : "failed"] += 1;
-        void slot;
       }
     }
     for (const child of suite.suites ?? []) walk(child);
   };
   for (const suite of (parsed.suites ?? []) as PwSuite[]) walk(suite);
-  if (spawn.status !== 0 && (parsed.stats?.failed ?? 0) === 0 && (parsed.stats?.total ?? 0) === 0) {
-    // Playwright died before producing results (config error, missing binary):
-    // every spec is an honest FAIL with the CLI's note, never silent.
-    const note = `playwright exit ${spawn.status}: ${(spawn.stderr ?? spawn.stdout ?? "").slice(-1500)}`;
+  // F1 (a): the zero-evidence / zero-test guards. After the walk, any
+  // available project still holding the seed observed NOTHING for that spec —
+  // either the JSON never materialized (every spec) or the spec genuinely
+  // produced zero observed tests on that project. Both are typed FAILs, never
+  // a vacuous pass.
+  for (const spec of specs) {
+    const outcome = outcomes.get(spec);
+    if (!outcome) continue;
+    for (const project of available) {
+      const slot = outcome.projects[project];
+      if (slot?.detail?.includes("F1 zero-evidence guard")) {
+        outcome.projects[project] = {
+          status: "fail",
+          detail: parseNote
+            ? `no machine evidence: ${parseNote} (F1 zero-evidence guard)`
+            : `zero tests observed for this spec×project (F1 zero-test guard)`,
+        };
+      }
+    }
+    if (parseNote) outcome.rawErrors.push(parseNote);
+  }
+  // F1 (d): the dead-run guard fires whenever NO results exist at all —
+  // a non-zero exit with zero parsed results (playwright died before
+  // reporting) OR an exit-0 run with zero tests (the pre-fix guard fired
+  // only on non-zero exit, so exit-0-with-no-results looked green). A
+  // non-zero exit WITH results is a legitimate red (the failures make the
+  // rows red; observed passes are real evidence and stay).
+  if ((parsed.stats?.total ?? 0) === 0) {
+    const note = `playwright ${
+      spawn.status !== 0
+        ? `exit ${spawn.status} with zero parsed results`
+        : "exited 0 but reported zero tests (dead-run guard)"
+    }: ${(spawn.stderr ?? spawn.stdout ?? "").slice(-1500)}`;
     for (const spec of specs) {
       const outcome = outcomes.get(spec);
       if (!outcome) continue;
+      outcome.rawErrors.push(note);
       for (const project of available) {
         if (outcome.projects[project]?.status === "pass") {
+          // Observed passes cannot survive a dead run — demote with the note.
           outcome.projects[project] = { status: "fail", detail: note };
         }
       }
-      outcome.rawErrors.push(note);
     }
   }
   return outcomes;
@@ -391,7 +486,12 @@ function runBrowserMatrix(
 
 function rowState(row: LedgerRow, outcomes: AutomatedOutcome[]): RowReport {
   let state: RowState;
-  if (outcomes.some((entry) => entry.status === "missing")) {
+  if (outcomes.length === 0) {
+    // E47 review P3a: a row with zero automated outcomes (declared manual-only)
+    // is honestly NOT-VERIFIED by the runner — the pre-fix fall-through
+    // reported it "pass" without anything having run.
+    state = "not_verified";
+  } else if (outcomes.some((entry) => entry.status === "missing")) {
     state = "missing";
   } else if (outcomes.some((entry) => entry.status === "fail")) {
     state = "fail";
@@ -547,7 +647,11 @@ function main(): number {
 
   // G3/E43: scan the ledger and the S34 fixture area BEFORE anything runs or
   // is written. A finding aborts the run without writing a report that could
-  // echo the content (category + path only, on stderr).
+  // echo the content (category + path only, on stderr). E47 review P3b: the
+  // scan covers the FULL S34 fixture surface — the browser specs (previously
+  // excluded whole-directory) and the harness fixtures (the harness lives
+  // outside tests/acceptance and was never scanned) — generated evidence
+  // stays excluded (it is payload-scanned at write time).
   const leakFindings: LeakFinding[] = [...scanForLeaks(ledgerText, toRepoPath(LEDGER_PATH))];
   const fixtureSkip = new Set([
     "node_modules",
@@ -556,11 +660,13 @@ function main(): number {
     "evidence",
     ".gitkeep",
   ]);
-  const fixtureFiles = listFiles(
-    FIXTURE_AREA,
-    [".ts", ".tsx", ".json", ".md", ".txt"],
-    fixtureSkip,
-  ).filter((file) => !file.startsWith(EVIDENCE_ROOT) && !file.startsWith(BROWSER_DIR));
+  const harnessDir = join(REPO_ROOT, "apps", "web", "s34-harness-matrix");
+  const fixtureFiles = [
+    ...listFiles(FIXTURE_AREA, [".ts", ".tsx", ".json", ".md", ".txt"], fixtureSkip).filter(
+      (file) => !file.startsWith(EVIDENCE_ROOT),
+    ),
+    ...listFiles(harnessDir, [".ts", ".tsx", ".json", ".md", ".txt", ".html", ".css"], fixtureSkip),
+  ];
   for (const file of fixtureFiles) {
     const findings = scanForLeaks(readFileSync(file, "utf8"), toRepoPath(file));
     leakFindings.push(...findings);
@@ -663,6 +769,50 @@ function main(): number {
         continue;
       }
       const result = vitestResults.get(entry.file);
+      // E47 review F3: entries that pin exact test identities are verified
+      // against the file's recorded results — every claimed name must exist
+      // (title or fullName); the entry's counts cover ONLY the claimed tests
+      // (the AC13 double-count fix), and a missing claim is a typed FAIL,
+      // never a pass (G4 — no claim without machine evidence).
+      const claimedNames = entry.testNames ?? [];
+      if (claimedNames.length > 0) {
+        const byName = new Map<string, VitestAssertion>();
+        for (const assertion of result?.assertions ?? []) {
+          byName.set(assertion.title, assertion);
+          byName.set(assertion.fullName, assertion);
+        }
+        const missing = claimedNames.filter((name) => !byName.has(name));
+        const claimed = claimedNames
+          .map((name) => byName.get(name))
+          .filter((a): a is VitestAssertion => a !== undefined);
+        const claimedPassed = claimed.filter((a) => a.status === "passed").length;
+        const claimedFailed = claimed.length - claimedPassed;
+        if (missing.length > 0) {
+          outcomes.push({
+            file: entry.file,
+            kind: entry.kind,
+            status: "fail",
+            claimedTests: claimedNames.length,
+            verifiedTests: claimedNames.length - missing.length,
+            detail: `claimed test name(s) not found in the mapped file's results: ${missing
+              .map((name) => `"${name}"`)
+              .join(", ")} (F3 identity pin — G4)`,
+          });
+          continue;
+        }
+        outcomes.push({
+          file: entry.file,
+          kind: entry.kind,
+          status: result?.status === "passed" && claimedFailed === 0 ? "pass" : "fail",
+          claimedTests: claimedNames.length,
+          verifiedTests: claimedNames.length,
+          testsPassed: claimedPassed,
+          testsFailed: claimedFailed,
+          ...(result ? { durationMs: result.durationMs } : {}),
+          ...(result?.failureTail ? { detail: result.failureTail } : {}),
+        });
+        continue;
+      }
       const passed = result?.status === "passed";
       outcomes.push({
         file: entry.file,
@@ -700,6 +850,7 @@ function main(): number {
       fail: rows.filter((row) => row.state === "fail").length,
       missing: rows.filter((row) => row.state === "missing").length,
       pendingMerge: rows.filter((row) => row.state === "pending_merge").length,
+      notVerified: rows.filter((row) => row.state === "not_verified").length,
     },
     rows,
     leakFindings,

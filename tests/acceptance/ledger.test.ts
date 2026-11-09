@@ -138,6 +138,45 @@ describe("the acceptance ledger (AC1–AC27)", () => {
     }
   });
 
+  it("pins exact test identities when one row cites the same file twice (F3: no double-count)", () => {
+    // E47 review F3: AC13 cited approvals.service.test.ts twice with
+    // whole-file semantics — the report double-counted the file's 51 tests.
+    // The de-dup keeps two claims but pins each to its exact test identities;
+    // this test keeps THAT de-dup executably honest: any row citing one file
+    // more than once must pin testNames on every duplicate citation.
+    for (const row of ledger.rows) {
+      const perFile = new Map<string, number>();
+      for (const entry of row.automated) {
+        if (entry.kind !== "vitest") continue;
+        const count = (perFile.get(entry.file) ?? 0) + 1;
+        perFile.set(entry.file, count);
+        if (count > 1) {
+          expect(
+            entry.testNames?.length ?? 0,
+            `${row.id}: the duplicate citation of ${entry.file} must pin exact testNames (F3)`,
+          ).toBeGreaterThan(0);
+        }
+      }
+    }
+    // And AC13's two claims cover DIFFERENT identities — no overlap.
+    const ac13 = ledger.rows.find((row) => row.id === "AC13");
+    const approvalEntries =
+      ac13?.automated.filter(
+        (entry) =>
+          entry.kind === "vitest" &&
+          entry.file === "apps/user-runtime/src/modules/approvals/approvals.service.test.ts",
+      ) ?? [];
+    expect(approvalEntries.length).toBe(2);
+    const first = new Set(approvalEntries[0]?.testNames ?? []);
+    const second = approvalEntries[1]?.testNames ?? [];
+    for (const name of second) {
+      expect(
+        first.has(name),
+        `AC13's two approvals.service claims must not share the identity "${name}"`,
+      ).toBe(false);
+    }
+  });
+
   it("surfaces pending-merge mappings as named gaps (G5: no silent conflict)", () => {
     for (const row of ledger.rows) {
       for (const entry of row.automated) {

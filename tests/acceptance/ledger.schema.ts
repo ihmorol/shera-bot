@@ -69,6 +69,15 @@ export const automatedEvidenceSchema = z.object({
   file: z.string().min(1),
   /** What the file covers, in one line; may cite a load-bearing test name. */
   covers: z.string().min(1),
+  /** Exact test identities this claim is pinned to (vitest rows; E47 review
+   * F3). Every name must exist in the mapped file's recorded results (matched
+   * against the assertion's title or fullName) — the runner verifies
+   * executably and a missing name is a typed FAIL, never a pass; the entry's
+   * pass/fail counts cover ONLY the claimed tests, so two entries citing one
+   * file no longer double-count it. Entries without this field keep
+   * whole-file semantics; browser-matrix entries are identified by their spec
+   * file and per-project results. */
+  testNames: z.array(z.string().min(1)).optional(),
   requires: z
     .object({
       branch: z.string().min(1),

@@ -46,6 +46,7 @@ describe("design tokens (UI_DESIGN §2.1)", () => {
       "--color-surface-elevated",
       "--color-brand",
       "--color-brand-deep",
+      "--color-brand-deepest",
       "--color-sky",
       "--color-cool-highlight",
       "--color-text",

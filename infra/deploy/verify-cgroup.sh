@@ -66,15 +66,24 @@ else
   PROBE="${USER_SLICE}/shera-cgroup-probe-$$"
   DELEGATED="no"
   if mkdir "${PROBE}" 2>/dev/null; then
+    # A refused subtree_control write is NOT a verdict by itself: an
+    # EEXIST-shaped refusal often means the controllers are ALREADY enabled
+    # (systemd's Delegate=yes) — the mkdir-only lie's sibling. Attempt the
+    # leaf writes REGARDLESS and let THEM decide (the script's own lesson).
     if echo "+memory +pids" > "${USER_SLICE}/cgroup.subtree_control" 2>/dev/null; then
-      if echo 1048576 > "${PROBE}/memory.max" 2>/dev/null && echo 0 > "${PROBE}/memory.swap.max" 2>/dev/null; then
-        DELEGATED="yes"
-        say "evidence: ${USER_SLICE} carries a WRITABLE leaf (subtree_control +memory +pids, memory.max + memory.swap.max=0 applied) — the full delegation sequence, not just mkdir"
-      else
-        say "evidence: the leaf was created but memory.max/swap.max writes were REFUSED — a partial delegation; the memory boundary cannot engage"
-      fi
+      say "evidence: subtree_control +memory +pids written at ${USER_SLICE}"
     else
-      say "evidence: subtree_control +memory +pids was REFUSED at ${USER_SLICE} — the controllers are not delegated"
+      ENABLED="$(cat "${USER_SLICE}/cgroup.subtree_control" 2>/dev/null || echo "")"
+      case " ${ENABLED} " in
+        *" memory "*|*" pids "*) say "evidence: the subtree_control write was refused but the controllers are ALREADY enabled (${ENABLED}) — proceeding to the leaf attempt" ;;
+        *) say "evidence: subtree_control +memory +pids was REFUSED at ${USER_SLICE} (enabled: '${ENABLED}') — the controllers are likely not delegated; the leaf attempt decides" ;;
+      esac
+    fi
+    if echo 1048576 > "${PROBE}/memory.max" 2>/dev/null && echo 0 > "${PROBE}/memory.swap.max" 2>/dev/null; then
+      DELEGATED="yes"
+      say "evidence: ${USER_SLICE} carries a WRITABLE leaf (memory.max + memory.swap.max=0 applied) — the full delegation sequence, not just mkdir"
+    else
+      say "evidence: the leaf's memory.max/swap.max writes were REFUSED — the memory boundary cannot engage (partial delegation at best)"
     fi
     rmdir "${PROBE}" 2>/dev/null
   else

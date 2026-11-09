@@ -382,9 +382,14 @@ done
 3. **No other exposure path exists**: the edge is the only published surface
    (the web netns), the control plane and the runtimes are
    `shera-internal`-only, the engine socket is mounted ONLY into the
-   control-plane (read-only for the monitor), and no ports beyond 80/443 are
-   published. Any second path is a change to this runbook and a recorded
-   decision.
+   control-plane (and read-only-flagged into the monitor), and no ports
+   beyond 80/443 are published. HONESTY ABOUT THE MONITOR'S SOCKET MOUNT
+   (the review's P3c): the `:ro` flag is a FILESYSTEM mount flag — the
+   engine API the socket serves is NOT read-only; anything holding that
+   socket can create, kill, and inspect every container on the VM. The
+   monitor is trusted stack code for exactly that reason; do not extend the
+   mount to anything else. Any second path is a change to this runbook and a
+   recorded decision.
 
 ---
 

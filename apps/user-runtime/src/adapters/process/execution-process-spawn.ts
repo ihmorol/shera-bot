@@ -77,6 +77,7 @@ import {
   nsIdentityFromFd,
   openNsUser,
   readNsUser,
+  readOomKillCount,
   snapshotProcStarttimes,
   type ProcSample,
 } from "./escape-sweep.ts";
@@ -207,6 +208,15 @@ export interface SandboxExit {
   verifiedLimits: Record<string, VerifiedLimit> | null;
   /** The cgroup layer's applied bounds (null when the layer is absent). */
   cgroupApplied: { cgroup_path: string; memory_max: string; pids_max: string } | null;
+  /**
+   * The S27-GAP-1 escape sweep's state for THIS execution (P3d, PR #86
+   * review): "active" — the leader's namespace was pinned and the sweep
+   * scopes every termination seam; "disabled_no_private_namespace" — the
+   * leader showed no private namespace (or the runtime's own identity was
+   * unreadable) and the sweep NEVER ran: the ST-04 sweep leg is VOID for
+   * this execution, honestly recorded instead of silently absent.
+   */
+  sweep: "active" | "disabled_no_private_namespace";
   /** Spawn-level failure detail (ENOENT etc.) — no process ever ran. */
   spawnError: string | null;
 }
@@ -540,7 +550,6 @@ export function spawnSandboxedExecution(
       : [];
     killGroup();
     killVerified([...chained, ...escaped]);
-    closeLeaderNsFd();
   };
 
   // The cgroup layer moves the ALREADY-spawned child into its leaf (the
@@ -630,7 +639,6 @@ export function spawnSandboxedExecution(
       ? collectEscapeCandidates(child.pid, spawnSnapshot, leaderSweepIdentity(), runtimeNsIdentity)
       : [];
     killVerified(escaped);
-    closeLeaderNsFd();
   };
 
   const wallClockTimer =
@@ -646,6 +654,12 @@ export function spawnSandboxedExecution(
     settled = true;
     if (wallClockTimer !== null) clearTimeout(wallClockTimer);
     resolveExit(exit);
+    // The pinned namespace fd closes HERE — after the exit (and its sweep
+    // state) is resolved, never inside the sweeps: the close-path reap runs
+    // BEFORE settle and needs the pinned identity live (the self-erasing
+    // state bug found by the P3d pin — the reap closed the fd, then settle
+    // read the sweep as disabled).
+    closeLeaderNsFd();
   };
 
   if (child === null) {
@@ -659,6 +673,7 @@ export function spawnSandboxedExecution(
         limitDeath: null,
         verifiedLimits: null,
         cgroupApplied: null,
+        sweep: "disabled_no_private_namespace", // no execution ran — the sweep is void
         spawnError: spawnErrorMessage,
       }),
     );
@@ -682,8 +697,15 @@ export function spawnSandboxedExecution(
     if (signal === "SIGXFSZ") return "disk";
     if (signal === "SIGKILL" && !cancelled) {
       // A SIGKILL we did not deliver: the kernel OOM killer at the cgroup
-      // memory.max when that layer is active, else an unattributed kill.
-      return cgroupLeaf !== null && cgroupLeaf.memory_max !== "max" ? "memory_oom" : "sigkill";
+      // memory.max when that layer is active — but only when THIS leaf's own
+      // memory.events witness confirms an OOM kill (P3b, PR #86 review): a
+      // host-wide OOM or an external SIGKILL is NOT the leaf's attribution
+      // and stays the untyped sigkill.
+      if (cgroupLeaf !== null && cgroupLeaf.memory_max !== "max") {
+        const oomKills = readOomKillCount(cgroupLeaf.path);
+        return oomKills !== null && oomKills > 0 ? "memory_oom" : "sigkill";
+      }
+      return "sigkill";
     }
     return null;
   };
@@ -703,10 +725,10 @@ export function spawnSandboxedExecution(
             pids_max: cgroupLeaf.pids_max,
           }
         : null,
+      sweep: sweepEnabled() ? "active" : "disabled_no_private_namespace",
       spawnError: error.message,
     });
     if (cgroupLeaf !== null) teardownCgroupLeaf(cgroupLeaf);
-    closeLeaderNsFd();
   });
 
   child.on("close", (code, signal) => {
@@ -744,6 +766,7 @@ export function spawnSandboxedExecution(
                 pids_max: cgroupLeaf.pids_max,
               }
             : null,
+          sweep: sweepEnabled() ? "active" : "disabled_no_private_namespace",
           spawnError: null,
         });
         if (cgroupLeaf !== null) teardownCgroupLeaf(cgroupLeaf);

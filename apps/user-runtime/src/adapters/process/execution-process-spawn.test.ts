@@ -299,6 +299,27 @@ describe("execution-process-spawn adapter (S26 chunk 1)", () => {
     expect(existsSync(cgroupPath)).toBe(false);
   });
 
+  it("records the escape sweep's state on the exit: active under the envelope, honestly void without it (P3d, PR #86 review)", async () => {
+    // The D27 envelope ran (networkDisabled) → the leader's private
+    // namespace was pinned → the sweep was LIVE for every termination seam.
+    const handle = spawnSandboxedExecution(makeRequest({ command: ["/bin/sleep", "0.2"] }));
+    const exit = await handle.waitForExit();
+    expect(exit.sweep).toBe("active");
+
+    // NO envelope (networkDisabled: false — the policy's own choice): the
+    // leader shows no private namespace, the sweep NEVER ran, and the exit
+    // records the degradation by name instead of silently omitting it.
+    const bare = spawnSandboxedExecution(
+      makeRequest({
+        command: ["/bin/sleep", "0.2"],
+        networkDisabled: false,
+        limits: { memoryBytes: null, cpuSeconds: null, maxProcesses: null, diskBytes: null },
+      }),
+    );
+    const bareExit = await bare.waitForExit();
+    expect(bareExit.sweep).toBe("disabled_no_private_namespace");
+  });
+
   it("bounds forwarded output at the adapter cap and marks the truncation", async () => {
     let forwarded = "";
     let truncated = false;

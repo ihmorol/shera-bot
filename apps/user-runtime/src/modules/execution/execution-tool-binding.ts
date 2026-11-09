@@ -335,6 +335,18 @@ async function runSandboxed(
   const durationMs = Date.now() - startedAtMs;
   const exitLabel = exit.code !== null ? `exit=${exit.code}` : `signal=${exit.signal ?? "unknown"}`;
 
+  // P3d (PR #86 review): the escape sweep's state is a SECURITY-POSTURE fact
+  // a deployed runtime must see — a sweep DISABLED for this execution (no
+  // private namespace on the leader) means the ST-04 sweep leg is VOID here.
+  // The typed field rides the exit; the fault log makes it observable to the
+  // monitoring/alert path (the S33 alert machinery's home).
+  if (exit.sweep === "disabled_no_private_namespace") {
+    deps.logFault("execution_sweep_disabled", {
+      execution_id: ctx.execution.execution_id,
+      reason: "no private namespace on the leader — the escape sweep never ran",
+    });
+  }
+
   // The runtime-written payload files go away after the exit (best effort):
   // executed code does not persist as a workspace file behind the run's back.
   for (const file of execution.cleanupFiles) {

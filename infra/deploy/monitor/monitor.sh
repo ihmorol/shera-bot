@@ -82,7 +82,12 @@ check_containers() {
     return
   fi
   edge_alert "engine" 0 ""
-  echo "${LIST}" | jq -c '.[] | select(.Names[0] | test("^/(shera-|\\d+shera-)")) | {name: .Names[0], state: .State, status: .Status, restarts: .RestartCount}' 2>/dev/null |
+  # The stack's containers are PINNED by container_name in docker-compose.yml
+  # (shera-*), and the provisioned user runtimes are shera-rt-<account> — the
+  # filter matches the pinned prefix, never the compose project name (which
+  # derives from the checkout directory and is not an identity, the review's
+  # P3c).
+  echo "${LIST}" | jq -c '.[] | select(.Names[0] | test("^/shera-")) | {name: .Names[0], state: .State, status: .Status, restarts: .RestartCount}' 2>/dev/null |
   while IFS= read -r row; do
     NAME="$(printf '%s' "${row}" | jq -r '.name' | sed 's|^/||')"
     STATE="$(printf '%s' "${row}" | jq -r '.state')"

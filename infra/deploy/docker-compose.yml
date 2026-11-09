@@ -53,6 +53,7 @@ x-build: &build
 
 services:
   web:
+    container_name: shera-web
     build:
       <<: *build
       target: web
@@ -87,6 +88,7 @@ services:
       - shera-internal
 
   control-plane:
+    container_name: shera-control-plane
     build:
       <<: *build
       target: control-plane
@@ -131,6 +133,7 @@ services:
       - shera-internal
 
   postgres:
+    container_name: shera-postgres
     image: postgres:16
     restart: unless-stopped
     environment:
@@ -148,6 +151,7 @@ services:
       - shera-internal
 
   redis:
+    container_name: shera-redis
     image: redis:7-alpine
     restart: unless-stopped
     # TRANSIENT ONLY (D2/D23): no persistence whatsoever — redis is never the
@@ -162,6 +166,7 @@ services:
       - shera-internal
 
   searxng:
+    container_name: shera-searxng
     image: searxng/searxng:latest
     restart: unless-stopped
     # JSON output for the S25 research API; limiter off (single-tenant,
@@ -180,6 +185,7 @@ services:
       - shera-internal
 
   caddy:
+    container_name: shera-caddy
     image: caddy:2
     restart: unless-stopped
     # The E43 namespace-owner pattern: caddy runs INSIDE the web service's
@@ -201,6 +207,7 @@ services:
       - caddy_config:/config
 
   backup:
+    container_name: shera-backup
     build:
       <<: *build
       target: backup
@@ -231,6 +238,7 @@ services:
       - shera-internal
 
   monitor:
+    container_name: shera-monitor
     build:
       <<: *build
       target: monitor

@@ -412,6 +412,7 @@ describe("the D27 network separation (S25 chunk 2)", () => {
             limitDeath: null,
             verifiedLimits: null,
             cgroupApplied: null,
+            sweep: "disabled_no_private_namespace",
             spawnError: null,
           }),
           cancel: () => {},

@@ -139,6 +139,26 @@ export function nsIdentityFromFd(fd: number): string | null {
   }
 }
 
+/**
+ * The leaf's memory.events oom_kill counter (P3b, PR #86 review): the
+ * attribution witness for the typed memory_oom classification — a SIGKILL
+ * is attributed to THIS leaf's boundary only when the leaf's own counter
+ * shows an OOM kill; a host-wide OOM (or an external SIGKILL) leaves the
+ * counter untouched and stays the untyped sigkill. null when unreadable
+ * (the leaf is gone — the caller classifies without the witness).
+ */
+export function readOomKillCount(cgroupLeafPath: string): number | null {
+  try {
+    const text = readFileSync(`${cgroupLeafPath}/memory.events`, "utf8");
+    const row = text.split("\n").find((line) => line.startsWith("oom_kill "));
+    if (row === undefined) return null;
+    const value = Number(row.slice("oom_kill ".length).trim());
+    return Number.isInteger(value) && value >= 0 ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Snapshot every sampleable pid's starttime — the spawn-time window anchor. */
 export function snapshotProcStarttimes(): Map<number, string> {
   const snapshot = new Map<number, string>();

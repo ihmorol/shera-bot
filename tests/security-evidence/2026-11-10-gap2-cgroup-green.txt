@@ -1,0 +1,57 @@
+# S27-GAP-2 / issue #84 GREEN evidence — the cgroup memory layer ENGAGES end to end (2026-11-10)
+#
+# The fix under test (the probe verdict + the cgroupfs teardown):
+#   apps/user-runtime/src/adapters/process/execution-process-spawn.ts —
+#   probeCgroupBaseDir's cleanup is rmdir(2) and BEST-EFFORT (a cgroupfs
+#   directory's pseudo-files are not unlinkable; the mkdir verdict can never
+#   again be masked by its own cleanup), teardownCgroupLeaf uses rmdir(2)
+#   the same way, and applyCgroupLayer writes memory.swap.max = 0 beside
+#   memory.max (the S06 no-swap-headroom posture: without it the kernel
+#   reclaims tmpfs/shared pages through swap and memory.max is never a HARD
+#   boundary — observed live: a 512 MiB tmpfs hog wrote straight through a
+#   live memory.max until the swap door closed).
+#
+# What the green runs demonstrate (both suites, same run batch):
+#   1. execution-process-spawn.test.ts 11/11 — the ground-truth probe test
+#      agrees with the host (delegation present, probe non-null), and the
+#      layer-applies test takes its ENGAGED branch end to end: bounds
+#      applied, /proc/<pid>/cgroup names the leaf, bounds read back from the
+#      applied record, the leaf REMOVED after exit (rmdir teardown).
+#   2. s27-st05-resource-exhaustion.test.ts 6/6 — the new GAP-2 leg: a tmpfs
+#      hog invisible to RLIMIT_DATA (dd into /dev/shm — page cache charged
+#      to the cgroup) WAITS until it observes itself inside its execution
+#      leaf, then EXECs dd (the hog becomes the leader) — the kernel
+#      SIGKILLs it at memory.max=256MiB with no swap door, and the exit is
+#      the TYPED memory_oom: GAP-2's exact question ("cannot distinguish
+#      'refused by limit' from 'refused by allocator'") is answered on this
+#      host: the boundary is the KERNEL's, not the allocator's.
+#
+# Command: pnpm vitest run apps/user-runtime/src/adapters/process/execution-process-spawn.test.ts
+#          pnpm vitest run tests/security/s27-st05-resource-exhaustion.test.ts
+
+=== adapter suite ===
+     ✓ cancel() kills the tree before any clock fires (the D27 termination seam) 395ms
+     ✓ applies the cgroup layer when a delegated base exists, and cleans the leaf up (best-effort, honestly recorded) 1567ms
+
+ Test Files  1 passed (1)
+      Tests  11 passed (11)
+   Start at  03:35:00
+   Duration  5.11s (tests 96%, transform 3%, import 1%)
+
+=== ST-05 suite ===
+     ✓ a loop appending past the 1 MiB cap is killed at the boundary and the file stays bounded 331ms
+   ✓ S27 ST-05 — the wall clock kills an infinite computation (1)
+     ✓ an infinite loop is SIGKILLed at the ceiling; the group is dead; wall_clock typed 1598ms
+   ✓ S27 ST-05 — a fork storm is bounded by RLIMIT_NPROC (2)
+     ✓ 40 spawn attempts against an 8-process cap: the kernel refuses the excess; the tree stays bounded 4072ms
+     ✓ NEGATIVE CONTROL: the same storm with no nproc limit spawns most of its children (what the cap prevents) 4102ms
+   ✓ S27 ST-05 — a runaway allocator is contained (RLIMIT_DATA; cgroup = GAP-2, honest) (1)
+     ✓ a loop allocating beyond the data ceiling either refuses allocation or dies at a limit — never grows unbounded 30241ms
+   ✓ S27 ST-05 — the cgroup memory layer where delegation exists (S27-GAP-2 verification, issue #84) (1)
+     ✓ a tmpfs hog invisible to RLIMIT_DATA dies at the KERNEL's cgroup boundary (typed memory_oom) — refused-by-limit distinguished from refused-by-allocator 347ms
+
+ Test Files  1 passed (1)
+      Tests  6 passed (6)
+   Start at  03:33:38
+   Duration  41.13s (tests 100%)
+

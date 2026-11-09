@@ -59,7 +59,7 @@
  * Governing records: D23 rule 2, D27, E1 (prlimit precedent), E13, G3, G4.
  */
 import { spawn, type ChildProcess } from "node:child_process";
-import { accessSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { accessSync, mkdirSync, rmdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import {
@@ -247,6 +247,18 @@ function applyCgroupLayer(
     if (limits.memoryBytes !== null) {
       writeFileSync(join(leaf, "memory.max"), String(limits.memoryBytes));
       memoryMax = String(limits.memoryBytes);
+      // NO swap headroom (the S06 container posture — MemorySwap = Memory):
+      // without this the kernel reclaims tmpfs/shared pages through swap and
+      // memory.max never becomes a HARD boundary — the S27-GAP-2
+      // re-verification's tmpfs hog survived a live memory.max until the
+      // swap door was closed (E48, live-verified 2026-11-10).
+      try {
+        writeFileSync(join(leaf, "memory.swap.max"), "0");
+      } catch {
+        // A kernel without swap accounting refuses the write — recorded as
+        // a null layer below? No: the memory.max boundary still applies;
+        // the swap headroom residual is the recorded honest gap (G5).
+      }
     }
     if (limits.maxProcesses !== null) {
       writeFileSync(join(leaf, "pids.max"), String(limits.maxProcesses));
@@ -267,9 +279,19 @@ function teardownCgroupLeaf(leaf: CgroupLeaf): void {
     // best effort
   }
   try {
-    rmSync(leaf.path, { recursive: true, force: true });
+    // Cgroupfs semantics: the pseudo-files are not unlinkable — rmdir(2)
+    // removes the directory wholesale (the kernel drops the read-only
+    // entries with it). rmSync-recursive would throw EPERM on the first
+    // pseudo-file and leave the leaf behind (the S27-GAP-2 re-verification
+    // found the layer live behind exactly this cleanup shape — issue #84).
+    rmdirSync(leaf.path);
   } catch {
-    // best effort
+    try {
+      // A plain-directory base (test fakes): unlinkable contents.
+      rmSync(leaf.path, { recursive: true, force: true });
+    } catch {
+      // best effort — the leaf lingers; harmless (an id is per-execution).
+    }
   }
 }
 
@@ -675,14 +697,29 @@ export function spawnSandboxedExecution(
   };
 }
 
-/** The cgroup base probe shared by the composition (honest null when absent). */
+/**
+ * The cgroup base probe shared by the composition (honest null when absent).
+ *
+ * S27-GAP-2 re-verification (issue #84, E48): the VERDICT is the mkdir on
+ * the delegated base — a cgroupfs directory's pseudo-files are not
+ * unlinkable, so the cleanup is rmdir(2) (the kernel drops the directory
+ * wholesale) and the cleanup is BEST-EFFORT, never verdict-bearing: the
+ * pre-fix cleanup (`rmSync(probe, { force: true })` on a directory) threw
+ * EISDIR on every delegated host and the catch returned null — a LIVE
+ * delegated layer was invisible behind the probe's own cleanup failure.
+ */
 export function probeCgroupBaseDir(candidateBases?: readonly string[]): string | null {
   const bases = candidateBases ?? ["/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service"];
   for (const base of bases) {
     const probe = join(base, "shera-exec-probe");
     try {
       mkdirSync(probe, { recursive: true });
-      rmSync(probe, { force: true });
+      try {
+        rmdirSync(probe);
+      } catch {
+        // The probe leaf lingers — harmless (the next probe's mkdir is
+        // idempotent); the verdict below was already made by the mkdir.
+      }
       // The composition's stable base dir (leaves are created per execution).
       const stable = join(base, "shera-exec");
       mkdirSync(stable, { recursive: true });

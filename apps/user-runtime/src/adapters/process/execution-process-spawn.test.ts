@@ -21,13 +21,22 @@
  *     fall-back to an unbounded child (G4).
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  probeCgroupBaseDir,
   resolveExecutionPrlimitBinary,
   resolveUnshareBinary,
   spawnSandboxedExecution,
@@ -47,24 +56,57 @@ function makeRequest(overrides: Partial<SandboxSpawnRequest> = {}): SandboxSpawn
   };
 }
 
-/** The delegated cgroup v2 subtree this user may create children under. */
-function probeCgroupBase(): string | null {
-  const candidates = ["/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service"];
-  for (const base of candidates) {
-    if (!existsSync(base)) continue;
-    const probe = join(base, "shera-exec-probe");
-    try {
-      mkdirSync(probe);
-      rmSync(probe);
-      return base;
-    } catch {
-      return null;
-    }
-  }
-  return null;
-}
+/** The delegated cgroup v2 subtree — the ADAPTER's own probe (issue #84:
+ * the probe's cleanup cannot mask the verdict; this file's private copy had
+ * the same rm-on-directory bug and always answered null). */
+const cgroupBase = probeCgroupBaseDir();
 
-const cgroupBase = probeCgroupBase();
+/**
+ * S27-GAP-2 re-verification (issue #84; S35): the probe's own CLEANUP must
+ * never mask the delegation verdict. The probe sequence is mkdir on the
+ * delegated base — a cgroupfs directory's pseudo-files are not unlinkable,
+ * so the cleanup is rmdir(2) (the kernel removes the directory wholesale).
+ * The pre-fix cleanup (`rmSync(probe)` without recursive) threw EISDIR on
+ * EVERY delegated host and the catch returned null — a live delegated layer
+ * was invisible behind the probe's own cleanup failure. This test pins the
+ * ground truth independently of the code under test (a direct leaf with a
+ * writable memory.max IS delegation) and requires the probe to agree.
+ */
+describe("probeCgroupBaseDir — the S27-GAP-2 re-verification (issue #84)", () => {
+  it("returns the stable base where delegation EXISTS — its cleanup cannot mask the layer", () => {
+    const sysBase = "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service";
+    let hostDelegated = false;
+    try {
+      const ground = join(sysBase, "shera-gap2-ground-truth");
+      mkdirSync(ground);
+      writeFileSync(join(ground, "memory.max"), "1048576");
+      rmdirSync(ground);
+      hostDelegated = true;
+    } catch {
+      // The host has no delegated subtree (or no cgroupfs) — the probe's
+      // null verdict IS honest here.
+    }
+
+    const base = probeCgroupBaseDir();
+    if (!hostDelegated) {
+      // The recorded GAP-2 host shape: the probe's null IS the honest
+      // verdict here (no delegated subtree exists).
+      expect(base).toBeNull();
+      console.log(
+        "probe verification: no delegated subtree on this host — the null verdict is honest (S27-GAP-2 stands as recorded)",
+      );
+      return;
+    }
+    expect(
+      base,
+      "the host HAS a delegated subtree (verified by direct leaf creation + memory.max write) but probeCgroupBaseDir returned null — the probe's own cleanup masked the layer (issue #84)",
+    ).not.toBeNull();
+    expect(base!.startsWith(sysBase)).toBe(true);
+    expect(existsSync(base!)).toBe(true);
+    // The stable dir stays (the composition's per-execution base — the
+    // adapter suite reuses it); no cleanup here.
+  });
+});
 
 describe("execution-process-spawn adapter (S26 chunk 1)", () => {
   let workspace: string;
@@ -221,41 +263,40 @@ describe("execution-process-spawn adapter (S26 chunk 1)", () => {
       expect(exit.cgroupApplied).toBeNull();
       return;
     }
-    const base = join(cgroupBase, "shera-exec-test");
-    rmSync(base, { recursive: true, force: true });
-    try {
-      let cgroupPath = "";
-      const handle = spawnSandboxedExecution(
-        makeRequest({
-          command: ["/bin/sleep", "1.5"],
-          cgroupBaseDir: base,
-          id: "exec-cgtest",
-          limits: {
-            memoryBytes: 536_870_912,
-            cpuSeconds: null,
-            maxProcesses: 16,
-            diskBytes: null,
-          },
-        }),
-        {
-          onCgroupApplied: (applied) => {
-            cgroupPath = applied.cgroup_path;
-          },
+    // Leaves live DIRECTLY under the stable base (the composition's own
+    // shape): the controller cascade is enabled on the stable base itself,
+    // so a nested level would sit outside every delegated controller. The
+    // stable base is the composition's PERSISTENT dir — it is never deleted
+    // here; the per-execution leaf is what gets cleaned up.
+    let cgroupPath = "";
+    const handle = spawnSandboxedExecution(
+      makeRequest({
+        command: ["/bin/sleep", "1.5"],
+        cgroupBaseDir: cgroupBase,
+        id: "exec-cgtest",
+        limits: {
+          memoryBytes: 536_870_912,
+          cpuSeconds: null,
+          maxProcesses: 16,
+          diskBytes: null,
         },
-      );
-      await new Promise((resolve) => setTimeout(resolve, 400));
-      expect(cgroupPath).toContain("exec-cgtest");
-      const procCgroup = readFileSync(`/proc/${handle.pid}/cgroup`, "utf8");
-      expect(procCgroup).toContain("shera-exec-test/exec-cgtest");
-      const exit = await handle.waitForExit();
-      expect(exit.code).toBe(0);
-      expect(exit.cgroupApplied).not.toBeNull();
-      expect(exit.cgroupApplied!.memory_max).toBe("536870912");
-      expect(exit.cgroupApplied!.pids_max).toBe("16");
-      expect(existsSync(cgroupPath)).toBe(false);
-    } finally {
-      rmSync(base, { recursive: true, force: true });
-    }
+      }),
+      {
+        onCgroupApplied: (applied) => {
+          cgroupPath = applied.cgroup_path;
+        },
+      },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(cgroupPath).toContain("exec-cgtest");
+    const procCgroup = readFileSync(`/proc/${handle.pid}/cgroup`, "utf8");
+    expect(procCgroup).toContain("exec-cgtest");
+    const exit = await handle.waitForExit();
+    expect(exit.code).toBe(0);
+    expect(exit.cgroupApplied).not.toBeNull();
+    expect(exit.cgroupApplied!.memory_max).toBe("536870912");
+    expect(exit.cgroupApplied!.pids_max).toBe("16");
+    expect(existsSync(cgroupPath)).toBe(false);
   });
 
   it("bounds forwarded output at the adapter cap and marks the truncation", async () => {

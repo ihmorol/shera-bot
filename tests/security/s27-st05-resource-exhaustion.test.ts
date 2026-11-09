@@ -35,6 +35,7 @@ import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 
 import {
+  probeCgroupBaseDir,
   spawnSandboxedExecution,
   type SandboxSpawnRequest,
 } from "../../apps/user-runtime/src/adapters/process/execution-process-spawn.ts";
@@ -225,6 +226,86 @@ describe("S27 ST-05 — a runaway allocator is contained (RLIMIT_DATA; cgroup = 
       refused || diedAtLimit,
       `the allocator must hit the data ceiling (refused=${refused}, limitDeath=${exit.limitDeath})`,
     ).toBe(true);
+    expect(processAlive(process.pid), "the runtime gateway stays healthy").toBe(true);
+  }, 60_000);
+});
+
+describe("S27 ST-05 — the cgroup memory layer where delegation exists (S27-GAP-2 verification, issue #84)", () => {
+  it("a tmpfs hog invisible to RLIMIT_DATA dies at the KERNEL's cgroup boundary (typed memory_oom) — refused-by-limit distinguished from refused-by-allocator", async () => {
+    // The GAP-2 question, verbatim: "the memory-exhaustion leg cannot
+    // distinguish 'refused by limit' from 'refused by allocator'". The
+    // closer writes through tmpfs (page cache charged to the cgroup,
+    // INVISIBLE to RLIMIT_DATA) — only a live cgroup boundary can stop it.
+    // The payload WAITS until it observes itself inside its execution leaf
+    // (the D27 move is asynchronous to the payload's start — a charger that
+    // begins inside the pre-move window completes before the boundary
+    // exists; that window is the recorded residual, E48 — the Compose
+    // deployment's container-level cgroup covers it), then EXECs dd — the
+    // hog BECOMES the leader, so the kernel's OOM kill surfaces as the
+    // typed memory_oom classification on the exit itself.
+    const cgroupBase = probeCgroupBaseDir();
+    const work = mkdtempSync(join(tmpdir(), "shera-s27-st05-gap2-"));
+    tempDirs.push(work);
+    const hogPath = `/dev/shm/shera-gap2-hog-${process.pid}`;
+    const payload = [
+      `i=0`,
+      `while [ $i -lt 400 ]; do`,
+      `  grep -q exec-cgtest-gap2 /proc/self/cgroup 2>/dev/null && break`,
+      `  i=$((i+1)); sleep 0.05`,
+      `done`,
+      `exec dd if=/dev/zero of=${hogPath} bs=1M count=512 2>/dev/null`,
+    ].join("\n");
+    const handle = spawnSandboxedExecution(
+      baseRequest(work, {
+        command: ["/bin/sh", "-c", payload],
+        limits: {
+          // memory.max = 256 MiB: HALF of what dd attempts — the kernel
+          // boundary must fire mid-dd when (and only when) the layer lives.
+          memoryBytes: 256 * 1024 * 1024,
+          cpuSeconds: 30,
+          maxProcesses: null,
+          diskBytes: null, // no RLIMIT_FSIZE — tmpfs writes are unbounded by it
+        },
+        // Leaves live DIRECTLY under the stable base (the composition's
+        // shape — the controller cascade is enabled on the stable base; a
+        // nested level would sit outside every delegated controller).
+        cgroupBaseDir: cgroupBase,
+        id: "cgtest-gap2",
+        wallClockMs: 25_000,
+      }),
+      {},
+    );
+    const exit = await handle.waitForExit();
+    // The hog is OOM-killed mid-write — its partial tmpfs file is the
+    // suite's own hygiene to remove.
+    rmSync(hogPath, { force: true });
+
+    if (cgroupBase === null) {
+      // The recorded S27-era host state (GAP-2, E45): NO delegated base —
+      // the leg pins the honest degradation and claims NOTHING (G5). The
+      // runbook's verify-cgroup.sh carries the host-side procedure.
+      console.log(
+        "ST-05 GAP-2 verification: NO delegated cgroup subtree on this host — the leg pins the honest degradation; the memory boundary rests on RLIMIT_DATA + the wall clock alone (S27-GAP-2 stands as recorded)",
+      );
+      expect(processAlive(process.pid), "the runtime gateway stays healthy").toBe(true);
+      return;
+    }
+
+    // THE LAYER ENGAGES: the applied bounds are the kernel's own, and the
+    // leader-hog died AT them — SIGKILL at memory.max with no swap door
+    // (memory.swap.max = 0, the S06 no-headroom posture), typed memory_oom,
+    // NOT an allocator refusal (dd never heap-allocates; RLIMIT_DATA never
+    // touches tmpfs page cache).
+    expect(
+      exit.cgroupApplied,
+      `the delegated base exists so the layer MUST apply (probed=${cgroupBase}) — an unexpected refusal is a finding, never a silent degradation`,
+    ).not.toBeNull();
+    expect(exit.cgroupApplied!.memory_max).toBe(String(256 * 1024 * 1024));
+    expect(
+      exit.limitDeath,
+      `the tmpfs leader-hog must die at the KERNEL's cgroup boundary (cgroupApplied=${JSON.stringify(exit.cgroupApplied)}, exit=${JSON.stringify({ code: exit.code, signal: exit.signal, timedOut: exit.timedOut })})`,
+    ).toBe("memory_oom");
+    expect(exit.signal).toBe("SIGKILL");
     expect(processAlive(process.pid), "the runtime gateway stays healthy").toBe(true);
   }, 60_000);
 });

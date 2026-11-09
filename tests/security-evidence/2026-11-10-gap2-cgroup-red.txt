@@ -1,0 +1,54 @@
+# S27-GAP-2 / issue #84 RED evidence — the probe's own cleanup masked a LIVE delegated layer (2026-11-10)
+#
+# The S35 re-verification of the recorded "cgroup memory layer is DEAD on the
+# recorded host" finding (SECURITY-GAPS §S27-GAP-2, issue #84) discovered the
+# layer is ALIVE on this host (systemd user@1000.service Delegate=yes; a
+# direct leaf with a writable memory.max was created OUTSIDE any code under
+# test) — and that probeCgroupBaseDir could never see it: its cleanup
+# (`rmSync(probe, { force: true })` on a DIRECTORY) threw EISDIR on every
+# delegated host and the catch returned null. The committed ground-truth test
+# pins exactly that: the host HAS delegation, the probe answers null.
+#
+# Command: pnpm vitest run apps/user-runtime/src/adapters/process/execution-process-spawn.test.ts
+# (pre-fix; the fix lands in the same slice — the green run is archived beside
+# this file). Also observed red-adjacent: the ST-05 tmpfs leg took its
+# honest-degradation branch (the null probe) although the boundary was live.
+
+
+ RUN  v5.0.1 /home/emon-morol/projects/github-cloud-projects/shera-bot-s35
+
+ ❯ apps/user-runtime/src/adapters/process/execution-process-spawn.test.ts (11 tests | 1 failed) 3251ms
+   ❯ probeCgroupBaseDir — the S27-GAP-2 re-verification (issue #84) (1)
+     × returns the stable base where delegation EXISTS — its cleanup cannot mask the layer 13ms
+   ✓ execution-process-spawn adapter (S26 chunk 1) (10)
+     ✓ resolves the enforcement binaries through their candidate paths (G4) 3ms
+     ✓ disables the network for the child: an outbound connect fails with ENETUNREACH (D27, demonstrated) 133ms
+     ✓ gives the child EXACTLY the request env — a secret planted in the runtime env is invisible (AC5) 122ms
+     ✓ applies the kernel limits and verifies them against /proc/<pid>/limits (E1 precedent) 488ms
+     ✓ kills a CPU spin at its ceiling with the typed limit-death classification (AC3) 1309ms
+     ✓ enforces the wall-clock ceiling on the WHOLE tree (detached group kill + reap) 502ms
+     ✓ cancel() kills the tree before any clock fires (the D27 termination seam) 400ms
+     ✓ skips the network namespace only when the request says so (the flag is the policy's, never the adapter's) 85ms
+     ✓ applies the cgroup layer when a delegated base exists, and cleans the leaf up (best-effort, honestly recorded) 69ms
+     ✓ bounds forwarded output at the adapter cap and marks the truncation 123ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/user-runtime/src/adapters/process/execution-process-spawn.test.ts > probeCgroupBaseDir — the S27-GAP-2 re-verification (issue #84) > returns the stable base where delegation EXISTS — its cleanup cannot mask the layer
+AssertionError: the host HAS a delegated subtree (verified by direct leaf creation + memory.max write) but probeCgroupBaseDir returned null — the probe's own cleanup masked the layer (issue #84): expected null not to be null
+ ❯ apps/user-runtime/src/adapters/process/execution-process-spawn.test.ts:108:11
+    106|       base,
+    107|       "the host HAS a delegated subtree (verified by direct leaf creat…
+    108|     ).not.toBeNull();
+       |           ^
+    109|     expect(base!.startsWith(sysBase)).toBe(true);
+    110|     expect(existsSync(base!)).toBe(true);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 10 passed (11)
+   Start at  03:25:40
+   Duration  3.68s (tests 94%, transform 4%, import 1%)
+

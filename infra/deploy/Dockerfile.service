@@ -1,0 +1,104 @@
+# Shera Bot — the stack's service images (S35).
+#
+# ONE multi-stage Dockerfile; compose picks the stage per service
+# (web / control-plane / backup / monitor). The USER runtime image —
+# the one the S06 backend provisions per account — is a separate build
+# (Dockerfile.user-runtime) because it is referenced by NAME through
+# SHERA_RUNTIME_IMAGE, not as a compose service.
+#
+# Build identity: GIT_SHA is a build arg stamped into every stage (the
+# issue's build-identity criterion; the smoke script reads the
+# org.opencontainers.image.revision labels).
+#
+# NOT built on the recorded building machine (E22–E47: the engine daemon is
+# unusable there) — the structural gate on that host is `docker compose
+# config`; the image builds are a deployment-host step in the runbook.
+# Every stage below is written to be correct by inspection against the
+# workspace's own package scripts (pnpm --filter <name> build/start) and
+# carries the honest NOT-VERIFIED note in the runbook until the owner's
+# scratch-VM build exercises them.
+
+FROM node:24-bookworm-slim AS base
+# corepack pins pnpm to the version declared in package.json#packageManager
+# (the single toolchain pin, same as CI).
+RUN corepack enable
+WORKDIR /app
+
+# ---- web -------------------------------------------------------------------
+FROM base AS web-build
+ARG GIT_SHA=local
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.base.json turbo.json tsconfig.json .npmrc ./
+COPY apps/web/package.json apps/web/
+COPY packages/contracts/package.json packages/contracts/
+COPY packages/clients/package.json packages/clients/
+COPY packages/pi-protocol/package.json packages/pi-protocol/
+COPY packages/observability/package.json packages/observability/
+COPY packages/agent-pack-sdk/package.json packages/agent-pack-sdk/
+COPY packages/provider-contracts/package.json packages/provider-contracts/
+COPY packages/test-kit/package.json packages/test-kit/
+RUN pnpm install --frozen-lockfile
+COPY . .
+RUN pnpm --filter @shera-bot/web build
+
+FROM node:24-bookworm-slim AS web
+ARG GIT_SHA=local
+LABEL org.opencontainers.image.revision=${GIT_SHA}
+LABEL org.opencontainers.image.title="shera-bot web"
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=web-build /app ./
+EXPOSE 3000
+CMD ["pnpm", "--filter", "@shera-bot/web", "start"]
+
+# ---- control-plane ----------------------------------------------------------
+FROM base AS control-plane-build
+ARG GIT_SHA=local
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.base.json turbo.json tsconfig.json .npmrc ./
+COPY apps/control-plane/package.json apps/control-plane/
+COPY packages/contracts/package.json packages/contracts/
+COPY packages/clients/package.json packages/clients/
+COPY packages/pi-protocol/package.json packages/pi-protocol/
+COPY packages/observability/package.json packages/observability/
+COPY packages/agent-pack-sdk/package.json packages/agent-pack-sdk/
+COPY packages/provider-contracts/package.json packages/provider-contracts/
+COPY packages/test-kit/package.json packages/test-kit/
+RUN pnpm install --frozen-lockfile
+COPY . .
+
+# The control plane runs from its TypeScript sources with its own package
+# script (`node src/main.ts` — Node ≥24 executes TS sources natively); no
+# compile step beyond dependency installation.
+FROM node:24-bookworm-slim AS control-plane
+ARG GIT_SHA=local
+LABEL org.opencontainers.image.revision=${GIT_SHA}
+LABEL org.opencontainers.image.title="shera-bot control-plane"
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=control-plane-build /app ./
+# The provisioning plane's engine client needs the socket bind-mounted by
+# compose (the ONE recorded socket mount — the control-plane's only).
+EXPOSE 3000
+CMD ["pnpm", "--filter", "@shera-bot/control-plane", "start"]
+
+# ---- backup -----------------------------------------------------------------
+FROM postgres:16 AS backup
+ARG GIT_SHA=local
+LABEL org.opencontainers.image.revision=${GIT_SHA}
+LABEL org.opencontainers.image.title="shera-bot backup"
+# postgres:16 ships pg_dump matching the server major — the tool the PRD §12
+# cadence needs for the central-PG side. restic is intentionally NOT baked
+# in: per E44 it stays the documented external binary (BACKUP_BACKEND=restic
+# refuses typed when the binary is absent — G4, never a silent fallback).
+COPY infra/deploy/backup/backup.sh /usr/local/bin/backup.sh
+RUN chmod +x /usr/local/bin/backup.sh
+ENTRYPOINT ["/usr/local/bin/backup.sh"]
+
+# ---- monitor ----------------------------------------------------------------
+FROM alpine:3.20 AS monitor
+ARG GIT_SHA=local
+LABEL org.opencontainers.image.revision=${GIT_SHA}
+LABEL org.opencontainers.image.title="shera-bot monitor"
+RUN apk add --no-cache docker-cli curl jq
+COPY infra/deploy/monitor/monitor.sh /usr/local/bin/monitor.sh
+RUN chmod +x /usr/local/bin/monitor.sh
+ENTRYPOINT ["/usr/local/bin/monitor.sh"]

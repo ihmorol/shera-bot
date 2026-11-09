@@ -1,0 +1,58 @@
+# Shera Bot — the USER runtime image (S35; provisioned per account by the S06
+# control-plane backend through SHERA_RUNTIME_IMAGE — never a compose service).
+#
+# What the runtime container carries: the user-runtime gateway (one supervised
+# runtime per user container, PRD §6), the util-linux binaries the D27 sandbox
+# envelope requires INSIDE the container (unshare/prlimit — the same kernel
+# envelope the prototype enforces on the building machine), git for the §10
+# project flows, and nothing else. No port is published by this image — the
+# S06 spec builder deliberately omits PortBindings (the isolation property,
+# D27) and the control plane reaches the container over the shera-internal
+# network by its container name.
+#
+# Container-isolation posture (PRD §16, infra/README guardrails): this image
+# must never receive the host Docker socket, host filesystem mounts, or any
+# credential material beyond the internal-channel credential DIGEST the
+# control plane injects at provisioning (G3).
+#
+# NOT built on the recorded building machine (E22–E47) — the build is a
+# deployment-host runbook step; the SHERA_RUNTIME_IMAGE name in .env points
+# at the tag this file produces.
+
+FROM node:24-bookworm-slim
+ARG GIT_SHA=local
+LABEL org.opencontainers.image.revision=${GIT_SHA}
+LABEL org.opencontainers.image.title="shera-bot user-runtime"
+
+# util-linux = unshare + prlimit (the D27 sandbox envelope's binaries);
+# git = the PRD §10 project flows inside the user container.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends util-linux git ca-certificates \
+  && rm -rf /var/lib/apt/lists/* \
+  && corepack enable
+
+WORKDIR /app
+ENV NODE_ENV=production
+
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.base.json turbo.json tsconfig.json .npmrc ./
+COPY apps/user-runtime/package.json apps/user-runtime/
+COPY agent-packs ./agent-packs
+COPY packages/contracts/package.json packages/contracts/
+COPY packages/clients/package.json packages/clients/
+COPY packages/pi-protocol/package.json packages/pi-protocol/
+COPY packages/observability/package.json packages/observability/
+COPY packages/agent-pack-sdk/package.json packages/agent-pack-sdk/
+COPY packages/provider-contracts/package.json packages/provider-contracts/
+COPY packages/test-kit/package.json packages/test-kit/
+RUN pnpm install --frozen-lockfile
+COPY . .
+
+# The gateway binds 127.0.0.1:8080 by default (RUNTIME_HOST); a
+# non-loopback bind requires RUNTIME_ALLOW_NON_LOOPBACK_BIND=1 — on the
+# compose network the control plane provisions the container with that
+# reference set (the runtime's own main.ts seam), keeping the unauthenticated
+# surface scoped to the container network. The data directory the runtime
+# writes (RUNTIME_DB_PATH's parent) is the per-user volume the S33 snapshot
+# machinery captures.
+EXPOSE 8080
+CMD ["pnpm", "--filter", "@shera-bot/user-runtime", "start"]

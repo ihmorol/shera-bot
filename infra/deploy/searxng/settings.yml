@@ -1,0 +1,18 @@
+# SearXNG settings for the Shera Bot stack (S35) — the research tools'
+# search backend (S25). Minimal single-tenant private posture: the limiter
+# and bot detection are OFF (the only clients are the stack's own runtime
+# containers on the private network), JSON output is REQUIRED by the S25
+# API, and the public instance registration is disabled.
+use_default_settings: true
+server:
+  # The upstream's documented placeholder — the REAL value arrives through
+  # the SEARXNG_SECRET environment reference the compose service carries
+  # (never a committed credential, G3; the runbook's pre-flight verifies the
+  # override engaged on the pinned image).
+  secret_key: "ultrasecretkey"
+  limiter: false
+  image_proxy: false
+search:
+  formats:
+    - html
+    - json

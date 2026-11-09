@@ -1,0 +1,20 @@
+# The production edge for one Shera Bot VM (S35; the E43 one-tenant pattern):
+# automatic HTTPS for a stack whose ONLY public surface is the web app.
+#
+# Caddy runs INSIDE the web service's network namespace (compose
+# network_mode: "service:web"), so 127.0.0.1:3000 IS the web app and the
+# published 80/443 belong to that namespace. The control plane never binds a
+# public interface — every control-plane call is the web app's own
+# same-origin proxy (/api/control/*, /api/runtime/*), which is also why the
+# proxy here is one flat pass-through: the app owns its routing.
+#
+# WebSockets (the /api/runtime/live engine.io path) upgrade automatically
+# through Caddy's reverse_proxy; flush_interval -1 keeps the event streams
+# (chat streaming, live events) unbuffered.
+{$DOMAIN} {
+	encode zstd gzip
+
+	reverse_proxy 127.0.0.1:3000 {
+		flush_interval -1
+	}
+}

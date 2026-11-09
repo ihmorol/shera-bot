@@ -1,0 +1,16 @@
+# The LOCAL (scratch-environment) edge variant — HTTP only, for the owner's
+# scratch run of the deploy runbook before a real domain exists (the E43
+# deploy/local pattern: a documented variant Caddyfile, not a second stack).
+#
+# Usage: docker compose -f docker-compose.yml up with
+# CADDYFILE=./Caddyfile.local exported in .env (see .env.example) and
+# PUBLIC_URL=http://<vm-ip> (no TLS). Automatic HTTPS stays OFF because the
+# hostname is not a public DNS name; the production Caddyfile takes over at
+# the real-domain step of the runbook.
+:80 {
+	encode zstd gzip
+
+	reverse_proxy 127.0.0.1:3000 {
+		flush_interval -1
+	}
+}

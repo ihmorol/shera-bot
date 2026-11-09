@@ -1,0 +1,276 @@
+# Shera Bot — the one-VM production Compose stack (S35; PRD §6.1).
+#
+# Topology, mapped 1:1 to the slice issue's list and PRD §6.1:
+#   web            — the Next.js client; the ONLY public-facing service
+#   control-plane  — the Express API; private (the web proxies to it); the
+#                    S06 provisioning plane for the user runtime containers
+#   postgres       — central control-plane records (D2/D24)
+#   redis          — TRANSIENT ONLY, no persistence (D2/D23: never the source
+#                    of truth; the prototype runtime owns its queues in-process
+#                    per E37 — this service exists per the PRD §6.1 topology)
+#   searxng        — the research tools' search backend (S25, SHERA_SEARXNG_URL)
+#   caddy          — automatic-HTTPS reverse proxy (E15 embed; E43 pattern:
+#                    Caddy runs in the SERVER's network namespace —
+#                    network_mode: "service:web" — so only the web service's
+#                    netns owns the published ports and neither the control
+#                    plane nor the proxy binds a public interface of its own)
+#   backup         — the control-plane PostgreSQL backup cadence (PRD §12);
+#                    the USER-facing snapshot/restore machinery is the
+#                    runtime's own (S33/E44) and rides the runtime containers
+#   monitor        — the monitoring minimum + alert routing (see monitor.sh)
+#
+# The "up to five user containers" are NOT static services here: they are
+# provisioned at runtime by the control plane through the S06 backend
+# (LocalContainerBackend, dockerode) onto the `shera-internal` network, one
+# per account, capped by SIGNUP_CAP = 5 (apps/control-plane/src/config.ts).
+# The compose stack provides that network, the docker socket to the
+# control-plane (the provisioning plane's engine client — the recorded E48
+# decision), and SHERA_RUNTIME_IMAGE.
+#
+# Secrets (G3): no literal appears in this file. Every value comes from the
+# environment; required ones use ${VAR:?} so an unconfigured deployment
+# REFUSES to render. The template is .env.example (names only).
+#
+# Structure gate (no daemon needed): cp .env.example .env && fill it, then
+#   docker compose config   — exit 0 = the stack is structurally valid.
+#
+# Build identity: every built image carries org.opencontainers.image.revision
+# = GIT_SHA and is tagged ${SHERA_IMAGE_PREFIX}<name>:${GIT_SHA}; the smoke
+# script (infra/deploy/smoke.sh) checks the running deployment's labels
+# against `git rev-parse HEAD` (the issue's build-identity criterion).
+#
+# E43 attribution: the namespace-owner Caddy posture, the
+# prebuilt-image-or-build dual posture, and the healthcheck + restart
+# pattern are pattern-references from OpenMausBot deploy/docker-compose.yml
+# (pinned aede7d817df9, Apache-2.0) — pattern only, no code copied; NOTICE
+# travel recorded in E48 and the PR E-note.
+
+x-build: &build
+  context: ../..
+  dockerfile: infra/deploy/Dockerfile.service
+  args:
+    GIT_SHA: ${GIT_SHA:-local}
+
+services:
+  web:
+    build:
+      <<: *build
+      target: web
+    image: ${SHERA_IMAGE_PREFIX:-shera-}web:${GIT_SHA:-local}
+    labels:
+      org.opencontainers.image.revision: ${GIT_SHA:-local}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      CONTROL_PLANE_URL: http://control-plane:3000
+      SHERA_WEB_ORIGIN: ${PUBLIC_URL:?set PUBLIC_URL in .env}
+    # The namespace owner for the edge: caddy (below) shares THIS container's
+    # network namespace, so the published ports live here and no other
+    # service binds anything public (the E43 one-tenant pattern, applied to
+    # the web-fronted stack).
+    ports:
+      - "80:80"
+      - "443:443"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/login').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - shera-internal
+
+  control-plane:
+    build:
+      <<: *build
+      target: control-plane
+    image: ${SHERA_IMAGE_PREFIX:-shera-}control-plane:${GIT_SHA:-local}
+    labels:
+      org.opencontainers.image.revision: ${GIT_SHA:-local}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_URL: postgres://shera:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/shera
+      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env}
+      AUTH_URL: ${PUBLIC_URL:?set PUBLIC_URL in .env}
+      AUTH_TRUST_HOST: "true"
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?set GOOGLE_CLIENT_ID in .env}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?set GOOGLE_CLIENT_SECRET in .env}
+      SHERA_WEB_ORIGIN: ${PUBLIC_URL:?set PUBLIC_URL in .env}
+      # The S06 provisioning plane (LocalContainerBackend):
+      SHERA_RUNTIME_IMAGE: ${SHERA_RUNTIME_IMAGE:-shera-user-runtime:local}
+      SHERA_RUNTIME_INTERNAL_PORT: "8080"
+      SHERA_RUNTIME_NETWORK: shera-internal
+    # The provisioning plane's engine client (dockerode) needs the engine
+    # socket — the ONE recorded socket mount in the stack, owned by the
+    # control-plane (E48). User runtime containers never receive it.
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/healthz').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - shera-internal
+
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: shera
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: shera
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shera -d shera"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - shera-internal
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # TRANSIENT ONLY (D2/D23): no persistence whatsoever — redis is never the
+    # source of truth, so the container carries no volume by design.
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - shera-internal
+
+  searxng:
+    image: searxng/searxng:latest
+    restart: unless-stopped
+    # JSON output for the S25 research API; limiter off (single-tenant,
+    # private instance — the runbook records the pinning decision).
+    environment:
+      # The instance's session secret — from .env, never a literal (G3).
+      SEARXNG_SECRET: ${SEARXNG_SECRET:?set SEARXNG_SECRET in .env}
+    volumes:
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - shera-internal
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    # The E43 namespace-owner pattern: caddy runs INSIDE the web service's
+    # network namespace — it reaches the web on 127.0.0.1:3000 and the
+    # published 80/443 belong to the web service (above). No other service
+    # binds a public interface.
+    network_mode: "service:web"
+    depends_on:
+      web:
+        condition: service_healthy
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+    volumes:
+      # CADDYFILE selects the edge variant: ./Caddyfile (production, automatic
+      # HTTPS — default) or ./Caddyfile.local (the scratch-environment HTTP
+      # edge; see .env.example and the runbook).
+      - ./${CADDYFILE:-Caddyfile}:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  backup:
+    build:
+      <<: *build
+      target: backup
+    image: ${SHERA_IMAGE_PREFIX:-shera-}backup:${GIT_SHA:-local}
+    labels:
+      org.opencontainers.image.revision: ${GIT_SHA:-local}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://shera:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/shera
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-21600}
+      BACKUP_KEEP: ${BACKUP_KEEP:-7}
+      BACKUP_BACKEND: ${BACKUP_BACKEND:-copy}
+    # The cadence the PRD §12 names; the USER-facing snapshot/restore
+    # machinery is the runtime's own six-hour scheduler (S33/E44) — this
+    # service covers the CENTRAL PostgreSQL side and reports its result to
+    # /backups/status.json for the monitor.
+    volumes:
+      - backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "test -f /backups/status.json || exit 1",
+        ]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+    networks:
+      - shera-internal
+
+  monitor:
+    build:
+      <<: *build
+      target: monitor
+    image: ${SHERA_IMAGE_PREFIX:-shera-}monitor:${GIT_SHA:-local}
+    labels:
+      org.opencontainers.image.revision: ${GIT_SHA:-local}
+    restart: unless-stopped
+    environment:
+      PUBLIC_URL: ${PUBLIC_URL:?set PUBLIC_URL in .env}
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+      BACKUP_MAX_AGE_SECONDS: ${BACKUP_MAX_AGE_SECONDS:-25200}
+      CHECK_INTERVAL_SECONDS: ${CHECK_INTERVAL_SECONDS:-60}
+    # Read-only engine access (container states + restart counts) and
+    # read-only access to the backup status volume.
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - backups:/backups:ro
+    depends_on:
+      - web
+      - control-plane
+      - postgres
+      - redis
+      - searxng
+      - backup
+    networks:
+      - shera-internal
+
+networks:
+  # The REAL network name must match SHERA_RUNTIME_NETWORK's default
+  # (shera-internal) — the S06 backend provisions the user runtime
+  # containers onto exactly this network.
+  shera-internal:
+    name: shera-internal
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
+  backups:

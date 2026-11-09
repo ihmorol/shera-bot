@@ -34,3 +34,9 @@ artifacts/
 .browsers-cache/
 tests/acceptance/browser/test-results/
 tests/acceptance/browser/playwright-report/
+
+# S35 deployment: the filled environment file lives ON THE VM only — it is
+# the one file in the tree that carries real secrets (G3). .env.example (the
+# committed template) carries names only.
+infra/deploy/.env
+.env

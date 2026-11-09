@@ -284,12 +284,15 @@ describe("sandbox containment through the executor (S26 chunk 5)", () => {
     // invisible to RLIMIT_DATA dying with the typed memory_oom — is the
     // ST-05 tmpfs leg (issue #84), because here RLIMIT_DATA caps at the
     // SAME size and wins the in-process race.
-    expect(settled.result_summary).not.toMatch(/ALLOC-BAD/);
+    // result_summary exists on the "executed" variant only — the containment
+    // evidence reads through the union honestly.
+    const summary = settled.outcome === "executed" ? settled.result_summary : "";
+    expect(summary).not.toMatch(/ALLOC-BAD/);
     expect(
-      /alloc refused/.test(settled.result_summary) ||
-        /signal=/.test(settled.result_summary) ||
+      /alloc refused/.test(summary) ||
+        /signal=/.test(summary) ||
         (settled.outcome === "execution_failed" && settled.error_code === "SANDBOX_LIMIT_EXCEEDED"),
-      `the hog must be contained at the ceiling (outcome=${settled.outcome}, summary=${settled.result_summary.slice(0, 200)})`,
+      `the hog must be contained at the ceiling (outcome=${settled.outcome}, summary=${summary.slice(0, 200)})`,
     ).toBe(true);
     if (cgroupBase === null) {
       // No delegated subtree: RLIMIT_DATA alone contains the hog — the

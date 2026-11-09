@@ -18,6 +18,10 @@ import express, { type Express, type NextFunction, type Request, type Response }
 import {
   isBrowserRuntimePath,
   runtimeWorkspaceMatches,
+  RuntimeAdminBackupRestoreRequest,
+  RuntimeAdminBackupRestoreResponse,
+  RuntimeAdminBackupTakeRequest,
+  RuntimeAdminBackupTakeResponse,
   RuntimeAdminCancelAllRequest,
   RuntimeAdminCancelAllResponse,
   RuntimeAdminCreditTopUpRequest,
@@ -26,6 +30,8 @@ import {
   RuntimeAdminTaskFailuresResponse,
   RUNTIME_ADMIN_TASK_FAILURES_PATH,
   RUNTIME_ADMIN_CREDITS_TOP_UP_PATH,
+  RUNTIME_ADMIN_BACKUP_TAKE_PATH,
+  RUNTIME_ADMIN_BACKUP_RESTORE_PATH,
   RuntimeCredentialCommitRequest,
   RuntimeCredentialCommitResponse,
   RuntimeCredentialRotationRequest,
@@ -495,6 +501,145 @@ export function createInternalApi(deps: InternalApiDeps): InternalApi {
           .status(500)
           .json(
             internalChannelError("INTERNAL_ERROR", "The task-failure read could not be completed."),
+          );
+      });
+  });
+
+  /**
+   * S33 admin backup commands (issue #34, D47): the admin-triggered snapshot
+   * and restore over the SAME channel, with the SAME tenant check and the
+   * same actor attribution shape as the S32 commands. The responses are the
+   * backup mechanism's OWN typed results — a refused take/restore is a 200
+   * with the honest false arm, never a fabricated success (G4).
+   */
+  function adminBackupTenantGuard(
+    req: Request,
+    res: Response,
+    workspaceId: string,
+    path: string,
+  ): boolean {
+    if (deps.accountId === undefined) {
+      // Fail CLOSED: an unbound composition must not skip the tenant check.
+      res
+        .status(503)
+        .json(
+          internalChannelError(
+            "INTERNAL_CHANNEL_NOT_BOUND",
+            "This runtime's channel composition does not bind an account; the admin command is refused.",
+          ),
+        );
+      return false;
+    }
+    if (workspaceId !== `ws_${deps.accountId}`) {
+      securityEvents.record({
+        event: "internal_admin_command_refused",
+        reason: "workspace_tenant_mismatch",
+        path,
+        occurred_at: new Date().toISOString(),
+      });
+      res
+        .status(403)
+        .json(
+          internalChannelError(
+            "RUNTIME_TENANT_MISMATCH",
+            "This workspace does not belong to this runtime.",
+          ),
+        );
+      return false;
+    }
+    return true;
+  }
+
+  app.post(RUNTIME_ADMIN_BACKUP_TAKE_PATH, requireChannelCredential, (req, res) => {
+    const parsed = RuntimeAdminBackupTakeRequest.safeParse(req.body);
+    if (!parsed.success) {
+      res
+        .status(400)
+        .json(
+          internalChannelError(
+            "CONTRACT_VALIDATION_FAILED",
+            "The backup take payload is not a valid RuntimeAdminBackupTakeRequest.",
+          ),
+        );
+      return;
+    }
+    if (
+      !adminBackupTenantGuard(req, res, parsed.data.workspace_id, RUNTIME_ADMIN_BACKUP_TAKE_PATH)
+    ) {
+      return;
+    }
+    if (!deps.adminCommands) {
+      res
+        .status(503)
+        .json(
+          internalChannelError(
+            "INTERNAL_ERROR",
+            "The admin command surface is not wired in this composition.",
+          ),
+        );
+      return;
+    }
+    deps.adminCommands
+      .takeBackup({
+        workspaceId: parsed.data.workspace_id,
+        snapshotRef: parsed.data.snapshot_ref,
+        actor: parsed.data.actor,
+      })
+      .then((result) => {
+        const response = RuntimeAdminBackupTakeResponse.parse(result);
+        res.status(200).json(response);
+      })
+      .catch(() => {
+        res
+          .status(500)
+          .json(internalChannelError("INTERNAL_ERROR", "The backup take could not be completed."));
+      });
+  });
+
+  app.post(RUNTIME_ADMIN_BACKUP_RESTORE_PATH, requireChannelCredential, (req, res) => {
+    const parsed = RuntimeAdminBackupRestoreRequest.safeParse(req.body);
+    if (!parsed.success) {
+      res
+        .status(400)
+        .json(
+          internalChannelError(
+            "CONTRACT_VALIDATION_FAILED",
+            "The backup restore payload is not a valid RuntimeAdminBackupRestoreRequest.",
+          ),
+        );
+      return;
+    }
+    if (
+      !adminBackupTenantGuard(req, res, parsed.data.workspace_id, RUNTIME_ADMIN_BACKUP_RESTORE_PATH)
+    ) {
+      return;
+    }
+    if (!deps.adminCommands) {
+      res
+        .status(503)
+        .json(
+          internalChannelError(
+            "INTERNAL_ERROR",
+            "The admin command surface is not wired in this composition.",
+          ),
+        );
+      return;
+    }
+    deps.adminCommands
+      .restoreBackup({
+        workspaceId: parsed.data.workspace_id,
+        snapshotId: parsed.data.snapshot_id,
+        actor: parsed.data.actor,
+      })
+      .then((result) => {
+        const response = RuntimeAdminBackupRestoreResponse.parse(result);
+        res.status(200).json(response);
+      })
+      .catch(() => {
+        res
+          .status(500)
+          .json(
+            internalChannelError("INTERNAL_ERROR", "The backup restore could not be completed."),
           );
       });
   });

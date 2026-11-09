@@ -9,6 +9,7 @@ import { ToolsSettingsSurface } from "@/components/settings/tools-settings";
 import { ProvidersSettingsSurface } from "@/components/settings/providers-settings";
 import { SchedulesSettingsSurface } from "@/components/settings/schedules-settings";
 import { CreditsSettingsSurface } from "@/components/settings/credits-settings";
+import { MemorySettingsSurface } from "@/components/settings/memory-settings";
 import { WorkersSettingsSurface } from "@/components/settings/worker-admission-readout";
 import { SurfaceFrame } from "@/components/shell/surface-frame";
 import { findAgent } from "@/lib/navigation";
@@ -61,6 +62,20 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
         <div className="mx-auto max-w-xl">
           <CreditsSettingsSurface />
         </div>
+      </SurfaceFrame>
+    );
+  }
+
+  // S29 (§S9 Memory, PRD §11, D37, AC27): the memory surface — the shared
+  // workspace memory and each Agent's private memory in the per-scope
+  // breakdown, the publication queue (approve/dismiss), the "remembered
+  // from …" provenance lines, version restore, and the auto-memory
+  // switches. Secrets are never stored, and a refused write shows its
+  // typed rejection honestly.
+  if (section?.length === 1 && section[0] === "memory") {
+    return (
+      <SurfaceFrame title="Settings" meta="Memory">
+        <MemorySettingsSurface />
       </SurfaceFrame>
     );
   }
@@ -184,6 +199,15 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
           </li>
           <li className="flex items-center justify-between rounded-xl border border-line bg-surface px-4 py-3">
             <Link
+              href={routes.settings("memory")}
+              className="text-sm text-text underline underline-offset-4 hover:text-cool-highlight"
+            >
+              Memory
+            </Link>
+            <span className="font-mono text-xs uppercase tracking-[0.16em] text-muted">open</span>
+          </li>
+          <li className="flex items-center justify-between rounded-xl border border-line bg-surface px-4 py-3">
+            <Link
               href={routes.settings("schedules")}
               className="text-sm text-text underline underline-offset-4 hover:text-cool-highlight"
             >
@@ -200,7 +224,7 @@ export default async function SettingsPage({ params }: SettingsPageProps) {
             </Link>
             <span className="font-mono text-xs uppercase tracking-[0.16em] text-muted">open</span>
           </li>
-          {["Profile", "Memory", "Workspace"].map((item) => (
+          {["Profile", "Workspace"].map((item) => (
             <li
               key={item}
               className="flex items-center justify-between rounded-xl border border-line bg-surface px-4 py-3"

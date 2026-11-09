@@ -12,18 +12,24 @@
  * message (G3).
  */
 import {
+  RUNTIME_ADMIN_BACKUP_RESTORE_PATH,
+  RUNTIME_ADMIN_BACKUP_TAKE_PATH,
   RUNTIME_ADMIN_CANCEL_ALL_PATH,
   RUNTIME_ADMIN_CREDITS_TOP_UP_PATH,
   RUNTIME_ADMIN_TASK_FAILURES_PATH,
   RUNTIME_CREDENTIALS_COMMIT_PATH,
   RUNTIME_CREDENTIALS_PATH,
   RUNTIME_REGISTRATION_PATH,
+  RuntimeAdminBackupRestoreResponse,
+  RuntimeAdminBackupTakeResponse,
   RuntimeAdminCancelAllResponse,
   RuntimeAdminCreditTopUpResponse,
   RuntimeAdminTaskFailuresResponse,
   RuntimeCredentialCommitResponse,
   RuntimeCredentialRotationResponse,
   RuntimeRegistrationResponse,
+  type RuntimeAdminBackupRestoreRequest,
+  type RuntimeAdminBackupTakeRequest,
   type RuntimeAdminCancelAllRequest,
   type RuntimeAdminCreditTopUpRequest,
   type RuntimeAdminTaskFailuresRequest,
@@ -188,6 +194,44 @@ export class RuntimeChannelClient {
       RuntimeAdminCreditTopUpResponse,
       this.options,
     ) as Promise<RuntimeAdminCreditTopUpResponse>;
+  }
+
+  /**
+   * S33 (issue #34, D47): the admin-triggered snapshot — the control plane's
+   * 1:1 ref rides to the runtime; the response is the runtime mechanism's
+   * OWN typed result (a refused take is an honest false arm, never a 500).
+   */
+  async takeBackup(
+    endpoint: string,
+    bearer: string,
+    request: RuntimeAdminBackupTakeRequest,
+  ): Promise<RuntimeAdminBackupTakeResponse> {
+    return call(
+      endpoint,
+      RUNTIME_ADMIN_BACKUP_TAKE_PATH,
+      "POST",
+      bearer,
+      request,
+      RuntimeAdminBackupTakeResponse,
+      this.options,
+    ) as Promise<RuntimeAdminBackupTakeResponse>;
+  }
+
+  /** S33: the admin-triggered restore — same channel, same honesty. */
+  async restoreBackup(
+    endpoint: string,
+    bearer: string,
+    request: RuntimeAdminBackupRestoreRequest,
+  ): Promise<RuntimeAdminBackupRestoreResponse> {
+    return call(
+      endpoint,
+      RUNTIME_ADMIN_BACKUP_RESTORE_PATH,
+      "POST",
+      bearer,
+      request,
+      RuntimeAdminBackupRestoreResponse,
+      this.options,
+    ) as Promise<RuntimeAdminBackupRestoreResponse>;
   }
 
   /** S32: the task-failure read over the recorded channel. */

@@ -329,6 +329,111 @@ export const RuntimeAdminTaskFailuresResponse = z.strictObject({
 export type RuntimeAdminTaskFailuresResponse = z.infer<typeof RuntimeAdminTaskFailuresResponse>;
 
 // ---------------------------------------------------------------------------
+// S33 admin backup commands (issue #34, D47; PRD §12): the admin-triggered
+// snapshot + restore over the SAME recorded internal channel. The take's
+// snapshot_ref is the control plane's 1:1 opaque handle — the runtime mints
+// NO id of its own for a triggered snapshot, so the ledger row and the
+// control_backups row name the SAME snapshot. Every response is the runtime
+// mechanism's OWN typed result, never a fabricated success (G4).
+// ---------------------------------------------------------------------------
+
+export const RUNTIME_ADMIN_BACKUP_TAKE_PATH = "/internal/v1/admin/backup/take" as const;
+
+export const RuntimeAdminBackupTakeRequest = z.strictObject({
+  workspace_id: WorkspaceId,
+  /** The control plane's 1:1 snapshot ref (the replayed trigger resolves to
+   * the SAME snapshot or a typed conflict — never a second snapshot). */
+  snapshot_ref: Id,
+  actor: z.strictObject({ type: z.literal("admin"), id: Id }),
+});
+export type RuntimeAdminBackupTakeRequest = z.infer<typeof RuntimeAdminBackupTakeRequest>;
+
+/** The take-failure vocabulary: the BackupService's operational reasons plus
+ * the replayed-ref conflict (a typed result, never a thrown 500). */
+export const RUNTIME_ADMIN_BACKUP_TAKE_FAILURES = [
+  "export_failed",
+  "integrity_failed",
+  "volume_failed",
+  "ledger_refused",
+  "conflict",
+] as const;
+export const RuntimeAdminBackupTakeFailure = z.enum(RUNTIME_ADMIN_BACKUP_TAKE_FAILURES);
+
+export const RuntimeAdminBackupTakeResponse = z.discriminatedUnion("taken", [
+  z.strictObject({
+    taken: z.literal(true),
+    workspace_id: WorkspaceId,
+    snapshot_id: Id,
+    taken_at: IsoDateTime,
+    db_bytes: z.number().int().nonnegative(),
+    retained_index: z.number().int().positive(),
+  }),
+  z.strictObject({
+    taken: z.literal(false),
+    workspace_id: WorkspaceId,
+    snapshot_ref: Id,
+    reason: RuntimeAdminBackupTakeFailure,
+    detail: z.string().max(300),
+  }),
+]);
+export type RuntimeAdminBackupTakeResponse = z.infer<typeof RuntimeAdminBackupTakeResponse>;
+
+export const RUNTIME_ADMIN_BACKUP_RESTORE_PATH = "/internal/v1/admin/backup/restore" as const;
+
+export const RuntimeAdminBackupRestoreRequest = z.strictObject({
+  workspace_id: WorkspaceId,
+  snapshot_id: Id,
+  actor: z.strictObject({ type: z.literal("admin"), id: Id }),
+});
+export type RuntimeAdminBackupRestoreRequest = z.infer<typeof RuntimeAdminBackupRestoreRequest>;
+
+export const RUNTIME_ADMIN_RESTORE_STAGES = [
+  "policy",
+  "stop",
+  "verify",
+  "database",
+  "volume",
+  "migrations",
+  "restart",
+] as const;
+export const RuntimeAdminRestoreStage = z.enum(RUNTIME_ADMIN_RESTORE_STAGES);
+
+export const RUNTIME_ADMIN_RESTORE_CODES = [
+  "RESTORE_SNAPSHOT_NOT_FOUND",
+  "RESTORE_SNAPSHOT_CORRUPT",
+  "RESTORE_STOP_FAILED",
+  "RESTORE_DATABASE_FAILED",
+  "RESTORE_VOLUME_FAILED",
+  "RESTORE_MIGRATION_FAILED",
+  "RESTORE_RESTART_FAILED",
+  "RESTORE_PORTS_NOT_WIRED",
+] as const;
+export const RuntimeAdminRestoreCode = z.enum(RUNTIME_ADMIN_RESTORE_CODES);
+
+export const RuntimeAdminBackupRestoreResponse = z.discriminatedUnion("restored", [
+  z.strictObject({
+    restored: z.literal(true),
+    workspace_id: WorkspaceId,
+    snapshot_id: Id,
+    restored_at: IsoDateTime,
+    migrated_from: z.array(z.number().int()),
+    migrated_to: z.array(z.number().int()),
+    db_bytes: z.number().int().nonnegative(),
+    volume_entry_count: z.number().int().nonnegative(),
+  }),
+  z.strictObject({
+    restored: z.literal(false),
+    workspace_id: WorkspaceId,
+    snapshot_id: Id,
+    failed_stage: RuntimeAdminRestoreStage,
+    code: RuntimeAdminRestoreCode,
+    detail: z.string().max(300),
+    replaced_before_failure: z.boolean(),
+  }),
+]);
+export type RuntimeAdminBackupRestoreResponse = z.infer<typeof RuntimeAdminBackupRestoreResponse>;
+
+// ---------------------------------------------------------------------------
 // Process-internal backend types (NOT wire schemas — never serialized to the
 // user boundary; never registered into OpenAPI).
 // ---------------------------------------------------------------------------

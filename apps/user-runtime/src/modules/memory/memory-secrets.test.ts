@@ -1,0 +1,993 @@
+/**
+ * S29 chunk 2 — the write-time secret rejection and the publication approval
+ * gate (issue #30 AC2; PRD §11, D22/E9, D37, G3/G6).
+ *
+ * The core pin: credentials, secrets, API keys, and tokens are ALWAYS
+ * rejected at the write boundary — the typed rejection is visible (reason
+ * classes, never the content) and NOTHING is stored: the whole database file
+ * (plus its WAL sidecars) is byte-scanned for every rejected literal, the
+ * S23 custody-scan posture. Memory must never become a secret store (D22).
+ *
+ * The second pin: publication of a SENSITIVE memory requires the explicit
+ * approval trail — a direct approve without a pending request is the typed
+ * refusal; the request → approve path records the deciding user. Automatic
+ * learning rides the typed `memory.candidate_proposed` journal event (G2)
+ * and an automatic proposal WITHOUT provenance is refused before anything
+ * exists (AC3).
+ */
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { afterAll, describe, expect, it } from "vitest";
+
+import {
+  DEFAULT_WORKSPACE_ID,
+  composeRuntime,
+  type RuntimeHandle,
+} from "../../transport/local-api/compose.ts";
+import {
+  cleanupTempResources,
+  makeTempDir,
+  trackConnection,
+} from "../../../test/helpers/temp-resources.ts";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const PACKS_ROOT = resolve(here, "../../../../../agent-packs");
+const WORKSPACE = DEFAULT_WORKSPACE_ID;
+const RESEARCHER = "agent_researcher";
+
+interface RunningRuntime {
+  runtime: RuntimeHandle;
+  origin: string;
+  dbPath: string;
+  close(): Promise<void>;
+}
+
+async function composeOn(dbPath: string): Promise<RunningRuntime> {
+  const runtime = composeRuntime({ dbPath, packsRoot: PACKS_ROOT });
+  trackConnection(runtime);
+  await new Promise<void>((resolveListen) =>
+    runtime.httpServer.listen(0, "127.0.0.1", resolveListen),
+  );
+  const address = runtime.httpServer.address() as { port: number };
+  return {
+    runtime,
+    origin: `http://127.0.0.1:${address.port}`,
+    dbPath,
+    close: () => runtime.close(),
+  };
+}
+
+async function post(origin: string, path: string, body: unknown) {
+  const response = await fetch(`${origin}${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return { status: response.status, body: (await response.json()) as Record<string, unknown> };
+}
+
+function createCommand(extra: Record<string, unknown>) {
+  return {
+    command_id: `cmd_${Math.random().toString(36).slice(2, 10)}`,
+    idempotency_key: `idem_${Math.random().toString(36).slice(2, 10)}`,
+    workspace_id: WORKSPACE,
+    actor: { type: "user", id: "user_emon" },
+    issued_at: "2026-11-04T10:00:00.000Z",
+    type: "memory.create",
+    owner_agent_id: null,
+    operation_id: null,
+    task_id: null,
+    expires_at: null,
+    ...extra,
+  };
+}
+
+/**
+ * Every byte of every file that belongs to the database (the db, the WAL,
+ * the shm) must be free of the rejected literals — the S23 custody-scan
+ * posture applied to memory: a rejection that left the secret on disk would
+ * be a leak, not a rejection.
+ */
+function databaseBytes(dbPath: string): string {
+  const dir = dirname(dbPath);
+  const base = dbPath.slice(dir.length + 1);
+  let combined = "";
+  for (const name of readdirSync(dir)) {
+    if (name !== base && !name.startsWith(`${base}-`)) continue;
+    const path = join(dir, name);
+    if (!statSync(path).isFile()) continue;
+    combined += readFileSync(path).toString("latin1");
+  }
+  return combined;
+}
+
+/** The fixture shapes: real secret FORMS with fake values (no real credential ever appears here). */
+const SECRET_FIXTURES: ReadonlyArray<{ label: string; content: string; needle: string }> = [
+  {
+    label: "API key assignment",
+    content:
+      "The service needs OPENAI_API_KEY=sk-proj-4f9a2b8c1d3e5f7a9b1c3d5e7f9a1b3c5d7e9f1a3b5c7d9e before calls work.",
+    needle: "sk-proj-4f9a2b8c1d3e5f7a9b1c3d5e7f9a1b3c5d7e9f1a3b5c7d9e",
+  },
+  {
+    label: "token assignment (quoted)",
+    content: 'Deploy note: the token is "ghp_a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8" until Friday.',
+    needle: "ghp_a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8",
+  },
+  {
+    label: "password assignment",
+    content: "Staging database password: hunter2-correct-horse-battery",
+    needle: "hunter2-correct-horse-battery",
+  },
+  {
+    label: "bearer token",
+    content: "Use this for the API call: Bearer abc123def456ghi789jkl012mno345",
+    needle: "abc123def456ghi789jkl012mno345",
+  },
+  {
+    label: "connection-string credential",
+    content: "The importer connects with postgres://etl_user:s3cretPa55word@db.internal:5432/app",
+    needle: "s3cretPa55word",
+  },
+  {
+    label: "high-entropy client secret",
+    content: "client_secret: Zx91vWq7Pp3LmKd8Rn5Tj2Yh6Bg4Fc0As1Ew9Xz7Qa3Nb5Mc1Vr",
+    needle: "Zx91vWq7Pp3LmKd8Rn5Tj2Yh6Bg4Fc0As1Ew9Xz7Qa3Nb5Mc1Vr",
+  },
+  {
+    // NO key name names this one. Correction from the fresh-context review
+    // (G5 honesty fix): the layer that catches this fixture is the ENTROPY
+    // pass (a 40-char mixed-charset literal) — the review DISPROVED the
+    // earlier "only the preset sees it" claim. The embed's proven
+    // contribution is the NEXT fixture: the bare AWS access-key id is 20
+    // chars (under the entropy pass's 32 floor) and all-upper/digits (no
+    // mixed classes), so ONLY the preset's AWS rule (enableIDScanRule)
+    // sees it. The embed must contribute, not decorate.
+    label: "bare GitHub token (no key name)",
+    content: "The release pipeline pushes with ghp_Z9y8x7W6v5U4t3S2r1Q0p9O8n7M6l5K4j3H",
+    needle: "ghp_Z9y8x7W6v5U4t3S2r1Q0p9O8n7M6l5K4j3H",
+  },
+  {
+    // The embed-contribution proof (see above): caught by the preset alone.
+    label: "bare AWS access key id",
+    content: "The exporter reads with AKIAQ2W3E4R5T6Y7U8I0",
+    needle: "AKIAQ2W3E4R5T6Y7U8I0",
+  },
+];
+
+afterAll(async () => {
+  await cleanupTempResources();
+});
+
+describe("S29 chunk 2: the write-time secret rejection (AC2)", () => {
+  it("rejects every secret-shaped create, never stores it, and shows the rejection honestly", async () => {
+    const running = await composeOn(join(makeTempDir("shera-s29-secret-"), "runtime.db"));
+    const { origin, dbPath } = running;
+
+    for (const fixture of SECRET_FIXTURES) {
+      const rejected = await post(
+        origin,
+        "/v1/memory/commands",
+        createCommand({
+          scope: "workspace",
+          summary: `Remember the ${fixture.label}`,
+          content: fixture.content,
+          sensitivity: "normal",
+          source_refs: ["conversation://direct/user_emon"],
+          confidence: 0.8,
+        }),
+      );
+      expect(rejected.status, fixture.label).toBe(400);
+      expect(rejected.body, fixture.label).toMatchObject({ code: "MEMORY_SECRET_REJECTED" });
+      // The rejection is HONEST: it names the reason class, never echoes the
+      // secret back into the response (G3).
+      expect(JSON.stringify(rejected.body), fixture.label).not.toContain(fixture.needle);
+    }
+
+    // NOTHING was stored: the whole database surface carries none of the
+    // rejected literals, and no memory row exists at all.
+    const bytes = databaseBytes(dbPath);
+    for (const fixture of SECRET_FIXTURES) {
+      expect(bytes.includes(fixture.needle), fixture.label).toBe(false);
+    }
+    const view = (await (await fetch(`${origin}/v1/memory?workspace_id=${WORKSPACE}`)).json()) as {
+      scopes: Record<string, unknown[]>;
+    };
+    const total = Object.values(view.scopes).reduce((sum, rows) => sum + rows.length, 0);
+    expect(total).toBe(0);
+
+    // A clean memory created AFTER the rejections still works — the scanner
+    // rejects secret shapes, not memory itself.
+    const clean = await post(
+      origin,
+      "/v1/memory/commands",
+      createCommand({
+        scope: "workspace",
+        summary: "Team prefers concise summaries",
+        content: "Summaries should stay under two hundred words.",
+        sensitivity: "normal",
+        source_refs: ["conversation://direct/user_emon"],
+        confidence: 0.7,
+      }),
+    );
+    expect(clean.status).toBe(200);
+
+    await running.close();
+  });
+
+  it("requires the approval trail for a sensitive publication — a direct approve is the typed refusal", async () => {
+    const running = await composeOn(join(makeTempDir("shera-s29-sensitive-"), "runtime.db"));
+    const { origin } = running;
+
+    const op = await post(origin, "/v1/operations", {
+      workspace_id: WORKSPACE,
+      definition_ref: null,
+      name: "Sensitive sweep",
+      roster_agent_ids: [RESEARCHER],
+      coordinator_agent_id: RESEARCHER,
+    });
+    expect(op.status).toBe(201);
+    const operationId = op.body["operation_id"] as string;
+
+    const created = await post(
+      origin,
+      "/v1/memory/commands",
+      createCommand({
+        scope: "operation",
+        operation_id: operationId,
+        summary: "Medical-adjacent research context",
+        content: "The sweep touches participant health records; handle citations carefully.",
+        sensitivity: "sensitive",
+        source_refs: [`conversation://${operationId}/messages`],
+        confidence: 0.9,
+      }),
+    );
+    expect(created.status).toBe(200);
+    const memoryId = (created.body["entry"] as { memory_id: string }).memory_id;
+
+    // A direct approve WITHOUT a pending request is the typed refusal —
+    // sensitive publication always carries the approval record.
+    const directApprove = await post(origin, "/v1/memory/commands", {
+      command_id: "cmd_direct_approve",
+      idempotency_key: "idem_direct_approve",
+      workspace_id: WORKSPACE,
+      actor: { type: "user", id: "user_emon" },
+      issued_at: "2026-11-04T10:05:00.000Z",
+      type: "memory.publish_decision",
+      memory_id: memoryId,
+      operation_id: operationId,
+      decision: "approve",
+    });
+    expect(directApprove.status).toBe(400);
+    expect(directApprove.body).toMatchObject({ code: "MEMORY_PUBLICATION_APPROVAL_REQUIRED" });
+
+    // The entry is invisible to the participant Agent while unapproved.
+    const hidden = (await await fetch(
+      `${origin}/v1/agents/${RESEARCHER}/memory/context?workspace_id=${WORKSPACE}&operation_id=${operationId}`,
+    ).then((r) => r.json())) as { entries: { memory_id: string }[] };
+    expect(hidden.entries.map((entry) => entry.memory_id)).not.toContain(memoryId);
+
+    // The user requests publication; the queue holds it pending; the
+    // approval records the deciding user and publishes.
+    const request = await post(origin, "/v1/memory/commands", {
+      command_id: "cmd_request_pub",
+      idempotency_key: "idem_request_pub",
+      workspace_id: WORKSPACE,
+      actor: { type: "user", id: "user_emon" },
+      issued_at: "2026-11-04T10:06:00.000Z",
+      type: "memory.request_publication",
+      memory_id: memoryId,
+      operation_id: operationId,
+    });
+    expect(request.status).toBe(200);
+
+    const queue = (await (await fetch(`${origin}/v1/memory?workspace_id=${WORKSPACE}`)).json()) as {
+      publication_queue: { memory_id: string; status: string }[];
+    };
+    expect(
+      queue.publication_queue.some((row) => row.memory_id === memoryId && row.status === "pending"),
+    ).toBe(true);
+
+    const approve = await post(origin, "/v1/memory/commands", {
+      command_id: "cmd_approve_pub",
+      idempotency_key: "idem_approve_pub",
+      workspace_id: WORKSPACE,
+      actor: { type: "user", id: "user_emon" },
+      issued_at: "2026-11-04T10:07:00.000Z",
+      type: "memory.publish_decision",
+      memory_id: memoryId,
+      operation_id: operationId,
+      decision: "approve",
+    });
+    expect(approve.status).toBe(200);
+
+    const visible = (await await fetch(
+      `${origin}/v1/agents/${RESEARCHER}/memory/context?workspace_id=${WORKSPACE}&operation_id=${operationId}`,
+    ).then((r) => r.json())) as { entries: { memory_id: string }[] };
+    expect(visible.entries.map((entry) => entry.memory_id)).toContain(memoryId);
+
+    await running.close();
+  });
+});
+
+describe("S29 chunk 2: the source_refs scan gap (fix-round F2)", () => {
+  const REF_SECRET = "sk-proj-4f9a2b8c1d3e5f7a9b1c3d5e7f9a1b3c5d7e9f1a3b5c7d9e";
+  const REF_NEEDLE_FILE =
+    "file:///srv/exports/OpenAI_API_KEY=sk-proj-4f9a2b8c1d3e5f7a9b1c3d5e7f9a1b3c5d7e9f1a3b5c7d9e";
+
+  it("rejects a secret inside source_refs on CREATE — the ref is scanned like every other write field, nothing stored", async () => {
+    const running = await composeOn(join(makeTempDir("shera-s29-refcreate-"), "runtime.db"));
+    const { origin, dbPath } = running;
+
+    const rejected = await post(
+      origin,
+      "/v1/memory/commands",
+      createCommand({
+        scope: "workspace",
+        summary: "Notes from the vault export",
+        content: "The note body itself is perfectly clean.",
+        sensitivity: "normal",
+        source_refs: ["conversation://direct/user_emon", REF_NEEDLE_FILE],
+        confidence: 0.8,
+      }),
+    );
+    expect(rejected.status).toBe(400);
+    expect(rejected.body).toMatchObject({ code: "MEMORY_SECRET_REJECTED" });
+    // The refusal never echoes the secret (G3) — and the scan covers the REF
+    // itself, not just the summary and content.
+    expect(JSON.stringify(rejected.body)).not.toContain(REF_SECRET);
+
+    // Nothing stored: the needle appears nowhere in the database surface.
+    const bytes = databaseBytes(dbPath);
+    expect(bytes.includes(REF_SECRET)).toBe(false);
+    const view = (await (await fetch(`${origin}/v1/memory?workspace_id=${WORKSPACE}`)).json()) as {
+      scopes: Record<string, unknown[]>;
+    };
+    const total = Object.values(view.scopes).reduce((sum, rows) => sum + rows.length, 0);
+    expect(total).toBe(0);
+
+    await running.close();
+  });
+
+  it("rejects a secret inside source_refs on EDIT — the stored entry keeps its own provenance", async () => {
+    const running = await composeOn(join(makeTempDir("shera-s29-refedit-"), "runtime.db"));
+    const { origin, dbPath } = running;
+
+    const created = await post(
+      origin,
+      "/v1/memory/commands",
+      createCommand({
+        scope: "workspace",
+        summary: "Clean note",
+        content: "The original note body.",
+        sensitivity: "normal",
+        source_refs: ["conversation://direct/user_emon"],
+        confidence: 0.7,
+      }),
+    );
+    expect(created.status).toBe(200);
+    const memoryId = (created.body["entry"] as { memory_id: string }).memory_id;
+
+    const rejected = await post(origin, "/v1/memory/commands", {
+      command_id: "cmd_ref_edit",
+      idempotency_key: "idem_ref_edit",
+      workspace_id: WORKSPACE,
+      actor: { type: "user", id: "user_emon" },
+      issued_at: "2026-11-04T10:05:00.000Z",
+      type: "memory.edit",
+      memory_id: memoryId,
+      summary: "Clean note",
+      content: "The edited body is still clean.",
+      sensitivity: "normal",
+      source_refs: [REF_NEEDLE_FILE],
+      confidence: 0.7,
+      expires_at: null,
+    });
+    expect(rejected.status).toBe(400);
+    expect(rejected.body).toMatchObject({ code: "MEMORY_SECRET_REJECTED" });
+
+    // The entry is untouched — content AND provenance (the rejected edit
+    // stored nothing, ref included).
+    const view = (await (await fetch(`${origin}/v1/memory?workspace_id=${WORKSPACE}`)).json()) as {
+      scopes: Record<string, { memory_id: string; content: string; source_refs: string[] }[]>;
+    };
+    const entry = view.scopes["workspace"]!.find((row) => row.memory_id === memoryId);
+    expect(entry!.content).toBe("The original note body.");
+    expect(entry!.source_refs).toEqual(["conversation://direct/user_emon"]);
+    expect(databaseBytes(dbPath).includes(REF_SECRET)).toBe(false);
+
+    await running.close();
+  });
+
+  it("rejects a secret inside an automatic candidate's source_refs — the proposal event never exists", async () => {
+    const running = await composeOn(join(makeTempDir("shera-s29-refcand-"), "runtime.db"));
+    const { origin, runtime, dbPath } = running;
+
+    const op = await post(origin, "/v1/operations", {
+      workspace_id: WORKSPACE,
+      definition_ref: null,
+      name: "Ref sweep",
+      roster_agent_ids: [RESEARCHER],
+      coordinator_agent_id: RESEARCHER,
+    });
+    expect(op.status).toBe(201);
+
+    await expect(
+      runtime.memory.proposeCandidate({
+        workspace_id: WORKSPACE,
+        proposed_by_agent_id: RESEARCHER,
+        scope: "operation",
+        operation_id: op.body["operation_id"] as string,
+        summary: "Learned from the export",
+        content: "The candidate body is clean.",
+        source_refs: [REF_NEEDLE_FILE],
+        confidence: 0.8,
+        sensitivity: "normal",
+      }),
+    ).rejects.toMatchObject({ code: "MEMORY_SECRET_REJECTED" });
+
+    // No entry, no event: the journal carries no proposal with the secret —
+    // the journal is where a ref secret would otherwise survive (G2/G3).
+    const candidates = runtime.memory.listCandidateEvents(WORKSPACE);
+    expect(candidates).toHaveLength(0);
+    expect(JSON.stringify(candidates)).not.toContain(REF_SECRET);
+    expect(databaseBytes(dbPath).includes(REF_SECRET)).toBe(false);
+
+    await running.close();
+  });
+});
+
+describe("S29 chunk 2: automatic learning with provenance (AC3, G2)", () => {
+  it("mediates an automatic candidate through the typed MemoryCandidateProposed event and refuses provenance-less proposals", async () => {
+    const running = await composeOn(join(makeTempDir("shera-s29-candidate-"), "runtime.db"));
+    const { origin, runtime } = running;
+
+    const op = await post(origin, "/v1/operations", {
+      workspace_id: WORKSPACE,
+      definition_ref: null,
+      name: "Learning sweep",
+      roster_agent_ids: [RESEARCHER],
+      coordinator_agent_id: RESEARCHER,
+    });
+    expect(op.status).toBe(201);
+    const operationId = op.body["operation_id"] as string;
+
+    // A provenance-less automatic proposal is refused BEFORE anything
+    // exists — no entry, no event (AC3).
+    await expect(
+      runtime.memory.proposeCandidate({
+        workspace_id: WORKSPACE,
+        proposed_by_agent_id: RESEARCHER,
+        scope: "operation",
+        operation_id: operationId,
+        summary: "Unsourced preference",
+        content: "The user seemed to like shorter answers.",
+        source_refs: [],
+        confidence: 0.6,
+        sensitivity: "normal",
+      }),
+    ).rejects.toMatchObject({ code: "MEMORY_PROVENANCE_REQUIRED" });
+
+    // A provenanced candidate is accepted: the entry exists (origin
+    // automatic) and the typed journal event carries the D37 payload.
+    const accepted = await runtime.memory.proposeCandidate({
+      workspace_id: WORKSPACE,
+      proposed_by_agent_id: RESEARCHER,
+      scope: "operation",
+      operation_id: operationId,
+      summary: "Operation decision: cite only peer-reviewed sources",
+      content: "Learned from the user's corrections: peer-reviewed citations only.",
+      source_refs: [`conversation://${operationId}/messages`],
+      confidence: 0.85,
+      sensitivity: "normal",
+    });
+    expect(accepted.entry.memory_id).toBeTruthy();
+    expect(accepted.entry.origin).toBe("automatic");
+
+    // The event is REAL: the journal holds a memory.candidate_proposed
+    // envelope whose payload matches the D37 field list.
+    const page = (await await fetch(
+      `${origin}/v1/operations/${operationId}/events?workspace_id=${WORKSPACE}`,
+    ).then((r) => r.json())) as { events?: unknown[] };
+    void page;
+
+    const candidates = runtime.memory.listCandidateEvents(WORKSPACE);
+    const mine = candidates.filter(
+      (event: { payload: { memory_id: string } }) =>
+        event.payload.memory_id === accepted.entry.memory_id,
+    );
+    expect(mine).toHaveLength(1);
+    expect(mine[0]!.event_type).toBe("memory.candidate_proposed");
+    expect(mine[0]!.payload).toMatchObject({
+      memory_id: accepted.entry.memory_id,
+      scope: "operation",
+      sensitivity: "normal",
+      confidence: 0.85,
+    });
+    expect((mine[0]!.payload as { source_refs: string[] }).source_refs).toEqual([
+      `conversation://${operationId}/messages`,
+    ]);
+    expect(mine[0]!.actor).toEqual({ type: "agent", id: RESEARCHER });
+
+    // A secret-shaped automatic candidate is rejected the same way — the
+    // automatic path never becomes the leak path.
+    await expect(
+      runtime.memory.proposeCandidate({
+        workspace_id: WORKSPACE,
+        proposed_by_agent_id: RESEARCHER,
+        scope: "operation",
+        operation_id: operationId,
+        summary: "Learned credential",
+        content: "OPENAI_API_KEY=sk-proj-4f9a2b8c1d3e5f7a9b1c3d5e7f9a1b3c5d7e9f1a3b5c7d9e",
+        source_refs: [`conversation://${operationId}/messages`],
+        confidence: 0.9,
+        sensitivity: "normal",
+      }),
+    ).rejects.toMatchObject({ code: "MEMORY_SECRET_REJECTED" });
+
+    await running.close();
+  });
+
+  it("holds a sensitive automatic candidate out of context until the user approves it", async () => {
+    const running = await composeOn(
+      join(makeTempDir("shera-s29-candidate-sensitive-"), "runtime.db"),
+    );
+    const { origin, runtime } = running;
+
+    const op = await post(origin, "/v1/operations", {
+      workspace_id: WORKSPACE,
+      definition_ref: null,
+      name: "Health sweep",
+      roster_agent_ids: [RESEARCHER],
+      coordinator_agent_id: RESEARCHER,
+    });
+    expect(op.status).toBe(201);
+    const operationId = op.body["operation_id"] as string;
+
+    const accepted = await runtime.memory.proposeCandidate({
+      workspace_id: WORKSPACE,
+      proposed_by_agent_id: RESEARCHER,
+      scope: "operation",
+      operation_id: operationId,
+      summary: "Participant health context",
+      content: "The cohort includes participant health records; citations need care.",
+      source_refs: [`conversation://${operationId}/messages`],
+      confidence: 0.8,
+      sensitivity: "sensitive",
+    });
+    expect(accepted.entry.memory_id).toBeTruthy();
+
+    // Invisible to the participant while unapproved, and PENDING in the
+    // publication queue (the runtime surfaced it for the user).
+    const hidden = (await await fetch(
+      `${origin}/v1/agents/${RESEARCHER}/memory/context?workspace_id=${WORKSPACE}&operation_id=${operationId}`,
+    ).then((r) => r.json())) as { entries: { memory_id: string }[] };
+    expect(hidden.entries.map((entry) => entry.memory_id)).not.toContain(accepted.entry.memory_id);
+
+    const queue = (await (await fetch(`${origin}/v1/memory?workspace_id=${WORKSPACE}`)).json()) as {
+      publication_queue: { memory_id: string; status: string }[];
+    };
+    expect(
+      queue.publication_queue.some(
+        (row) => row.memory_id === accepted.entry.memory_id && row.status === "pending",
+      ),
+    ).toBe(true);
+
+    await running.close();
+  });
+});
+
+describe("S29 chunk 2: the approval decision settles the request it approves (fix-round F18)", () => {
+  it("approving a sensitive candidate decides the Agent's pending request — the queue carries no pending row afterwards", async () => {
+    const running = await composeOn(join(makeTempDir("shera-s29-f18-approve-"), "runtime.db"));
+    const { origin, runtime } = running;
+
+    const op = await post(origin, "/v1/operations", {
+      workspace_id: WORKSPACE,
+      definition_ref: null,
+      name: "Approval settle sweep",
+      roster_agent_ids: [RESEARCHER],
+      coordinator_agent_id: RESEARCHER,
+    });
+    expect(op.status).toBe(201);
+    const operationId = op.body["operation_id"] as string;
+
+    const accepted = await runtime.memory.proposeCandidate({
+      workspace_id: WORKSPACE,
+      proposed_by_agent_id: RESEARCHER,
+      scope: "operation",
+      operation_id: operationId,
+      summary: "Participant health context",
+      content: "The cohort includes participant health records; citations need care.",
+      source_refs: [`conversation://${operationId}/messages`],
+      confidence: 0.8,
+      sensitivity: "sensitive",
+    });
+    expect(accepted.entry.memory_id).toBeTruthy();
+
+    const before = (await (
+      await fetch(`${origin}/v1/memory?workspace_id=${WORKSPACE}`)
+    ).json()) as {
+      publication_queue: {
+        request_id: string;
+        memory_id: string;
+        status: string;
+        requested_by: string;
+        decided_by: string | null;
+      }[];
+    };
+    const pendingRow = before.publication_queue.find(
+      (row) => row.memory_id === accepted.entry.memory_id && row.status === "pending",
+    );
+    expect(pendingRow).toBeDefined();
+    expect(pendingRow!.requested_by).toBe(RESEARCHER);
+
+    // The user approves FROM the queue (the S9 surface's Approve).
+    const approve = await post(origin, "/v1/memory/commands", {
+      command_id: "cmd_f18_approve",
+      idempotency_key: "idem_f18_approve",
+      workspace_id: WORKSPACE,
+      actor: { type: "user", id: "user_emon" },
+      issued_at: "2026-11-04T10:07:00.000Z",
+      type: "memory.publish_decision",
+      memory_id: accepted.entry.memory_id,
+      operation_id: operationId,
+      decision: "approve",
+    });
+    expect(approve.status).toBe(200);
+
+    // The request the Agent made is DECIDED — not left pending beside a
+    // duplicate approved row. The management read is the PENDING queue by
+    // design (listPublicationRequests filters status = 'pending'), so the
+    // memory appears in it NO MORE; the decided row's own trail fields are
+    // pinned at the storage layer in memory.service.test.ts.
+    const after = (await (await fetch(`${origin}/v1/memory?workspace_id=${WORKSPACE}`)).json()) as {
+      publication_queue: { request_id: string; memory_id: string; status: string }[];
+    };
+    expect(after.publication_queue.some((row) => row.memory_id === accepted.entry.memory_id)).toBe(
+      false,
+    );
+
+    // The boundary still flips: the entry is visible in the Operation context.
+    const visible = (await await fetch(
+      `${origin}/v1/agents/${RESEARCHER}/memory/context?workspace_id=${WORKSPACE}&operation_id=${operationId}`,
+    ).then((r) => r.json())) as { entries: { memory_id: string }[] };
+    expect(visible.entries.map((entry) => entry.memory_id)).toContain(accepted.entry.memory_id);
+
+    await running.close();
+  });
+});
+
+describe("S29 review round: the publication boundary holds for EVERY scope (review C1/C2/C3)", () => {
+  it("an account-scope memory can never be published into an Operation — the typed refusal, and the entry reaches no Agent context (review C1)", async () => {
+    const running = await composeOn(join(makeTempDir("shera-s29-c1-account-"), "runtime.db"));
+    const { origin } = running;
+
+    // The publication target (a real Operation with a roster, so the only
+    // thing standing between the account row and the Agents is the
+    // boundary itself).
+    const op = await post(origin, "/v1/operations", {
+      workspace_id: WORKSPACE,
+      definition_ref: null,
+      name: "Account leak probe",
+      roster_agent_ids: [RESEARCHER],
+      coordinator_agent_id: RESEARCHER,
+    });
+    expect(op.status).toBe(201);
+    const operationId = op.body["operation_id"] as string;
+
+    // The account-scope SENSITIVE memory: D37's account row says the user
+    // (and explicitly authorized runtime services) alone ever see it.
+    const created = await post(
+      origin,
+      "/v1/memory/commands",
+      createCommand({
+        scope: "account",
+        summary: "Account-wide onboarding fact",
+        content: "The workspace runs on the student pack and studies physics.",
+        sensitivity: "sensitive",
+        source_refs: ["conversation://direct/user_emon"],
+        confidence: 0.9,
+      }),
+    );
+    expect(created.status).toBe(200);
+    const memoryId = (created.body["entry"] as { memory_id: string }).memory_id;
+
+    // The Agent's request_publication (the D37 proposing flow — deliberately
+    // NOT on the F17 user-only list) must be REFUSED for an account-scope
+    // entry: approving it would share account memory into an Operation.
+    const agentRequest = await post(origin, "/v1/memory/commands", {
+      command_id: "cmd_c1_agent_request",
+      idempotency_key: "idem_c1_agent_request",
+      workspace_id: WORKSPACE,
+      actor: { type: "agent", id: RESEARCHER },
+      issued_at: "2026-11-04T10:05:00.000Z",
+      type: "memory.request_publication",
+      memory_id: memoryId,
+      operation_id: operationId,
+    });
+    expect(agentRequest.status).toBe(403);
+    expect(agentRequest.body).toMatchObject({ code: "MEMORY_PUBLICATION_SCOPE_FORBIDDEN" });
+
+    // The user's own request is refused for the same reason — the scope
+    // rule is about WHAT may be published, not WHO asks.
+    const userRequest = await post(origin, "/v1/memory/commands", {
+      command_id: "cmd_c1_user_request",
+      idempotency_key: "idem_c1_user_request",
+      workspace_id: WORKSPACE,
+      actor: { type: "user", id: "user_emon" },
+      issued_at: "2026-11-04T10:06:00.000Z",
+      type: "memory.request_publication",
+      memory_id: memoryId,
+      operation_id: operationId,
+    });
+    expect(userRequest.status).toBe(403);
+    expect(userRequest.body).toMatchObject({ code: "MEMORY_PUBLICATION_SCOPE_FORBIDDEN" });
+
+    // A direct user approve is refused too — no path may set the published
+    // column on an account-scope row.
+    const approve = await post(origin, "/v1/memory/commands", {
+      command_id: "cmd_c1_approve",
+      idempotency_key: "idem_c1_approve",
+      workspace_id: WORKSPACE,
+      actor: { type: "user", id: "user_emon" },
+      issued_at: "2026-11-04T10:07:00.000Z",
+      type: "memory.publish_decision",
+      memory_id: memoryId,
+      operation_id: operationId,
+      decision: "approve",
+    });
+    expect(approve.status).toBe(403);
+    expect(approve.body).toMatchObject({ code: "MEMORY_PUBLICATION_SCOPE_FORBIDDEN" });
+
+    // The queue carries nothing for this memory, and the entry appears in
+    // NO Agent context read — plain AND Operation (the live-proven leak
+    // closes only when every read shape is checked).
+    const view = (await (await fetch(`${origin}/v1/memory?workspace_id=${WORKSPACE}`)).json()) as {
+      publication_queue: { memory_id: string }[];
+    };
+    expect(view.publication_queue.some((row) => row.memory_id === memoryId)).toBe(false);
+    for (const path of [
+      `/v1/agents/${RESEARCHER}/memory/context?workspace_id=${WORKSPACE}`,
+      `/v1/agents/${RESEARCHER}/memory/context?workspace_id=${WORKSPACE}&operation_id=${operationId}`,
+    ]) {
+      const context = (await (await fetch(`${origin}${path}`)).json()) as {
+        entries: { memory_id: string }[];
+      };
+      expect(
+        context.entries.map((entry) => entry.memory_id),
+        path,
+      ).not.toContain(memoryId);
+    }
+
+    await running.close();
+  });
+
+  it("a published sensitive entry is participation-gated — a non-participant Agent's context read excludes it (review C2)", async () => {
+    const running = await composeOn(join(makeTempDir("shera-s29-c2-participant-"), "runtime.db"));
+    const { origin, runtime } = running;
+
+    // The roster holds ONLY the researcher: general_assistant is NOT a
+    // participant of this Operation.
+    const op = await post(origin, "/v1/operations", {
+      workspace_id: WORKSPACE,
+      definition_ref: null,
+      name: "Participant gate probe",
+      roster_agent_ids: [RESEARCHER],
+      coordinator_agent_id: RESEARCHER,
+    });
+    expect(op.status).toBe(201);
+    const operationId = op.body["operation_id"] as string;
+
+    // The Agent proposes a SENSITIVE operation-scope candidate; the user
+    // approves it through the queue (the recorded flow — 200 by design).
+    const accepted = await runtime.memory.proposeCandidate({
+      workspace_id: WORKSPACE,
+      proposed_by_agent_id: RESEARCHER,
+      scope: "operation",
+      operation_id: operationId,
+      summary: "Participant health context",
+      content: "The cohort includes participant health records; citations need care.",
+      source_refs: [`conversation://${operationId}/messages`],
+      confidence: 0.8,
+      sensitivity: "sensitive",
+    });
+    expect(accepted.entry.memory_id).toBeTruthy();
+
+    const approve = await post(origin, "/v1/memory/commands", {
+      command_id: "cmd_c2_approve",
+      idempotency_key: "idem_c2_approve",
+      workspace_id: WORKSPACE,
+      actor: { type: "user", id: "user_emon" },
+      issued_at: "2026-11-04T10:07:00.000Z",
+      type: "memory.publish_decision",
+      memory_id: accepted.entry.memory_id,
+      operation_id: operationId,
+      decision: "approve",
+    });
+    expect(approve.status).toBe(200);
+
+    // The PARTICIPANT sees the published entry in the Operation context;
+    // the NON-participant must NOT — the participation gate every other
+    // branch of the visibility table applies (the review's live-proven
+    // probe: the published sensitive row reached ANY agent naming the
+    // Operation).
+    const participant = (await (
+      await fetch(
+        `${origin}/v1/agents/${RESEARCHER}/memory/context?workspace_id=${WORKSPACE}&operation_id=${operationId}`,
+      )
+    ).json()) as { entries: { memory_id: string }[] };
+    expect(participant.entries.map((entry) => entry.memory_id)).toContain(accepted.entry.memory_id);
+    const nonParticipant = (await (
+      await fetch(
+        `${origin}/v1/agents/agent_general_assistant/memory/context?workspace_id=${WORKSPACE}&operation_id=${operationId}`,
+      )
+    ).json()) as { entries: { memory_id: string }[] };
+    expect(nonParticipant.entries.map((entry) => entry.memory_id)).not.toContain(
+      accepted.entry.memory_id,
+    );
+
+    await running.close();
+  });
+
+  it("a publication request must target the memory's own Operation — the scope/ownership validation (review C3)", async () => {
+    const running = await composeOn(join(makeTempDir("shera-s29-c3-target-"), "runtime.db"));
+    const { origin } = running;
+
+    const opOne = await post(origin, "/v1/operations", {
+      workspace_id: WORKSPACE,
+      definition_ref: null,
+      name: "Own operation",
+      roster_agent_ids: [RESEARCHER],
+      coordinator_agent_id: RESEARCHER,
+    });
+    expect(opOne.status).toBe(201);
+    const ownOperationId = opOne.body["operation_id"] as string;
+    const opTwo = await post(origin, "/v1/operations", {
+      workspace_id: WORKSPACE,
+      definition_ref: null,
+      name: "Other operation",
+      roster_agent_ids: [RESEARCHER],
+      coordinator_agent_id: RESEARCHER,
+    });
+    expect(opTwo.status).toBe(201);
+    const otherOperationId = opTwo.body["operation_id"] as string;
+
+    // An operation-scoped memory belongs to ITS Operation: publishing its
+    // content into a DIFFERENT Operation would leak it past the scope
+    // binding the write enforced.
+    const created = await post(
+      origin,
+      "/v1/memory/commands",
+      createCommand({
+        scope: "operation",
+        operation_id: ownOperationId,
+        summary: "Own-operation note",
+        content: "This note belongs to its own Operation.",
+        sensitivity: "normal",
+        source_refs: [`conversation://${ownOperationId}/messages`],
+        confidence: 0.8,
+      }),
+    );
+    expect(created.status).toBe(200);
+    const memoryId = (created.body["entry"] as { memory_id: string }).memory_id;
+
+    const request = await post(origin, "/v1/memory/commands", {
+      command_id: "cmd_c3_request",
+      idempotency_key: "idem_c3_request",
+      workspace_id: WORKSPACE,
+      actor: { type: "user", id: "user_emon" },
+      issued_at: "2026-11-04T10:06:00.000Z",
+      type: "memory.request_publication",
+      memory_id: memoryId,
+      operation_id: otherOperationId,
+    });
+    expect(request.status).toBe(403);
+    expect(request.body).toMatchObject({ code: "MEMORY_PUBLICATION_SCOPE_FORBIDDEN" });
+
+    const approve = await post(origin, "/v1/memory/commands", {
+      command_id: "cmd_c3_approve",
+      idempotency_key: "idem_c3_approve",
+      workspace_id: WORKSPACE,
+      actor: { type: "user", id: "user_emon" },
+      issued_at: "2026-11-04T10:07:00.000Z",
+      type: "memory.publish_decision",
+      memory_id: memoryId,
+      operation_id: otherOperationId,
+      decision: "approve",
+    });
+    expect(approve.status).toBe(403);
+    expect(approve.body).toMatchObject({ code: "MEMORY_PUBLICATION_SCOPE_FORBIDDEN" });
+
+    await running.close();
+  });
+});
+
+describe("S29 review round: the scanner sees FIELD BOUNDARIES, not just whole fields (review C5)", () => {
+  // The straddle: EACH field alone is innocent — "pa" carries no vocabulary
+  // word and no high-entropy literal; "ssword=hunter2-correct-horse" names
+  // no key ("ssword" contains no vocabulary term) and its value is too
+  // short for the entropy pass. Joined with a newline (the scanner's field
+  // separator) the key-assignment regex cannot span the boundary — the
+  // credential only EXISTS when the fields are read together. The reviewer
+  // proved this shape stores today.
+  const STRADDLES: ReadonlyArray<{
+    label: string;
+    summary: string;
+    content: string;
+    needle: string;
+  }> = [
+    {
+      label: "key split mid-word at the boundary",
+      summary: "pa",
+      content: "ssword=hunter2-correct-horse",
+      needle: "hunter2-correct-horse",
+    },
+    {
+      label: "vocabulary word split at the boundary (mid-vocabulary variant)",
+      summary: "the api_",
+      content: "key=hunter2-correct-horse-battery",
+      needle: "hunter2-correct-horse-battery",
+    },
+  ];
+
+  it("rejects a key-assignment straddling the summary/content boundary — each field alone is innocent, together they are a credential, nothing stored", async () => {
+    const running = await composeOn(join(makeTempDir("shera-s29-c5-straddle-"), "runtime.db"));
+    const { origin, dbPath } = running;
+
+    for (const fixture of STRADDLES) {
+      const rejected = await post(
+        origin,
+        "/v1/memory/commands",
+        createCommand({
+          scope: "workspace",
+          summary: fixture.summary,
+          content: fixture.content,
+          sensitivity: "normal",
+          source_refs: ["conversation://direct/user_emon"],
+          confidence: 0.8,
+        }),
+      );
+      expect(rejected.status, fixture.label).toBe(400);
+      expect(rejected.body, fixture.label).toMatchObject({ code: "MEMORY_SECRET_REJECTED" });
+      // The refusal never echoes the credential (G3).
+      expect(JSON.stringify(rejected.body), fixture.label).not.toContain(fixture.needle);
+    }
+
+    // NOTHING was stored: the straddled literals appear nowhere in the
+    // database surface (db + WAL + shm), and no memory row exists.
+    const bytes = databaseBytes(dbPath);
+    for (const fixture of STRADDLES) {
+      expect(bytes.includes(fixture.needle), fixture.label).toBe(false);
+    }
+    const view = (await (await fetch(`${origin}/v1/memory?workspace_id=${WORKSPACE}`)).json()) as {
+      scopes: Record<string, unknown[]>;
+    };
+    const total = Object.values(view.scopes).reduce((sum, rows) => sum + rows.length, 0);
+    expect(total).toBe(0);
+
+    // The scanner still accepts ordinary prose AFTER the rejections — the
+    // boundary pass rejects credential shapes, not memory itself. (The
+    // prose deliberately avoids the recorded vocabulary words entirely:
+    // the key-assignment sweep's space separator treats "credential <any
+    // word>" as an assignment even within ONE field — the recorded AC21
+    // over-rejection posture the review queued as a follow-up.)
+    const clean = await post(
+      origin,
+      "/v1/memory/commands",
+      createCommand({
+        scope: "workspace",
+        summary: "A perfectly ordinary note",
+        content: "Nothing here looks like one of those.",
+        sensitivity: "normal",
+        source_refs: ["conversation://direct/user_emon"],
+        confidence: 0.7,
+      }),
+    );
+    expect(clean.status).toBe(200);
+
+    await running.close();
+  });
+});

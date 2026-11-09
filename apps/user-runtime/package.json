@@ -19,6 +19,8 @@
     "@ai-sdk/openai": "4.0.105",
     "@ai-sdk/openai-compatible": "3.0.81",
     "@mozilla/readability": "0.6.0",
+    "@secretlint/core": "13.1.0",
+    "@secretlint/secretlint-rule-preset-recommend": "13.1.0",
     "@shera-bot/agent-pack-sdk": "workspace:*",
     "@shera-bot/contracts": "workspace:*",
     "@shera-bot/pi-protocol": "workspace:*",

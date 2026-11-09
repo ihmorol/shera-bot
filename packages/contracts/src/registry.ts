@@ -25,7 +25,7 @@ import { CollaborationMessage } from "./collaboration.ts";
 import { CreditRelease, CreditReservation, CreditSettlement } from "./credits.ts";
 import { SheraError } from "./errors.ts";
 import { EVENT_ENVELOPES, TypedExecutionEvent, TriggerWebhookPayload } from "./events.ts";
-import { MemoryEntry } from "./memory.ts";
+import { MemoryCommand, MemoryEntry } from "./memory.ts";
 import {
   AddRosterAgentCommand,
   Operation,
@@ -77,6 +77,10 @@ export const CONTRACT_REGISTRY = {
   CreditSettlement,
   CreditRelease,
   MemoryEntry,
+  // S29 (issue #30; D37, G2/G6): the typed memory user-command surface —
+  // one commands envelope, one discriminated union, publication as its own
+  // explicit user decision (AC27).
+  MemoryCommand,
   ToolDefinition,
   CollaborationMessage,
   SheraError,

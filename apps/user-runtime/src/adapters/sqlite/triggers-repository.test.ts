@@ -91,10 +91,19 @@ describe("v19 migration (trigger records)", () => {
     // itself never moves once merged.
     const v19 = MIGRATIONS.find((migration) => migration.version === 19);
     expect(v19?.name).toBe("trigger-records");
-    expect(MIGRATIONS.at(-2)?.version).toBe(20);
-    expect(MIGRATIONS.at(-2)?.name).toBe("credit-ledger");
-    expect(MIGRATIONS.at(-1)?.version).toBe(21);
-    expect(MIGRATIONS.at(-1)?.name).toBe("run-checkpoints");
+    // The S29 integration renumbered the memory tables (authored v21) to
+    // v22 — main's landed v21 run-checkpoints keeps its slot — and the pin
+    // tracks the head.
+    expect(MIGRATIONS.at(-4)?.version).toBe(20);
+    expect(MIGRATIONS.at(-4)?.name).toBe("credit-ledger");
+    expect(MIGRATIONS.at(-3)?.version).toBe(21);
+    expect(MIGRATIONS.at(-3)?.name).toBe("run-checkpoints");
+    // S33 appended v22 (backup-snapshots) after this migration; the S28
+    // entry itself never moves once merged.
+    expect(MIGRATIONS.at(-2)?.version).toBe(22);
+    expect(MIGRATIONS.at(-2)?.name).toBe("memory");
+    expect(MIGRATIONS.at(-1)?.version).toBe(23);
+    expect(MIGRATIONS.at(-1)?.name).toBe("backup-snapshots");
     expect(appliedMigrationVersions(newDb().conn.db)).toContain(19);
   });
 

@@ -86,4 +86,6 @@ Adopted as PATTERNS from OpenMausBot `deploy/` (pinned `aede7d817df9`, Apache-2.
 10. The PID-namespace containment decision (§9 — Manual decision 6).
 11. CI execution of the new/changed suites.
 
+**Post-fix gate (the fourth archive, at the review-round tip `a77d3ec`): all nine steps exit 0 — 2533/2533 in 236 files, zero flakes, real PostgreSQL 16; boundary-guards 527 files.** The environmental baseline unchanged.
+
 **G8**: merge approval is the orchestrator's (owner-delegated 2026-11-07) — this PR is the handoff artifact and is not merged by the builder.

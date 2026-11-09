@@ -75,6 +75,9 @@ The fresh-context review verified the round's spine sound (the #83 red/green pai
 
 
 
+## The post-fix gate (the fourth archive, at the review-round tip `a77d3ec`)
+
+**ALL NINE STEPS EXIT 0 — 2533/2533 in 236 files, zero failures, zero flakes, real PostgreSQL 16** (the +3 tests over this archive's 2530: the F1 concurrent-execution leg, the F2 reap-identity leg, the P3d sweep-state pin); boundary-guards PASS 527 source files. The environmental baseline: UNCHANGED — zero flakes this round.
 **ALL NINE STEPS EXIT 0 — 2530/2530 in 236 files, zero failures, zero flakes, real PostgreSQL 16** (install / lint / format:check / typecheck / test / build / license:inventory / boundary-guards / mockup:test). No assertion was widened anywhere across the three archive rounds.
 
 **A record correction, appended and never erased (G4/G5):** the `20e72ad` commit message states the S16 file was "green isolated in the same archive, 11/11" — that was written BEFORE the isolation runs happened, and they FAILED (the file failed isolated twice more — once in the `20e72ad` archive, once in the worktree — before passing in the following verbose run at 665 ms and then in this definitive gate). The honest history of that test across this slice's gates: gate 1 red (co-run), gate 2 red (co-run), isolated red ×2, then green, and green in the definitive full run — the E46-documented S16 spawn-race family's co-run-AND-solo tail on this machine, never widened. The claim in the commit message stands corrected here; the commit itself is history (G5: preserved, not rewritten).

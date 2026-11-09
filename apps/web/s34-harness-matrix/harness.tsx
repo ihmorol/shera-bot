@@ -84,6 +84,12 @@ const IDENTITIES: AgentRosterSummary[] = [
     initial_glyph: "PT",
     has_user_instructions: true,
     session: { presence: "active" },
+    // S30's roster activity line (E43 idea 4): the frozen fixture carries one
+    // honest derived line — the harness renders the real component's shape.
+    last_activity: {
+      at: "2026-09-20T13:58:00Z",
+      preview: "Trace the base case first — hidden tests usually probe empty input.",
+    },
   },
 ];
 

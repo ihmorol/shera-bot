@@ -1,0 +1,75 @@
+# S27 ST-10 RED-without-control proof (2026-11-09)
+#
+# The web proxy's tenant gate was TEMPORARILY REMOVED (reverted before commit):
+# apps/web/lib/server/proxies.ts — the `if (!runtimeWorkspaceMatches(...))
+# return tenantMismatch()` check deleted (the forwarder passed EVERY request
+# through regardless of the workspace binding).
+#
+# Command: pnpm vitest run tests/security/s27-st10-cross-user.test.ts
+# Expected with the control present: ALL PASS. Observed with it removed
+# (2 failed): B's authenticated foreign-workspace requests were FORWARDED
+# upstream (forwarded=1, status 200) in BOTH the query and the body shapes —
+# the cross-user request reached the runtime. The pure-binding legs and the
+# two-store/custody legs stayed green (different controls).
+
+ RUN  v5.0.1 /home/emon-morol/projects/github-cloud-projects/shera-bot-s27
+
+ ❯ tests/security/s27-st10-cross-user.test.ts (7 tests | 2 failed) 1005ms
+   ✓ S27 ST-10 — the tenant binding refuses every foreign selector shape (2)
+     ✓ a foreign workspace in the QUERY is refused; duplicates where one matches are refused 7ms
+     ✓ the positive controls: the session's OWN workspace passes (the gate is not a dead end) 10ms
+   ❯ S27 ST-10 — the proxy enforces the binding (nothing forwarded on a mismatch) (3)
+     × B's session calling with A's workspace in the QUERY: 403 RUNTIME_TENANT_MISMATCH, ZERO upstream calls 104ms
+     × B's session calling with A's workspace in the BODY: 403 RUNTIME_TENANT_MISMATCH, ZERO upstream calls 18ms
+     ✓ B's own workspace IS forwarded (the positive control reaches the runtime) 6ms
+   ✓ S27 ST-10 — two accounts, two stores: B's runtime never resolves A's rows (1)
+     ✓ rows written through A's adapters are invisible to B's adapters and B's store bytes 417ms
+   ✓ S27 ST-10 — A's provider credential is sealed and absent from B's runtime bytes (D22/E9) (1)
+     ✓ the sealed custody row lives in A's store only; neither store carries the plaintext 433ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/security/s27-st10-cross-user.test.ts > S27 ST-10 — the proxy enforces the binding (nothing forwarded on a mismatch) > B's session calling with A's workspace in the QUERY: 403 RUNTIME_TENANT_MISMATCH, ZERO upstream calls
+AssertionError: expected 200 to be 403 // Object.is equality
+
+- Expected
++ Received
+
+- 403
++ 200
+
+ ❯ tests/security/s27-st10-cross-user.test.ts:261:27
+    259|   it("B's session calling with A's workspace in the QUERY: 403 RUNTIME…
+    260|     const result = await proxied("GET", `/v1/terminals/state?workspace…
+    261|     expect(result.status).toBe(403);
+       |                           ^
+    262|     expect(result.code).toBe("RUNTIME_TENANT_MISMATCH");
+    263|     expect(result.forwarded).toBe(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/security/s27-st10-cross-user.test.ts > S27 ST-10 — the proxy enforces the binding (nothing forwarded on a mismatch) > B's session calling with A's workspace in the BODY: 403 RUNTIME_TENANT_MISMATCH, ZERO upstream calls
+AssertionError: expected 200 to be 403 // Object.is equality
+
+- Expected
++ Received
+
+- 403
++ 200
+
+ ❯ tests/security/s27-st10-cross-user.test.ts:273:27
+    271|       sessionBody(WS_B, SUB_B),
+    272|     );
+    273|     expect(result.status).toBe(403);
+       |                           ^
+    274|     expect(result.code).toBe("RUNTIME_TENANT_MISMATCH");
+    275|     expect(result.forwarded).toBe(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 5 passed (7)
+   Start at  22:57:53
+   Duration  2.95s (transform 40%, tests 39%, import 20%, worker 1%)
+

@@ -52,11 +52,17 @@ Adopted as PATTERNS from OpenMausBot `deploy/` (pinned `aede7d817df9`, Apache-2.
 
 ## The archive round's catches (the gate doing its job — the E46 precedent, recorded not waived)
 
-The first nine-step fresh-archive run (at `da4f80b`) returned eight exit-0 steps and a RED test step — 2527/2530 with THREE failures, each dispositioned:
+The first nine-step fresh-archive run (at `da4f80b`) returned eight exit-0 steps and a RED test step — 2527/2530 with THREE failures, each dispositioned (the second archive at the type-fix commit caught the `result_summary` union narrowing in the AC3 invariant — TS2339 — fixed `20e72ad`; its test step failed ONLY the S16 family, 2529/2530):
 
 1. **The portability guard bit MY comment** (`tests/contract/runtime-portability.test.ts`, D23 rule 2): the applyCgroupLayer comment named the S06 posture with the engine field's literal spelling ("MemorySwap") — engine vocabulary in the runtime surface. The guard is RIGHT and unweakened; the comment reworded to the posture's semantics ("the memory cap and the swap cap set EQUAL").
 2. **A REAL dead-test resuscitation** (`execution-sandbox-limits.test.ts` AC3 "a memory hog is killed at the cgroup memory.max where delegation exists"): the S26 test's engaged branch was UNREACHABLE on every host until the probe fix (the same masking this record already documents) — now live, it failed twice for real reasons: (a) its cap (256 MiB) sat BELOW node's boot floor (E36: node boots at data >= 1 GiB) — node SIGTRAP'd AT BOOT, the payload never ran; (b) rescaled above the floor (1024 MiB, a 3 GiB hog), node died with its OWN heap abort (SIGABRT at the data cap) rather than a catchable refusal. The test now pins the INVARIANT (either boundary, every honest shape): the 3000 allocations never complete ("ALLOC-BAD" never printed) and the record shows the ceiling — the clean refusal, the recorded death signal, or the typed limit death — plus the gateway-health invariant. The cgroup boundary's EXCLUSIVE proof stays the ST-05 tmpfs leg (RLIMIT_DATA caps at the same size here and wins the in-process race — the boundary needs a hog RLIMIT_DATA cannot see).
 3. **The documented environmental family**: `s16-workers-api.test.ts` timed out under the archive's parallel load (the S16 spawn-race family, E46/E47) — green isolated 11/11 in the fix round; the ST-05 wall-clock leg showed the same co-run-only shape once more in a later combined run (spawn-refusal under the fork-storm's parallel load), green isolated 6/6 and 30/30 in the lighter combination. Never widened.
+
+## The definitive gate (the third archive, at the final tip `20e72ad`)
+
+**ALL NINE STEPS EXIT 0 — 2530/2530 in 236 files, zero failures, zero flakes, real PostgreSQL 16** (install / lint / format:check / typecheck / test / build / license:inventory / boundary-guards / mockup:test). No assertion was widened anywhere across the three archive rounds.
+
+**A record correction, appended and never erased (G4/G5):** the `20e72ad` commit message states the S16 file was "green isolated in the same archive, 11/11" — that was written BEFORE the isolation runs happened, and they FAILED (the file failed isolated twice more — once in the `20e72ad` archive, once in the worktree — before passing in the following verbose run at 665 ms and then in this definitive gate). The honest history of that test across this slice's gates: gate 1 red (co-run), gate 2 red (co-run), isolated red ×2, then green, and green in the definitive full run — the E46-documented S16 spawn-race family's co-run-AND-solo tail on this machine, never widened. The claim in the commit message stands corrected here; the commit itself is history (G5: preserved, not rewritten).
 
 ## Verification (what ran, exactly)
 

@@ -36,7 +36,14 @@
  *   4. WALL CLOCK + PROCESS-TREE TERMINATION — the child runs detached (its
  *      own process group); the wall-clock ceiling and cancel() both
  *      SIGKILL the WHOLE group (`kill(-pid)`, the S19 detached+group-kill
- *      pattern with its post-exit reap), so no descendant survives.
+ *      pattern with its post-exit reap). S27-GAP-1 closure (issue #83, E48):
+ *      the same seams ALSO sweep session-escaped descendants — a `setsid`
+ *      grandchild is outside every group's reach, so before the group kill
+ *      the PPid chain is walked (while intact) and /proc is scanned for NEW
+ *      session leaders inside this execution's OWN user namespace
+ *      (uid_map-anchored — see escape-sweep.ts); everything collected is
+ *      SIGKILLed pid-verified against the spawn-time starttime snapshot.
+ *      The sweep re-runs in the post-exit reap for late escapees.
  *
  * Child output discipline (G3): this adapter forwards RAW stdout/stderr
  * chunks through the request's sink and interprets nothing; the binding owns
@@ -52,8 +59,28 @@
  * Governing records: D23 rule 2, D27, E1 (prlimit precedent), E13, G3, G4.
  */
 import { spawn, type ChildProcess } from "node:child_process";
-import { accessSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  accessSync,
+  closeSync,
+  mkdirSync,
+  rmdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
+
+import {
+  collectEscapeCandidates,
+  collectGroupDescendants,
+  killVerified,
+  nsIdentityFromFd,
+  openNsUser,
+  readNsUser,
+  readOomKillCount,
+  snapshotProcStarttimes,
+  type ProcSample,
+} from "./escape-sweep.ts";
 
 /** util-linux unshare install locations probed in order (Ubuntu: /usr/bin). */
 export const UNSHARE_BIN_CANDIDATES: readonly string[] = [
@@ -181,6 +208,15 @@ export interface SandboxExit {
   verifiedLimits: Record<string, VerifiedLimit> | null;
   /** The cgroup layer's applied bounds (null when the layer is absent). */
   cgroupApplied: { cgroup_path: string; memory_max: string; pids_max: string } | null;
+  /**
+   * The S27-GAP-1 escape sweep's state for THIS execution (P3d, PR #86
+   * review): "active" — the leader's namespace was pinned and the sweep
+   * scopes every termination seam; "disabled_no_private_namespace" — the
+   * leader showed no private namespace (or the runtime's own identity was
+   * unreadable) and the sweep NEVER ran: the ST-04 sweep leg is VOID for
+   * this execution, honestly recorded instead of silently absent.
+   */
+  sweep: "active" | "disabled_no_private_namespace";
   /** Spawn-level failure detail (ENOENT etc.) — no process ever ran. */
   spawnError: string | null;
 }
@@ -230,6 +266,19 @@ function applyCgroupLayer(
     if (limits.memoryBytes !== null) {
       writeFileSync(join(leaf, "memory.max"), String(limits.memoryBytes));
       memoryMax = String(limits.memoryBytes);
+      // NO swap headroom (the S06 container posture: the memory cap and the
+      // swap cap set EQUAL — swap never extends the envelope): without this
+      // the kernel reclaims tmpfs/shared pages through swap and memory.max
+      // never becomes a HARD boundary — the S27-GAP-2 re-verification's
+      // tmpfs hog survived a live memory.max until the swap door was closed
+      // (E48, live-verified 2026-11-10).
+      try {
+        writeFileSync(join(leaf, "memory.swap.max"), "0");
+      } catch {
+        // A kernel without swap accounting refuses the write — recorded as
+        // a null layer below? No: the memory.max boundary still applies;
+        // the swap headroom residual is the recorded honest gap (G5).
+      }
     }
     if (limits.maxProcesses !== null) {
       writeFileSync(join(leaf, "pids.max"), String(limits.maxProcesses));
@@ -250,9 +299,19 @@ function teardownCgroupLeaf(leaf: CgroupLeaf): void {
     // best effort
   }
   try {
-    rmSync(leaf.path, { recursive: true, force: true });
+    // Cgroupfs semantics: the pseudo-files are not unlinkable — rmdir(2)
+    // removes the directory wholesale (the kernel drops the read-only
+    // entries with it). rmSync-recursive would throw EPERM on the first
+    // pseudo-file and leave the leaf behind (the S27-GAP-2 re-verification
+    // found the layer live behind exactly this cleanup shape — issue #84).
+    rmdirSync(leaf.path);
   } catch {
-    // best effort
+    try {
+      // A plain-directory base (test fakes): unlinkable contents.
+      rmSync(leaf.path, { recursive: true, force: true });
+    } catch {
+      // best effort — the leaf lingers; harmless (an id is per-execution).
+    }
   }
 }
 
@@ -373,6 +432,11 @@ export function spawnSandboxedExecution(
     argv.push(...request.command);
   }
 
+  // The S27-GAP-1 escape-sweep anchor taken BEFORE the spawn (issue #83):
+  // every pid's /proc starttime now — what counts as NEW in this execution's
+  // window at the termination seams.
+  const spawnSnapshot = snapshotProcStarttimes();
+
   let child: ChildProcess | null = null;
   if (spawnErrorMessage === null) {
     child = spawn(argv[0]!, argv.slice(1), {
@@ -393,6 +457,100 @@ export function spawnSandboxedExecution(
   }
 
   const pid = child?.pid ?? 0;
+
+  // The sweep's second anchor: the leader's user-NAMESPACE identity (the
+  // ns/user inode via readlink(2)) — what scopes the sweep to THIS
+  // execution. The identity is the NAMESPACE ITSELF, never the uid_map
+  // STRING: every `unshare --user --map-root-user` execution produces the
+  // identical map text in a DISTINCT namespace, and a map-string compare let
+  // one execution's cancel kill a concurrent execution's tree (the F1 red,
+  // tests/security-evidence/2026-11-10-f1-ns-identity-red.txt). A leader whose
+  // ns/user equals the RUNTIME's own has no private envelope and the sweep
+  // does not run (a control that cannot scope itself does not run — G5, the
+  // recorded honest degradation; the D27 networkDisabled posture makes the
+  // private namespace the production norm). Read LAZILY at sweep time,
+  // cached once private: at spawn-return the fork may still be pre-exec, and
+  // the namespace only exists after unshare(2) has run.
+  const runtimeNsIdentity = readNsUser(process.pid);
+  // The leader's namespace identity is held as an OPEN fd (openNsUser): the
+  // fd PINS the namespace — its inode cannot be freed and reused by a
+  // concurrent execution's unshare while the sweep might still compare
+  // against it. A plain identity STRING read from a dead leader is racy
+  // (found live in this fix round: the inode is kernel-global and reused
+  // after destruction — a co-run sweep matched a NEW execution that drew
+  // the same inode and killed it; the pinned fd is the sound form).
+  let leaderNsFd: number | null = null;
+  const closeLeaderNsFd = (): void => {
+    if (leaderNsFd !== null) {
+      try {
+        closeSync(leaderNsFd);
+      } catch {
+        // already closed — best effort
+      }
+      leaderNsFd = null;
+    }
+  };
+  const leaderSweepIdentity = (): string | null => {
+    if (leaderNsFd !== null) return nsIdentityFromFd(leaderNsFd);
+    return null;
+  };
+  const sweepEnabled = (): boolean => leaderNsFd !== null;
+  // The identity is PRIMED while the leader LIVES (the F2 review finding):
+  // on the clean-exit path the post-exit reap fires 50 ms after close, by
+  // which time the leader's /proc entry is gone and a lazily-opened
+  // namespace is unopenable — the reap's sweep would disable itself and a
+  // daemonized survivor would outlive the execution the record says it
+  // cannot. The prime is a bounded non-blocking poll (unshare(2) execs
+  // within milliseconds of spawn; 40 x 25 ms is generous); the OPEN pins
+  // the namespace for the sweep's whole lifetime (F1's identity soundness).
+  const primeNsIdentity = (): void => {
+    if (child === null || child.pid === undefined) return;
+    const leaderPid: number = child.pid;
+    let attempts = 0;
+    const tick = (): void => {
+      if (leaderNsFd !== null) return; // captured
+      const identity = readNsUser(leaderPid);
+      if (identity === null) return; // the leader is gone
+      if (runtimeNsIdentity === null || identity === runtimeNsIdentity) {
+        // No private envelope on this leader (or the runtime's own
+        // identity is unreadable) — the sweep stays disabled (G5, the
+        // recorded honest degradation).
+        return;
+      }
+      const fd = openNsUser(leaderPid);
+      if (fd !== null) leaderNsFd = fd; // PINNED — the inode cannot be reused
+      return;
+    };
+    const poll = (): void => {
+      if (leaderNsFd !== null) return;
+      const before = attempts++;
+      tick();
+      if (leaderNsFd === null && before < 40) setTimeout(poll, 25);
+    };
+    setTimeout(poll, 25);
+  };
+  primeNsIdentity();
+
+  /**
+   * The S27-GAP-1 sweep at the termination seams: collect the still-parented
+   * descendants (PPid chain, intact NOW — before the group dies) and the
+   * session-escaped candidates (the setsid shape: NEW in the window, own
+   * session leader, this execution's namespace), then the group kill, then
+   * the verified kills (starttime-matched — pid reuse between the walk and
+   * the kill is spared).
+   */
+  const sweepAndKill = (): void => {
+    if (child === null || child.pid === undefined) return;
+    const leaderPid: number = child.pid;
+    const chained: ProcSample[] = collectGroupDescendants(leaderPid).filter(
+      (sample) => sample.pid !== leaderPid,
+    );
+    const escaped = sweepEnabled()
+      ? collectEscapeCandidates(leaderPid, spawnSnapshot, leaderSweepIdentity(), runtimeNsIdentity)
+      : [];
+    killGroup();
+    killVerified([...chained, ...escaped]);
+  };
 
   // The cgroup layer moves the ALREADY-spawned child into its leaf (the
   // pre-move window is covered by the prlimit layer, which was active from
@@ -446,7 +604,8 @@ export function spawnSandboxedExecution(
     child.stderr?.on("data", (chunk: string) => forward("stderr", chunk));
   }
 
-  const killTree = (): void => {
+  /** The recorded group kill: the whole process group, direct-kill fallback. */
+  const killGroup = (): void => {
     if (child === null || child.pid === undefined) return;
     try {
       // The whole group: unshare/prlimit exec'd into the command (same pid),
@@ -462,6 +621,26 @@ export function spawnSandboxedExecution(
     }
   };
 
+  /**
+   * The termination seam (cancel() and the wall clock): the D27/D14 group
+   * kill PLUS the S27-GAP-1 escape sweep — the group kill alone leaves a
+   * setsid'd grandchild alive (live-reproduced, ST-04's detached leg). The
+   * sweep runs BEFORE the group kill so the PPid chain is still intact, and
+   * again from the post-exit reap for late escapees.
+   */
+  const killTree = (): void => {
+    sweepAndKill();
+  };
+
+  /** The escape sweep alone (no group kill) — the reap's late-escapee pass. */
+  const sweepOnly = (): void => {
+    if (child === null || child.pid === undefined) return;
+    const escaped = sweepEnabled()
+      ? collectEscapeCandidates(child.pid, spawnSnapshot, leaderSweepIdentity(), runtimeNsIdentity)
+      : [];
+    killVerified(escaped);
+  };
+
   const wallClockTimer =
     request.wallClockMs !== null && child !== null
       ? setTimeout(() => {
@@ -475,6 +654,12 @@ export function spawnSandboxedExecution(
     settled = true;
     if (wallClockTimer !== null) clearTimeout(wallClockTimer);
     resolveExit(exit);
+    // The pinned namespace fd closes HERE — after the exit (and its sweep
+    // state) is resolved, never inside the sweeps: the close-path reap runs
+    // BEFORE settle and needs the pinned identity live (the self-erasing
+    // state bug found by the P3d pin — the reap closed the fd, then settle
+    // read the sweep as disabled).
+    closeLeaderNsFd();
   };
 
   if (child === null) {
@@ -488,6 +673,7 @@ export function spawnSandboxedExecution(
         limitDeath: null,
         verifiedLimits: null,
         cgroupApplied: null,
+        sweep: "disabled_no_private_namespace", // no execution ran — the sweep is void
         spawnError: spawnErrorMessage,
       }),
     );
@@ -511,8 +697,15 @@ export function spawnSandboxedExecution(
     if (signal === "SIGXFSZ") return "disk";
     if (signal === "SIGKILL" && !cancelled) {
       // A SIGKILL we did not deliver: the kernel OOM killer at the cgroup
-      // memory.max when that layer is active, else an unattributed kill.
-      return cgroupLeaf !== null && cgroupLeaf.memory_max !== "max" ? "memory_oom" : "sigkill";
+      // memory.max when that layer is active — but only when THIS leaf's own
+      // memory.events witness confirms an OOM kill (P3b, PR #86 review): a
+      // host-wide OOM or an external SIGKILL is NOT the leaf's attribution
+      // and stays the untyped sigkill.
+      if (cgroupLeaf !== null && cgroupLeaf.memory_max !== "max") {
+        const oomKills = readOomKillCount(cgroupLeaf.path);
+        return oomKills !== null && oomKills > 0 ? "memory_oom" : "sigkill";
+      }
+      return "sigkill";
     }
     return null;
   };
@@ -532,6 +725,7 @@ export function spawnSandboxedExecution(
             pids_max: cgroupLeaf.pids_max,
           }
         : null,
+      sweep: sweepEnabled() ? "active" : "disabled_no_private_namespace",
       spawnError: error.message,
     });
     if (cgroupLeaf !== null) teardownCgroupLeaf(cgroupLeaf);
@@ -541,14 +735,19 @@ export function spawnSandboxedExecution(
     // Post-exit reap (the S19 pattern): stragglers of the group holding no
     // stdio would otherwise survive the close. One extra group SIGKILL after
     // a short sweep, then the group is checked by the callers' own probes.
+    // The S27-GAP-1 escape sweep re-runs here too — a payload's dying gasp
+    // can fork a late setsid escapee between cancel and exit, and a group
+    // that is already gone must not mean a sweep that never happens.
     const reap = (): void => {
+      let groupAlive = false;
       try {
         process.kill(-pid, 0);
-        // Group still has members: kill again.
-        killTree();
+        groupAlive = true;
       } catch {
         // ESRCH — the group is gone.
       }
+      if (groupAlive) killTree();
+      else sweepOnly();
     };
     setTimeout(() => {
       reap();
@@ -567,6 +766,7 @@ export function spawnSandboxedExecution(
                 pids_max: cgroupLeaf.pids_max,
               }
             : null,
+          sweep: sweepEnabled() ? "active" : "disabled_no_private_namespace",
           spawnError: null,
         });
         if (cgroupLeaf !== null) teardownCgroupLeaf(cgroupLeaf);
@@ -584,14 +784,29 @@ export function spawnSandboxedExecution(
   };
 }
 
-/** The cgroup base probe shared by the composition (honest null when absent). */
+/**
+ * The cgroup base probe shared by the composition (honest null when absent).
+ *
+ * S27-GAP-2 re-verification (issue #84, E48): the VERDICT is the mkdir on
+ * the delegated base — a cgroupfs directory's pseudo-files are not
+ * unlinkable, so the cleanup is rmdir(2) (the kernel drops the directory
+ * wholesale) and the cleanup is BEST-EFFORT, never verdict-bearing: the
+ * pre-fix cleanup (`rmSync(probe, { force: true })` on a directory) threw
+ * EISDIR on every delegated host and the catch returned null — a LIVE
+ * delegated layer was invisible behind the probe's own cleanup failure.
+ */
 export function probeCgroupBaseDir(candidateBases?: readonly string[]): string | null {
   const bases = candidateBases ?? ["/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service"];
   for (const base of bases) {
     const probe = join(base, "shera-exec-probe");
     try {
       mkdirSync(probe, { recursive: true });
-      rmSync(probe, { force: true });
+      try {
+        rmdirSync(probe);
+      } catch {
+        // The probe leaf lingers — harmless (the next probe's mkdir is
+        // idempotent); the verdict below was already made by the mkdir.
+      }
       // The composition's stable base dir (leaves are created per execution).
       const stable = join(base, "shera-exec");
       mkdirSync(stable, { recursive: true });

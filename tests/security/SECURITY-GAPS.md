@@ -47,6 +47,30 @@ over-claim.
   namespace at spawn (the S35 compose deployment owns this surface) or a
   cgroup-delegation sweep; neither is buildable on the recorded host.
 
+- **DISPOSITION (S35, issue #83, E48 — recorded 2026-11-10, nothing above is
+  erased):** the fix family's cancel-side half LANDED on this host after all —
+  a /proc-side escape sweep that needs neither a PID namespace nor cgroup
+  delegation: at cancel()/wall-clock (and again in the post-exit reap) the
+  termination seam walks the PPid chain while intact and sweeps NEW session
+  leaders (sid === pid, the only shape setsid(2) can produce) born during the
+  execution window INSIDE the execution's own user namespace (the leader's
+  PRIVATE uid_map under the D27 `unshare --user` envelope — the host-map case
+  disables the sweep, an honest degradation, recorded), and SIGKILLs every
+  candidate pid-verified against the spawn-time starttime snapshot (the
+  pidfd-reuse-safety stand-in — Node exposes no pidfd surface, a native FFI
+  dependency was rejected). The DETACHED leg is now a pinned green in
+  `s27-st04-process-tree-escape.test.ts` (red/green evidence pair
+  `2026-11-10-gap1-setsid-{red,green}.txt` — the red run on the unfixed tree
+  shows the grandchild surviving exactly as this section records). The
+  REMAINING residual that still needs the deployment host: (a) a double-fork
+  orphan whose intermediate parent exits inside one sweep window without ever
+  calling setsid (leader's session, chain broken — invisible to a post-hoc
+  walk); (b) an escapee that nests its OWN user namespace (no longer
+  uid_map-matched); (c) a leader without a private uid_map (no D27 namespace —
+  sweep disabled). These close with PID-namespace containment at spawn in the
+  S35 Compose posture — recorded as the deployment-host item in the runbook
+  §hardening.
+
 ## S27-GAP-2 — the cgroup memory layer is unavailable on the recorded host (limits ride RLIMIT_DATA only)
 
 - **Threat:** TM-2.2 (container resource exhaustion); threat model §5 ST-05's
@@ -75,6 +99,39 @@ over-claim.
   memory cap (S27-GAP-2) — the prototype's RLIMIT_DATA layer is the fallback, the
   cgroup sweep is dead on the recorded host". The S35 deployment owns the
   container boundary where D27's per-container limits are actually enforceable.
+
+- **DISPOSITION (S35, issue #84, E48 — recorded 2026-11-10, nothing above is
+  erased):** the re-verification CHANGED the picture on this host, and the
+  change is recorded with its evidence, not absorbed: the delegated subtree
+  is LIVE here now (systemd `user@1000.service` carries `Delegate=yes`; a
+  direct leaf with a writable memory.max was created outside any code under
+  test — the S27-era "not writable" observation no longer reproduces; the
+  kernel moved to 7.0.0-42 between the record and this re-verification, and
+  whatever the earlier probe hit, the present kernel delegates). TWO real
+  defects were masking the layer, both fixed red-first (evidence pair
+  `2026-11-10-gap2-cgroup-{red,green}.txt`): (1) `probeCgroupBaseDir`'s
+  cleanup threw EISDIR on EVERY delegated host (`rmSync` without recursive
+  on a directory) and returned null — a live layer invisible behind its own
+  cleanup failure; (2) `teardownCgroupLeaf` used the same rmSync shape and
+  could never remove a cgroupfs leaf (both now use rmdir(2), the cgroupfs
+  semantics, best-effort and never verdict-bearing). AND a third, live:
+  memory.max alone is not a HARD boundary while swap reclaim exists — the
+  re-verification's tmpfs hog wrote straight through a live memory.max until
+  `memory.swap.max = 0` was written beside it (the S06 no-headroom posture).
+  The committed ST-05 leg now pins the answer to GAP-2's exact question on a
+  delegated host: a tmpfs hog invisible to RLIMIT_DATA (dd into /dev/shm)
+  waits until it observes itself inside its execution leaf, then EXECs dd —
+  the kernel SIGKILLs it at memory.max and the exit is the TYPED
+  `memory_oom`. The `verify-cgroup.sh` deployment procedure (infra/deploy)
+  verifies the FULL delegation sequence on any host (mkdir-only LIES —
+  recorded in the script). Residuals, honestly recorded: the pre-move window
+  (a charger that begins before the D27 leaf move lands completes before the
+  boundary exists — the Compose container-level cgroup covers it), a host
+  without swap accounting refusing the swap.max write (the memory.max
+  boundary still applies; the swap headroom residual stands), and the VM
+  itself: the owner's scratch-VM re-run of `verify-cgroup.sh` + the ST-05
+  suite is the deployment-host verification this disposition cannot perform
+  from here (no daemon, E22-E47).
 
 ## S27-GAP-3 (recorded, not a runtime gap) — the container-level cross-user legs stay a manual PROCEDURE
 

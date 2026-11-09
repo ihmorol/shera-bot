@@ -1,0 +1,26 @@
+# The Docker build context is the repository root (the monorepo's workspace
+# layout requires it). This file keeps the context to what the images build
+# from — never secrets, never evidence, never the developer's local state
+# (G3: nothing that could smuggle credentials into a layer).
+.git
+.github
+agents
+**/node_modules
+**/.next
+**/dist
+**/coverage
+docs
+tests
+mockup
+artifacts
+spikes
+**/.env
+**/.env.*
+!**/.env.example
+.context*
+.claude
+.codegraph
+.gstack
+.agents
+.zcode
+.session-archive

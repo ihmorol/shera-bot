@@ -1,0 +1,30 @@
+# F2 (PR #86 review, P2) RED evidence — the reap's sweep is inert on the clean-exit path (2026-11-10)
+#
+# The shape: the payload setsids a long-lived daemon and EXITS 0 — no cancel,
+# no wall clock. The post-exit reap fires 50 ms after close, by which time
+# the leader (and its /proc entry) is GONE: the lazily-read namespace
+# identity is unreadable, sweepEnabled() answers false, sweepOnly() collects
+# nothing, and the daemon survives while the reap comment claims coverage.
+#
+# Command: pnpm vitest run tests/security/s27-st04-process-tree-escape.test.ts
+# Observed: "the daemonized child 237804 SURVIVED a clean exit — the reap's
+# sweep ran without the leader's identity" (the other three legs stay green).
+# The fix (the identity captured while the leader lives — a bounded post-spawn
+# prime) lands next commit.
+
+ ❯ tests/security/s27-st04-process-tree-escape.test.ts:388:9
+    386|         processAlive(pid),
+    387|         `the daemonized child ${pid} SURVIVED a clean exit — the reap'…
+    388|       ).toBe(false);
+       |         ^
+    389|     }
+    390|     reapMarkerPids(marker); // defense in depth for the suite's own hy…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 3 passed (4)
+   Start at  04:55:22
+   Duration  9.34s (tests 98%, transform 2%)
+

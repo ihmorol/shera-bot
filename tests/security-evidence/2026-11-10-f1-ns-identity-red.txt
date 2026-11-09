@@ -1,0 +1,36 @@
+# F1 (PR #86 review, P1) RED evidence — the sweep's map-STRING identity kills a concurrent execution (2026-11-10)
+#
+# The two-overlapping-executions shape: execution A and execution B both run
+# the D27 envelope (`unshare --user --map-root-user`) — BOTH leaders carry the
+# IDENTICAL uid_map string ("0 1000 1") in DISTINCT namespaces. B starts after
+# A, so B's leader is new in A's spawn-window, its own session leader, and
+# map-string-equal. A's cancel collects B's leader and SIGKILLs it — a
+# concurrent execution's legitimate running tree destroyed by another
+# execution's cancellation. The third ST-04 leg pins exactly this (the fix —
+# namespace identity via /proc/<pid>/ns/user readlink — lands next commit).
+#
+# Command: pnpm vitest run tests/security/s27-st04-process-tree-escape.test.ts
+# Observed: "execution B's LEADER must SURVIVE another execution's cancel —
+# expected false to be true" (the first two legs — the group kill and the
+# setsid sweep — stay green; A's own tree died correctly).
+
+
+- true
++ false
+
+ ❯ tests/security/s27-st04-process-tree-escape.test.ts:313:7
+    311|       processAlive(handleB.pid),
+    312|       "execution B's LEADER must SURVIVE another execution's cancel — …
+    313|     ).toBe(true);
+       |       ^
+    314|     for (const pid of childrenB) {
+    315|       expect(
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed (3)
+   Start at  04:49:55
+   Duration  7.63s (tests 98%, transform 2%)
+

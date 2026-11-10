@@ -1267,6 +1267,25 @@ function wire(
             });
           });
         },
+        // D6 task-finish seam (S17 chunk 3's wired call): when a committed
+        // transition ends the run's execution — terminal (completion,
+        // cancellation, failure) or RECOVERY_REQUIRED (process death) — the
+        // run's write leases are force-released. A lease NEVER outlives its
+        // task; the cancellation path's own release dedupes here (only
+        // unreleased rows move).
+        onRunExecutionEnded: (workspaceId, runId, state) => {
+          try {
+            writeLeases.releaseLeasesForTask(runId);
+          } catch (error: unknown) {
+            logFault("task_run_lease_release_failed", {
+              workspace_id: workspaceId,
+              run_id: runId,
+              state,
+              name: error instanceof Error ? error.name : "Error",
+              message: error instanceof Error ? error.message : String(error),
+            });
+          }
+        },
         logFault: (event, fields) => logFault(event, fields),
       };
     }

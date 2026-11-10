@@ -1403,11 +1403,39 @@ export class TaskWorkerSupervisor {
 
   // ── Crash handling ─────────────────────────────────────────────────────────
 
-  private onChildExit(
+  /**
+   * The bounded window (ms) an unexpected CLEAN exit (code 0, no signal)
+   * yields the event loop before the crash classification, so a `done` frame
+   * already in the pipe is processed instead of being dropped by the
+   * listener unsubscription below. The exit notification and the pending
+   * stdout data event are independent loop events; under load the exit can
+   * win the queue, and without this drain an honest completion is classified
+   * `unexpected_exit` (crash → RECOVERY_REQUIRED) — losing the run's result.
+   * Bounded and clean-exit-only: nonzero/signal exits and initiated stops
+   * classify immediately (D14: death is detected independently of any final
+   * event; a real crash never waits).
+   */
+  private static readonly CLEAN_EXIT_DONE_DRAIN_MS = 25;
+
+  private async onChildExit(
     record: WorkerRecord,
     incarnation: Incarnation,
     exit: TaskWorkerChildExit,
-  ): void {
+  ): Promise<void> {
+    // Clean-exit drain BEFORE any unsubscription: yield the loop so pending
+    // stdout frames (the done frame the child flushed before exiting) are
+    // processed. If the done aftermath won the race, it owns everything
+    // (terminating/doneHandled) and this observer stays quiet.
+    if (
+      !incarnation.terminating &&
+      !incarnation.doneHandled &&
+      exit.code === 0 &&
+      exit.signal === null
+    ) {
+      await new Promise((resolve) =>
+        setTimeout(resolve, TaskWorkerSupervisor.CLEAN_EXIT_DONE_DRAIN_MS),
+      );
+    }
     for (const timer of incarnation.escalationTimers) clearTimeout(timer);
     incarnation.escalationTimers = [];
     for (const unsubscribe of incarnation.unsubscribers) unsubscribe();

@@ -201,12 +201,18 @@ class ControlledWorkerChild implements TaskWorkerChild {
     });
   }
 
-  /** Deliver one child frame to the supervisor NOW (the test's lever). */
+  /**
+   * Deliver one child frame to the supervisor NOW (the test's lever). Works
+   * even after exit: the frame simulates bytes already in the pipe whose
+   * stdout data event races the exit notification.
+   */
   deliver(frame: Record<string, unknown>): void {
-    this.emit(frame);
+    const line = encodeWorkerFrame({ v: WORKER_PROTOCOL_VERSION, ...frame } as never);
+    for (const listener of this.lineListeners) listener(line);
   }
 
-  private finish(exit: { code: number | null; signal: string | null }): void {
+  /** Exit the child with the given exit record (the exit notification). */
+  finish(exit: { code: number | null; signal: string | null }): void {
     if (this.exited) return;
     this.exited = true;
     this.exit = exit;
@@ -343,6 +349,22 @@ function makeHarness(options: HarnessOptions = {}): StressHarness {
         });
       });
     },
+    // The composition's D6 task-finish seam (the compose.ts wiring, mirrored).
+    onRunExecutionEnded: (workspaceId, runId, state) => {
+      try {
+        leases.releaseLeasesForTask(runId);
+      } catch (error: unknown) {
+        faults.push({
+          event: "stress_lease_release_failed",
+          fields: {
+            workspace_id: workspaceId,
+            run_id: runId,
+            state,
+            name: error instanceof Error ? error.name : "Error",
+          },
+        });
+      }
+    },
     logFault: (event, fields) => faults.push({ event, fields }),
   };
 
@@ -450,6 +472,8 @@ interface RunIntegrity {
   rowState: RunState;
   taskStream: Array<{ sequence: number; event_id: string; event_type: string }>;
   workerStream: Array<{ sequence: number; event_id: string; event_type: string }>;
+  /** Crash payloads from the worker stream (evidence on failure). */
+  crashPayloads: string[];
 }
 
 /** Read one run's row state and both of its journal streams. */
@@ -467,8 +491,12 @@ function readRunIntegrity(harness: StressHarness, runId: string): RunIntegrity {
     event_type: row.event_type,
   });
   const taskStream = harness.journal.listStream(taskStreamId(runId), WS).map(toRow);
-  const workerStream = harness.journal.listStream(runId, WS).map(toRow);
-  return { runId, rowState, taskStream, workerStream };
+  const workerRows = harness.journal.listStream(runId, WS);
+  const workerStream = workerRows.map(toRow);
+  const crashPayloads = workerRows
+    .filter((row) => row.event_type === "worker.crashed")
+    .map((row) => row.payload.slice(0, 220));
+  return { runId, rowState, taskStream, workerStream, crashPayloads };
 }
 
 /**
@@ -478,7 +506,8 @@ function readRunIntegrity(harness: StressHarness, runId: string): RunIntegrity {
 function assertJournalRowIntegrity(states: RunIntegrity[]): void {
   const evidence = (state: RunIntegrity): string =>
     ` [task: ${state.taskStream.map((e) => `${e.sequence}:${e.event_type}`).join(", ") || "empty"}]` +
-    ` [worker: ${state.workerStream.map((e) => `${e.sequence}:${e.event_type}`).join(", ") || "empty"}]`;
+    ` [worker: ${state.workerStream.map((e) => e.event_type).join(", ") || "empty"}]` +
+    state.crashPayloads.map((payload) => ` [crash payload: ${payload}]`).join("");
   const terminal = RUN_STATES_TERMINAL as readonly string[];
   for (const state of states) {
     // I1: terminal, never wedged.
@@ -803,5 +832,60 @@ describe("stress: N concurrent operations through the composed runtime gateway",
       active,
       `lease outlived its completed task: ${active.map((lease) => `${lease.task_id}:${lease.path}`).join(", ")}`,
     ).toEqual([]);
+  }, 30_000);
+
+  // ── Scenario 1d: the clean-exit/done-frame race ───────────────────────────
+  //
+  // The child's exit notification and the pending stdout data event are
+  // independent loop events. When the exit event wins the queue, the old
+  // observer unsubscribed the line listeners FIRST and classified the clean
+  // exit (code 0, no signal) as `unexpected_exit` — an honest completion
+  // whose done frame was already in the pipe became a crash, wedging the run
+  // in RECOVERY_REQUIRED under load (observed repeatedly in the storm: exit
+  // code 0, last_percent 100, all progress journalled, then worker.crashed).
+  // The bounded clean-exit drain lets the in-flight done frame be processed
+  // before any unsubscription; this repro delivers the race DETERMINISTICALLY
+  // (exit resolves first, the done frame arrives inside the drain window).
+  it("a clean exit whose done frame is still in flight completes the run (never classified as a crash)", async () => {
+    const children: ControlledWorkerChild[] = [];
+    const harness = makeHarness({
+      controlledSpawn: (request) => {
+        const child = new ControlledWorkerChild({ heartbeatMs: 20 });
+        child.workerId = request.worker_id;
+        child.pid = 43_000 + children.length;
+        children.push(child);
+        return child;
+      },
+    });
+
+    const runId = "stress-clean-exit-run";
+    startRun(harness, runId);
+    await untilTruthy(() =>
+      harness.supervisor.presenceState(WS, runId) === "running" ? true : undefined,
+    );
+
+    const child = children[0];
+    if (child === undefined) throw new Error("the controlled child never spawned");
+
+    // The race, in the losing order: the exit notification resolves first;
+    // the done frame's data event lands moments later (bytes in the pipe).
+    child.finish({ code: 0, signal: null });
+    setTimeout(() => child.deliver({ type: "done", summary: "work completed" }), 5);
+
+    // The completion must win: the row reaches SUCCEEDED through the done
+    // aftermath, the worker.completed event is journalled, and NO crash is
+    // classified for the clean exit.
+    const integrity = await untilTruthy(() => {
+      const state = readRunIntegrity(harness, runId);
+      return state.rowState === "SUCCEEDED" ? state : undefined;
+    }, 5_000);
+    expect(
+      integrity.workerStream.some((event) => event.event_type === "worker.completed"),
+      "the in-flight done frame must be journalled as a completion",
+    ).toBe(true);
+    expect(
+      integrity.workerStream.some((event) => event.event_type === "worker.crashed"),
+      "a clean exit with an in-flight done frame must never be classified as a crash",
+    ).toBe(false);
   }, 30_000);
 });

@@ -95,6 +95,21 @@ function emit(frame: WorkerChildFrame): void {
   process.stdout.write(encodeWorkerFrame(frame));
 }
 
+/**
+ * Emit one frame and resolve only when the bytes have left the process
+ * (flushed to the pipe). Used on the frames the worker MEANS the runtime to
+ * see before it exits (done, error): a bare `process.exit()` after
+ * `stdout.write` can truncate the pipe under load, turning an honest
+ * completion into a lost frame — the supervisor would then classify the exit
+ * as a crash. The intrinsic-crash path stays abrupt BY DESIGN (death must be
+ * detectable independently of any final frame, D14 rule).
+ */
+function emitAndFlush(frame: WorkerChildFrame): Promise<void> {
+  return new Promise((resolve) => {
+    process.stdout.write(encodeWorkerFrame(frame), () => resolve());
+  });
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -209,7 +224,7 @@ async function run(): Promise<void> {
       process.exit(137);
     }
     if (errorOnStep === step && (errorOnRun === "" || errorOnRun === args["run-id"])) {
-      emit({
+      await emitAndFlush({
         v: protocolVersion,
         type: "error",
         failure_class: errorClass,
@@ -236,9 +251,10 @@ async function run(): Promise<void> {
     }
     await delay(stepDelayMs);
   }
-  emit({ v: protocolVersion, type: "done", summary: `completed ${steps} steps` });
+  await emitAndFlush({ v: protocolVersion, type: "done", summary: `completed ${steps} steps` });
   // The work is complete: a healthy worker exits after done (D32 — its
-  // lifecycle is governed by the task, and the task just finished).
+  // lifecycle is governed by the task, and the task just finished). The done
+  // frame was flushed first, so the runtime sees the honest completion.
   process.exit(0);
 }
 

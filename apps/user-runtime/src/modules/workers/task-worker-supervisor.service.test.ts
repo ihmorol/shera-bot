@@ -829,12 +829,15 @@ interface ScriptedChildControl {
   /** Push one stdout line to the supervisor (no trailing newline, parser-shaped). */
   deliver(line: string): void;
   deliverDone(summary: string): void;
+  /** Fire the stdout EOF listeners (the spawn adapter's 'end' event). */
+  stdoutEnd(): void;
   /** Resolve the exit cleanly (code 0, no signal). */
   exitClean(): void;
 }
 
 function makeScriptedChild(workerId: string): ScriptedChildControl {
   let lineListener: ((line: string) => void) | null = null;
+  const stdoutEndListeners = new Set<() => void>();
   let resolveExit!: (exit: { code: number | null; signal: string | null }) => void;
   const exitPromise = new Promise<{ code: number | null; signal: string | null }>((resolve) => {
     resolveExit = resolve;
@@ -863,6 +866,13 @@ function makeScriptedChild(workerId: string): ScriptedChildControl {
       };
     },
     onStderr: () => () => {},
+    // The C4 seam: stdout EOF fires AFTER the last data event (the done
+    // frame the child flushed before exiting), exactly like the production
+    // spawn adapter's child.stdout 'end'.
+    onStdoutEnd: (listener) => {
+      stdoutEndListeners.add(listener);
+      return () => stdoutEndListeners.delete(listener);
+    },
     send: () => {},
     kill: () => {},
     waitForExit: () => exitPromise,
@@ -874,6 +884,7 @@ function makeScriptedChild(workerId: string): ScriptedChildControl {
       lineListener?.(
         JSON.stringify({ v: WORKER_PROTOCOL_VERSION, type: "done", summary }),
       ),
+    stdoutEnd: () => stdoutEndListeners.forEach((listener) => listener()),
     exitClean: () => resolveExit({ code: 0, signal: null }),
   };
 }
@@ -933,9 +944,11 @@ describe("C4 — the clean-exit close: a done frame landing after the drain is n
 
       // The race, scripted: the clean exit notification WINS the loop queue,
       // and the done frame the child flushed before exiting lands 120ms
-      // later — five times the 25ms CLEAN_EXIT_DONE_DRAIN_MS window.
+      // later — five times the 25ms CLEAN_EXIT_DONE_DRAIN_MS window. Stdout
+      // EOF fires at +150ms, after the done frame, like a real pipe.
       control!.exitClean();
       setTimeout(() => control!.deliverDone("the work finished"), 120);
+      setTimeout(() => control!.stdoutEnd(), 150);
 
       // An honest completion: done → worker.completed → run SUCCEEDED. Under
       // a fixed drain the observer unsubscribes first, drops the in-flight

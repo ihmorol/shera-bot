@@ -9,6 +9,8 @@
       "tests/acceptance/browser/layout.spec.ts",
       "tests/acceptance/browser/keyboard-a11y.spec.ts",
       "--project=chromium",
+      "--project=firefox",
+      "--project=webkit",
       "--project=chrome",
       "--output=/home/emon-morol/projects/github-cloud-projects/shera-bot/tests/acceptance/browser/test-results"
     ],
@@ -146,6 +148,58 @@
         "dependencies": [],
         "ignoreSnapshots": false,
         "__projectId": "chrome"
+      },
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "/home/emon-morol/projects/github-cloud-projects/shera-bot/tests/acceptance/browser/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "name": "firefox",
+        "testDir": "/home/emon-morol/projects/github-cloud-projects/shera-bot/tests/acceptance/browser",
+        "snapshotDir": "/home/emon-morol/projects/github-cloud-projects/shera-bot/tests/acceptance/browser",
+        "testIgnore": [],
+        "testMatch": "*.spec.ts",
+        "timeout": 30000,
+        "use": {
+          "baseURL": "http://127.0.0.1:4621",
+          "screenshot": "off",
+          "trace": "off",
+          "video": "off",
+          "browserName": "firefox"
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": "firefox"
+      },
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "/home/emon-morol/projects/github-cloud-projects/shera-bot/tests/acceptance/browser/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "name": "webkit",
+        "testDir": "/home/emon-morol/projects/github-cloud-projects/shera-bot/tests/acceptance/browser",
+        "snapshotDir": "/home/emon-morol/projects/github-cloud-projects/shera-bot/tests/acceptance/browser",
+        "testIgnore": [],
+        "testMatch": "*.spec.ts",
+        "timeout": 30000,
+        "use": {
+          "baseURL": "http://127.0.0.1:4621",
+          "screenshot": "off",
+          "trace": "off",
+          "video": "off",
+          "browserName": "webkit"
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": "webkit"
       }
     ],
     "quiet": false,
@@ -209,12 +263,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 5640,
+                      "duration": 1653,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:49:53.232Z",
+                      "startTime": "2026-11-10T17:45:17.233Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -243,12 +297,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 2643,
+                      "duration": 1116,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:49:59.467Z",
+                      "startTime": "2026-11-10T17:45:19.127Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -277,12 +331,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 2396,
+                      "duration": 1658,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:50:02.185Z",
+                      "startTime": "2026-11-10T17:45:20.272Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -311,12 +365,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 2248,
+                      "duration": 1766,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:50:04.625Z",
+                      "startTime": "2026-11-10T17:45:21.976Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -345,12 +399,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 1611,
+                      "duration": 944,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:50:06.921Z",
+                      "startTime": "2026-11-10T17:45:23.770Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -379,12 +433,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 1594,
+                      "duration": 998,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:50:08.578Z",
+                      "startTime": "2026-11-10T17:45:24.740Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -413,12 +467,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 2922,
+                      "duration": 1768,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:50:48.248Z",
+                      "startTime": "2026-11-10T17:45:51.231Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -447,12 +501,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 2360,
+                      "duration": 1325,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:50:52.531Z",
+                      "startTime": "2026-11-10T17:45:53.919Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -481,12 +535,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 2626,
+                      "duration": 1683,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:50:54.968Z",
+                      "startTime": "2026-11-10T17:45:55.290Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -515,12 +569,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 2541,
+                      "duration": 1995,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:50:57.720Z",
+                      "startTime": "2026-11-10T17:45:57.025Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -549,12 +603,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 1925,
+                      "duration": 1132,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:51:00.308Z",
+                      "startTime": "2026-11-10T17:45:59.063Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -583,12 +637,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 1921,
+                      "duration": 1235,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:51:02.301Z",
+                      "startTime": "2026-11-10T17:46:00.241Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -597,6 +651,414 @@
                 }
               ],
               "id": "aa09586c1d16412a1f00-130c1e7f486ca3aa48ed",
+              "file": "journeys.spec.ts",
+              "line": 83,
+              "column": 3
+            },
+            {
+              "title": "login → the Google sign-in entry points at the control plane",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3531,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:46:28.155Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "aa09586c1d16412a1f00-0bd413b18a2bc33ffa04",
+              "file": "journeys.spec.ts",
+              "line": 17,
+              "column": 3
+            },
+            {
+              "title": "Operation chat → send → artifact and run cards visible",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1585,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:46:33.167Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "aa09586c1d16412a1f00-414cd1e24df38c2d524a",
+              "file": "journeys.spec.ts",
+              "line": 26,
+              "column": 3
+            },
+            {
+              "title": "approval → the five choices decide; the chosen decision is recorded",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1954,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:46:34.787Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "aa09586c1d16412a1f00-bdf765ec1f4df3e4ba9c",
+              "file": "journeys.spec.ts",
+              "line": 42,
+              "column": 3
+            },
+            {
+              "title": "recovery after refresh → the thread re-renders deterministically",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2199,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:46:36.780Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "aa09586c1d16412a1f00-d82f691442ee3c3a6a04",
+              "file": "journeys.spec.ts",
+              "line": 61,
+              "column": 3
+            },
+            {
+              "title": "settings → credits read-out renders the real ledger fields",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1518,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:46:39.009Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "aa09586c1d16412a1f00-a966858c324bc108d2ff",
+              "file": "journeys.spec.ts",
+              "line": 76,
+              "column": 3
+            },
+            {
+              "title": "provider configuration failure shows a configuration state, never fake success (G4)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1531,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:46:40.553Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "aa09586c1d16412a1f00-70f3a763fbfe7e302368",
+              "file": "journeys.spec.ts",
+              "line": 83,
+              "column": 3
+            },
+            {
+              "title": "login → the Google sign-in entry points at the control plane",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3088,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:47:17.766Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "aa09586c1d16412a1f00-c3827eb28f1116256ff6",
+              "file": "journeys.spec.ts",
+              "line": 17,
+              "column": 3
+            },
+            {
+              "title": "Operation chat → send → artifact and run cards visible",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3353,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:47:21.115Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "aa09586c1d16412a1f00-501c2e09d6b42fb292fc",
+              "file": "journeys.spec.ts",
+              "line": 26,
+              "column": 3
+            },
+            {
+              "title": "approval → the five choices decide; the chosen decision is recorded",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3443,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:47:24.501Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "aa09586c1d16412a1f00-2921de5a23a415d2c542",
+              "file": "journeys.spec.ts",
+              "line": 42,
+              "column": 3
+            },
+            {
+              "title": "recovery after refresh → the thread re-renders deterministically",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3115,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:47:27.969Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "aa09586c1d16412a1f00-f0e8db5ce759cce96cb4",
+              "file": "journeys.spec.ts",
+              "line": 61,
+              "column": 3
+            },
+            {
+              "title": "settings → credits read-out renders the real ledger fields",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2564,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:47:31.127Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "aa09586c1d16412a1f00-e99fa1b503c1f061dca6",
+              "file": "journeys.spec.ts",
+              "line": 76,
+              "column": 3
+            },
+            {
+              "title": "provider configuration failure shows a configuration state, never fake success (G4)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2696,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:47:33.750Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "aa09586c1d16412a1f00-f64ccca3c47b231a8836",
               "file": "journeys.spec.ts",
               "line": 83,
               "column": 3
@@ -634,12 +1096,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 2278,
+                      "duration": 1431,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:50:10.266Z",
+                      "startTime": "2026-11-10T17:45:25.786Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -674,12 +1136,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 2236,
+                      "duration": 1443,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:50:12.590Z",
+                      "startTime": "2026-11-10T17:45:27.246Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -714,12 +1176,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 2159,
+                      "duration": 1345,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:50:14.872Z",
+                      "startTime": "2026-11-10T17:45:28.719Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -754,12 +1216,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 3115,
+                      "duration": 1458,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:50:17.070Z",
+                      "startTime": "2026-11-10T17:45:30.085Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -794,12 +1256,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 2782,
+                      "duration": 1382,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:50:20.254Z",
+                      "startTime": "2026-11-10T17:45:31.565Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -834,12 +1296,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 2098,
+                      "duration": 1340,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:50:23.133Z",
+                      "startTime": "2026-11-10T17:45:32.970Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -874,12 +1336,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 2273,
+                      "duration": 1350,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:50:25.326Z",
+                      "startTime": "2026-11-10T17:45:34.334Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -914,12 +1376,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 2528,
+                      "duration": 1609,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:51:04.350Z",
+                      "startTime": "2026-11-10T17:46:01.553Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -954,12 +1416,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 3339,
+                      "duration": 1667,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:51:06.926Z",
+                      "startTime": "2026-11-10T17:46:03.204Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -994,12 +1456,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 3376,
+                      "duration": 1679,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:51:10.338Z",
+                      "startTime": "2026-11-10T17:46:04.901Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -1034,12 +1496,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 2907,
+                      "duration": 1825,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:51:13.781Z",
+                      "startTime": "2026-11-10T17:46:06.620Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -1074,12 +1536,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 2623,
+                      "duration": 1597,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:51:16.737Z",
+                      "startTime": "2026-11-10T17:46:08.485Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -1114,12 +1576,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 2465,
+                      "duration": 1461,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:51:19.447Z",
+                      "startTime": "2026-11-10T17:46:10.116Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -1154,12 +1616,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 2617,
+                      "duration": 1477,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:51:21.972Z",
+                      "startTime": "2026-11-10T17:46:11.605Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -1174,6 +1636,566 @@
                 }
               ],
               "id": "c21dd4f907de5aa8a41b-52a061fa84e096ce3aff",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 65,
+              "column": 5
+            },
+            {
+              "title": "no critical/serious violations on login",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2292,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:46:42.135Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-login.json",
+                          "contentType": "application/json",
+                          "body": "ewogICJzdXJmYWNlIjogImxvZ2luIiwKICAiYmxvY2tpbmciOiAwLAogICJ2aW9sYXRpb25zIjogW10KfQ=="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-a133fd954b29ec8ab2ff",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 65,
+              "column": 5
+            },
+            {
+              "title": "no critical/serious violations on operation-chat",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2158,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:46:44.460Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-operation-chat.json",
+                          "contentType": "application/json",
+                          "body": "ewogICJzdXJmYWNlIjogIm9wZXJhdGlvbi1jaGF0IiwKICAiYmxvY2tpbmciOiAwLAogICJ2aW9sYXRpb25zIjogW10KfQ=="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-dc9ccb4c3b4b77e696c3",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 65,
+              "column": 5
+            },
+            {
+              "title": "no critical/serious violations on operation-thread-artifacts",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1790,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:46:46.655Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-operation-thread-artifacts.json",
+                          "contentType": "application/json",
+                          "body": "ewogICJzdXJmYWNlIjogIm9wZXJhdGlvbi10aHJlYWQtYXJ0aWZhY3RzIiwKICAiYmxvY2tpbmciOiAwLAogICJ2aW9sYXRpb25zIjogW10KfQ=="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-84c6a5f4da39cd4919de",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 65,
+              "column": 5
+            },
+            {
+              "title": "no critical/serious violations on approval",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2866,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:46:48.479Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-approval.json",
+                          "contentType": "application/json",
+                          "body": "ewogICJzdXJmYWNlIjogImFwcHJvdmFsIiwKICAiYmxvY2tpbmciOiAwLAogICJ2aW9sYXRpb25zIjogW10KfQ=="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-9ac23f72922f8ebe274c",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 65,
+              "column": 5
+            },
+            {
+              "title": "no critical/serious violations on providers-settings",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1872,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:46:51.375Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-providers-settings.json",
+                          "contentType": "application/json",
+                          "body": "ewogICJzdXJmYWNlIjogInByb3ZpZGVycy1zZXR0aW5ncyIsCiAgImJsb2NraW5nIjogMCwKICAidmlvbGF0aW9ucyI6IFsKICAgIHsKICAgICAgImlkIjogImhlYWRpbmctb3JkZXIiLAogICAgICAiaW1wYWN0IjogIm1vZGVyYXRlIiwKICAgICAgIm5vZGVzIjogWwogICAgICAgIFsKICAgICAgICAgICJoMyIKICAgICAgICBdCiAgICAgIF0KICAgIH0KICBdCn0="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-39f39dc93795e72128d4",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 65,
+              "column": 5
+            },
+            {
+              "title": "no critical/serious violations on providers-failure",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1804,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:46:53.287Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-providers-failure.json",
+                          "contentType": "application/json",
+                          "body": "ewogICJzdXJmYWNlIjogInByb3ZpZGVycy1mYWlsdXJlIiwKICAiYmxvY2tpbmciOiAwLAogICJ2aW9sYXRpb25zIjogW10KfQ=="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-9bc63e55c390bb4bba16",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 65,
+              "column": 5
+            },
+            {
+              "title": "no critical/serious violations on credits-settings",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1813,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:46:55.113Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-credits-settings.json",
+                          "contentType": "application/json",
+                          "body": "ewogICJzdXJmYWNlIjogImNyZWRpdHMtc2V0dGluZ3MiLAogICJibG9ja2luZyI6IDAsCiAgInZpb2xhdGlvbnMiOiBbXQp9"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-302266604cb456e95f12",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 65,
+              "column": 5
+            },
+            {
+              "title": "no critical/serious violations on login",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3115,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:47:36.490Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-login.json",
+                          "contentType": "application/json",
+                          "body": "ewogICJzdXJmYWNlIjogImxvZ2luIiwKICAiYmxvY2tpbmciOiAwLAogICJ2aW9sYXRpb25zIjogW10KfQ=="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-b311acd0aa3dc0a1d3c8",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 65,
+              "column": 5
+            },
+            {
+              "title": "no critical/serious violations on operation-chat",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 4108,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:47:39.635Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-operation-chat.json",
+                          "contentType": "application/json",
+                          "body": "ewogICJzdXJmYWNlIjogIm9wZXJhdGlvbi1jaGF0IiwKICAiYmxvY2tpbmciOiAwLAogICJ2aW9sYXRpb25zIjogW10KfQ=="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-9f46ad87dfdb759a00a0",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 65,
+              "column": 5
+            },
+            {
+              "title": "no critical/serious violations on operation-thread-artifacts",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3277,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:47:43.779Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-operation-thread-artifacts.json",
+                          "contentType": "application/json",
+                          "body": "ewogICJzdXJmYWNlIjogIm9wZXJhdGlvbi10aHJlYWQtYXJ0aWZhY3RzIiwKICAiYmxvY2tpbmciOiAwLAogICJ2aW9sYXRpb25zIjogW10KfQ=="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-8cfefe7ca345a14f9864",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 65,
+              "column": 5
+            },
+            {
+              "title": "no critical/serious violations on approval",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3759,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:47:47.085Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-approval.json",
+                          "contentType": "application/json",
+                          "body": "ewogICJzdXJmYWNlIjogImFwcHJvdmFsIiwKICAiYmxvY2tpbmciOiAwLAogICJ2aW9sYXRpb25zIjogW10KfQ=="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-994347c9883303411eb1",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 65,
+              "column": 5
+            },
+            {
+              "title": "no critical/serious violations on providers-settings",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3463,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:47:50.871Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-providers-settings.json",
+                          "contentType": "application/json",
+                          "body": "ewogICJzdXJmYWNlIjogInByb3ZpZGVycy1zZXR0aW5ncyIsCiAgImJsb2NraW5nIjogMCwKICAidmlvbGF0aW9ucyI6IFsKICAgIHsKICAgICAgImlkIjogImhlYWRpbmctb3JkZXIiLAogICAgICAiaW1wYWN0IjogIm1vZGVyYXRlIiwKICAgICAgIm5vZGVzIjogWwogICAgICAgIFsKICAgICAgICAgICJoMyIKICAgICAgICBdCiAgICAgIF0KICAgIH0KICBdCn0="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-6190dd88376d98fab9cb",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 65,
+              "column": 5
+            },
+            {
+              "title": "no critical/serious violations on providers-failure",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3126,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:47:54.356Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-providers-failure.json",
+                          "contentType": "application/json",
+                          "body": "ewogICJzdXJmYWNlIjogInByb3ZpZGVycy1mYWlsdXJlIiwKICAiYmxvY2tpbmciOiAwLAogICJ2aW9sYXRpb25zIjogW10KfQ=="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-baa50fe29a1f39bcbf7f",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 65,
+              "column": 5
+            },
+            {
+              "title": "no critical/serious violations on credits-settings",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3581,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:47:57.506Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-credits-settings.json",
+                          "contentType": "application/json",
+                          "body": "ewogICJzdXJmYWNlIjogImNyZWRpdHMtc2V0dGluZ3MiLAogICJibG9ja2luZyI6IDAsCiAgInZpb2xhdGlvbnMiOiBbXQp9"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-dff2d323674bbbd25e96",
               "file": "keyboard-a11y.spec.ts",
               "line": 65,
               "column": 5
@@ -1202,12 +2224,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 1630,
+                      "duration": 966,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:50:27.641Z",
+                      "startTime": "2026-11-10T17:45:35.707Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -1236,12 +2258,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 1893,
+                      "duration": 1123,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:50:29.316Z",
+                      "startTime": "2026-11-10T17:45:36.698Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -1270,12 +2292,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 2158,
+                      "duration": 1195,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:50:31.256Z",
+                      "startTime": "2026-11-10T17:45:37.844Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -1304,12 +2326,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 2003,
+                      "duration": 1261,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:51:24.647Z",
+                      "startTime": "2026-11-10T17:46:13.111Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -1338,12 +2360,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 2123,
+                      "duration": 1608,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:51:26.703Z",
+                      "startTime": "2026-11-10T17:46:14.433Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -1372,12 +2394,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 2656,
+                      "duration": 1504,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:51:28.910Z",
+                      "startTime": "2026-11-10T17:46:16.074Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -1386,6 +2408,210 @@
                 }
               ],
               "id": "c21dd4f907de5aa8a41b-c584a7bde7fbd09ffbdf",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 135,
+              "column": 3
+            },
+            {
+              "title": "login: the sign-in entry is reachable and labelled",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1451,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:46:56.947Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-172dc6cd66381b8bcdb3",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 95,
+              "column": 3
+            },
+            {
+              "title": "operation chat: composer is keyboard-wired end to end",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2107,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:46:58.417Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-240f30ac3ad619f001b5",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 123,
+              "column": 3
+            },
+            {
+              "title": "approval: review opens the decision modal with the five verbatim choices",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2415,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:47:00.563Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-635d812f9e391c7d4d6c",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 135,
+              "column": 3
+            },
+            {
+              "title": "login: the sign-in entry is reachable and labelled",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2378,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:48:01.112Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-ed1fa88e0727c719adb2",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 95,
+              "column": 3
+            },
+            {
+              "title": "operation chat: composer is keyboard-wired end to end",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2729,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:48:03.517Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-297673c28c8e51d682ef",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 123,
+              "column": 3
+            },
+            {
+              "title": "approval: review opens the decision modal with the five verbatim choices",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3643,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:48:06.276Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-8cfc3d9d5b9d43626dc7",
               "file": "keyboard-a11y.spec.ts",
               "line": 135,
               "column": 3
@@ -1423,12 +2649,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 2354,
+                      "duration": 1898,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:50:33.479Z",
+                      "startTime": "2026-11-10T17:45:39.103Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -1457,12 +2683,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 2384,
+                      "duration": 1853,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:50:35.884Z",
+                      "startTime": "2026-11-10T17:45:41.036Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -1491,12 +2717,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 2452,
+                      "duration": 2332,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:50:38.306Z",
+                      "startTime": "2026-11-10T17:45:42.919Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -1525,12 +2751,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 2664,
+                      "duration": 1958,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:50:40.803Z",
+                      "startTime": "2026-11-10T17:45:45.285Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -1559,12 +2785,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 3353,
+                      "duration": 1721,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:51:31.651Z",
+                      "startTime": "2026-11-10T17:46:17.654Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -1593,12 +2819,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 3140,
+                      "duration": 1853,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:51:35.075Z",
+                      "startTime": "2026-11-10T17:46:19.404Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -1627,12 +2853,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 2799,
+                      "duration": 1855,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:51:38.288Z",
+                      "startTime": "2026-11-10T17:46:21.295Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -1661,12 +2887,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 2991,
+                      "duration": 1855,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:51:41.137Z",
+                      "startTime": "2026-11-10T17:46:23.193Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -1675,6 +2901,278 @@
                 }
               ],
               "id": "9f98fd8c8d1538f5ebbb-3210ae1fe482d27a8f15",
+              "file": "layout.spec.ts",
+              "line": 79,
+              "column": 5
+            },
+            {
+              "title": "surfaces fit 360px without horizontal overflow",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2527,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:47:03.029Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9f98fd8c8d1538f5ebbb-a68774edced663f1098d",
+              "file": "layout.spec.ts",
+              "line": 79,
+              "column": 5
+            },
+            {
+              "title": "surfaces fit 768px without horizontal overflow",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2173,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:47:05.578Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9f98fd8c8d1538f5ebbb-90d6b796025d40f6e049",
+              "file": "layout.spec.ts",
+              "line": 79,
+              "column": 5
+            },
+            {
+              "title": "surfaces fit 1024px without horizontal overflow",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2344,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:47:07.786Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9f98fd8c8d1538f5ebbb-64eba99dfa05af51a8ce",
+              "file": "layout.spec.ts",
+              "line": 79,
+              "column": 5
+            },
+            {
+              "title": "surfaces fit 1440px without horizontal overflow",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3256,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:47:10.172Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9f98fd8c8d1538f5ebbb-6bef2905c5ec3335570b",
+              "file": "layout.spec.ts",
+              "line": 79,
+              "column": 5
+            },
+            {
+              "title": "surfaces fit 360px without horizontal overflow",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3741,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:48:09.968Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9f98fd8c8d1538f5ebbb-1d10dfe2e73bb5a77b00",
+              "file": "layout.spec.ts",
+              "line": 79,
+              "column": 5
+            },
+            {
+              "title": "surfaces fit 768px without horizontal overflow",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3915,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:48:13.735Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9f98fd8c8d1538f5ebbb-6e07ebd495e2ba27a501",
+              "file": "layout.spec.ts",
+              "line": 79,
+              "column": 5
+            },
+            {
+              "title": "surfaces fit 1024px without horizontal overflow",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3773,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:48:17.674Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9f98fd8c8d1538f5ebbb-271d225011f740bef823",
+              "file": "layout.spec.ts",
+              "line": 79,
+              "column": 5
+            },
+            {
+              "title": "surfaces fit 1440px without horizontal overflow",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 4390,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:48:21.472Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9f98fd8c8d1538f5ebbb-a0e060faf6b74574202f",
               "file": "layout.spec.ts",
               "line": 79,
               "column": 5
@@ -1703,12 +3201,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 1742,
+                      "duration": 1099,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:50:43.504Z",
+                      "startTime": "2026-11-10T17:45:47.269Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -1737,12 +3235,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 1469,
+                      "duration": 1819,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:50:45.294Z",
+                      "startTime": "2026-11-10T17:45:48.393Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -1771,12 +3269,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 1987,
+                      "duration": 1146,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:51:44.197Z",
+                      "startTime": "2026-11-10T17:46:25.083Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -1805,12 +3303,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 1794,
+                      "duration": 1065,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-11-10T00:51:46.252Z",
+                      "startTime": "2026-11-10T17:46:26.268Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -1822,6 +3320,142 @@
               "file": "layout.spec.ts",
               "line": 111,
               "column": 3
+            },
+            {
+              "title": "mobile 360px: the login entry and composer stay reachable",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1638,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:47:13.457Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9f98fd8c8d1538f5ebbb-cccb24a03da92c66d580",
+              "file": "layout.spec.ts",
+              "line": 100,
+              "column": 3
+            },
+            {
+              "title": "desktop 1440px: the thread and approval card render at full width",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1346,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:47:15.117Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9f98fd8c8d1538f5ebbb-7a723f5ac78d2ee35155",
+              "file": "layout.spec.ts",
+              "line": 111,
+              "column": 3
+            },
+            {
+              "title": "mobile 360px: the login entry and composer stay reachable",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2584,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:48:25.894Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9f98fd8c8d1538f5ebbb-12ba96a71453532c7c46",
+              "file": "layout.spec.ts",
+              "line": 100,
+              "column": 3
+            },
+            {
+              "title": "desktop 1440px: the thread and approval card render at full width",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2625,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T17:48:28.510Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9f98fd8c8d1538f5ebbb-35fd02ba89c177b65aa8",
+              "file": "layout.spec.ts",
+              "line": 111,
+              "column": 3
             }
           ]
         }
@@ -1830,9 +3464,9 @@
   ],
   "errors": [],
   "stats": {
-    "startTime": "2026-11-10T00:49:49.164Z",
-    "duration": 119250.76599999999,
-    "expected": 44,
+    "startTime": "2026-11-10T17:45:14.801Z",
+    "duration": 196525.317,
+    "expected": 88,
     "skipped": 0,
     "unexpected": 0,
     "flaky": 0

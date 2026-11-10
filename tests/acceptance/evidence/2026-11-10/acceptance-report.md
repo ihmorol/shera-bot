@@ -1,4 +1,4 @@
-# Acceptance runner report — 2026-11-10T17:48:31.363Z
+# Acceptance runner report — 2026-11-10T20:39:24.835Z
 
 The criteria runner's record for this run (E43 tiering; G4/G5/G7 honesty rules in the script header). Machine-readable twin: `acceptance-report.json` alongside this file.
 

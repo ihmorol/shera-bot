@@ -49,7 +49,12 @@ import { join } from "node:path";
 
 import { afterAll, describe, expect, it } from "vitest";
 
-import { openDatabase, verifySnapshotIntegrity, vacuumIntoBackup } from "../../apps/user-runtime/src/adapters/sqlite/connection.ts";
+import {
+  openDatabase,
+  verifySnapshotIntegrity,
+  vacuumIntoBackup,
+  type SqliteConnection,
+} from "../../apps/user-runtime/src/adapters/sqlite/connection.ts";
 import { applyMigrations } from "../../apps/user-runtime/src/adapters/sqlite/migrations.ts";
 import { OperationsRepository } from "../../apps/user-runtime/src/adapters/sqlite/operations-repository.ts";
 import { RunCheckpointsRepository } from "../../apps/user-runtime/src/adapters/sqlite/run-checkpoints-repository.ts";
@@ -89,7 +94,7 @@ const PACK_CATALOG = {
 } as const;
 
 const tempDirs: string[] = [];
-const connections: Runtime["conn"][] = [];
+const connections: SqliteConnection[] = [];
 
 afterAll(() => {
   for (const conn of connections.splice(0)) {
@@ -105,7 +110,7 @@ afterAll(() => {
 });
 
 interface Runtime {
-  conn: SqliteConnection_forScenario;
+  conn: SqliteConnection;
   tx: SqliteTransactions;
   journal: EventJournalRepository;
   events: EventsService;

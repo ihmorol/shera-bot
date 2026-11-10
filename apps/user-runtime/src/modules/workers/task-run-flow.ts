@@ -47,7 +47,18 @@ const WORKER_STOP_STATES: readonly RunState[] = ["CANCELLING", "CANCELLED", "FAI
 
 /** The states in which a run's EXECUTION has ended (D6's force-release
  * moments): the terminal states — completion, cancellation, failure — and
- * RECOVERY_REQUIRED, the recorded process-death state (D32). */
+ * RECOVERY_REQUIRED, the recorded process-death state (D32).
+ *
+ * PAUSED is deliberately NOT here — the recorded rationale (stress review
+ * C5, lease semantics unchanged): a pause is a non-terminal state whose
+ * execution may resume, so a lease NEVER outlives its TASK is not violated
+ * by a lease outliving an interruption; the D6 TTL covers the bounded
+ * pause windows. The recorded caveat: a `retry_exhausted` pause (S22) is
+ * INDEFINITE — a lease held across one lives as long as the user leaves
+ * the run paused (TTL expiry + re-acquire apply meanwhile; no force-release
+ * fires until the run reaches a terminal or recovery state). Flagged as an
+ * observation for the lease-semantics owner in the E29 closure note
+ * (TRACEABILITY), not a defect. */
 const RUN_EXECUTION_ENDED_STATES: readonly string[] = [
   ...RUN_STATES_TERMINAL,
   "RECOVERY_REQUIRED",

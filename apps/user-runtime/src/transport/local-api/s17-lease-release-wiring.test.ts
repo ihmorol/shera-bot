@@ -30,6 +30,9 @@ import { afterAll, afterEach, describe, expect, it } from "vitest";
 
 import type { RuntimeHandle } from "./compose.ts";
 import { DEFAULT_WORKSPACE_ID, composeRuntime } from "./compose.ts";
+import { openDatabase } from "../../adapters/sqlite/connection.ts";
+import { OperationsRepository } from "../../adapters/sqlite/operations-repository.ts";
+import { SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
 import {
   cleanupTempResources,
   makeTempDir,
@@ -109,6 +112,46 @@ async function activeLeases(origin: string): Promise<Array<Record<string, unknow
   return (listed.body["leases"] ?? []) as Array<Record<string, unknown>>;
 }
 
+/**
+ * Seed one task-scoped child run through the operations REPOSITORY on a
+ * second connection (the S20 chunk-2 arrangement: harness runs live on the
+ * journal, the approval cascade is task-scoped over operations.runs rows;
+ * arrangement writes stay inside the repository — no SQL here).
+ */
+function seedChildRun(dbPath: string, parentTaskId: string, runId: string, state = "RUNNING") {
+  const conn = openDatabase(dbPath);
+  try {
+    const row = {
+      run_id: runId,
+      workspace_id: WS,
+      operation_id: "op_lease_wiring_children",
+      parent_task_id: parentTaskId,
+      state: state as "RUNNING",
+      events_seq_cursor: 0,
+      credits: {} as Record<string, unknown>,
+      artifacts: [] as string[],
+      created_at: clockNow,
+      updated_at: clockNow,
+    };
+    new OperationsRepository(new SqliteTransactions(conn.db)).createRun(WS, row);
+    return row;
+  } finally {
+    conn.close();
+  }
+}
+
+/** Re-read one child run through the repository on a second connection. */
+function readChildRun(dbPath: string, parentTaskId: string, runId: string) {
+  const conn = openDatabase(dbPath);
+  try {
+    return new OperationsRepository(new SqliteTransactions(conn.db))
+      .listRunsByParentTaskId(WS, parentTaskId)
+      .find((row) => row.run_id === runId);
+  } finally {
+    conn.close();
+  }
+}
+
 describe("C1 — the harness composition's task-finish seam releases the run's leases", () => {
   it("a run driven to FAILED through the composed runtime takes its write lease with it (D6)", async () => {
     const dbPath = join(makeTempDir("shera-s17-lease-wiring-"), "runtime.db");
@@ -155,6 +198,112 @@ describe("C1 — the harness composition's task-finish seam releases the run's l
     runtime.operations.applyRunState(WS, operation.operation_id, runId, "FAILED");
     expect(runtime.operations.getRun(WS, operation.operation_id, runId).state).toBe("FAILED");
 
+    expect(await activeLeases(origin)).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// C2a — the approvals-decision cancel path (the formerly-bypassed seam #1)
+// ---------------------------------------------------------------------------
+
+/**
+ * The gated scripted demo tool (runtime-owned typed definition, D38) — the
+ * S20 arrangement: a RUNNING scripted run proposing it pauses
+ * WAITING_FOR_APPROVAL and files the pending approval the cancel decision
+ * needs.
+ */
+const GATED_TOOL = {
+  agent_id: GENERAL,
+  tool: {
+    tool_id: "tool_repo_push",
+    tool_version: "1.2.0",
+    capability: "repo.push",
+    risk_class: "EXTERNAL_WRITE",
+    resource_scope: "workspace://notes/draft.md",
+    side_effect_summary: "Pushes local commits to the configured remote repository.",
+  },
+  args_digest: `sha256:${"c".repeat(64)}`,
+  proposal_summary: "Scripted demo proposal: push the drafted notes.",
+} as const;
+
+const clockNow = "2026-11-10T12:00:00.000Z";
+
+/** A typed trigger (D34/G2) whose derived task id is unique per call. */
+function scriptedTrigger(n: number): Record<string, unknown> {
+  return {
+    event_id: `evt_lease_wiring_trig_${n}`,
+    stream_id: "conversation:conv_lease_wiring_001",
+    sequence: 1,
+    event_version: 1,
+    actor: { type: "system", id: "scheduler" },
+    task_id: `task_lease_wiring_${n}`,
+    conversation_id: "conv_lease_wiring_001",
+    occurred_at: clockNow,
+    redaction_class: "internal",
+    event_type: "trigger.scheduled",
+    payload: { schedule_id: "sch_lease_wiring_001", due_at: clockNow },
+  };
+}
+
+describe("C2a — an approval decision that cancels the task releases its leases", () => {
+  it("cancel-the-task through the composed approvals boundary releases the parent run's lease AND each cancelled child's (D6)", async () => {
+    const dbPath = join(makeTempDir("shera-s17-lease-wiring-"), "runtime.db");
+    const runtime = composeRuntime({
+      dbPath,
+      packsRoot: PACKS_ROOT,
+      now: () => clockNow,
+      scriptedToolProposal: GATED_TOOL,
+    });
+    trackConnection(runtime);
+    runtimes.push(runtime);
+    await new Promise<void>((resolveListen) =>
+      runtime.httpServer.listen(0, "127.0.0.1", resolveListen),
+    );
+    const origin = `http://127.0.0.1:${(runtime.httpServer.address() as { port: number }).port}`;
+
+    // The scripted run pauses WAITING_FOR_APPROVAL with one pending request.
+    const started = runtime.harness.startRun(
+      scriptedTrigger(1) as unknown as Parameters<RuntimeHandle["harness"]["startRun"]>[0],
+    );
+    if (!started.ok) {
+      throw new Error(`the scripted run refused to start: ${started.code}`);
+    }
+    const taskId = started.task_id;
+    expect(started.state).toBe("WAITING_FOR_APPROVAL");
+    const pending = (await getJson(origin, `/v1/approvals/pending?workspace_id=${WS}`)).body[
+      "approvals"
+    ] as Array<Record<string, unknown>>;
+    expect(pending).toHaveLength(1);
+    const approvalId = pending[0]!["approval_id"] as string;
+
+    // One non-terminal child run (D34/D46 delegation link) — the cascade
+    // approvals.service.ts writes CANCELLED through the raw repository
+    // updateRunState, never through OperationsService.applyRunState.
+    const childRunId = "run_lease_wiring_child";
+    const child = seedChildRun(dbPath, taskId, childRunId);
+    expect(child.state).toBe("RUNNING");
+
+    // Both runs hold leases.
+    await acquireLease(origin, "workspace://docs/c2a-parent.md", taskId);
+    await acquireLease(origin, "workspace://docs/c2a-child.md", childRunId);
+    expect(await activeLeases(origin)).toHaveLength(2);
+
+    // The user cancels the task through the five-contract-choices decision
+    // route — the ONLY effects path (applyDecision).
+    const decision = await postJson(origin, `/v1/approvals/${approvalId}/decision`, {
+      workspace_id: WS,
+      choice: "cancel-the-task",
+      decided_by: { type: "user", id: "user_owner" },
+    });
+    expect(decision.status).toBe(200);
+    expect(decision.body["outcome"]).toBe("task_cancelled");
+    expect(decision.body["cancelled_child_run_ids"]).toEqual([childRunId]);
+
+    // The child row is durably CANCELLED (the cascade ran).
+    expect(readChildRun(dbPath, taskId, childRunId)?.state).toBe("CANCELLED");
+
+    // A lease NEVER outlives its task: BOTH the journalled parent cancel and
+    // the raw-repository child writes release their leases at the same seam.
     expect(await activeLeases(origin)).toHaveLength(0);
   });
 });

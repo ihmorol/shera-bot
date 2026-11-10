@@ -1334,6 +1334,12 @@ function wire(
     events,
     approvals: approvalsRepository,
     operations: operationsRepository,
+    // D6 task-finish seam (stress review C2a): the cancel-the-task decision
+    // journals its transitions without ever touching
+    // OperationsService.applyRunState, so it releases the cancelled runs'
+    // write leases itself through the SAME force-release seam the composed
+    // flow hook and the run-cancellation teardown use.
+    leases: writeLeases,
     ...(options.now ? { clock: options.now } : {}),
   });
 

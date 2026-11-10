@@ -45,9 +45,17 @@ export interface FeatureRuntime {
 export interface ComposeJourneyOptions {
   /** The injected clock (E37); the scheduler's truth source. */
   now?: () => string;
-  scriptedToolProposal?: RuntimeHandle extends never ? never : Parameters<typeof composeRuntime>[0]["scriptedToolProposal"];
+  scriptedToolProposal?: Parameters<typeof composeRuntime>[0]["scriptedToolProposal"];
   providerEnforcement?: boolean;
   workspaceId?: string;
+  /** The supervised task-worker harness command (S16; the recovery journeys). */
+  workerHarness?: Parameters<typeof composeRuntime>[0]["workerHarness"];
+  workerPolicy?: Parameters<typeof composeRuntime>[0]["workerPolicy"];
+  /**
+   * Compose over an EXISTING store (the restart journeys). Default: a fresh
+   * disposable database in a tracked temp directory.
+   */
+  dbPath?: string;
 }
 
 /**
@@ -57,8 +65,8 @@ export interface ComposeJourneyOptions {
 export async function composeJourney(
   options: ComposeJourneyOptions = {},
 ): Promise<FeatureRuntime> {
-  const dir = makeTempDir("shera-feature-");
-  const dbPath = join(dir, "runtime.db");
+  const dbPath =
+    options.dbPath ?? join(makeTempDir("shera-feature-"), "runtime.db");
   const runtime = composeRuntime({
     dbPath,
     packsRoot: PACKS_ROOT,
@@ -68,6 +76,8 @@ export async function composeJourney(
       ? { providerEnforcement: options.providerEnforcement }
       : {}),
     ...(options.workspaceId ? { workspaceId: options.workspaceId } : {}),
+    ...(options.workerHarness ? { workerHarness: options.workerHarness } : {}),
+    ...(options.workerPolicy ? { workerPolicy: options.workerPolicy } : {}),
   });
   trackConnection(runtime);
   await new Promise<void>((resolveListen) =>

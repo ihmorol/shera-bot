@@ -1064,33 +1064,50 @@ function wire(
           },
         };
 
-  // S16 (D32 layer 3): when a worker harness is configured the composed
-  // operations service is the RUN-FLOW variant — applyRunState stays exactly
-  // the D8-validated write and additionally drives the worker lifecycle
-  // (RUNNING starts a worker, CANCELLING/terminal stops it). Without the
-  // harness the plain service is composed and transitions behave exactly as
-  // before (G4).
-  const operations: OperationsService = options.workerHarness
-    ? new RunFlowOperationsService({
-        operations: operationsRepository,
-        conversations: conversationsRepository,
-        events,
-        journal,
-        agents: agentsRepository,
-        tx,
-        publish: containFanout((event) => publisher(event), logFault),
-        ...(operationTurnGate ? { turnGate: operationTurnGate } : {}),
-      })
-    : new OperationsService({
-        operations: operationsRepository,
-        conversations: conversationsRepository,
-        events,
-        journal,
-        agents: agentsRepository,
-        tx,
-        publish: containFanout((event) => publisher(event), logFault),
-        ...(operationTurnGate ? { turnGate: operationTurnGate } : {}),
+  // S16 (D32 layer 3): the composed operations service is ALWAYS the
+  // run-flow variant — applyRunState stays exactly the D8-validated write;
+  // with a worker harness it additionally drives the worker lifecycle
+  // (RUNNING starts a worker, CANCELLING/terminal stops it), and on BOTH
+  // compositions a committed transition that ends the run's execution fires
+  // the D6 task-finish seam (stress review C2b: writeLeases is composed
+  // unconditionally, so its release must be wired unconditionally too — the
+  // no-harness composition is the one the scheduler walk terminates runs
+  // through, and a failed/completed scheduled run never leaks a lease).
+  // Without a harness the worker lifecycle hooks are typed no-ops: no
+  // process ever spawns, no row ever stops (G4 unchanged).
+  const operations: OperationsService = new RunFlowOperationsService({
+    operations: operationsRepository,
+    conversations: conversationsRepository,
+    events,
+    journal,
+    agents: agentsRepository,
+    tx,
+    publish: containFanout((event) => publisher(event), logFault),
+    ...(operationTurnGate ? { turnGate: operationTurnGate } : {}),
+  });
+
+  // The D6 task-finish seam's release half — the SAME closure both
+  // compositions wire (the harness runFlow below, and the no-harness flow
+  // after the workers system). Contained like every flow hook: a release
+  // failure is a fault record, never a failed transition (the B4 post-commit
+  // discipline); idempotent per task (only unreleased rows move).
+  const releaseLeasesOnExecutionEnded = (
+    workspaceId: string,
+    runId: string,
+    state: string,
+  ): void => {
+    try {
+      writeLeases.releaseLeasesForTask(runId);
+    } catch (error: unknown) {
+      logFault("task_run_lease_release_failed", {
+        workspace_id: workspaceId,
+        run_id: runId,
+        state,
+        name: error instanceof Error ? error.name : "Error",
+        message: error instanceof Error ? error.message : String(error),
       });
+    }
+  };
 
   // S22: the runtime-owned retry coordinator — the bounded transient-failure
   // policy (PRD §8: at most three attempts, then the run pauses and notifies).
@@ -1267,6 +1284,13 @@ function wire(
             });
           });
         },
+        // D6 task-finish seam (S17 chunk 3's wired call): when a committed
+        // transition ends the run's execution — terminal (completion,
+        // cancellation, failure) or RECOVERY_REQUIRED (process death) — the
+        // run's write leases are force-released. A lease NEVER outlives its
+        // task; the cancellation path's own release dedupes here (only
+        // unreleased rows move).
+        onRunExecutionEnded: releaseLeasesOnExecutionEnded,
         logFault: (event, fields) => logFault(event, fields),
       };
     }
@@ -1282,6 +1306,23 @@ function wire(
 
     return { supervisor, admission, reconcile };
   })();
+
+  // No worker harness (G4): the flow's worker lifecycle hooks are typed
+  // no-ops — nothing ever spawns, nothing ever stops — but the D6
+  // task-finish seam still fires (stress review C2b): the scheduler walk's
+  // terminal writes (fail_task/complete_task through OperationsRunSeam,
+  // which holds this SAME composed instance) release the run's write leases
+  // exactly like the harness composition. The harness wiring above claimed
+  // the runFlow slot; this block composes the flow-wired seam for the
+  // former plain-service shape.
+  if (operations instanceof RunFlowOperationsService && operations.runFlow === null) {
+    operations.runFlow = {
+      startRunWorker: () => {},
+      stopRunWorker: () => {},
+      onRunExecutionEnded: releaseLeasesOnExecutionEnded,
+      logFault: (event, fields) => logFault(event, fields),
+    };
+  }
 
   // S16: the admission readout behind GET /v1/workers/admission — the
   // configured limits, the live count, and the queued runs with their
@@ -1315,6 +1356,12 @@ function wire(
     events,
     approvals: approvalsRepository,
     operations: operationsRepository,
+    // D6 task-finish seam (stress review C2a): the cancel-the-task decision
+    // journals its transitions without ever touching
+    // OperationsService.applyRunState, so it releases the cancelled runs'
+    // write leases itself through the SAME force-release seam the composed
+    // flow hook and the run-cancellation teardown use.
+    leases: writeLeases,
     ...(options.now ? { clock: options.now } : {}),
   });
 

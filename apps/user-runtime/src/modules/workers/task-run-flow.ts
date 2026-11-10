@@ -16,8 +16,12 @@
  *    SUCCEEDED) stop it too, defensively: a run that reaches a terminal state
  *    by another path never leaves an orphaned worker behind. Stopping a run
  *    without a live worker is a typed no-op (idempotent).
- *  - Every OTHER state — including RECOVERY_REQUIRED (the recovery slice
- *    owns it) and PAUSED (the pause slice) — changes nothing here.
+ *  - The D6 task-finish seam: a committed state that ends the run's
+ *    execution (terminal, or RECOVERY_REQUIRED — the recorded process-death
+ *    state) fires the composition's onRunExecutionEnded hook so the run's
+ *    write leases are force-released (a lease NEVER outlives its task).
+ *  - Every OTHER state — including PAUSED (the pause slice) — changes
+ *    nothing here.
  *
  * The supervisor's OWN run-state writes (SUCCEEDED on done, RECOVERY_REQUIRED
  * on crash, QUEUED on refusal) go through the OperationsRunSeam holding the
@@ -32,7 +36,7 @@
  * Governing records: D32, D8, E1, D10; AC25.
  */
 import { OperationsService, type OperationsServiceDeps } from "../operations/operations.service.ts";
-import type { RunState } from "@shera-bot/contracts";
+import { RUN_STATES_TERMINAL, type RunState } from "@shera-bot/contracts";
 
 /** The states that START a run's worker (the run is actively executing). */
 const WORKER_START_STATES: readonly RunState[] = ["RUNNING"];
@@ -40,6 +44,25 @@ const WORKER_START_STATES: readonly RunState[] = ["RUNNING"];
 /** The states that STOP the run's worker (cancellation, or a terminal state
  * reached by another path — defensively idempotent). */
 const WORKER_STOP_STATES: readonly RunState[] = ["CANCELLING", "CANCELLED", "FAILED", "SUCCEEDED"];
+
+/** The states in which a run's EXECUTION has ended (D6's force-release
+ * moments): the terminal states — completion, cancellation, failure — and
+ * RECOVERY_REQUIRED, the recorded process-death state (D32).
+ *
+ * PAUSED is deliberately NOT here — the recorded rationale (stress review
+ * C5, lease semantics unchanged): a pause is a non-terminal state whose
+ * execution may resume, so a lease NEVER outlives its TASK is not violated
+ * by a lease outliving an interruption; the D6 TTL covers the bounded
+ * pause windows. The recorded caveat: a `retry_exhausted` pause (S22) is
+ * INDEFINITE — a lease held across one lives as long as the user leaves
+ * the run paused (TTL expiry + re-acquire apply meanwhile; no force-release
+ * fires until the run reaches a terminal or recovery state). Flagged as an
+ * observation for the lease-semantics owner in the E29 closure note
+ * (TRACEABILITY), not a defect. */
+const RUN_EXECUTION_ENDED_STATES: readonly string[] = [
+  ...RUN_STATES_TERMINAL,
+  "RECOVERY_REQUIRED",
+];
 
 export function isWorkerStartState(state: RunState): boolean {
   return WORKER_START_STATES.includes(state);
@@ -49,10 +72,23 @@ export function isWorkerStopState(state: RunState): boolean {
   return WORKER_STOP_STATES.includes(state);
 }
 
+export function isRunExecutionEndedState(state: RunState): boolean {
+  return RUN_EXECUTION_ENDED_STATES.includes(state);
+}
+
 /** What the flow asks the supervisor to do, per transition. */
 export interface TaskRunFlowHooks {
   startRunWorker(workspaceId: string, runId: string): void;
   stopRunWorker(workspaceId: string, runId: string, state: RunState): void;
+  /**
+   * The D6 task-finish seam (S17 chunk 3's wired call): a committed
+   * transition that ends the run's execution — a terminal state (completion,
+   * cancellation, failure) or RECOVERY_REQUIRED (the recorded process-death
+   * state) — fires this so the composition can force-release the run's
+   * write leases (a lease NEVER outlives its task). Idempotent per state:
+   * the cancellation path's own release is a no-op here.
+   */
+  onRunExecutionEnded?(workspaceId: string, runId: string, state: RunState): void;
   /** The contained fault sink (the composition's redacted logger). */
   logFault(event: string, fields: Record<string, unknown>): void;
 }
@@ -90,6 +126,13 @@ export class RunFlowOperationsService extends OperationsService {
         flow.startRunWorker(workspaceId, runId);
       } else if (isWorkerStopState(run.state)) {
         flow.stopRunWorker(workspaceId, runId, run.state);
+      }
+      // The D6 task-finish seam: the execution ended (terminal state or the
+      // process-death record) — the composition force-releases the run's
+      // write leases. Fired from the COMMITTED state, after the worker
+      // lifecycle hook, contained like every other flow hook.
+      if (flow.onRunExecutionEnded && isRunExecutionEndedState(run.state)) {
+        flow.onRunExecutionEnded(workspaceId, runId, run.state);
       }
     } catch (error) {
       flow.logFault("task_run_flow_failed", {

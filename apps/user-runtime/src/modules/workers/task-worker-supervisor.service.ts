@@ -164,6 +164,15 @@ export interface TaskWorkerChildExit {
 export interface TaskWorkerChild {
   onLine(listener: (line: string) => void): () => void;
   onStderr(listener: (chunk: string) => void): () => void;
+  /**
+   * Stdout EOF (the stream 'end' every real pipe delivers after its LAST
+   * data event). Optional: children that expose it let the supervisor close
+   * a clean exit deterministically — awaiting EOF guarantees every
+   * in-flight stdout frame has been dispatched before crash classification
+   * (stress review C4). Absent (test fakes), the supervisor keeps the
+   * bounded timer drain.
+   */
+  onStdoutEnd?(listener: () => void): () => void;
   send(frame: WorkerParentFrame): void;
   kill(signal?: NodeJS.Signals): void;
   waitForExit(): Promise<TaskWorkerChildExit>;
@@ -370,6 +379,13 @@ interface Incarnation {
   stderrBytes: number;
   handshake: Promise<HandshakeFailure | null>;
   settleHandshake: (outcome: HandshakeFailure | null) => void;
+  /**
+   * Resolves at the child's stdout EOF (C4) when the child exposes the seam;
+   * null when it does not (the timer drain covers those). Every pending
+   * stdout 'data' event has been dispatched BEFORE EOF fires, so a clean
+   * exit that awaits this cannot drop an in-flight done frame.
+   */
+  stdoutEof: Promise<void> | null;
 }
 
 interface WorkerRecord {
@@ -958,6 +974,7 @@ export class TaskWorkerSupervisor {
       stderrBytes: 0,
       handshake,
       settleHandshake,
+      stdoutEof: null,
     };
 
     incarnation.unsubscribers.push(
@@ -966,6 +983,14 @@ export class TaskWorkerSupervisor {
     incarnation.unsubscribers.push(
       child.onStderr((chunk) => this.handleStderr(incarnation, chunk)),
     );
+    // C4: the deterministic clean-exit close — capture the stdout EOF when
+    // the child exposes it (every pending 'data' event dispatches BEFORE
+    // 'end', so awaiting EOF cannot drop an in-flight done frame).
+    if (child.onStdoutEnd !== undefined) {
+      incarnation.stdoutEof = new Promise<void>((resolve) => {
+        incarnation.unsubscribers.push(child.onStdoutEnd!(resolve));
+      });
+    }
     // Exit observer: deliberate terminations handle their own aftermath; an
     // exit nobody initiated is a crash (death is detected independently of
     // any final event).
@@ -1403,11 +1428,63 @@ export class TaskWorkerSupervisor {
 
   // ── Crash handling ─────────────────────────────────────────────────────────
 
-  private onChildExit(
+  /**
+   * The bounded window (ms) an unexpected CLEAN exit (code 0, no signal)
+   * yields the event loop before the crash classification — the FALLBACK for
+   * children that do not expose the stdout-EOF seam (the in-process test
+   * fakes). Children WITH the seam close deterministically instead: the
+   * supervisor awaits stdout EOF (CLEAN_EXIT_STDOUT_EOF_CAP_MS below),
+   * which dispatches every pending stdout frame before classification —
+   * the exit-vs-frame race the timer only narrows (stress review C4).
+   * Clean-exit-only: nonzero/signal exits and initiated stops classify
+   * immediately (D14: death is detected independently of any final event;
+   * a real crash never waits on a fixed drain).
+   */
+  private static readonly CLEAN_EXIT_DONE_DRAIN_MS = 25;
+
+  /**
+   * The safety-net cap (ms) on the stdout-EOF await for a clean exit. The
+   * EOF is deterministic in the honest path (the child's process is gone;
+   * its pipe flushes and closes in milliseconds) — but a leaked grandchild
+   * holding the pipe's write end (an orphaned process-group member the kill
+   * could not reach) would never deliver EOF, and an unbounded await would
+   * hang the exit observer forever. The cap keeps that pathological case
+   * bounded (classification proceeds; D14) at a generous 2s — far above any
+   * honest flush, far below the heartbeat stall window.
+   */
+  private static readonly CLEAN_EXIT_STDOUT_EOF_CAP_MS = 2_000;
+
+  private async onChildExit(
     record: WorkerRecord,
     incarnation: Incarnation,
     exit: TaskWorkerChildExit,
-  ): void {
+  ): Promise<void> {
+    // Clean-exit close BEFORE any unsubscription: when the child exposes the
+    // stdout-EOF seam, await it (deterministic — every pending stdout frame,
+    // including the done frame the child flushed before exiting, has been
+    // dispatched by the time EOF fires), bounded by the safety-net cap. If
+    // the done aftermath won the race, it owns everything
+    // (terminating/doneHandled) and this observer stays quiet.
+    if (
+      !incarnation.terminating &&
+      !incarnation.doneHandled &&
+      exit.code === 0 &&
+      exit.signal === null
+    ) {
+      if (incarnation.stdoutEof !== null) {
+        await Promise.race([
+          incarnation.stdoutEof,
+          new Promise((resolve) =>
+            setTimeout(resolve, TaskWorkerSupervisor.CLEAN_EXIT_STDOUT_EOF_CAP_MS),
+          ),
+        ]);
+      } else {
+        // No EOF seam (the test fakes): the legacy bounded timer drain.
+        await new Promise((resolve) =>
+          setTimeout(resolve, TaskWorkerSupervisor.CLEAN_EXIT_DONE_DRAIN_MS),
+        );
+      }
+    }
     for (const timer of incarnation.escalationTimers) clearTimeout(timer);
     incarnation.escalationTimers = [];
     for (const unsubscribe of incarnation.unsubscribers) unsubscribe();

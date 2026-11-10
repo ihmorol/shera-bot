@@ -46,6 +46,8 @@ import {
   type FakeTaskWorkerHandle,
   type SpawnFakeTaskWorkerOptions,
 } from "./fake-task-worker.ts";
+import { encodeWorkerFrame, WORKER_PROTOCOL_VERSION } from "./worker-frames.ts";
+import { OperationsRunSeam } from "./operations-run-seam.ts";
 import {
   TaskWorkerSupervisor,
   type TaskRunOperationsSeam,
@@ -809,4 +811,169 @@ describe("S16 chunk 1 — AC25: session hibernation never stops the run's worker
 
     await session.stopAll();
   });
+});
+
+// ── C4 (stress review): the clean-exit close ─────────────────────────────────
+
+/**
+ * A synthetic TaskWorkerChild whose stdout delivery is fully scripted — the
+ * in-process double the race repro needs: the clean exit notification
+ * (code 0, no signal) resolves FIRST, and the done frame the child flushed
+ * before exiting lands LATER, exactly the loop-queue order a loaded machine
+ * produces for real (the exit event and the pending stdout data event are
+ * independent). The handshake is delivered the moment the supervisor
+ * subscribes (the spawn adapter's parser hands complete lines).
+ */
+interface ScriptedChildControl {
+  child: TaskWorkerChild;
+  /** Push one stdout line to the supervisor (no trailing newline, parser-shaped). */
+  deliver(line: string): void;
+  deliverDone(summary: string): void;
+  /** Fire the stdout EOF listeners (the spawn adapter's 'end' event). */
+  stdoutEnd(): void;
+  /** Resolve the exit cleanly (code 0, no signal). */
+  exitClean(): void;
+}
+
+function makeScriptedChild(workerId: string): ScriptedChildControl {
+  let lineListener: ((line: string) => void) | null = null;
+  const stdoutEndListeners = new Set<() => void>();
+  let resolveExit!: (exit: { code: number | null; signal: string | null }) => void;
+  const exitPromise = new Promise<{ code: number | null; signal: string | null }>((resolve) => {
+    resolveExit = resolve;
+  });
+  const child: TaskWorkerChild = {
+    onLine: (listener) => {
+      lineListener = listener;
+      listener(
+        JSON.stringify({
+          v: WORKER_PROTOCOL_VERSION,
+          type: "hello",
+          worker_version: WORKER_PROTOCOL_VERSION,
+          pid: 424242,
+        }),
+      );
+      listener(
+        JSON.stringify({
+          v: WORKER_PROTOCOL_VERSION,
+          type: "ready",
+          worker_id: workerId,
+          pid: 424242,
+        }),
+      );
+      return () => {
+        lineListener = null;
+      };
+    },
+    onStderr: () => () => {},
+    // The C4 seam: stdout EOF fires AFTER the last data event (the done
+    // frame the child flushed before exiting), exactly like the production
+    // spawn adapter's child.stdout 'end'.
+    onStdoutEnd: (listener) => {
+      stdoutEndListeners.add(listener);
+      return () => stdoutEndListeners.delete(listener);
+    },
+    send: () => {},
+    kill: () => {},
+    waitForExit: () => exitPromise,
+  };
+  return {
+    child,
+    deliver: (line) => lineListener?.(line),
+    deliverDone: (summary) =>
+      lineListener?.(
+        JSON.stringify({ v: WORKER_PROTOCOL_VERSION, type: "done", summary }),
+      ),
+    stdoutEnd: () => stdoutEndListeners.forEach((listener) => listener()),
+    exitClean: () => resolveExit({ code: 0, signal: null }),
+  };
+}
+
+describe("C4 — the clean-exit close: a done frame landing after the drain is never a crash", () => {
+  it("completes the run when the done frame lands 120ms AFTER the clean exit (never classified unexpected_exit)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "shera-s16-c4-"));
+    const conn = openDatabase(join(dir, "runtime.db"));
+    try {
+      applyMigrations(conn.db);
+      const tx = new SqliteTransactions(conn.db);
+      const journal = new EventJournalRepository(tx);
+      const events = new EventsService(journal, tx);
+      const workersRepo = new TaskWorkersRepository(tx);
+      const ops = new OperationsService({
+        operations: new OperationsRepository(tx),
+        tx,
+        packCatalog: {
+          pack_id: "pack_c4_test",
+          pack_version: "1.0.0",
+          agents: [FAKE_SEED],
+          locateAgentPack: (agentId) => (agentId === AGENT ? "pack_c4_test" : null),
+          skills: [],
+          connectors: [],
+        },
+      });
+      const operationId = ops.createOperation(WS, {
+        definition_ref: null,
+        name: "C4 late-done op",
+        roster_agent_ids: [AGENT],
+        coordinator_agent_id: AGENT,
+      }).operation_id;
+      const runId = "run-c4-late-done";
+      ops.createRun(WS, operationId, { run_id: runId });
+
+      const faults: Array<{ event: string; fields: Record<string, unknown> }> = [];
+      let control: ScriptedChildControl | null = null;
+      const supervisor = new TaskWorkerSupervisor({
+        events,
+        tx,
+        taskWorkers: workersRepo,
+        runControl: new OperationsRunSeam(ops),
+        spawnChild: (request) => {
+          control = makeScriptedChild(request.worker_id);
+          return control.child;
+        },
+        stderrSink: { write: () => {} },
+        // The same wide window as WORKER_POLICY above: the repro completes at
+        // ~150ms; a starved loop must never read as a stall here.
+        policy: { ...WORKER_POLICY },
+        logFault: (event, fields) => faults.push({ event, fields }),
+      });
+
+      const started = await supervisor.startWorker(WS, runId);
+      expect(started.state).toBe("running");
+      expect(control).not.toBeNull();
+
+      // The race, scripted: the clean exit notification WINS the loop queue,
+      // and the done frame the child flushed before exiting lands 120ms
+      // later — five times the 25ms CLEAN_EXIT_DONE_DRAIN_MS window. Stdout
+      // EOF fires at +150ms, after the done frame, like a real pipe.
+      control!.exitClean();
+      setTimeout(() => control!.deliverDone("the work finished"), 120);
+      setTimeout(() => control!.stdoutEnd(), 150);
+
+      // An honest completion: done → worker.completed → run SUCCEEDED. Under
+      // a fixed drain the observer unsubscribes first, drops the in-flight
+      // frame, and misclassifies the clean exit unexpected_exit
+      // (worker.crashed → RECOVERY_REQUIRED — the run wedges).
+      const deadline = Date.now() + 2_000;
+      let state = "";
+      for (;;) {
+        state = ops.getRun(WS, operationId, runId).state;
+        if (state === "SUCCEEDED" || state === "RECOVERY_REQUIRED") break;
+        if (Date.now() > deadline) {
+          throw new Error(`timed out waiting for a terminal state (last: ${state})`);
+        }
+        await new Promise((resolveDelay) => setTimeout(resolveDelay, 10));
+      }
+      expect(state).toBe("SUCCEEDED");
+
+      const workerStream = journal.listStream(runId, WS);
+      expect(workerStream.some((row) => row.event_type === "worker.completed")).toBe(true);
+      expect(workerStream.some((row) => row.event_type === "worker.crashed")).toBe(false);
+
+      await supervisor.stopAll();
+    } finally {
+      conn.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 15_000);
 });

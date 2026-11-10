@@ -220,6 +220,7 @@ export function spawnTaskWorkerChild(
 
   const lineListeners = new Set<(line: string) => void>();
   const stderrListeners = new Set<(chunk: string) => void>();
+  const stdoutEndListeners = new Set<() => void>();
 
   const parser = new JsonLineParser();
   child.stdout?.setEncoding("utf8");
@@ -229,6 +230,11 @@ export function spawnTaskWorkerChild(
   child.stdout?.on("end", () => {
     const partial = parser.end();
     if (partial !== null) lineListeners.forEach((listener) => listener(partial));
+    // C4: stdout EOF — fired AFTER the stream's last data event (and the
+    // partial-line flush above), the deterministic close the supervisor
+    // awaits on a clean exit so an in-flight done frame can never be
+    // dropped by the crash classification.
+    stdoutEndListeners.forEach((listener) => listener());
   });
   child.stderr?.setEncoding("utf8");
   child.stderr?.on("data", (chunk: string) => {
@@ -243,6 +249,10 @@ export function spawnTaskWorkerChild(
     onStderr: (listener) => {
       stderrListeners.add(listener);
       return () => stderrListeners.delete(listener);
+    },
+    onStdoutEnd: (listener) => {
+      stdoutEndListeners.add(listener);
+      return () => stdoutEndListeners.delete(listener);
     },
     send: (frame: WorkerParentFrame) => {
       if (child.exitCode !== null || child.signalCode !== null) return;

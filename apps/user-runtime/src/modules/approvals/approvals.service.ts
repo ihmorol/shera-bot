@@ -133,6 +133,7 @@ import {
 import type { EventJournalRepository } from "../../adapters/sqlite/event-journal-repository.ts";
 import type { OperationsRepository } from "../../adapters/sqlite/operations-repository.ts";
 import type { SqliteExec, SqliteTransactions } from "../../adapters/sqlite/transactions.ts";
+import type { WriteLeasesRepository } from "../../adapters/sqlite/write-leases-repository.ts";
 import type { EventsService } from "../events/events.service.ts";
 import { taskStreamId } from "../tasks/task-events.ts";
 import { evaluateTaskTransition } from "../tasks/task-transitions.ts";
@@ -291,6 +292,18 @@ export interface ApprovalsServiceDeps {
    * runs beyond this cascade.
    */
   operations: Pick<OperationsRepository, "listRunsByParentTaskId" | "updateRunState">;
+  /**
+   * D6 task-finish seam (stress review C2a): the cancel path journals its
+   * transitions through evaluateTaskTransition (pure) and writes the
+   * cancelled children through the raw repository — it never routes through
+   * OperationsService.applyRunState, so the composed flow's
+   * onRunExecutionEnded hook never fires here. The composition hands the
+   * SAME force-release seam the run-cancellation teardown uses; the release
+   * fires at the same seam the journalling happens (inside the decision's
+   * atomic unit — the nested transaction joins it, so the decision and the
+   * release commit or roll back together; a lease NEVER outlives its task).
+   */
+  leases?: Pick<WriteLeasesRepository, "releaseLeasesForTask">;
   /** Injected clock (ISO strings); defaults to the system clock. */
   clock?: () => string;
 }
@@ -952,6 +965,20 @@ export class ApprovalsService {
         exec,
       );
       cancelledChildRunIds.push(child.run_id);
+    }
+
+    // D6 task-finish seam (stress review C2a): this path's committed
+    // transitions never route through OperationsService.applyRunState (the
+    // journalling above IS the transition; the children go through the raw
+    // repository), so the composed flow's onRunExecutionEnded hook cannot
+    // fire. The release fires HERE, at the same seam the journalling
+    // happens, for the cancelled parent and every cancelled child — a lease
+    // NEVER outlives its task. The nested transaction call joins the
+    // decision's atomic unit (SqliteTransactions), so the decision and its
+    // releases commit or roll back together; no contained half-state.
+    this.deps.leases?.releaseLeasesForTask(request.task_id);
+    for (const childRunId of cancelledChildRunIds) {
+      this.deps.leases?.releaseLeasesForTask(childRunId);
     }
 
     return {

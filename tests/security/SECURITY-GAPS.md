@@ -71,6 +71,32 @@ over-claim.
   S35 Compose posture — recorded as the deployment-host item in the runbook
   §hardening.
 
+- **RE-VERIFICATION (verify-s27-gaps branch, 2026-11-10, main tip 36ff1b2 —
+  appended beneath the disposition; nothing above is altered):** the
+  containment re-proven on THIS host with fresh runs, evidence over claims:
+  (1) `pnpm vitest run tests/security/s27-st04-process-tree-escape.test.ts`
+  from the worktree root: 4/4 GREEN, including the reproducer leg itself —
+  "a setsid grandchild that sheds the group AND session is ALSO dead after
+  cancel() — the S27-GAP-1 escape sweep (issue #83)" (2308 ms) — plus the F1
+  namespace-identity leg (3705 ms) and the F2 reap-identity leg (840 ms);
+  (2) a typed-exit probe (temporary file, run from the worktree and removed
+  after the capture) ran the #83 reproducer shape verbatim — the leader
+  spawns `setsid node …` detached, the grandchild registers its OWN pid
+  (`escaped_pids=[34820]`), cancel() fires mid-flight. The settled exit
+  record: `{"cancelled":true,"sweep":"active","limitDeath":null,"code":null,
+  "signal":"SIGKILL","timedOut":false}` and the LIVE process list answers
+  `survivors=[]` — the escaped grandchild is dead. The typed `sweep: "active"`
+  field (P3d) is the witness that the namespace-identity sweep ENGAGED on
+  this host (the honest-degradation value would be
+  `disabled_no_private_namespace`); (3) ST-09 re-run solo: 5/5 GREEN — the
+  lease matrix is unaffected by the sweep's fd lifecycle. **Verdict: the
+  issue #83 reproducer is CONTAINED on this host** — the setsid grandchild
+  no longer survives group-kill cancellation. Honest category for the sweep:
+  `engaged`. The disposition's residuals stand UNCHANGED: (a) a double-fork
+  orphan whose intermediate parent exits inside one sweep window, (b) an
+  escapee nesting its OWN user namespace, (c) a host-map leader — all still
+  the deployment-host PID-namespace item.
+
 ## S27-GAP-2 — the cgroup memory layer is unavailable on the recorded host (limits ride RLIMIT_DATA only)
 
 - **Threat:** TM-2.2 (container resource exhaustion); threat model §5 ST-05's
@@ -132,6 +158,46 @@ over-claim.
   itself: the owner's scratch-VM re-run of `verify-cgroup.sh` + the ST-05
   suite is the deployment-host verification this disposition cannot perform
   from here (no daemon, E22-E47).
+
+- **RE-VERIFICATION (verify-s27-gaps branch, 2026-11-10, main tip 36ff1b2 —
+  appended beneath the disposition; nothing above is altered):** the
+  cgroup-backed memory leg re-proven ENGAGED on THIS host with fresh runs.
+  (1) `bash infra/deploy/verify-cgroup.sh` → **exit 0, `verdict: engaged`**.
+  Quoted evidence lines: "root controllers: cpuset cpu io memory hugetlb pids
+  rdma misc dmem"; "subtree_control +memory +pids written at
+  /sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service";
+  "…user@1000.service carries a WRITABLE leaf (memory.max +
+  memory.swap.max=0 applied) — the full delegation sequence, not just mkdir";
+  and, kept honest: "the engine CLI is present but the daemon did not answer
+  (the recorded building-machine shape) — driver posture unobserved"; "this
+  process's cgroup: 0::/user.slice/user-1000.slice/user@1000.service/
+  app.slice/app-zcode-10825.scope". The P3a fix is confirmed live: a refused
+  subtree_control write is no longer a verdict — the delegation sequence
+  (subtree_control + a writable leaf) is the verdict.
+  (2) `pnpm vitest run tests/security/s27-st05-resource-exhaustion.test.ts`
+  from the worktree root: 6/6 GREEN, and the GAP-2 leg ("a tmpfs hog
+  invisible to RLIMIT_DATA dies at the KERNEL's cgroup boundary (typed
+  memory_oom) — refused-by-limit distinguished from
+  refused-by-allocator") took the ENGAGED branch in BOTH the full-suite run
+  and the solo re-run — the honest-degradation message "NO delegated cgroup
+  subtree on this host" appears ZERO times in either log. What the suite
+  observed, exactly (the assertions it passed): `cgroupApplied.memory_max =
+  "268435456"` (256 MiB — half of what dd attempts, so the kernel boundary
+  fires mid-dd); `limitDeath = "memory_oom"` — the P3b typed classification,
+  which types a SIGKILL as memory_oom ONLY when the leaf's own
+  `memory.events` `oom_kill` counter is > 0 (`readOomKillCount` in
+  escape-sweep.ts — a host-wide OOM or external SIGKILL stays the untyped
+  sigkill); `signal = "SIGKILL"`; gateway alive. **Honest category for the
+  cgroup memory layer on this host: `engaged`** — the suite header's
+  historical "cgroup layer being GAP-2" phrasing describes the RLIMIT_DATA
+  leg's original record; the committed GAP-2 leg and this re-verification
+  are the current answer, and the honest-degradation branch remains for
+  non-delegated hosts (G5). (3) Full suite on the same tip: `pnpm vitest run
+  tests/security/` → 14/14 files, 82/82 tests GREEN. The disposition's
+  residuals stand UNCHANGED: the pre-move window (Compose container-level
+  cgroup covers it), a host without swap accounting refusing the swap.max
+  write, and the driver posture (daemon-less here — `unobserved`), which
+  keeps the owner's scratch-VM re-run the deployment-host verification.
 
 ## S27-GAP-3 (recorded, not a runtime gap) — the container-level cross-user legs stay a manual PROCEDURE
 

@@ -1,0 +1,1840 @@
+{
+  "config": {
+    "argv": [
+      "/home/emon-morol/.nvm/versions/node/v24.21.0/bin/node",
+      "/home/emon-morol/projects/github-cloud-projects/shera-bot/node_modules/@playwright/test/cli.js",
+      "test",
+      "--config=tests/acceptance/browser/playwright.config.ts",
+      "tests/acceptance/browser/journeys.spec.ts",
+      "tests/acceptance/browser/layout.spec.ts",
+      "tests/acceptance/browser/keyboard-a11y.spec.ts",
+      "--project=chromium",
+      "--project=chrome",
+      "--output=/home/emon-morol/projects/github-cloud-projects/shera-bot/tests/acceptance/browser/test-results"
+    ],
+    "configFile": "/home/emon-morol/projects/github-cloud-projects/shera-bot/tests/acceptance/browser/playwright.config.ts",
+    "rootDir": "/home/emon-morol/projects/github-cloud-projects/shera-bot/tests/acceptance/browser",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/home/emon-morol/projects/github-cloud-projects/shera-bot/tests/acceptance/browser/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/home/emon-morol/projects/github-cloud-projects/shera-bot/tests/acceptance/browser",
+        "testIgnore": [],
+        "testMatch": [
+          "*.spec.ts"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "/home/emon-morol/projects/github-cloud-projects/shera-bot/tests/acceptance/browser/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chrome",
+        "name": "chrome",
+        "testDir": "/home/emon-morol/projects/github-cloud-projects/shera-bot/tests/acceptance/browser",
+        "testIgnore": [],
+        "testMatch": [
+          "*.spec.ts"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "/home/emon-morol/projects/github-cloud-projects/shera-bot/tests/acceptance/browser/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "firefox",
+        "name": "firefox",
+        "testDir": "/home/emon-morol/projects/github-cloud-projects/shera-bot/tests/acceptance/browser",
+        "testIgnore": [],
+        "testMatch": [
+          "*.spec.ts"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "/home/emon-morol/projects/github-cloud-projects/shera-bot/tests/acceptance/browser/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "webkit",
+        "name": "webkit",
+        "testDir": "/home/emon-morol/projects/github-cloud-projects/shera-bot/tests/acceptance/browser",
+        "testIgnore": [],
+        "testMatch": [
+          "*.spec.ts"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "filteredProjects": [
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "/home/emon-morol/projects/github-cloud-projects/shera-bot/tests/acceptance/browser/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "name": "chromium",
+        "testDir": "/home/emon-morol/projects/github-cloud-projects/shera-bot/tests/acceptance/browser",
+        "snapshotDir": "/home/emon-morol/projects/github-cloud-projects/shera-bot/tests/acceptance/browser",
+        "testIgnore": [],
+        "testMatch": "*.spec.ts",
+        "timeout": 30000,
+        "use": {
+          "baseURL": "http://127.0.0.1:4621",
+          "screenshot": "off",
+          "trace": "off",
+          "video": "off",
+          "browserName": "chromium"
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": "chromium"
+      },
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "/home/emon-morol/projects/github-cloud-projects/shera-bot/tests/acceptance/browser/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "name": "chrome",
+        "testDir": "/home/emon-morol/projects/github-cloud-projects/shera-bot/tests/acceptance/browser",
+        "snapshotDir": "/home/emon-morol/projects/github-cloud-projects/shera-bot/tests/acceptance/browser",
+        "testIgnore": [],
+        "testMatch": "*.spec.ts",
+        "timeout": 30000,
+        "use": {
+          "baseURL": "http://127.0.0.1:4621",
+          "screenshot": "off",
+          "trace": "off",
+          "video": "off",
+          "browserName": "chromium",
+          "channel": "chrome"
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": "chrome"
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "line",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "/home/emon-morol/projects/github-cloud-projects/shera-bot/tests/acceptance/evidence/2026-11-10/browser-run.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "default",
+    "updateSourceMethod": "patch",
+    "version": "1.64.1",
+    "workers": 1,
+    "webServer": {
+      "command": "node_modules/.bin/vite --config apps/web/s34-harness-matrix/vite.config.mts",
+      "url": "http://127.0.0.1:4621",
+      "cwd": "/home/emon-morol/projects/github-cloud-projects/shera-bot",
+      "reuseExistingServer": false,
+      "timeout": 60000
+    }
+  },
+  "suites": [
+    {
+      "title": "journeys.spec.ts",
+      "file": "journeys.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "core journeys in real browsers",
+          "file": "journeys.spec.ts",
+          "line": 16,
+          "column": 6,
+          "specs": [
+            {
+              "title": "login → the Google sign-in entry points at the control plane",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 5640,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:49:53.232Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "aa09586c1d16412a1f00-cae5da0bd32a08b14607",
+              "file": "journeys.spec.ts",
+              "line": 17,
+              "column": 3
+            },
+            {
+              "title": "Operation chat → send → artifact and run cards visible",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2643,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:49:59.467Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "aa09586c1d16412a1f00-5828bbbadefcba3f9c5f",
+              "file": "journeys.spec.ts",
+              "line": 26,
+              "column": 3
+            },
+            {
+              "title": "approval → the five choices decide; the chosen decision is recorded",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2396,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:50:02.185Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "aa09586c1d16412a1f00-16a6c5fce3c1dac7966a",
+              "file": "journeys.spec.ts",
+              "line": 42,
+              "column": 3
+            },
+            {
+              "title": "recovery after refresh → the thread re-renders deterministically",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2248,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:50:04.625Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "aa09586c1d16412a1f00-8096c9e90748ce7ba260",
+              "file": "journeys.spec.ts",
+              "line": 61,
+              "column": 3
+            },
+            {
+              "title": "settings → credits read-out renders the real ledger fields",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1611,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:50:06.921Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "aa09586c1d16412a1f00-f18eb08df6408c3dfc96",
+              "file": "journeys.spec.ts",
+              "line": 76,
+              "column": 3
+            },
+            {
+              "title": "provider configuration failure shows a configuration state, never fake success (G4)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1594,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:50:08.578Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "aa09586c1d16412a1f00-7b970e0789b56ce6bd09",
+              "file": "journeys.spec.ts",
+              "line": 83,
+              "column": 3
+            },
+            {
+              "title": "login → the Google sign-in entry points at the control plane",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chrome",
+                  "projectName": "chrome",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2922,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:50:48.248Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "aa09586c1d16412a1f00-0a1efdfc4e5c543a8039",
+              "file": "journeys.spec.ts",
+              "line": 17,
+              "column": 3
+            },
+            {
+              "title": "Operation chat → send → artifact and run cards visible",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chrome",
+                  "projectName": "chrome",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2360,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:50:52.531Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "aa09586c1d16412a1f00-1c90035c5e0f7985bf7b",
+              "file": "journeys.spec.ts",
+              "line": 26,
+              "column": 3
+            },
+            {
+              "title": "approval → the five choices decide; the chosen decision is recorded",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chrome",
+                  "projectName": "chrome",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2626,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:50:54.968Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "aa09586c1d16412a1f00-e550a014289ed5e202ae",
+              "file": "journeys.spec.ts",
+              "line": 42,
+              "column": 3
+            },
+            {
+              "title": "recovery after refresh → the thread re-renders deterministically",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chrome",
+                  "projectName": "chrome",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2541,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:50:57.720Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "aa09586c1d16412a1f00-5995c8aae017374e191f",
+              "file": "journeys.spec.ts",
+              "line": 61,
+              "column": 3
+            },
+            {
+              "title": "settings → credits read-out renders the real ledger fields",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chrome",
+                  "projectName": "chrome",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1925,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:51:00.308Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "aa09586c1d16412a1f00-ebe41f2e6b3e68bd0813",
+              "file": "journeys.spec.ts",
+              "line": 76,
+              "column": 3
+            },
+            {
+              "title": "provider configuration failure shows a configuration state, never fake success (G4)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chrome",
+                  "projectName": "chrome",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1921,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:51:02.301Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "aa09586c1d16412a1f00-130c1e7f486ca3aa48ed",
+              "file": "journeys.spec.ts",
+              "line": 83,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "keyboard-a11y.spec.ts",
+      "file": "keyboard-a11y.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "axe-core over the named surfaces",
+          "file": "keyboard-a11y.spec.ts",
+          "line": 63,
+          "column": 6,
+          "specs": [
+            {
+              "title": "no critical/serious violations on login",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2278,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:50:10.266Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-login.json",
+                          "contentType": "application/json",
+                          "body": "ewogICJzdXJmYWNlIjogImxvZ2luIiwKICAiYmxvY2tpbmciOiAwLAogICJ2aW9sYXRpb25zIjogW10KfQ=="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-349c7aa5c80515cfed13",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 65,
+              "column": 5
+            },
+            {
+              "title": "no critical/serious violations on operation-chat",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2236,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:50:12.590Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-operation-chat.json",
+                          "contentType": "application/json",
+                          "body": "ewogICJzdXJmYWNlIjogIm9wZXJhdGlvbi1jaGF0IiwKICAiYmxvY2tpbmciOiAwLAogICJ2aW9sYXRpb25zIjogW10KfQ=="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-aac0297f7d6b8939daba",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 65,
+              "column": 5
+            },
+            {
+              "title": "no critical/serious violations on operation-thread-artifacts",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2159,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:50:14.872Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-operation-thread-artifacts.json",
+                          "contentType": "application/json",
+                          "body": "ewogICJzdXJmYWNlIjogIm9wZXJhdGlvbi10aHJlYWQtYXJ0aWZhY3RzIiwKICAiYmxvY2tpbmciOiAwLAogICJ2aW9sYXRpb25zIjogW10KfQ=="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-41249d00dba534a5a781",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 65,
+              "column": 5
+            },
+            {
+              "title": "no critical/serious violations on approval",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3115,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:50:17.070Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-approval.json",
+                          "contentType": "application/json",
+                          "body": "ewogICJzdXJmYWNlIjogImFwcHJvdmFsIiwKICAiYmxvY2tpbmciOiAwLAogICJ2aW9sYXRpb25zIjogW10KfQ=="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-035bca7565a1ee476579",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 65,
+              "column": 5
+            },
+            {
+              "title": "no critical/serious violations on providers-settings",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2782,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:50:20.254Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-providers-settings.json",
+                          "contentType": "application/json",
+                          "body": "ewogICJzdXJmYWNlIjogInByb3ZpZGVycy1zZXR0aW5ncyIsCiAgImJsb2NraW5nIjogMCwKICAidmlvbGF0aW9ucyI6IFsKICAgIHsKICAgICAgImlkIjogImhlYWRpbmctb3JkZXIiLAogICAgICAiaW1wYWN0IjogIm1vZGVyYXRlIiwKICAgICAgIm5vZGVzIjogWwogICAgICAgIFsKICAgICAgICAgICJoMyIKICAgICAgICBdCiAgICAgIF0KICAgIH0KICBdCn0="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-0237f37da4ab88d54a8e",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 65,
+              "column": 5
+            },
+            {
+              "title": "no critical/serious violations on providers-failure",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2098,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:50:23.133Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-providers-failure.json",
+                          "contentType": "application/json",
+                          "body": "ewogICJzdXJmYWNlIjogInByb3ZpZGVycy1mYWlsdXJlIiwKICAiYmxvY2tpbmciOiAwLAogICJ2aW9sYXRpb25zIjogW10KfQ=="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-e803372271741fedcbd2",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 65,
+              "column": 5
+            },
+            {
+              "title": "no critical/serious violations on credits-settings",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2273,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:50:25.326Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-credits-settings.json",
+                          "contentType": "application/json",
+                          "body": "ewogICJzdXJmYWNlIjogImNyZWRpdHMtc2V0dGluZ3MiLAogICJibG9ja2luZyI6IDAsCiAgInZpb2xhdGlvbnMiOiBbXQp9"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-db6aa451764cca113e92",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 65,
+              "column": 5
+            },
+            {
+              "title": "no critical/serious violations on login",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chrome",
+                  "projectName": "chrome",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2528,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:51:04.350Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-login.json",
+                          "contentType": "application/json",
+                          "body": "ewogICJzdXJmYWNlIjogImxvZ2luIiwKICAiYmxvY2tpbmciOiAwLAogICJ2aW9sYXRpb25zIjogW10KfQ=="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-8c2f63491a5582509810",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 65,
+              "column": 5
+            },
+            {
+              "title": "no critical/serious violations on operation-chat",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chrome",
+                  "projectName": "chrome",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3339,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:51:06.926Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-operation-chat.json",
+                          "contentType": "application/json",
+                          "body": "ewogICJzdXJmYWNlIjogIm9wZXJhdGlvbi1jaGF0IiwKICAiYmxvY2tpbmciOiAwLAogICJ2aW9sYXRpb25zIjogW10KfQ=="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-4c4a8ba9a15f70f28954",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 65,
+              "column": 5
+            },
+            {
+              "title": "no critical/serious violations on operation-thread-artifacts",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chrome",
+                  "projectName": "chrome",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3376,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:51:10.338Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-operation-thread-artifacts.json",
+                          "contentType": "application/json",
+                          "body": "ewogICJzdXJmYWNlIjogIm9wZXJhdGlvbi10aHJlYWQtYXJ0aWZhY3RzIiwKICAiYmxvY2tpbmciOiAwLAogICJ2aW9sYXRpb25zIjogW10KfQ=="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-8fad3ff4cd945020ed93",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 65,
+              "column": 5
+            },
+            {
+              "title": "no critical/serious violations on approval",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chrome",
+                  "projectName": "chrome",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2907,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:51:13.781Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-approval.json",
+                          "contentType": "application/json",
+                          "body": "ewogICJzdXJmYWNlIjogImFwcHJvdmFsIiwKICAiYmxvY2tpbmciOiAwLAogICJ2aW9sYXRpb25zIjogW10KfQ=="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-b1b9b22d4c2f352977c7",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 65,
+              "column": 5
+            },
+            {
+              "title": "no critical/serious violations on providers-settings",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chrome",
+                  "projectName": "chrome",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2623,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:51:16.737Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-providers-settings.json",
+                          "contentType": "application/json",
+                          "body": "ewogICJzdXJmYWNlIjogInByb3ZpZGVycy1zZXR0aW5ncyIsCiAgImJsb2NraW5nIjogMCwKICAidmlvbGF0aW9ucyI6IFsKICAgIHsKICAgICAgImlkIjogImhlYWRpbmctb3JkZXIiLAogICAgICAiaW1wYWN0IjogIm1vZGVyYXRlIiwKICAgICAgIm5vZGVzIjogWwogICAgICAgIFsKICAgICAgICAgICJoMyIKICAgICAgICBdCiAgICAgIF0KICAgIH0KICBdCn0="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-41d57ed9110c22126b80",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 65,
+              "column": 5
+            },
+            {
+              "title": "no critical/serious violations on providers-failure",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chrome",
+                  "projectName": "chrome",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2465,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:51:19.447Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-providers-failure.json",
+                          "contentType": "application/json",
+                          "body": "ewogICJzdXJmYWNlIjogInByb3ZpZGVycy1mYWlsdXJlIiwKICAiYmxvY2tpbmciOiAwLAogICJ2aW9sYXRpb25zIjogW10KfQ=="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-47a36ec81ab0091dcf85",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 65,
+              "column": 5
+            },
+            {
+              "title": "no critical/serious violations on credits-settings",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chrome",
+                  "projectName": "chrome",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2617,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:51:21.972Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "axe-credits-settings.json",
+                          "contentType": "application/json",
+                          "body": "ewogICJzdXJmYWNlIjogImNyZWRpdHMtc2V0dGluZ3MiLAogICJibG9ja2luZyI6IDAsCiAgInZpb2xhdGlvbnMiOiBbXQp9"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-52a061fa84e096ce3aff",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 65,
+              "column": 5
+            }
+          ]
+        },
+        {
+          "title": "keyboard-only core trails",
+          "file": "keyboard-a11y.spec.ts",
+          "line": 94,
+          "column": 6,
+          "specs": [
+            {
+              "title": "login: the sign-in entry is reachable and labelled",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1630,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:50:27.641Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-58972bbdd9e0987ffa96",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 95,
+              "column": 3
+            },
+            {
+              "title": "operation chat: composer is keyboard-wired end to end",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1893,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:50:29.316Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-564f5551b491e7527c5a",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 123,
+              "column": 3
+            },
+            {
+              "title": "approval: review opens the decision modal with the five verbatim choices",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2158,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:50:31.256Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-c79cf16d7b9f55cc2b87",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 135,
+              "column": 3
+            },
+            {
+              "title": "login: the sign-in entry is reachable and labelled",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chrome",
+                  "projectName": "chrome",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2003,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:51:24.647Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-bc0d9fd77346838eb2b4",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 95,
+              "column": 3
+            },
+            {
+              "title": "operation chat: composer is keyboard-wired end to end",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chrome",
+                  "projectName": "chrome",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2123,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:51:26.703Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-6ad991a7ae622f25aea2",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 123,
+              "column": 3
+            },
+            {
+              "title": "approval: review opens the decision modal with the five verbatim choices",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chrome",
+                  "projectName": "chrome",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2656,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:51:28.910Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "c21dd4f907de5aa8a41b-c584a7bde7fbd09ffbdf",
+              "file": "keyboard-a11y.spec.ts",
+              "line": 135,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "layout.spec.ts",
+      "file": "layout.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "AC20 layout sweep — every named surface at every §18 width",
+          "file": "layout.spec.ts",
+          "line": 77,
+          "column": 6,
+          "specs": [
+            {
+              "title": "surfaces fit 360px without horizontal overflow",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2354,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:50:33.479Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9f98fd8c8d1538f5ebbb-e2f4fa13797eba94d29b",
+              "file": "layout.spec.ts",
+              "line": 79,
+              "column": 5
+            },
+            {
+              "title": "surfaces fit 768px without horizontal overflow",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2384,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:50:35.884Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9f98fd8c8d1538f5ebbb-a2c9472bfa814d40a269",
+              "file": "layout.spec.ts",
+              "line": 79,
+              "column": 5
+            },
+            {
+              "title": "surfaces fit 1024px without horizontal overflow",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2452,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:50:38.306Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9f98fd8c8d1538f5ebbb-9efd6079278387fccc96",
+              "file": "layout.spec.ts",
+              "line": 79,
+              "column": 5
+            },
+            {
+              "title": "surfaces fit 1440px without horizontal overflow",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2664,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:50:40.803Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9f98fd8c8d1538f5ebbb-a98b39d9d52e85d461c2",
+              "file": "layout.spec.ts",
+              "line": 79,
+              "column": 5
+            },
+            {
+              "title": "surfaces fit 360px without horizontal overflow",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chrome",
+                  "projectName": "chrome",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3353,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:51:31.651Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9f98fd8c8d1538f5ebbb-bf63ebb053261ae22059",
+              "file": "layout.spec.ts",
+              "line": 79,
+              "column": 5
+            },
+            {
+              "title": "surfaces fit 768px without horizontal overflow",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chrome",
+                  "projectName": "chrome",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3140,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:51:35.075Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9f98fd8c8d1538f5ebbb-fa5cc5a7ea6b43de2af7",
+              "file": "layout.spec.ts",
+              "line": 79,
+              "column": 5
+            },
+            {
+              "title": "surfaces fit 1024px without horizontal overflow",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chrome",
+                  "projectName": "chrome",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2799,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:51:38.288Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9f98fd8c8d1538f5ebbb-d667a67e9bcbe62c8904",
+              "file": "layout.spec.ts",
+              "line": 79,
+              "column": 5
+            },
+            {
+              "title": "surfaces fit 1440px without horizontal overflow",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chrome",
+                  "projectName": "chrome",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2991,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:51:41.137Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9f98fd8c8d1538f5ebbb-3210ae1fe482d27a8f15",
+              "file": "layout.spec.ts",
+              "line": 79,
+              "column": 5
+            }
+          ]
+        },
+        {
+          "title": "AC20 navigation integrity at the extremes",
+          "file": "layout.spec.ts",
+          "line": 99,
+          "column": 6,
+          "specs": [
+            {
+              "title": "mobile 360px: the login entry and composer stay reachable",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1742,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:50:43.504Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9f98fd8c8d1538f5ebbb-d34ac02f2d3dc65df133",
+              "file": "layout.spec.ts",
+              "line": 100,
+              "column": 3
+            },
+            {
+              "title": "desktop 1440px: the thread and approval card render at full width",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1469,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:50:45.294Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9f98fd8c8d1538f5ebbb-f827fd0863065ac5f37a",
+              "file": "layout.spec.ts",
+              "line": 111,
+              "column": 3
+            },
+            {
+              "title": "mobile 360px: the login entry and composer stay reachable",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chrome",
+                  "projectName": "chrome",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1987,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:51:44.197Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9f98fd8c8d1538f5ebbb-4ea975d3de36e575f9a0",
+              "file": "layout.spec.ts",
+              "line": 100,
+              "column": 3
+            },
+            {
+              "title": "desktop 1440px: the thread and approval card render at full width",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chrome",
+                  "projectName": "chrome",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1794,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-11-10T00:51:46.252Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9f98fd8c8d1538f5ebbb-a9cbce4329412c5bf869",
+              "file": "layout.spec.ts",
+              "line": 111,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-11-10T00:49:49.164Z",
+    "duration": 119250.76599999999,
+    "expected": 44,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

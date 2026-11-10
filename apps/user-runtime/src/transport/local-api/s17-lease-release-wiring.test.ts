@@ -307,3 +307,51 @@ describe("C2a — an approval decision that cancels the task releases its leases
     expect(await activeLeases(origin)).toHaveLength(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// C2b — the no-harness composition (the formerly-bypassed seam #2)
+// ---------------------------------------------------------------------------
+
+describe("C2b — the no-harness composition's terminal transitions release leases", () => {
+  it("a run driven to a terminal state on a composition WITHOUT a worker harness takes its write lease with it (D6)", async () => {
+    const dbPath = join(makeTempDir("shera-s17-lease-wiring-"), "runtime.db");
+    // No workerHarness, no scripted proposals: the plain composition — the
+    // shape whose writeLeases repository is composed unconditionally while
+    // its operations service carried NO runFlow hook (compose.ts composes
+    // the plain OperationsService when options.workerHarness is absent).
+    // The scheduler walk terminates runs through THIS composition
+    // (OperationsRunSeam(operations) → applyRunState, scheduler.service.ts
+    // fail_task/complete_task), so a failed/completed scheduled run leaked
+    // its lease.
+    const runtime = composeRuntime({ dbPath, packsRoot: PACKS_ROOT });
+    trackConnection(runtime);
+    runtimes.push(runtime);
+    await new Promise<void>((resolveListen) =>
+      runtime.httpServer.listen(0, "127.0.0.1", resolveListen),
+    );
+    const origin = `http://127.0.0.1:${(runtime.httpServer.address() as { port: number }).port}`;
+
+    const operation = runtime.operations.createOperation(WS, {
+      definition_ref: null,
+      name: "S17 lease-wiring no-harness op",
+      roster_agent_ids: [RESEARCHER],
+      coordinator_agent_id: GENERAL,
+    });
+    const runId = "run_lease_wiring_c2b";
+    runtime.operations.createRun(WS, operation.operation_id, { run_id: runId });
+
+    await acquireLease(origin, "workspace://docs/c2b-release-wiring.md", runId);
+    expect(await activeLeases(origin)).toHaveLength(1);
+
+    // The exact seam the scheduler walk drives: applyRunState on the
+    // composed operations instance (OperationsRunSeam(operations) holds this
+    // ONE instance — the walk's fail_task/complete_task land here).
+    runtime.operations.applyRunState(WS, operation.operation_id, runId, "QUEUED");
+    runtime.operations.applyRunState(WS, operation.operation_id, runId, "RUNNING");
+    runtime.operations.applyRunState(WS, operation.operation_id, runId, "FAILED");
+    expect(runtime.operations.getRun(WS, operation.operation_id, runId).state).toBe("FAILED");
+
+    // A lease NEVER outlives its task — on the no-harness composition too.
+    expect(await activeLeases(origin)).toHaveLength(0);
+  });
+});

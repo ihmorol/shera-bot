@@ -17,7 +17,11 @@ import { mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { DEFAULT_WORKSPACE_ID, composeRuntime, type RuntimeHandle } from "../../../apps/user-runtime/src/transport/local-api/compose.ts";
+import {
+  DEFAULT_WORKSPACE_ID,
+  composeRuntime,
+  type RuntimeHandle,
+} from "../../../apps/user-runtime/src/transport/local-api/compose.ts";
 import {
   cleanupTempResources,
   makeTempDir,
@@ -61,11 +65,8 @@ export interface ComposeJourneyOptions {
  * Compose one journey runtime over a fresh disposable SQLite database and
  * listen on a loopback port. The handle is tracked for the shared cleanup.
  */
-export async function composeJourney(
-  options: ComposeJourneyOptions = {},
-): Promise<FeatureRuntime> {
-  const dbPath =
-    options.dbPath ?? join(makeTempDir("shera-feature-"), "runtime.db");
+export async function composeJourney(options: ComposeJourneyOptions = {}): Promise<FeatureRuntime> {
+  const dbPath = options.dbPath ?? join(makeTempDir("shera-feature-"), "runtime.db");
   const runtime = composeRuntime({
     dbPath,
     packsRoot: PACKS_ROOT,
@@ -91,7 +92,10 @@ export async function composeJourney(
   };
 }
 
-export async function getJson(origin: string, path: string): Promise<{ status: number; body: Record<string, unknown> }> {
+export async function getJson(
+  origin: string,
+  path: string,
+): Promise<{ status: number; body: Record<string, unknown> }> {
   const response = await fetch(`${origin}${path}`);
   return { status: response.status, body: (await response.json()) as Record<string, unknown> };
 }

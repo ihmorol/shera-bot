@@ -44,7 +44,10 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { RUN_STATES_TERMINAL, type RunState } from "@shera-bot/contracts";
 
-import { openDatabase, type SqliteConnection } from "../../apps/user-runtime/src/adapters/sqlite/connection.ts";
+import {
+  openDatabase,
+  type SqliteConnection,
+} from "../../apps/user-runtime/src/adapters/sqlite/connection.ts";
 import { applyMigrations } from "../../apps/user-runtime/src/adapters/sqlite/migrations.ts";
 import { EventJournalRepository } from "../../apps/user-runtime/src/adapters/sqlite/event-journal-repository.ts";
 import { OperationsRepository } from "../../apps/user-runtime/src/adapters/sqlite/operations-repository.ts";
@@ -375,11 +378,7 @@ function makeHarness(options: HarnessOptions = {}): StressHarness {
     runControl,
     workers: {
       stopWorker: (workspaceId, runId, reason) =>
-        supervisor.stopWorker(
-          workspaceId,
-          runId,
-          reason === "shutdown" ? "shutdown" : "requested",
-        ),
+        supervisor.stopWorker(workspaceId, runId, reason === "shutdown" ? "shutdown" : "requested"),
     },
     leases,
     approvals,
@@ -520,10 +519,9 @@ function assertJournalRowIntegrity(states: RunIntegrity[]): void {
       for (let index = 0; index < stream.length; index += 1) {
         const row = stream[index];
         if (row === undefined) throw new Error(`run ${state.runId}: stream row vanished`);
-        expect(
-          row.sequence,
-          `run ${state.runId} stream sequence gap at index ${index}`,
-        ).toBe(index + 1);
+        expect(row.sequence, `run ${state.runId} stream sequence gap at index ${index}`).toBe(
+          index + 1,
+        );
       }
       const ids = new Set(stream.map((event) => event.event_id));
       expect(ids.size).toBe(stream.length);
@@ -540,8 +538,12 @@ function assertJournalRowIntegrity(states: RunIntegrity[]): void {
     if (succeeded.length > 0) {
       expect(state.rowState).toBe("SUCCEEDED");
     }
-    expect(cancelled.length, `run ${state.runId}: duplicated task.cancelled`).toBeLessThanOrEqual(1);
-    expect(succeeded.length, `run ${state.runId}: duplicated task.succeeded`).toBeLessThanOrEqual(1);
+    expect(cancelled.length, `run ${state.runId}: duplicated task.cancelled`).toBeLessThanOrEqual(
+      1,
+    );
+    expect(succeeded.length, `run ${state.runId}: duplicated task.succeeded`).toBeLessThanOrEqual(
+      1,
+    );
     expect(
       cancelled.length > 0 && succeeded.length > 0,
       `run ${state.runId}: both cancel and complete terminal markers journalled`,
@@ -636,7 +638,9 @@ describe("stress: N concurrent operations through the composed runtime gateway",
           return allTerminal
             ? states
             : states
-                .filter((state) => !(RUN_STATES_TERMINAL as readonly string[]).includes(state.rowState))
+                .filter(
+                  (state) => !(RUN_STATES_TERMINAL as readonly string[]).includes(state.rowState),
+                )
                 .map((state) => `${state.runId}=${state.rowState}`)
                 .join(",");
         },
@@ -806,10 +810,16 @@ describe("stress: N concurrent operations through the composed runtime gateway",
     );
 
     // The exec-phase hold.
-    harness.leases.acquireLease(WS, `workspace://notes/${runId}.md`, runId, {
-      type: "user",
-      id: USER.id,
-    }, 60_000);
+    harness.leases.acquireLease(
+      WS,
+      `workspace://notes/${runId}.md`,
+      runId,
+      {
+        type: "user",
+        id: USER.id,
+      },
+      60_000,
+    );
     expect(
       harness.leases.listActiveLeases(WS).length,
       "the lease must be active while the run executes",

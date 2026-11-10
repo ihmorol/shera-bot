@@ -39,7 +39,10 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { RUN_STATES_TERMINAL, type RunState } from "@shera-bot/contracts";
 
-import { openDatabase, type SqliteConnection } from "../../apps/user-runtime/src/adapters/sqlite/connection.ts";
+import {
+  openDatabase,
+  type SqliteConnection,
+} from "../../apps/user-runtime/src/adapters/sqlite/connection.ts";
 import { applyMigrations } from "../../apps/user-runtime/src/adapters/sqlite/migrations.ts";
 import { EventJournalRepository } from "../../apps/user-runtime/src/adapters/sqlite/event-journal-repository.ts";
 import { OperationsRepository } from "../../apps/user-runtime/src/adapters/sqlite/operations-repository.ts";
@@ -118,9 +121,11 @@ interface StormHarness {
 const openHarnesses: StormHarness[] = [];
 let currentHarness: StormHarness | null = null;
 
-function makeHarness(options: {
-  spawnSpec?: (spawnIndex: number) => SpawnFakeTaskWorkerOptions;
-} = {}): StormHarness {
+function makeHarness(
+  options: {
+    spawnSpec?: (spawnIndex: number) => SpawnFakeTaskWorkerOptions;
+  } = {},
+): StormHarness {
   const dir = mkdtempSync(join(tmpdir(), "shera-stress-cancel-storm-"));
   const conn = openDatabase(join(dir, "runtime.db"));
   applyMigrations(conn.db);
@@ -330,10 +335,16 @@ describe("stress: the cancellation storm (rapid-fire cancels during spawn and ex
       harness.ops.applyRunState(WS, harness.operationId, runId, "QUEUED");
       harness.ops.applyRunState(WS, harness.operationId, runId, "RUNNING");
       // The exec-phase hold every cancel must answer for.
-      harness.leases.acquireLease(WS, `workspace://notes/${runId}.md`, runId, {
-        type: "user",
-        id: USER.id,
-      }, 60_000);
+      harness.leases.acquireLease(
+        WS,
+        `workspace://notes/${runId}.md`,
+        runId,
+        {
+          type: "user",
+          id: USER.id,
+        },
+        60_000,
+      );
       runIds.push(runId);
       for (const offsetMs of [400, 405, 410]) {
         cancelPromises.push(
@@ -372,12 +383,16 @@ describe("stress: the cancellation storm (rapid-fire cancels during spawn and ex
 
     // S2: every row settles terminal — the state machine never wedges.
     for (const runId of runIds) {
-      const state = await untilTruthy(() => {
-        const current = rowStateOf(harness, runId);
-        return current !== null && (RUN_STATES_TERMINAL as readonly string[]).includes(current)
-          ? current
-          : undefined;
-      }, 20_000, `terminal state for ${runId}`);
+      const state = await untilTruthy(
+        () => {
+          const current = rowStateOf(harness, runId);
+          return current !== null && (RUN_STATES_TERMINAL as readonly string[]).includes(current)
+            ? current
+            : undefined;
+        },
+        20_000,
+        `terminal state for ${runId}`,
+      );
       if (state !== "CANCELLED") {
         const task = harness.journal
           .listStream(taskStreamId(runId), WS)
@@ -385,7 +400,10 @@ describe("stress: the cancellation storm (rapid-fire cancels during spawn and ex
           .join(", ");
         const worker = harness.journal
           .listStream(runId, WS)
-          .map((row) => `${row.event_type}${row.event_type.endsWith("crashed") ? ` ${row.payload.slice(0, 160)}` : ""}`)
+          .map(
+            (row) =>
+              `${row.event_type}${row.event_type.endsWith("crashed") ? ` ${row.payload.slice(0, 160)}` : ""}`,
+          )
           .join(", ");
         throw new Error(
           `run ${runId} settled ${state} under the cancel storm (expected CANCELLED)\ncancel outcomes: ${outcomeSummary}\ntask stream: ${task || "empty"}\nworker stream: ${worker || "empty"}`,
@@ -422,19 +440,17 @@ describe("stress: the cancellation storm (rapid-fire cancels during spawn and ex
         handle.waitForExit(),
         new Promise<null>((resolve) => setTimeout(() => resolve(null), 5_000)),
       ]);
-      expect(
-        exit,
-        `a storm worker never exited (zombie): pid ${handle.child.pid}`,
-      ).not.toBeNull();
+      expect(exit, `a storm worker never exited (zombie): pid ${handle.child.pid}`).not.toBeNull();
     }
 
     // S6: the teardown answered honestly — every run's cancel (the winning
     // one) reports preserved journal evidence.
     for (const runId of runIds) {
       const preserved = harness.journal.countStream(taskStreamId(runId), WS);
-      expect(preserved, `run ${runId}: the journal must be preserved through cancel`).toBeGreaterThan(
-        0,
-      );
+      expect(
+        preserved,
+        `run ${runId}: the journal must be preserved through cancel`,
+      ).toBeGreaterThan(0);
     }
 
     // No fault was swallowed by the wiring (a contained teardown failure is
@@ -456,10 +472,16 @@ describe("stress: the cancellation storm (rapid-fire cancels during spawn and ex
       harness.ops.createRun(WS, harness.operationId, { run_id: runId });
       harness.ops.applyRunState(WS, harness.operationId, runId, "QUEUED");
       harness.ops.applyRunState(WS, harness.operationId, runId, "RUNNING");
-      harness.leases.acquireLease(WS, `workspace://notes/${runId}.md`, runId, {
-        type: "user",
-        id: USER.id,
-      }, 60_000);
+      harness.leases.acquireLease(
+        WS,
+        `workspace://notes/${runId}.md`,
+        runId,
+        {
+          type: "user",
+          id: USER.id,
+        },
+        60_000,
+      );
       runIds.push(runId);
     }
 
@@ -480,12 +502,16 @@ describe("stress: the cancellation storm (rapid-fire cancels during spawn and ex
     }
 
     for (const runId of runIds) {
-      const state = await untilTruthy(() => {
-        const current = rowStateOf(harness, runId);
-        return current !== null && (RUN_STATES_TERMINAL as readonly string[]).includes(current)
-          ? current
-          : undefined;
-      }, 20_000, `terminal state for ${runId}`);
+      const state = await untilTruthy(
+        () => {
+          const current = rowStateOf(harness, runId);
+          return current !== null && (RUN_STATES_TERMINAL as readonly string[]).includes(current)
+            ? current
+            : undefined;
+        },
+        20_000,
+        `terminal state for ${runId}`,
+      );
       expect(state).toBe("CANCELLED");
     }
     // The spawn either completed and was immediately stopped, or never
@@ -496,7 +522,10 @@ describe("stress: the cancellation storm (rapid-fire cancels during spawn and ex
         handle.waitForExit(),
         new Promise<null>((resolve) => setTimeout(() => resolve(null), 5_000)),
       ]);
-      expect(exit, `spawn-window worker survived its cancellation: pid ${handle.child.pid}`).not.toBeNull();
+      expect(
+        exit,
+        `spawn-window worker survived its cancellation: pid ${handle.child.pid}`,
+      ).not.toBeNull();
     }
     expect(harness.leases.listActiveLeases(WS)).toEqual([]);
     expect(

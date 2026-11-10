@@ -37,7 +37,6 @@ const USER = { type: "user", id: "user_emon" } as const;
 const GATED_AGENT = "agent_general_assistant";
 const CONVERSATION = "conv_feature_j2";
 
-
 const clockNow = "2026-11-10T12:00:00.000Z";
 
 /** The gated scripted tool (EXTERNAL_WRITE — every decision is a prompt). */
@@ -187,14 +186,13 @@ describe("J2: approval gate integrity", () => {
 
       // The pending list is empty; the run completes (the scripted harness
       // drives the resumed run to its terminal state).
-      expect(((await pendingList(origin)).body["approvals"] ?? [])).toHaveLength(0);
+      expect((await pendingList(origin)).body["approvals"] ?? []).toHaveLength(0);
 
       // ── The grant is CONSUMED once the approved execution completes ──
       const grants = await waitFor(
         async () =>
-          ((await getJson(origin, `/v1/approvals/grants?workspace_id=${WS}`)).body[
-            "grants"
-          ] ?? []) as Array<Record<string, unknown>>,
+          ((await getJson(origin, `/v1/approvals/grants?workspace_id=${WS}`)).body["grants"] ??
+            []) as Array<Record<string, unknown>>,
         (rows) => rows.length === 1 && rows[0]!["consumed_at"] !== null,
       );
       expect(grants[0]).toMatchObject({ one_time: true });
@@ -211,10 +209,9 @@ describe("J2: approval gate integrity", () => {
       expect(reprompt).toHaveLength(1);
       expect(reprompt[0]!["approval_id"]).not.toBe(approvalId);
       // Exactly ONE grant still exists — the re-prompt created none.
-      const grantsAfterReprompt = ((await getJson(
-        origin,
-        `/v1/approvals/grants?workspace_id=${WS}`,
-      )).body["grants"] ?? []) as Array<Record<string, unknown>>;
+      const grantsAfterReprompt = ((
+        await getJson(origin, `/v1/approvals/grants?workspace_id=${WS}`)
+      ).body["grants"] ?? []) as Array<Record<string, unknown>>;
       expect(grantsAfterReprompt).toHaveLength(1);
     } finally {
       await journey.close();
@@ -244,8 +241,10 @@ describe("J2: approval gate integrity", () => {
 
       // No residue: no grant anywhere, no pending card, and the detail read
       // shows the rejected stamp for the audit trail.
-      expect(((await getJson(origin, `/v1/approvals/grants?workspace_id=${WS}`)).body["grants"] ?? [])).toHaveLength(0);
-      expect(((await pendingList(origin)).body["approvals"] ?? [])).toHaveLength(0);
+      expect(
+        (await getJson(origin, `/v1/approvals/grants?workspace_id=${WS}`)).body["grants"] ?? [],
+      ).toHaveLength(0);
+      expect((await pendingList(origin)).body["approvals"] ?? []).toHaveLength(0);
       const detail = await getJson(origin, `/v1/approvals/${approvalId}?workspace_id=${WS}`);
       expect((detail.body["approval"] as Record<string, unknown>)["status"]).toBe("rejected");
       expect((detail.body["approval"] as Record<string, unknown>)["resolved_by_choice"]).toBe(
@@ -378,7 +377,7 @@ describe("J2: approval gate integrity", () => {
       expect(cancel.body["outcome"]).toBe("cancelled");
 
       // The pending approval is resolved as CANCELLED (never rejected).
-      expect(((await pendingList(origin)).body["approvals"] ?? [])).toHaveLength(0);
+      expect((await pendingList(origin)).body["approvals"] ?? []).toHaveLength(0);
       const detail = await getJson(origin, `/v1/approvals/${approvalId}?workspace_id=${WS}`);
       expect((detail.body["approval"] as Record<string, unknown>)["status"]).toBe("cancelled");
 
@@ -387,7 +386,9 @@ describe("J2: approval gate integrity", () => {
       expect(late.status).toBe(409);
       expect(late.body["code"]).toBe("APPROVAL_ALREADY_RESOLVED");
       // No grant minted by the late attempt, nothing resurrected.
-      expect(((await getJson(origin, `/v1/approvals/grants?workspace_id=${WS}`)).body["grants"] ?? [])).toHaveLength(0);
+      expect(
+        (await getJson(origin, `/v1/approvals/grants?workspace_id=${WS}`)).body["grants"] ?? [],
+      ).toHaveLength(0);
     } finally {
       await journey.close();
     }
@@ -424,8 +425,10 @@ describe("J2: approval gate integrity", () => {
       expect(other.body["code"]).toBe("AGENT_CANNOT_DECIDE_APPROVAL");
 
       // Nothing resolved: the card is still pending, no grant exists.
-      expect(((await pendingList(origin)).body["approvals"] ?? [])).toHaveLength(1);
-      expect(((await getJson(origin, `/v1/approvals/grants?workspace_id=${WS}`)).body["grants"] ?? [])).toHaveLength(0);
+      expect((await pendingList(origin)).body["approvals"] ?? []).toHaveLength(1);
+      expect(
+        (await getJson(origin, `/v1/approvals/grants?workspace_id=${WS}`)).body["grants"] ?? [],
+      ).toHaveLength(0);
       void runtime;
     } finally {
       await journey.close();

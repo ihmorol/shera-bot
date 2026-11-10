@@ -107,4 +107,12 @@ try {
   // already closed
 }
 
-parentPort.postMessage({ workerId, committed, busyRetries, contendedBegins, totalBeginWaitMs, errors, streamId });
+parentPort.postMessage({
+  workerId,
+  committed,
+  busyRetries,
+  contendedBegins,
+  totalBeginWaitMs,
+  errors,
+  streamId,
+});

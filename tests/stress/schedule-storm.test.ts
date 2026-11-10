@@ -42,7 +42,10 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { openDatabase, type SqliteConnection } from "../../apps/user-runtime/src/adapters/sqlite/connection.ts";
+import {
+  openDatabase,
+  type SqliteConnection,
+} from "../../apps/user-runtime/src/adapters/sqlite/connection.ts";
 import { applyMigrations } from "../../apps/user-runtime/src/adapters/sqlite/migrations.ts";
 import { EventJournalRepository } from "../../apps/user-runtime/src/adapters/sqlite/event-journal-repository.ts";
 import { OperationsRepository } from "../../apps/user-runtime/src/adapters/sqlite/operations-repository.ts";
@@ -323,10 +326,7 @@ describe("stress: the schedule/watcher storm (single-fire under concurrent deliv
     expect(manualOutcomes.length).toBe(12);
     for (const triggerId of triggerIds) {
       const firings = harness.triggers.listRecentFirings(WS, triggerId, 100);
-      expect(
-        firings.length,
-        `trigger ${triggerId} must hold exactly one firing row`,
-      ).toBe(1);
+      expect(firings.length, `trigger ${triggerId} must hold exactly one firing row`).toBe(1);
       const stream = harness.journal.listStream(taskStreamId(firings[0]?.run_id ?? ""), WS);
       expect(
         stream.filter((row) => row.event_type === "trigger.scheduled").length,
@@ -367,10 +367,7 @@ describe("stress: the schedule/watcher storm (single-fire under concurrent deliv
     }
     await harness.scheduler.tick();
     let runs = harness.ops.listRuns(WS, harness.operationId);
-    expect(
-      runs.length,
-      "twelve intermediate writes must collapse into ONE firing",
-    ).toBe(1);
+    expect(runs.length, "twelve intermediate writes must collapse into ONE firing").toBe(1);
 
     // Repeated ticks over the UNCHANGED content: no double execution.
     for (let i = 0; i < 5; i += 1) {
@@ -395,4 +392,3 @@ describe("stress: the schedule/watcher storm (single-fire under concurrent deliv
     expect(stream.filter((row) => row.event_type.startsWith("trigger.")).length).toBe(1);
   }, 60_000);
 });
-

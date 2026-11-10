@@ -62,9 +62,7 @@ const WORKER_COUNT = 6;
 const WORKER_ITERATIONS = 40;
 const WORKER_HOLD_MS = 2;
 
-const WAL_WORKER_SCRIPT = fileURLToPath(
-  new URL("./helpers/wal-worker.mjs", import.meta.url),
-);
+const WAL_WORKER_SCRIPT = fileURLToPath(new URL("./helpers/wal-worker.mjs", import.meta.url));
 
 const dirs: string[] = [];
 const conns: Array<{ close(): void }> = [];
@@ -177,7 +175,7 @@ describe("stress: SQLite product-state WAL contention (parallel writers)", () =>
       runWorker(index + 1, WORKER_HOLD_MS),
     );
     const productPromises = productStreams.map((streamId) => productWriter(streamId));
-    const [reports, ] = await Promise.all([
+    const [reports] = await Promise.all([
       Promise.all(workerPromises),
       Promise.all(productPromises),
     ]);
@@ -189,10 +187,9 @@ describe("stress: SQLite product-state WAL contention (parallel writers)", () =>
         report.errors,
         `worker ${report.workerId} surfaced errors: ${report.errors.slice(0, 5).join(" | ")}`,
       ).toEqual([]);
-      expect(
-        report.committed,
-        `worker ${report.workerId} lost units under contention`,
-      ).toBe(WORKER_ITERATIONS);
+      expect(report.committed, `worker ${report.workerId} lost units under contention`).toBe(
+        WORKER_ITERATIONS,
+      );
     }
     expect(
       productFailures,
@@ -213,10 +210,7 @@ describe("stress: SQLite product-state WAL contention (parallel writers)", () =>
     // W2: transactions serialize — each stream's rows are exactly 1..n.
     for (const report of reports) {
       const rows = journal.listStream(report.streamId, WS);
-      expect(
-        rows.length,
-        `worker ${report.workerId} stream row count`,
-      ).toBe(WORKER_ITERATIONS);
+      expect(rows.length, `worker ${report.workerId} stream row count`).toBe(WORKER_ITERATIONS);
       for (let index = 0; index < rows.length; index += 1) {
         expect(
           rows[index]?.sequence,
@@ -233,9 +227,9 @@ describe("stress: SQLite product-state WAL contention (parallel writers)", () =>
     }
 
     // W3: all committed rows unique across the whole journal.
-    const all = journal.listWorkspaceStreams(WS).flatMap((streamId) =>
-      journal.listStream(streamId, WS).map((row) => row.event_id),
-    );
+    const all = journal
+      .listWorkspaceStreams(WS)
+      .flatMap((streamId) => journal.listStream(streamId, WS).map((row) => row.event_id));
     expect(new Set(all).size).toBe(all.length);
     expect(all.length).toBe(
       WORKER_COUNT * WORKER_ITERATIONS + productStreams.length * WORKER_ITERATIONS,

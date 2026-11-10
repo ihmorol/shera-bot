@@ -881,9 +881,7 @@ function makeScriptedChild(workerId: string): ScriptedChildControl {
     child,
     deliver: (line) => lineListener?.(line),
     deliverDone: (summary) =>
-      lineListener?.(
-        JSON.stringify({ v: WORKER_PROTOCOL_VERSION, type: "done", summary }),
-      ),
+      lineListener?.(JSON.stringify({ v: WORKER_PROTOCOL_VERSION, type: "done", summary })),
     stdoutEnd: () => stdoutEndListeners.forEach((listener) => listener()),
     exitClean: () => resolveExit({ code: 0, signal: null }),
   };

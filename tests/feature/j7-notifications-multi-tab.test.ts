@@ -140,9 +140,8 @@ describe("J7: notification center + multi-tab sync", () => {
       // ── TAB A reads the center: both real records are there ──
       const tabA = await waitFor(
         async () =>
-          ((
-            await getJson(origin, `/v1/notifications?workspace_id=${WS}`)
-          ).body["notifications"] ?? []) as NotificationView[],
+          ((await getJson(origin, `/v1/notifications?workspace_id=${WS}`)).body["notifications"] ??
+            []) as NotificationView[],
         (rows) =>
           rows.some((row) => row.kind === "completion") &&
           rows.some((row) => row.kind === "approval_required"),
@@ -176,7 +175,10 @@ describe("J7: notification center + multi-tab sync", () => {
       expect(unreadBefore).toBeGreaterThanOrEqual(2);
 
       // ── TAB A marks the completion read; the replay is a no-op ──
-      const markRead = command({ type: "notifications.mark_read", notification_id: completionRow.notification_id });
+      const markRead = command({
+        type: "notifications.mark_read",
+        notification_id: completionRow.notification_id,
+      });
       expect((await postJson(origin, "/v1/notifications/commands", markRead)).status).toBe(200);
       expect((await postJson(origin, "/v1/notifications/commands", markRead)).status).toBe(200);
 
@@ -184,12 +186,17 @@ describe("J7: notification center + multi-tab sync", () => {
       const tabBAfter = ((await getJson(origin, `/v1/notifications?workspace_id=${WS}`)).body[
         "notifications"
       ] ?? []) as NotificationView[];
-      const readRowB = tabBAfter.find((row) => row.notification_id === completionRow.notification_id)!;
+      const readRowB = tabBAfter.find(
+        (row) => row.notification_id === completionRow.notification_id,
+      )!;
       expect(readRowB.read_at).not.toBeNull();
       expect(unreadOf(tabBAfter)).toBe(unreadBefore - 1);
 
       // ── TAB A mutes the approval item (the S20 mute family) ──
-      const mute = command({ type: "notifications.mute", notification_id: approvalRow.notification_id });
+      const mute = command({
+        type: "notifications.mute",
+        notification_id: approvalRow.notification_id,
+      });
       expect((await postJson(origin, "/v1/notifications/commands", mute)).status).toBe(200);
 
       // TAB B sees the mute; the approval STAYS pending (delivery is
@@ -208,11 +215,15 @@ describe("J7: notification center + multi-tab sync", () => {
       ).toBe(true);
 
       // ── TAB A flips the delivery toggles; TAB B reads them back ──
-      const set = await postJson(origin, "/v1/notifications/settings/commands", command({
-        type: "notifications.set_settings",
-        in_app_enabled: false,
-        browser_enabled: true,
-      }));
+      const set = await postJson(
+        origin,
+        "/v1/notifications/settings/commands",
+        command({
+          type: "notifications.set_settings",
+          in_app_enabled: false,
+          browser_enabled: true,
+        }),
+      );
       expect(set.status).toBe(200);
       const tabBSettings = await getJson(origin, `/v1/notifications/settings?workspace_id=${WS}`);
       expect(tabBSettings.body["settings"]).toMatchObject({

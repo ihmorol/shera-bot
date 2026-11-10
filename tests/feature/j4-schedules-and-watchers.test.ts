@@ -118,7 +118,7 @@ describe("J4: schedules + watchers", () => {
         `/v1/schedules/${triggerId}/firings?workspace_id=${WS}`,
       );
       expect(firings.status).toBe(200);
-      expect(((firings.body["firings"] as Array<unknown>) ?? [])).toHaveLength(1);
+      expect((firings.body["firings"] as Array<unknown>) ?? []).toHaveLength(1);
 
       // ── Pause: the due occurrence while paused fires nothing ──
       const paused = await postJson(origin, `/v1/schedules/${triggerId}/pause`, {

@@ -39,7 +39,10 @@ import {
 } from "./helpers/runtime-harness.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const WORKER_CHILD = resolve(here, "../../apps/user-runtime/src/modules/workers/fake-task-worker-child.ts");
+const WORKER_CHILD = resolve(
+  here,
+  "../../apps/user-runtime/src/modules/workers/fake-task-worker-child.ts",
+);
 
 const NOW = "2026-11-04T13:00:00.000Z";
 const AGENT = "agent_researcher";
@@ -345,14 +348,20 @@ describe("J5: checkpoint → restart recovery", () => {
     // marker. (The restart marker appears when a dead worker row is reaped —
     // this journey's crash window is the narrow one: the gateway died AFTER
     // the checkpoint but BEFORE the run's worker row existed.)
-    const timelines = status.body["timelines"] as Record<string, { markers: Array<{ kind: string }> }>;
+    const timelines = status.body["timelines"] as Record<
+      string,
+      { markers: Array<{ kind: string }> }
+    >;
     const readTimeline = timelines["run_j5_read"]?.markers.map((marker) => marker.kind) ?? [];
     expect(readTimeline).toEqual(["checkpoint", "resume"]);
     const writeTimeline = timelines["run_j5_write"]?.markers.map((marker) => marker.kind) ?? [];
     expect(writeTimeline).toEqual(["checkpoint", "pause"]);
 
     // ── NOTHING TORN: conversation, file, operation records all read back ──
-    const thread = await getJson(originB, `/v1/operations/${operationId}/thread?workspace_id=${WS}`);
+    const thread = await getJson(
+      originB,
+      `/v1/operations/${operationId}/thread?workspace_id=${WS}`,
+    );
     expect(thread.status).toBe(200);
     const items = (thread.body["items"] ?? []) as Array<Record<string, unknown>>;
     expect(
@@ -363,7 +372,10 @@ describe("J5: checkpoint → restart recovery", () => {
       "the pre-crash chat message survives the restart",
     ).toBe(true);
 
-    const fileRead = await getJson(originB, `/v1/workspace/files?workspace_id=${WS}&path=workspace://notes/draft.md&actor_type=user&actor_id=user_emon`);
+    const fileRead = await getJson(
+      originB,
+      `/v1/workspace/files?workspace_id=${WS}&path=workspace://notes/draft.md&actor_type=user&actor_id=user_emon`,
+    );
     expect(fileRead.status).toBe(200);
     expect(fileRead.body["size"]).toBe(Buffer.byteLength(draftContent));
 

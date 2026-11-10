@@ -37,12 +37,18 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { openDatabase, type SqliteConnection } from "../../apps/user-runtime/src/adapters/sqlite/connection.ts";
+import {
+  openDatabase,
+  type SqliteConnection,
+} from "../../apps/user-runtime/src/adapters/sqlite/connection.ts";
 import { applyMigrations } from "../../apps/user-runtime/src/adapters/sqlite/migrations.ts";
 import { EventJournalRepository } from "../../apps/user-runtime/src/adapters/sqlite/event-journal-repository.ts";
 import { SqliteTransactions } from "../../apps/user-runtime/src/adapters/sqlite/transactions.ts";
 import { EventsService } from "../../apps/user-runtime/src/modules/events/events.service.ts";
-import { REPLAY_BATCH_LIMIT, ReplayService } from "../../apps/user-runtime/src/modules/events/replay.service.ts";
+import {
+  REPLAY_BATCH_LIMIT,
+  ReplayService,
+} from "../../apps/user-runtime/src/modules/events/replay.service.ts";
 
 const WS = "ws-stress-flood";
 const STREAM_COUNT = 10;

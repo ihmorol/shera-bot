@@ -180,7 +180,18 @@ function buildRuntime(dbPath: string): Runtime {
       });
     },
   });
-  return { conn, tx, journal, events, ops, operationsRepo, checkpoints, checkpointService, driver, resumeCalls };
+  return {
+    conn,
+    tx,
+    journal,
+    events,
+    ops,
+    operationsRepo,
+    checkpoints,
+    checkpointService,
+    driver,
+    resumeCalls,
+  };
 }
 
 // ── The integrity checker (R1–R3) over ANY open runtime ─────────────────────
@@ -215,10 +226,9 @@ function assertCheckpointJournalConsistency(
       expect(stream[index]?.sequence, `${label}: run ${runId} task-stream gap`).toBe(index + 1);
     }
     const maxSequence = runtime.journal.maxSequence(WS, taskStreamId(runId), undefined);
-    expect(
-      maxSequence,
-      `${label}: run ${runId} max sequence disagrees with the row count`,
-    ).toBe(stream.length);
+    expect(maxSequence, `${label}: run ${runId} max sequence disagrees with the row count`).toBe(
+      stream.length,
+    );
 
     // R3: versions exactly 1..max.
     const versions = rows.map((row) => row.checkpoint_version).sort((a, b) => a - b);
@@ -286,7 +296,11 @@ describe("stress: checkpoint/restore racing an active writer storm", () => {
           stepId: `step_${runId}_${step}`,
           stepKind: "tool_execution",
           completedActions: [
-            { kind: "tool_execution", summary: `stress step ${step}`, ref: `exec_${runId}_${step}` },
+            {
+              kind: "tool_execution",
+              summary: `stress step ${step}`,
+              ref: `exec_${runId}_${step}`,
+            },
           ],
           pendingAction: {
             kind: "tool_execution",
@@ -300,7 +314,9 @@ describe("stress: checkpoint/restore racing an active writer storm", () => {
         if (verdict.ok) {
           writerCommitted += 1;
         } else {
-          writerFailures.push(`${runId}/${step}: ${verdict.code} ${JSON.stringify(verdict.detail)}`);
+          writerFailures.push(
+            `${runId}/${step}: ${verdict.code} ${JSON.stringify(verdict.detail)}`,
+          );
         }
         // The worker-stream flood (concurrent multi-stream journal pressure).
         live.events.appendEvent({
@@ -449,9 +465,7 @@ describe("stress: checkpoint/restore racing an active writer storm", () => {
       conversationId: operationId,
       stepId: `step_${interruptedRunId}_during_recovery`,
       stepKind: "tool_execution",
-      completedActions: [
-        { kind: "tool_execution", summary: "checkpoint taken during recovery" },
-      ],
+      completedActions: [{ kind: "tool_execution", summary: "checkpoint taken during recovery" }],
       pendingAction: {
         kind: "tool_execution",
         summary: "pending during recovery",
@@ -463,7 +477,9 @@ describe("stress: checkpoint/restore racing an active writer storm", () => {
     });
     const recoveryOutcome = await restoredRuntime.driver.recoverRun(WS, interruptedRunId);
     expect(
-      ["resumed", "paused_for_review", "skipped", "resume_failed"].includes(recoveryOutcome.outcome),
+      ["resumed", "paused_for_review", "skipped", "resume_failed"].includes(
+        recoveryOutcome.outcome,
+      ),
       `recovery settled with ${JSON.stringify(recoveryOutcome)}`,
     ).toBe(true);
     expect(writerDuringRecovery.ok, JSON.stringify(writerDuringRecovery)).toBe(true);
@@ -490,4 +506,3 @@ describe("stress: checkpoint/restore racing an active writer storm", () => {
     assertCheckpointJournalConsistency(live, runIds, "live");
   }, 120_000);
 });
-

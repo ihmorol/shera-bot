@@ -306,15 +306,15 @@ describe("J6: credit ledger", () => {
       charged_units: 0,
       reserved_units: 0,
     });
-    const drill = ((await getJson(
+    const drill = (await getJson(
       origin,
       `/v1/credits/runs/run_j6_cancel_release?workspace_id=${WS}`,
-    )) as unknown) as { body: { released_units: number; releases: Array<{ reason: string; released_units: number }> } };
+    )) as unknown as {
+      body: { released_units: number; releases: Array<{ reason: string; released_units: number }> };
+    };
     expect(drill.body["released_units"]).toBe(50);
     // The release row records the D8 cancellation reason.
-    const release = (drill.body["releases"] ?? []).find(
-      (row) => row.reason === "task_cancelled",
-    );
+    const release = (drill.body["releases"] ?? []).find((row) => row.reason === "task_cancelled");
     expect(release).toBeDefined();
     expect(release!["released_units"]).toBe(50);
   });

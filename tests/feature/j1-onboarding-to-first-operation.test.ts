@@ -83,7 +83,10 @@ describe("J1: onboarding → first Operation", () => {
       postJson(origin, "/v1/onboarding/commands", onboardingCommand({ step, option_id }));
 
     const welcomeAnswer = await answer("welcome", "research");
-    expect(welcomeAnswer.status, `welcome answer failed: ${JSON.stringify(welcomeAnswer.body)}`).toBe(200);
+    expect(
+      welcomeAnswer.status,
+      `welcome answer failed: ${JSON.stringify(welcomeAnswer.body)}`,
+    ).toBe(200);
     const afterWelcome = (await getJson(origin, `/v1/onboarding?workspace_id=${WS}`)).body[
       "onboarding"
     ] as OnboardingSnapshot;
@@ -102,7 +105,13 @@ describe("J1: onboarding → first Operation", () => {
     // No current step remains once the interview is completed.
     expect(completed.current_step).toBeNull();
     // No skipped gate: every step has an answer.
-    for (const step of ["welcome", "provider_check", "approvals_briefing", "memory_briefing", "done"]) {
+    for (const step of [
+      "welcome",
+      "provider_check",
+      "approvals_briefing",
+      "memory_briefing",
+      "done",
+    ]) {
       expect(completed.answers[step]).not.toBeNull();
     }
 
@@ -185,9 +194,7 @@ describe("J1: onboarding → first Operation", () => {
     expect(operation.definition_ref).toBe(preview.body["definition_ref"]);
     expect(detail.body["chat_conversation_id"]).toBe(chatId);
     const roster = detail.body["roster"] as Array<{ agent_id: string }>;
-    expect(roster.map((member) => member.agent_id).sort()).toEqual(
-      [RESEARCHER, CITATION].sort(),
-    );
+    expect(roster.map((member) => member.agent_id).sort()).toEqual([RESEARCHER, CITATION].sort());
 
     // The first run exists in the D8 CREATED state (a run the UI can show
     // immediately — no silent auto-start, no stuck pre-state).
@@ -212,10 +219,7 @@ describe("J1: onboarding → first Operation", () => {
     });
 
     // The thread read model renders it (with the @-addressing resolved).
-    const thread = await getJson(
-      origin,
-      `/v1/operations/${operationId}/thread?workspace_id=${WS}`,
-    );
+    const thread = await getJson(origin, `/v1/operations/${operationId}/thread?workspace_id=${WS}`);
     expect(thread.status).toBe(200);
     const messages = (thread.body["items"] ?? []) as Array<Record<string, unknown>>;
     const userMessages = messages.filter((item) => item["kind"] === "message");

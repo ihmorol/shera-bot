@@ -89,31 +89,38 @@ describe("J3: memory scopes end-to-end", () => {
     try {
       // ── 1. The Operation holds BOTH agents (the boundary must hold even
       // for a same-operation participant) ──
-      const operationId = await createOperation(origin, "Literature sweep", [
-        RESEARCHER,
-        GENERAL,
-      ]);
+      const operationId = await createOperation(origin, "Literature sweep", [RESEARCHER, GENERAL]);
 
       // ── 2. The researcher's PRIVATE memory (the agent-session write) ──
-      const privateCreate = await postJson(origin, "/v1/memory/commands", memoryCommand({
-        scope: "agent_private",
-        owner_agent_id: RESEARCHER,
-        operation_id: operationId,
-        summary: "Failed extraction heuristic for corpus 3",
-        content:
-          "The regex-based extraction heuristic loses table rows when the PDF uses spanned cells; use the layout parser instead.",
-        sensitivity: "normal",
-        source_refs: [`conversation://${operationId}/messages`],
-        confidence: 0.8,
-      }));
+      const privateCreate = await postJson(
+        origin,
+        "/v1/memory/commands",
+        memoryCommand({
+          scope: "agent_private",
+          owner_agent_id: RESEARCHER,
+          operation_id: operationId,
+          summary: "Failed extraction heuristic for corpus 3",
+          content:
+            "The regex-based extraction heuristic loses table rows when the PDF uses spanned cells; use the layout parser instead.",
+          sensitivity: "normal",
+          source_refs: [`conversation://${operationId}/messages`],
+          confidence: 0.8,
+        }),
+      );
       expect(privateCreate.status).toBe(200);
       const memoryId = (privateCreate.body["entry"] as MemoryEntryView).memory_id;
 
       // Owner sees it; the participant does not; the operation context does
       // not; the user's management view groups nothing under account scope.
-      const own = await getJson(origin, `/v1/agents/${RESEARCHER}/memory/context?workspace_id=${WS}`);
+      const own = await getJson(
+        origin,
+        `/v1/agents/${RESEARCHER}/memory/context?workspace_id=${WS}`,
+      );
       expect(contextIds(own.body)).toContain(memoryId);
-      const other = await getJson(origin, `/v1/agents/${GENERAL}/memory/context?workspace_id=${WS}`);
+      const other = await getJson(
+        origin,
+        `/v1/agents/${GENERAL}/memory/context?workspace_id=${WS}`,
+      );
       expect(contextIds(other.body)).not.toContain(memoryId);
       const opContext = await getJson(
         origin,
@@ -143,10 +150,7 @@ describe("J3: memory scopes end-to-end", () => {
         expect(contextIds(otherAgentContext.body)).not.toContain(memoryId);
         // The foreign workspace_id on the OWN runtime is a typed 403.
         const foreignWorkspace = "ws-someone-else-0001";
-        const mismatch = await getJson(
-          origin,
-          `/v1/memory?workspace_id=${foreignWorkspace}`,
-        );
+        const mismatch = await getJson(origin, `/v1/memory?workspace_id=${foreignWorkspace}`);
         expect(mismatch.status).toBe(403);
         expect(mismatch.body["code"]).toBe("WORKSPACE_MISMATCH");
       } finally {
@@ -194,15 +198,19 @@ describe("J3: memory scopes end-to-end", () => {
 
       // ── 5. The credential-shaped write is refused at the boundary ──
       const secret = "AKIAQ2W3E4R5T6Y7U8I0";
-      const refused = await postJson(origin, "/v1/memory/commands", memoryCommand({
-        scope: "agent_private",
-        owner_agent_id: RESEARCHER,
-        summary: "Deployment credential",
-        content: `The exporter reads with ${secret} and password: "s3cretPa55word"`,
-        sensitivity: "normal",
-        source_refs: ["conversation://direct/user_emon"],
-        confidence: 0.9,
-      }));
+      const refused = await postJson(
+        origin,
+        "/v1/memory/commands",
+        memoryCommand({
+          scope: "agent_private",
+          owner_agent_id: RESEARCHER,
+          summary: "Deployment credential",
+          content: `The exporter reads with ${secret} and password: "s3cretPa55word"`,
+          sensitivity: "normal",
+          source_refs: ["conversation://direct/user_emon"],
+          confidence: 0.9,
+        }),
+      );
       expect(refused.status).toBe(400);
       expect(refused.body).toMatchObject({ code: "MEMORY_SECRET_REJECTED" });
       // The rejection names the rule classes, never echoes the secret (G3).
@@ -224,15 +232,19 @@ describe("J3: memory scopes end-to-end", () => {
       // the assignment heuristic refuses `<vocab word> <value>` even in
       // innocuous prose (memory-secrets.test.ts's own clean fixture does the
       // same).
-      const sanitized = await postJson(origin, "/v1/memory/commands", memoryCommand({
-        scope: "agent_private",
-        owner_agent_id: RESEARCHER,
-        summary: "Deployment values handling",
-        content: "The deployment values stay in the environment and never in memory.",
-        sensitivity: "normal",
-        source_refs: ["conversation://direct/user_emon"],
-        confidence: 0.9,
-      }));
+      const sanitized = await postJson(
+        origin,
+        "/v1/memory/commands",
+        memoryCommand({
+          scope: "agent_private",
+          owner_agent_id: RESEARCHER,
+          summary: "Deployment values handling",
+          content: "The deployment values stay in the environment and never in memory.",
+          sensitivity: "normal",
+          source_refs: ["conversation://direct/user_emon"],
+          confidence: 0.9,
+        }),
+      );
       expect(sanitized.status).toBe(200);
       void CITATION;
     } finally {

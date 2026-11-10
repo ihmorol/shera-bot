@@ -59,10 +59,7 @@ const WORKER_STOP_STATES: readonly RunState[] = ["CANCELLING", "CANCELLED", "FAI
  * fires until the run reaches a terminal or recovery state). Flagged as an
  * observation for the lease-semantics owner in the E29 closure note
  * (TRACEABILITY), not a defect. */
-const RUN_EXECUTION_ENDED_STATES: readonly string[] = [
-  ...RUN_STATES_TERMINAL,
-  "RECOVERY_REQUIRED",
-];
+const RUN_EXECUTION_ENDED_STATES: readonly string[] = [...RUN_STATES_TERMINAL, "RECOVERY_REQUIRED"];
 
 export function isWorkerStartState(state: RunState): boolean {
   return WORKER_START_STATES.includes(state);

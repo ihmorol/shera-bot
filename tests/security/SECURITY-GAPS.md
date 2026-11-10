@@ -84,7 +84,7 @@ over-claim.
   spawns `setsid node …` detached, the grandchild registers its OWN pid
   (`escaped_pids=[34820]`), cancel() fires mid-flight. The settled exit
   record: `{"cancelled":true,"sweep":"active","limitDeath":null,"code":null,
-  "signal":"SIGKILL","timedOut":false}` and the LIVE process list answers
+"signal":"SIGKILL","timedOut":false}` and the LIVE process list answers
   `survivors=[]` — the escaped grandchild is dead. The typed `sweep: "active"`
   field (P3d) is the witness that the namespace-identity sweep ENGAGED on
   this host (the honest-degradation value would be
@@ -182,7 +182,7 @@ over-claim.
   and the solo re-run — the honest-degradation message "NO delegated cgroup
   subtree on this host" appears ZERO times in either log. What the suite
   observed, exactly (the assertions it passed): `cgroupApplied.memory_max =
-  "268435456"` (256 MiB — half of what dd attempts, so the kernel boundary
+"268435456"` (256 MiB — half of what dd attempts, so the kernel boundary
   fires mid-dd); `limitDeath = "memory_oom"` — the P3b typed classification,
   which types a SIGKILL as memory_oom ONLY when the leaf's own
   `memory.events` `oom_kill` counter is > 0 (`readOomKillCount` in
@@ -193,7 +193,7 @@ over-claim.
   leg's original record; the committed GAP-2 leg and this re-verification
   are the current answer, and the honest-degradation branch remains for
   non-delegated hosts (G5). (3) Full suite on the same tip: `pnpm vitest run
-  tests/security/` → 14/14 files, 82/82 tests GREEN. The disposition's
+tests/security/` → 14/14 files, 82/82 tests GREEN. The disposition's
   residuals stand UNCHANGED: the pre-move window (Compose container-level
   cgroup covers it), a host without swap accounting refusing the swap.max
   write, and the driver posture (daemon-less here — `unobserved`), which

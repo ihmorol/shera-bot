@@ -13,8 +13,7 @@
  * journey explicitly names the service seam it drives (the credits ledger and
  * the scheduler fire seam are the recorded operator/admin channels).
  */
-import { mkdirSync, mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -92,7 +91,7 @@ export async function composeJourney(
   };
 }
 
-export async function getJson(origin: string, path: string): Promise<{ status: number; body: any }> {
+export async function getJson(origin: string, path: string): Promise<{ status: number; body: Record<string, unknown> }> {
   const response = await fetch(`${origin}${path}`);
   return { status: response.status, body: (await response.json()) as Record<string, unknown> };
 }
@@ -101,7 +100,7 @@ export async function postJson(
   origin: string,
   path: string,
   body: unknown,
-): Promise<{ status: number; body: any }> {
+): Promise<{ status: number; body: Record<string, unknown> }> {
   const response = await fetch(`${origin}${path}`, {
     method: "POST",
     headers: { "content-type": "application/json" },

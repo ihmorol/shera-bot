@@ -36,7 +36,7 @@
  * runtime owns its clocks and queues), D20/D48 (reservation consult), D23
  * rule 6 (the ledger's PK claim), D34 (typed trigger origin), AC2/AC6/AC8.
  */
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 

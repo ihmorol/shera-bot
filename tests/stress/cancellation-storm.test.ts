@@ -49,13 +49,11 @@ import { TaskWorkersRepository } from "../../apps/user-runtime/src/adapters/sqli
 import { SqliteTransactions } from "../../apps/user-runtime/src/adapters/sqlite/transactions.ts";
 import { ApprovalsService } from "../../apps/user-runtime/src/modules/approvals/approvals.service.ts";
 import { EventsService } from "../../apps/user-runtime/src/modules/events/events.service.ts";
-import { OperationsService } from "../../apps/user-runtime/src/modules/operations/operations.service.ts";
 import { RunFlowOperationsService } from "../../apps/user-runtime/src/modules/workers/task-run-flow.ts";
 import { RunCancellationService } from "../../apps/user-runtime/src/modules/tasks/run-cancellation.service.ts";
 import { taskStreamId } from "../../apps/user-runtime/src/modules/tasks/task-events.ts";
 import {
   TaskWorkerSupervisor,
-  type TaskRunOperationsSeam,
   type TaskWorkerChild,
   type TaskWorkerSupervisorPolicy,
 } from "../../apps/user-runtime/src/modules/workers/task-worker-supervisor.service.ts";

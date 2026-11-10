@@ -54,7 +54,6 @@ import { TaskWorkersRepository } from "../../apps/user-runtime/src/adapters/sqli
 import { SqliteTransactions } from "../../apps/user-runtime/src/adapters/sqlite/transactions.ts";
 import { ApprovalsService } from "../../apps/user-runtime/src/modules/approvals/approvals.service.ts";
 import { EventsService } from "../../apps/user-runtime/src/modules/events/events.service.ts";
-import { OperationsService } from "../../apps/user-runtime/src/modules/operations/operations.service.ts";
 import { RunFlowOperationsService } from "../../apps/user-runtime/src/modules/workers/task-run-flow.ts";
 import { RunCancellationService } from "../../apps/user-runtime/src/modules/tasks/run-cancellation.service.ts";
 import {
@@ -176,7 +175,7 @@ class ControlledWorkerChild implements TaskWorkerChild {
     return () => this.lineListeners.delete(listener);
   }
 
-  onStderr(_listener: (chunk: string) => void): () => void {
+  onStderr(): () => void {
     return () => {};
   }
 
@@ -654,7 +653,7 @@ describe("stress: N concurrent operations through the composed runtime gateway",
             `${state.runId}: row=${state.rowState} task=[${state.taskStream.map((e) => `${e.sequence}:${e.event_type}`).join(" | ")}]`,
         )
         .join("\n  ");
-      throw new Error(`${String(error)}\nrun evidence:\n  ${detail}`);
+      throw new Error(`${String(error)}\nrun evidence:\n  ${detail}`, { cause: error });
     }
     // Let the worker-exit observers drain (the done aftermath is async).
     await new Promise((resolve) => setTimeout(resolve, 250));

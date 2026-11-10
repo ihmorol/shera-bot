@@ -274,7 +274,7 @@ describe("stress: checkpoint/restore racing an active writer storm", () => {
     // units so the event loop interleaves them — including INSIDE the
     // snapshot's and the restore's await windows.
     let writerCommitted = 0;
-    let writerFailures: string[] = [];
+    const writerFailures: string[] = [];
     const writerRun = async (runId: string): Promise<void> => {
       for (let step = 1; step <= STEPS_PER_RUN; step += 1) {
         // Yield to the loop: the snapshot and the restore interleave here.

@@ -46,7 +46,7 @@ import {
   type FakeTaskWorkerHandle,
   type SpawnFakeTaskWorkerOptions,
 } from "./fake-task-worker.ts";
-import { encodeWorkerFrame, WORKER_PROTOCOL_VERSION } from "./worker-frames.ts";
+import { WORKER_PROTOCOL_VERSION } from "./worker-frames.ts";
 import { OperationsRunSeam } from "./operations-run-seam.ts";
 import {
   TaskWorkerSupervisor,

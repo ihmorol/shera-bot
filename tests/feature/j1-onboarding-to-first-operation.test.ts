@@ -84,7 +84,7 @@ describe("J1: onboarding → first Operation", () => {
 
     const welcomeAnswer = await answer("welcome", "research");
     expect(welcomeAnswer.status, `welcome answer failed: ${JSON.stringify(welcomeAnswer.body)}`).toBe(200);
-    let afterWelcome = (await getJson(origin, `/v1/onboarding?workspace_id=${WS}`)).body[
+    const afterWelcome = (await getJson(origin, `/v1/onboarding?workspace_id=${WS}`)).body[
       "onboarding"
     ] as OnboardingSnapshot;
     expect(afterWelcome.current_step).toBe("provider_check");

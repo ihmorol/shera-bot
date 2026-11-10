@@ -72,7 +72,7 @@ cd apps/control-plane && pnpm db:migrate && PORT=3001 pnpm start   # identity + 
 cd apps/web && pnpm dev                                            # the client
 ```
 
-The control plane creates runtime containers through Docker (image `shera-user-runtime:dev`) on an internal-only network with no published ports. The image build and the full container lifecycle are unvalidated work; no Dockerfile or compose file is committed yet.
+The control plane creates runtime containers through Docker (image `shera-user-runtime:dev`) on an internal-only network with no published ports. The image is built from [`infra/deploy/Dockerfile.user-runtime`](infra/deploy/Dockerfile.user-runtime); the one-VM production stack (compose, Caddy, backup, monitor, smoke gate) lives in [`infra/deploy/`](infra/deploy/) with its operator path in [`docs/s35-deploy-runbook.md`](docs/s35-deploy-runbook.md). On a host without Docker the web + control-plane pair still boots (that is how the S35 smoke HTTP legs were verified); the per-account runtime containers are the piece that needs an engine.
 
 ### Checks
 
@@ -87,17 +87,20 @@ pnpm license:inventory  # dependency + license gate
 pnpm mockup:test        # the mockup's regression suite
 ```
 
-Integration tests start a real PostgreSQL cluster. Point `SHERA_PG_BIN` at local PostgreSQL 16 binaries first. Live-provider tests are opt-in and never run by default (G7).
+Integration tests start a real PostgreSQL cluster. Point `SHERA_PG_BIN` at local PostgreSQL 16 binaries first (on Ubuntu: `SHERA_PG_BIN=/usr/lib/postgresql/16/bin`). Live-provider tests are opt-in and never run by default (G7).
 
-The S15 record (E28) pins the full suite at 1210 tests in 98 files, with boundary guards, typecheck, and build green. The latest CI runs on `main` pass the same pipeline.
+The E48 record pins the full suite at 2533 tests in 236 files, with boundary guards, typecheck, and build green. The acceptance gate is separate:
+
+```bash
+pnpm exec playwright install          # once: chromium, firefox, webkit binaries
+pnpm acceptance                       # the 27-row browser + HTTP matrix (reports to tests/acceptance/evidence/)
+```
 
 ## Current status
 
-Design is complete. The PRD carries decisions D1–D51 and acceptance criteria 1–27. Implementation follows a 35-slice build plan (GitHub issues #2–#36) with guardrails G1–G8 as acceptance criteria.
+The 35-slice build plan is COMPLETE (S01–S35, all merged; the map and the per-slice evidence pointers live in [`docs/BUILD_MAP.md`](docs/BUILD_MAP.md)). Final verification 2026-11-10: full suite 2533/2533 green, acceptance GREEN on main.
 
-Landed (S01–S16): monorepo scaffold, contracts, control plane with auth, container provisioning, the runtime gateway, the web shell, the end-to-end thin slice, the pack loader, agent identity with private-folder isolation, on-demand agent sessions, Operation chats, ad-hoc Operations, the launch preview gate, and task-worker supervision. S17–S35 are open; the live list is in [`docs/BUILD_MAP.md`](docs/BUILD_MAP.md).
-
-Not yet validated against real services: Google OAuth sign-in, the Docker lifecycle, and live model providers. [`docs/TRACEABILITY.md`](docs/TRACEABILITY.md) keeps the standing list with evidence.
+What remains is operational, not construction: the owner's acceptance verdicts (the S34 ledger), the live VM deployment per [`docs/s35-deploy-runbook.md`](docs/s35-deploy-runbook.md), the host-side verification of issues [#83](https://github.com/ihmorol/shera-bot/issues/83)/[#84](https://github.com/ihmorol/shera-bot/issues/84) on the deployment host, and the CI environment fix ([#78](https://github.com/ihmorol/shera-bot/issues/78)). Not yet validated against real services: Google OAuth sign-in and live model providers — [`docs/TRACEABILITY.md`](docs/TRACEABILITY.md) keeps the standing list with evidence.
 
 ## Documentation
 

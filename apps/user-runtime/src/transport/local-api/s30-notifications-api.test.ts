@@ -86,11 +86,12 @@ function seedLifecycleEvent(
     taskId: string;
     occurredAt: string;
     toState: string;
+    sequence?: number;
   },
 ): void {
   runtime.journal.append({
     stream_id: `task:${fields.taskId}`,
-    sequence: 1,
+    sequence: fields.sequence ?? 1,
     event_id: fields.eventId,
     event_type: fields.eventType,
     schema_version: 1,
@@ -255,6 +256,41 @@ describe("S30 notifications: the runtime-derived center records", () => {
     // only — a foreign workspace is a typed 403, and the rows never cross.
     const otherList = await get(origin, `/v1/notifications?workspace_id=${OTHER_WORKSPACE}`);
     expect(otherList.status).toBe(403);
+  });
+
+  it("keeps newest-first ordering for events that share one occurred_at instant (the journal's sequence tie-break survives the read-model sort)", async () => {
+    const running = await composeOn(join(makeTempDir("shera-s30-same-instant-"), "runtime.db"));
+    const { origin, runtime } = running;
+
+    // Two lifecycle events at the SAME instant, on different runs (different
+    // sequences): the journal's own read orders them newest-sequence-first
+    // (occurred_at DESC, sequence DESC), and the center's sort must PRESERVE
+    // that — not let an inconsistent comparator swap same-instant rows.
+    seedLifecycleEvent(runtime, {
+      eventId: "evt_instant_old",
+      eventType: "task.succeeded",
+      taskId: "task_instant_1",
+      occurredAt: "2026-11-08T09:00:00.000Z",
+      toState: "SUCCEEDED",
+      sequence: 3,
+    });
+    seedLifecycleEvent(runtime, {
+      eventId: "evt_instant_new",
+      eventType: "task.failed",
+      taskId: "task_instant_2",
+      occurredAt: "2026-11-08T09:00:00.000Z",
+      toState: "FAILED",
+      sequence: 7,
+    });
+
+    const list = await get(origin, `/v1/notifications?workspace_id=${WORKSPACE}`);
+    expect(list.status).toBe(200);
+    const rows = list.body["notifications"] as NotificationView[];
+    expect(rows).toHaveLength(2);
+    expect(rows.map((row) => row.notification_id)).toEqual([
+      "note-evt_instant_new",
+      "note-evt_instant_old",
+    ]);
   });
 
   it("mark-read persists through the typed command and survives re-reads; the command is idempotent", async () => {

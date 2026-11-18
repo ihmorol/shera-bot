@@ -121,14 +121,6 @@ export interface CreditAccountInsert {
   created_at: string;
 }
 
-export interface CreditGrantInput {
-  workspace_id: string;
-  transaction_id: string;
-  amount_units: number;
-  related_id: string | null;
-  created_at: string;
-}
-
 export interface CreditReservationInsert {
   workspace_id: string;
   reservation_id: string;

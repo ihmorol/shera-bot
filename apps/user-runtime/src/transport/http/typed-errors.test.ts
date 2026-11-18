@@ -18,6 +18,7 @@ import {
   AgentFolderAccessDeniedError,
   AgentFolderUriInvalidError,
 } from "../../modules/agents/agent-folders.service.ts";
+import { ProviderGateError } from "../../modules/providers/provider-gate.ts";
 import {
   consoleRedactedLogger,
   createTypedErrorRequestHandler,
@@ -277,6 +278,28 @@ describe("createTypedErrorRequestHandler — untyped faults are recorded, not si
 
     // Both are typed rejections: answered precisely and recorded as data —
     // never logged as untyped_request_fault with message + stack.
+    expect(logged).toHaveLength(0);
+  });
+
+  it("does not log the provider gate's typed configuration states — an expected typed 409 is never an untyped fault", () => {
+    const logged: Array<{ event: string; fields: Record<string, unknown> }> = [];
+    const handler = createTypedErrorRequestHandler((event, fields) =>
+      logged.push({ event, fields }),
+    );
+
+    const res = stubResponse();
+    callHandler(
+      handler,
+      new ProviderGateError("PROVIDER_NOT_CONFIGURED", "No provider is configured yet."),
+      { method: "POST", path: "/v1/operations/op_1/runs" },
+      res,
+      () => {},
+    );
+    expect(res.statusCode).toBe(409);
+    expect((res.body as { code: string }).code).toBe("PROVIDER_NOT_CONFIGURED");
+    // The gate's configuration states are TYPED answers (the S23 authored
+    // safe_message rides the body) — they are answered precisely and recorded
+    // as data, never logged as untyped_request_fault with message + stack.
     expect(logged).toHaveLength(0);
   });
 

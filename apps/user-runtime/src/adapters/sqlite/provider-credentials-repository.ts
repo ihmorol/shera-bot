@@ -24,18 +24,6 @@ export class ProviderCredentialsRepositoryError extends Error {
   }
 }
 
-export interface ProviderCredentialRow {
-  workspace_id: string;
-  provider_id: string;
-  ciphertext: Buffer;
-  iv: Buffer;
-  tag: Buffer;
-  key_version: number;
-  credential_hint: string;
-  created_at: string;
-  updated_at: string;
-}
-
 export class ProviderCredentialsRepository {
   constructor(private readonly tx: SqliteTransactions) {}
 

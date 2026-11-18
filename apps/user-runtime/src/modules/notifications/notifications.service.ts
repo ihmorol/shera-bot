@@ -135,7 +135,15 @@ export class NotificationsService {
       });
     }
 
-    return rows.sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : -1)).slice(0, 200);
+    // Newest first, as a CONSISTENT three-way comparator: the journal's own
+    // read already orders same-instant rows newest-sequence-first
+    // (occurred_at DESC, sequence DESC), and a two-way `<` comparator answers
+    // -1 for BOTH orders of an equal pair — an inconsistent sort contract that
+    // let the read-model sort REVERSE the journal's tie-break. Equal instants
+    // answer 0 and keep the derivation order (stable sort).
+    return rows
+      .sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : a.occurred_at > b.occurred_at ? -1 : 0))
+      .slice(0, 200);
   }
 
   /** One journal lifecycle event → one derived view (honest nulls where the

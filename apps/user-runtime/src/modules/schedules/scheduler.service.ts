@@ -174,16 +174,6 @@ export type FireOutcome =
   | { outcome: "recovery_required"; runId: string; code: string }
   | { outcome: "failed"; code: string; runId: string | null };
 
-export interface TriggerFiring {
-  workspace_id: string;
-  trigger_id: string;
-  idempotency_key: string;
-  run_id: string | null;
-  outcome: string;
-  detail_json: string | null;
-  fired_at: string;
-}
-
 const DEFAULT_TICK_MS = 1_000;
 
 /** The walk's outcome (S24): the D8 result plus the two credit legs — a D48

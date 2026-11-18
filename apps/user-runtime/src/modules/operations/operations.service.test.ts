@@ -47,6 +47,7 @@ import {
   OperationsServiceError,
   type OperationPackCatalog,
 } from "./operations.service.ts";
+import { purposeDerivedOutputs } from "./operations-preview.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const studentManifestPath = resolve(here, "../../../../../agent-packs/student/v1/manifest.json");
@@ -1027,5 +1028,30 @@ describe("S13 chunk 2 — typed 404-class rejections and E12 scoping", () => {
     // Runs created in one workspace never leak into the other's operation.
     service.createRun(WORKSPACE, record.operation_id, {});
     expect(service.listRuns("ws-secondary", record.operation_id)).toEqual([]);
+  });
+});
+
+describe("operations-preview pure derivations — the purpose-derived expected outputs", () => {
+  const PREFIX = "From the definition's purpose: ";
+
+  it("keeps the HEAD of a purpose over the statement budget (a capped statement is the prefix + the purpose's beginning, never a mid-word tail)", () => {
+    // A schema-max purpose (2000 chars): prefix (31) + purpose must cap at the
+    // statement's 2000-char bound by trimming the purpose's OVERFLOW — the
+    // head survives, the tail is cut. The statement reads as the derivation
+    // it claims to be, not as a fragment starting mid-word.
+    const purpose = `${"a".repeat(1900)}TAIL-KEPT`;
+    const statement = purposeDerivedOutputs(purpose).statement;
+    expect(statement.startsWith(`${PREFIX}aaa`)).toBe(true);
+    expect(statement).toContain("TAIL-KEPT"); // 1900 + 31 = 1931 <= 2000: fully kept
+    const purpose2 = `${"b".repeat(1990)}TAIL-CUT`;
+    const statement2 = purposeDerivedOutputs(purpose2).statement;
+    expect(statement2.startsWith(`${PREFIX}bbb`)).toBe(true);
+    expect(statement2).not.toContain("TAIL-CUT");
+    expect(statement2.length).toBe(2000);
+  });
+
+  it("keeps a short purpose whole", () => {
+    const purpose = "Outline the thesis chapter in five sections.";
+    expect(purposeDerivedOutputs(purpose).statement).toBe(`${PREFIX}${purpose}`);
   });
 });

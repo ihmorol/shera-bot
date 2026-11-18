@@ -157,13 +157,15 @@ export function estimateCredits(
  * Group 8, honest fallback: the student pack's definitions carry NO expected
  * outputs field, so the statement is derived from the definition's purpose
  * and marked "purpose_derived" with the reason — never invented. (The
- * statement is capped at the schema's 2000-char bound; the purpose itself is
- * capped at 2000, so the prefix is trimmed away first if ever needed.)
+ * statement is capped at the schema's 2000-char bound: the purpose's own
+ * budget is what remains after the derivation prefix, and an over-budget
+ * purpose is trimmed from its END — the statement keeps the purpose's
+ * BEGINNING, the part that says what the operation is for.)
  */
 export function purposeDerivedOutputs(purpose: string): OperationPreviewExpectedOutputs {
   const prefix = "From the definition's purpose: ";
   const budget = 2000 - prefix.length;
-  const statement = `${prefix}${purpose.slice(Math.max(0, purpose.length - budget))}`;
+  const statement = `${prefix}${purpose.slice(0, budget)}`;
   return {
     statement,
     source: "purpose_derived",

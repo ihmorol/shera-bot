@@ -69,24 +69,6 @@ export interface CreditAccountState {
   used_this_month_units: number;
 }
 
-/** The bounded-estimate inputs for one model call. */
-export interface EstimateInput {
-  workspace_id: string;
-  task_id: string;
-  provider_id: string;
-  model: string;
-  prompt_chars: number;
-  max_output_tokens: number;
-}
-
-/** The actual-usage inputs for one settled call (nullable when the provider
- * reported no metering — recorded as unknown, never fabricated, G4). */
-export interface UsageInput {
-  input_tokens: number | null;
-  output_tokens: number | null;
-  latency_ms: number | null;
-}
-
 export class CreditLedgerService {
   constructor(private readonly deps: CreditLedgerDeps) {}
 

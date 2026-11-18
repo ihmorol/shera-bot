@@ -32,16 +32,6 @@ import {
 } from "node:fs";
 import { basename, join } from "node:path";
 
-/** The names a volume snapshot NEVER captures (D22/E9 key exclusion; the
- * live database rides the recorded export helper instead of a file copy). */
-export const VOLUME_EXCLUDED_NAMES: ReadonlySet<string> = new Set([
-  "runtime.db",
-  "runtime.db-wal",
-  "runtime.db-shm",
-  "provider-credentials.key",
-  "project-credentials.key",
-]);
-
 /** The live database file's names — computed from the configured dbPath so
  * a renamed database is still excluded by name. */
 export function databaseFileNames(dbPath: string): ReadonlySet<string> {

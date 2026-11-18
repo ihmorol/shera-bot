@@ -193,7 +193,7 @@ function readZipCentralEntries(buffer: Buffer): ZipCentralEntry[] {
   return entries;
 }
 
-function zipEntryBytes(buffer: Buffer, entry: ZipCentralEntry): Buffer {
+function zipEntryBytes(buffer: Buffer, entry: ZipCentralEntry, maxOutputCap: number): Buffer {
   if ((entry.flags & 0x0001) !== 0) {
     throw new ArchiveImportError("ARCHIVE_UNSUPPORTED_FORMAT", "encrypted zip entries are refused");
   }
@@ -234,8 +234,24 @@ function zipEntryBytes(buffer: Buffer, entry: ZipCentralEntry): Buffer {
   }
   if (entry.method === 8) {
     try {
-      return inflateRawSync(payload);
-    } catch {
+      // The per-entry cap rides the inflater itself: a header that LIES about
+      // its uncompressed size defeats the declared-size pre-check above, and
+      // inflateRawSync without a maxOutputLength would materialize the whole
+      // inflated payload before the post-hoc length check could refuse it —
+      // the same peak-memory amplification the tar.gz path's mid-stream cap
+      // closed (a gzip bomb never materializes in memory there either).
+      return inflateRawSync(payload, { maxOutputLength: maxOutputCap });
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        (error as { code?: unknown }).code === "ERR_BUFFER_TOO_LARGE"
+      ) {
+        throw new ArchiveImportError(
+          "ARCHIVE_LIMIT_EXCEEDED",
+          "an entry decompresses above the per-entry cap",
+        );
+      }
       throw new ArchiveImportError("ARCHIVE_UNREADABLE", "a deflate entry failed to inflate");
     }
   }
@@ -281,7 +297,7 @@ async function extractZip(
       await mkdir(join(destDir, relative), { recursive: true });
       continue;
     }
-    const bytes = zipEntryBytes(buffer, entry);
+    const bytes = zipEntryBytes(buffer, entry, limits.maxFileBytes);
     if (bytes.length > limits.maxFileBytes) {
       throw new ArchiveImportError(
         "ARCHIVE_LIMIT_EXCEEDED",

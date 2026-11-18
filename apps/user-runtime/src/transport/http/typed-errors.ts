@@ -974,6 +974,10 @@ function isUntypedFault(error: unknown): boolean {
     !(error instanceof EventsServiceError) &&
     !(error instanceof ApprovalsServiceError) &&
     !(error instanceof GitServiceError) &&
+    // S23: the provider gate's configuration states are TYPED answers (the
+    // resolution's authored safe_message rides the 409 body) — an expected
+    // configuration refusal is never an untyped fault with a stack.
+    !(error instanceof ProviderGateError) &&
     !(error instanceof OperationsServiceError) &&
     !(error instanceof MemoryServiceError) &&
     !(error instanceof TerminalEventsRepositoryError) &&

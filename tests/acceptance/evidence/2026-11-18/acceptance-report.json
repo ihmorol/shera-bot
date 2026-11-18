@@ -1,7 +1,7 @@
 {
   "tool": "shera-bot acceptance runner (S34)",
   "schemaVersion": 1,
-  "generatedAt": "2026-11-18T15:57:28.827Z",
+  "generatedAt": "2026-11-18T17:04:20.478Z",
   "ledger": {
     "version": 1,
     "rows": 27
@@ -49,7 +49,7 @@
           "status": "pass",
           "testsPassed": 7,
           "testsFailed": 0,
-          "durationMs": 681
+          "durationMs": 911
         },
         {
           "file": "apps/control-plane/test/signup-cap.test.ts",
@@ -57,7 +57,7 @@
           "status": "pass",
           "testsPassed": 3,
           "testsFailed": 0,
-          "durationMs": 673
+          "durationMs": 500
         },
         {
           "file": "apps/web/test/login.test.ts",
@@ -65,7 +65,7 @@
           "status": "pass",
           "testsPassed": 2,
           "testsFailed": 0,
-          "durationMs": 159
+          "durationMs": 133
         }
       ],
       "gaps": [
@@ -84,7 +84,7 @@
           "status": "pass",
           "testsPassed": 16,
           "testsFailed": 0,
-          "durationMs": 1156
+          "durationMs": 1064
         },
         {
           "file": "tests/integration/runtime-provisioning.test.ts",
@@ -92,7 +92,7 @@
           "status": "pass",
           "testsPassed": 6,
           "testsFailed": 0,
-          "durationMs": 1457
+          "durationMs": 1968
         },
         {
           "file": "apps/control-plane/test/runtime-container-spec.test.ts",
@@ -100,7 +100,7 @@
           "status": "pass",
           "testsPassed": 9,
           "testsFailed": 0,
-          "durationMs": 22
+          "durationMs": 15
         },
         {
           "file": "apps/control-plane/test/local-container-backend.test.ts",
@@ -108,7 +108,7 @@
           "status": "pass",
           "testsPassed": 4,
           "testsFailed": 0,
-          "durationMs": 60
+          "durationMs": 80
         }
       ],
       "gaps": [
@@ -127,7 +127,7 @@
           "status": "pass",
           "testsPassed": 9,
           "testsFailed": 0,
-          "durationMs": 4541
+          "durationMs": 3910
         },
         {
           "file": "apps/web/test/agent-surfaces.test.ts",
@@ -135,7 +135,7 @@
           "status": "pass",
           "testsPassed": 32,
           "testsFailed": 0,
-          "durationMs": 686
+          "durationMs": 680
         }
       ],
       "gaps": [
@@ -153,7 +153,7 @@
           "status": "pass",
           "testsPassed": 6,
           "testsFailed": 0,
-          "durationMs": 2738
+          "durationMs": 2412
         },
         {
           "file": "apps/user-runtime/src/modules/sessions/session-supervisor.service.test.ts",
@@ -161,7 +161,7 @@
           "status": "pass",
           "testsPassed": 13,
           "testsFailed": 0,
-          "durationMs": 13234
+          "durationMs": 12158
         },
         {
           "file": "apps/user-runtime/src/modules/agents/agent-folders.service.test.ts",
@@ -169,7 +169,7 @@
           "status": "pass",
           "testsPassed": 12,
           "testsFailed": 0,
-          "durationMs": 3911
+          "durationMs": 3568
         }
       ],
       "gaps": [
@@ -188,7 +188,7 @@
           "status": "pass",
           "testsPassed": 9,
           "testsFailed": 0,
-          "durationMs": 4483
+          "durationMs": 3728
         },
         {
           "file": "apps/web/test/adhoc-operation.test.ts",
@@ -196,7 +196,7 @@
           "status": "pass",
           "testsPassed": 31,
           "testsFailed": 0,
-          "durationMs": 537
+          "durationMs": 346
         }
       ],
       "gaps": [
@@ -214,7 +214,7 @@
           "status": "pass",
           "testsPassed": 11,
           "testsFailed": 0,
-          "durationMs": 4541
+          "durationMs": 4551
         },
         {
           "file": "apps/web/test/launch-preview.test.ts",
@@ -222,15 +222,15 @@
           "status": "pass",
           "testsPassed": 41,
           "testsFailed": 0,
-          "durationMs": 810
+          "durationMs": 634
         },
         {
           "file": "apps/user-runtime/src/modules/operations/operations.service.test.ts",
           "kind": "vitest",
           "status": "pass",
-          "testsPassed": 26,
+          "testsPassed": 28,
           "testsFailed": 0,
-          "durationMs": 10016
+          "durationMs": 8862
         }
       ],
       "gaps": [
@@ -249,7 +249,7 @@
           "status": "pass",
           "testsPassed": 15,
           "testsFailed": 0,
-          "durationMs": 7798
+          "durationMs": 6527
         },
         {
           "file": "apps/web/test/live-views.test.ts",
@@ -257,7 +257,7 @@
           "status": "pass",
           "testsPassed": 18,
           "testsFailed": 0,
-          "durationMs": 217
+          "durationMs": 172
         },
         {
           "file": "apps/web/test/runtime-live.test.ts",
@@ -265,7 +265,7 @@
           "status": "pass",
           "testsPassed": 20,
           "testsFailed": 0,
-          "durationMs": 79
+          "durationMs": 63
         },
         {
           "file": "apps/web/test/e2e/mock-runtime-e2e.test.ts",
@@ -273,7 +273,7 @@
           "status": "pass",
           "testsPassed": 1,
           "testsFailed": 0,
-          "durationMs": 2298
+          "durationMs": 2067
         }
       ],
       "gaps": [
@@ -292,7 +292,7 @@
           "status": "pass",
           "testsPassed": 14,
           "testsFailed": 0,
-          "durationMs": 4322
+          "durationMs": 3780
         },
         {
           "file": "apps/user-runtime/src/modules/research/s25-research-tools.test.ts",
@@ -300,7 +300,7 @@
           "status": "pass",
           "testsPassed": 5,
           "testsFailed": 0,
-          "durationMs": 1776
+          "durationMs": 1329
         },
         {
           "file": "apps/user-runtime/src/transport/local-api/s26-execution-api.test.ts",
@@ -308,7 +308,7 @@
           "status": "pass",
           "testsPassed": 3,
           "testsFailed": 0,
-          "durationMs": 1817
+          "durationMs": 2075
         }
       ],
       "gaps": [
@@ -327,7 +327,7 @@
           "status": "pass",
           "testsPassed": 5,
           "testsFailed": 0,
-          "durationMs": 1815
+          "durationMs": 1895
         },
         {
           "file": "apps/user-runtime/src/modules/tools/tools-inventory.service.test.ts",
@@ -335,7 +335,7 @@
           "status": "pass",
           "testsPassed": 9,
           "testsFailed": 0,
-          "durationMs": 2628
+          "durationMs": 2495
         }
       ],
       "gaps": [
@@ -354,7 +354,7 @@
           "status": "pass",
           "testsPassed": 13,
           "testsFailed": 0,
-          "durationMs": 4906
+          "durationMs": 4021
         },
         {
           "file": "apps/user-runtime/src/modules/providers/connection-test.test.ts",
@@ -362,7 +362,7 @@
           "status": "pass",
           "testsPassed": 10,
           "testsFailed": 0,
-          "durationMs": 206
+          "durationMs": 235
         },
         {
           "file": "apps/user-runtime/src/transport/local-api/s23-providers-api.test.ts",
@@ -370,7 +370,7 @@
           "status": "pass",
           "testsPassed": 6,
           "testsFailed": 0,
-          "durationMs": 3148
+          "durationMs": 2849
         }
       ],
       "gaps": [
@@ -389,7 +389,7 @@
           "status": "pass",
           "testsPassed": 7,
           "testsFailed": 0,
-          "durationMs": 144
+          "durationMs": 76
         },
         {
           "file": "apps/user-runtime/src/modules/providers/provider-service.test.ts",
@@ -397,7 +397,7 @@
           "status": "pass",
           "testsPassed": 13,
           "testsFailed": 0,
-          "durationMs": 4906
+          "durationMs": 4021
         },
         {
           "file": "apps/user-runtime/src/transport/local-api/s23-providers-api.test.ts",
@@ -405,7 +405,7 @@
           "status": "pass",
           "testsPassed": 6,
           "testsFailed": 0,
-          "durationMs": 3148
+          "durationMs": 2849
         }
       ],
       "gaps": [
@@ -423,7 +423,7 @@
           "status": "pass",
           "testsPassed": 2,
           "testsFailed": 0,
-          "durationMs": 1584
+          "durationMs": 1310
         },
         {
           "file": "apps/user-runtime/src/modules/schedules/scheduler.service.test.ts",
@@ -431,7 +431,7 @@
           "status": "pass",
           "testsPassed": 8,
           "testsFailed": 0,
-          "durationMs": 3485
+          "durationMs": 3567
         },
         {
           "file": "apps/user-runtime/src/modules/schedules/scheduler-wake-manager.test.ts",
@@ -439,7 +439,7 @@
           "status": "pass",
           "testsPassed": 1,
           "testsFailed": 0,
-          "durationMs": 1396
+          "durationMs": 1366
         }
       ],
       "gaps": [
@@ -459,7 +459,7 @@
           "verifiedTests": 6,
           "testsPassed": 6,
           "testsFailed": 0,
-          "durationMs": 13748
+          "durationMs": 13530
         },
         {
           "file": "tests/contract/approval-contract.test.ts",
@@ -467,7 +467,7 @@
           "status": "pass",
           "testsPassed": 3,
           "testsFailed": 0,
-          "durationMs": 14
+          "durationMs": 12
         },
         {
           "file": "apps/web/test/approvals-ui.test.ts",
@@ -475,7 +475,7 @@
           "status": "pass",
           "testsPassed": 34,
           "testsFailed": 0,
-          "durationMs": 630
+          "durationMs": 361
         },
         {
           "file": "apps/user-runtime/src/modules/approvals/approvals.service.test.ts",
@@ -485,7 +485,7 @@
           "verifiedTests": 3,
           "testsPassed": 3,
           "testsFailed": 0,
-          "durationMs": 13748
+          "durationMs": 13530
         },
         {
           "file": "tests/acceptance/browser/journeys.spec.ts",
@@ -525,7 +525,7 @@
           "status": "pass",
           "testsPassed": 11,
           "testsFailed": 0,
-          "durationMs": 12
+          "durationMs": 20
         },
         {
           "file": "apps/user-runtime/src/modules/tasks/retry-coordinator.service.test.ts",
@@ -533,7 +533,7 @@
           "status": "pass",
           "testsPassed": 8,
           "testsFailed": 0,
-          "durationMs": 2952
+          "durationMs": 3296
         }
       ],
       "gaps": [
@@ -551,7 +551,7 @@
           "status": "pass",
           "testsPassed": 8,
           "testsFailed": 0,
-          "durationMs": 3782
+          "durationMs": 2774
         },
         {
           "file": "apps/user-runtime/src/modules/workers/worker-tree-cancellation.test.ts",
@@ -559,7 +559,7 @@
           "status": "pass",
           "testsPassed": 2,
           "testsFailed": 0,
-          "durationMs": 1489
+          "durationMs": 2345
         }
       ],
       "gaps": [
@@ -577,7 +577,7 @@
           "status": "pass",
           "testsPassed": 31,
           "testsFailed": 0,
-          "durationMs": 9104
+          "durationMs": 8377
         },
         {
           "file": "apps/user-runtime/src/modules/recovery/s31-restart-matrix.test.ts",
@@ -585,7 +585,7 @@
           "status": "pass",
           "testsPassed": 8,
           "testsFailed": 0,
-          "durationMs": 7889
+          "durationMs": 9037
         },
         {
           "file": "apps/user-runtime/src/modules/memory/memory.service.test.ts",
@@ -593,7 +593,7 @@
           "status": "pass",
           "testsPassed": 9,
           "testsFailed": 0,
-          "durationMs": 3276
+          "durationMs": 2749
         }
       ],
       "gaps": [
@@ -612,7 +612,7 @@
           "status": "pass",
           "testsPassed": 17,
           "testsFailed": 0,
-          "durationMs": 11545
+          "durationMs": 11060
         },
         {
           "file": "apps/user-runtime/src/modules/git/validation-runner.test.ts",
@@ -620,7 +620,7 @@
           "status": "pass",
           "testsPassed": 11,
           "testsFailed": 0,
-          "durationMs": 10080
+          "durationMs": 9967
         }
       ],
       "gaps": [
@@ -638,7 +638,7 @@
           "status": "pass",
           "testsPassed": 7,
           "testsFailed": 0,
-          "durationMs": 3526
+          "durationMs": 3653
         },
         {
           "file": "apps/user-runtime/src/modules/backups/s33-restore-service.test.ts",
@@ -646,7 +646,7 @@
           "status": "pass",
           "testsPassed": 7,
           "testsFailed": 0,
-          "durationMs": 2655
+          "durationMs": 3257
         },
         {
           "file": "apps/control-plane/test/s33-admin-backups.test.ts",
@@ -654,7 +654,7 @@
           "status": "pass",
           "testsPassed": 3,
           "testsFailed": 0,
-          "durationMs": 458
+          "durationMs": 514
         }
       ],
       "gaps": [
@@ -673,7 +673,7 @@
           "status": "pass",
           "testsPassed": 23,
           "testsFailed": 0,
-          "durationMs": 3844
+          "durationMs": 3515
         },
         {
           "file": "apps/user-runtime/test/recovery/kill9-recovery.test.ts",
@@ -681,7 +681,7 @@
           "status": "pass",
           "testsPassed": 1,
           "testsFailed": 0,
-          "durationMs": 9833
+          "durationMs": 8896
         },
         {
           "file": "apps/user-runtime/test/recovery/recovery-probes.test.ts",
@@ -689,7 +689,7 @@
           "status": "pass",
           "testsPassed": 5,
           "testsFailed": 0,
-          "durationMs": 3923
+          "durationMs": 3657
         },
         {
           "file": "apps/user-runtime/src/transport/local-api/s31-recovery-boot.test.ts",
@@ -697,7 +697,7 @@
           "status": "pass",
           "testsPassed": 2,
           "testsFailed": 0,
-          "durationMs": 3095
+          "durationMs": 3242
         }
       ],
       "gaps": [
@@ -758,7 +758,7 @@
           "status": "pass",
           "testsPassed": 3,
           "testsFailed": 0,
-          "durationMs": 194
+          "durationMs": 86
         }
       ],
       "gaps": [
@@ -779,7 +779,7 @@
           "status": "pass",
           "testsPassed": 20,
           "testsFailed": 0,
-          "durationMs": 4192
+          "durationMs": 3273
         },
         {
           "file": "tests/security/s27-st02-workspace-boundary.test.ts",
@@ -787,7 +787,7 @@
           "status": "pass",
           "testsPassed": 8,
           "testsFailed": 0,
-          "durationMs": 2153
+          "durationMs": 2399
         },
         {
           "file": "tests/security/s27-st07-credential-leakage.test.ts",
@@ -795,7 +795,7 @@
           "status": "pass",
           "testsPassed": 3,
           "testsFailed": 0,
-          "durationMs": 1181
+          "durationMs": 1278
         },
         {
           "file": "apps/user-runtime/src/modules/providers/custody-boundary.test.ts",
@@ -803,7 +803,7 @@
           "status": "pass",
           "testsPassed": 2,
           "testsFailed": 0,
-          "durationMs": 1550
+          "durationMs": 875
         },
         {
           "file": "tests/contract/runtime-access.test.ts",
@@ -811,7 +811,7 @@
           "status": "pass",
           "testsPassed": 13,
           "testsFailed": 0,
-          "durationMs": 69
+          "durationMs": 31
         },
         {
           "file": "tests/contract/user-runtime-boundary.test.ts",
@@ -819,7 +819,7 @@
           "status": "pass",
           "testsPassed": 6,
           "testsFailed": 0,
-          "durationMs": 394
+          "durationMs": 161
         }
       ],
       "gaps": [
@@ -839,7 +839,7 @@
           "status": "pass",
           "testsPassed": 5,
           "testsFailed": 0,
-          "durationMs": 1177
+          "durationMs": 1879
         },
         {
           "file": "packages/agent-pack-sdk/src/loader.test.ts",
@@ -847,7 +847,7 @@
           "status": "pass",
           "testsPassed": 14,
           "testsFailed": 0,
-          "durationMs": 168
+          "durationMs": 113
         },
         {
           "file": "apps/user-runtime/src/adapters/sqlite/workspaces-repository.test.ts",
@@ -855,7 +855,7 @@
           "status": "pass",
           "testsPassed": 4,
           "testsFailed": 0,
-          "durationMs": 969
+          "durationMs": 824
         }
       ],
       "gaps": [
@@ -873,7 +873,7 @@
           "status": "pass",
           "testsPassed": 11,
           "testsFailed": 0,
-          "durationMs": 4541
+          "durationMs": 4551
         },
         {
           "file": "apps/web/test/launch-preview.test.ts",
@@ -881,7 +881,7 @@
           "status": "pass",
           "testsPassed": 41,
           "testsFailed": 0,
-          "durationMs": 810
+          "durationMs": 634
         }
       ],
       "gaps": [
@@ -897,9 +897,9 @@
           "file": "apps/user-runtime/src/modules/operations/operations.service.test.ts",
           "kind": "vitest",
           "status": "pass",
-          "testsPassed": 26,
+          "testsPassed": 28,
           "testsFailed": 0,
-          "durationMs": 10016
+          "durationMs": 8862
         },
         {
           "file": "apps/user-runtime/src/transport/local-api/s13-operations-api.test.ts",
@@ -907,7 +907,7 @@
           "status": "pass",
           "testsPassed": 13,
           "testsFailed": 0,
-          "durationMs": 8260
+          "durationMs": 5345
         },
         {
           "file": "apps/user-runtime/src/modules/credits/credit-aggregation.test.ts",
@@ -915,7 +915,7 @@
           "status": "pass",
           "testsPassed": 4,
           "testsFailed": 0,
-          "durationMs": 4439
+          "durationMs": 3663
         }
       ],
       "gaps": [
@@ -933,7 +933,7 @@
           "status": "pass",
           "testsPassed": 14,
           "testsFailed": 0,
-          "durationMs": 3495
+          "durationMs": 3915
         },
         {
           "file": "apps/user-runtime/src/modules/workers/task-worker-supervisor.service.test.ts",
@@ -941,7 +941,7 @@
           "status": "pass",
           "testsPassed": 20,
           "testsFailed": 0,
-          "durationMs": 17726
+          "durationMs": 15450
         },
         {
           "file": "apps/user-runtime/src/modules/recovery/s31-restart-matrix.test.ts",
@@ -949,7 +949,7 @@
           "status": "pass",
           "testsPassed": 8,
           "testsFailed": 0,
-          "durationMs": 7889
+          "durationMs": 9037
         }
       ],
       "gaps": [
@@ -968,7 +968,7 @@
           "status": "pass",
           "testsPassed": 6,
           "testsFailed": 0,
-          "durationMs": 2757
+          "durationMs": 1851
         },
         {
           "file": "apps/user-runtime/src/modules/tools/tool-executor.service.test.ts",
@@ -976,7 +976,7 @@
           "status": "pass",
           "testsPassed": 14,
           "testsFailed": 0,
-          "durationMs": 4322
+          "durationMs": 3780
         },
         {
           "file": "apps/user-runtime/src/modules/tools/tool-executor-cancellation.test.ts",
@@ -984,7 +984,7 @@
           "status": "pass",
           "testsPassed": 3,
           "testsFailed": 0,
-          "durationMs": 896
+          "durationMs": 1299
         }
       ],
       "gaps": [
@@ -1002,7 +1002,7 @@
           "status": "pass",
           "testsPassed": 4,
           "testsFailed": 0,
-          "durationMs": 3085
+          "durationMs": 2353
         },
         {
           "file": "apps/user-runtime/src/modules/memory/memory-controls.test.ts",
@@ -1010,7 +1010,7 @@
           "status": "pass",
           "testsPassed": 5,
           "testsFailed": 0,
-          "durationMs": 2472
+          "durationMs": 2909
         },
         {
           "file": "apps/user-runtime/src/modules/memory/memory-secrets.test.ts",
@@ -1018,7 +1018,7 @@
           "status": "pass",
           "testsPassed": 12,
           "testsFailed": 0,
-          "durationMs": 5080
+          "durationMs": 5090
         }
       ],
       "gaps": [

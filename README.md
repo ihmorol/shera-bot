@@ -90,7 +90,7 @@ pnpm mockup:test        # the mockup's regression suite
 
 Integration tests start a real PostgreSQL cluster. Point `SHERA_PG_BIN` at local PostgreSQL 16 binaries first (on Ubuntu: `SHERA_PG_BIN=/usr/lib/postgresql/16/bin`). Live-provider tests are opt-in and never run by default (G7).
 
-The hardening-round evidence (2026-11-11) pins the full suite at 2564 tests in 250 files, with boundary guards, typecheck, and build green. The acceptance gate is separate:
+The hardening-sweep evidence (2026-11-18, after PRs #90/#91) pins the full suite at 2576 tests in 251 files, with lint, boundary guards, typecheck, and build green. The acceptance gate is separate:
 
 ```bash
 pnpm exec playwright install          # once: chromium, firefox, webkit binaries
@@ -99,9 +99,9 @@ pnpm acceptance                       # the 27-row browser + HTTP matrix (report
 
 ## Current status
 
-The 35-slice build plan is COMPLETE (S01–S35, all merged; the map and the per-slice evidence pointers live in [`docs/BUILD_MAP.md`](docs/BUILD_MAP.md)). Final verification 2026-11-11: full suite 2564/2564 green in 250 files, acceptance GREEN on main (0 partial).
+The 35-slice build plan is COMPLETE (S01–S35, all merged; the map and the per-slice evidence pointers live in [`docs/BUILD_MAP.md`](docs/BUILD_MAP.md)). Final verification 2026-11-18: full suite 2574/2576 green in 251 files (the 2 failures under full-suite load are the documented E27-era stall-window family — 26/26 and 42/42 solo green immediately after, windows never widened), acceptance 27/27 GREEN on main (0 partial).
 
-What remains is operational, not construction: the owner's acceptance verdicts (the S34 ledger), the live VM deployment per [`docs/s35-deploy-runbook.md`](docs/s35-deploy-runbook.md), the host-side verification of issues [#83](https://github.com/ihmorol/shera-bot/issues/83)/[#84](https://github.com/ihmorol/shera-bot/issues/84) on the deployment host, and the CI environment fix ([#78](https://github.com/ihmorol/shera-bot/issues/78)). Not yet validated against real services: Google OAuth sign-in and live model providers — [`docs/TRACEABILITY.md`](docs/TRACEABILITY.md) keeps the standing list with evidence.
+What remains is operational, not construction: the owner's acceptance verdicts (the S34 ledger — the slice issues close on the engineering evidence while the verdict column stays `open` by its recorded rule), the live VM deployment per [`docs/s35-deploy-runbook.md`](docs/s35-deploy-runbook.md) (the deployment-host residuals of the closed #83/#84 live there), and the CI environment fix ([#78](https://github.com/ihmorol/shera-bot/issues/78) — the exact patch sits on local branch `ci-pg16-binaries`, needing the owner's workflow-scope token). Not yet validated against real services: Google OAuth sign-in and live model providers — [`docs/TRACEABILITY.md`](docs/TRACEABILITY.md) keeps the standing list with evidence.
 
 ## Documentation
 

@@ -23,7 +23,7 @@ function stubFetch(): string[] {
   const urls: string[] = [];
   vi.stubGlobal(
     "fetch",
-    vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
+    vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
       urls.push(url);
       const body = url.endsWith("/edit")

@@ -1,6 +1,11 @@
 import { afterAll, describe, expect, it } from "vitest";
 
-import { RuntimeSocket, RuntimeSocketError, buildRequestFrame, parseSocketFrame } from "../lib/ws-socket";
+import {
+  RuntimeSocket,
+  RuntimeSocketError,
+  buildRequestFrame,
+  parseSocketFrame,
+} from "../lib/ws-socket";
 import { startFakeRuntimeWs, type FakeRuntimeWs } from "./helpers/fake-runtime-ws";
 
 /**

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { proxyToControlPlane, proxyToLocalApi } from "../lib/server/proxies";
+import * as runtimeProxyRoute from "../app/api/runtime/[...path]/route";
 
 /**
  * The web server-side proxies (S09 chunk 1) as their own module contract: the
@@ -1166,5 +1167,43 @@ describe("runtime proxy — S28 schedules surface (allowlist additions + actor b
 
     expect(response.status).toBe(404);
     expect(calls).toHaveLength(0);
+  });
+});
+
+describe("runtime proxy route — Next method dispatch", () => {
+  // The proxy + contracts allowlist own PUT (/v1/workspace/files, the D6
+  // editor seam) and DELETE (/v1/workspace/leases/:id), but Next only
+  // dispatches the methods the route.ts module actually exports — a missing
+  // export answers 405 before proxyToLocalApi ever runs. The proxies tests
+  // above call proxyToLocalApi directly, so they cannot catch a dropped
+  // export; this block pins the route module's method surface.
+  it("exports handlers for every method the proxy contract serves", () => {
+    expect(typeof runtimeProxyRoute.GET).toBe("function");
+    expect(typeof runtimeProxyRoute.POST).toBe("function");
+    expect(typeof runtimeProxyRoute.PUT).toBe("function");
+    expect(typeof runtimeProxyRoute.DELETE).toBe("function");
+  });
+
+  it("dispatches the D6 editor seam's PUT end-to-end through the route handler", async () => {
+    process.env["CONTROL_PLANE_URL"] = CONTROL_BASE;
+    const { calls } = stubFetch(() => Response.json({ ok: true }));
+
+    const request = new Request("http://web.test/api/runtime/v1/workspace/files", {
+      method: "PUT",
+      body: JSON.stringify({
+        workspace_id: "ws_1",
+        path: "workspace://notes.md",
+        actor: { type: "user", id: "google-account-1" },
+        content: "# rewritten",
+      }),
+      headers: { "content-type": "application/json" },
+    });
+    const response = await runtimeProxyRoute.PUT!(request, {} as never);
+
+    expect(response.status).toBe(200);
+    const forwarded = calls.at(-1)!;
+    expect(String(forwarded.input)).toBe(`${CONTROL_BASE}/api/runtime/local/v1/workspace/files`);
+    expect(forwarded.init?.method).toBe("PUT");
+    expect(JSON.parse(String(forwarded.init?.body))["content"]).toBe("# rewritten");
   });
 });

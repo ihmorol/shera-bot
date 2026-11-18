@@ -38,7 +38,6 @@ import { join } from "node:path";
 
 import type { ArtifactsRepository } from "../../adapters/sqlite/artifacts-repository.ts";
 import {
-  probeCgroupBaseDir,
   type SandboxExecutionHandle,
   type SandboxSpawnRequest,
 } from "../../adapters/process/execution-process-spawn.ts";
@@ -596,12 +595,6 @@ export function makeTerminalExecutionBinding(deps: ExecutionToolDeps): ToolBindi
     },
   };
 }
-
-/**
- * The composition's cgroup-base probe (re-exported so the composition stays
- * in the transport layer without importing the adapter's internals).
- */
-export const probeExecutionCgroupBase = probeCgroupBaseDir;
 
 /** The workspace scope join helper for composition-provided roots. */
 export function executionWorkspaceRoot(dataDir: string, workspaceId: string): string {

@@ -67,14 +67,3 @@ export class ResearchToolError extends ToolBindingError {
     this.kind = shape.kind;
   }
 }
-
-/** The codes the research family adds to the executor's binding vocabulary. */
-export const RESEARCH_BINDING_CODES: readonly ToolBindingFailureCode[] = Object.freeze([
-  "TRANSIENT_NETWORK",
-  "TOOL_RESPONSE_TOO_LARGE",
-  "RESEARCH_INPUT_INVALID",
-  "RESEARCH_RESPONSE_INVALID",
-  "RESEARCH_SOURCE_NOT_FOUND",
-  "RESEARCH_SOURCE_UNREADABLE",
-  "RESEARCH_PROVIDER_UNAVAILABLE",
-]);

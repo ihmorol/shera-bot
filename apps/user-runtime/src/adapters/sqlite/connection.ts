@@ -157,21 +157,3 @@ export function verifySnapshotIntegrity(path: string): SnapshotIntegrityResult {
   }
 }
 
-/**
- * The restore-side companion (E11 restore step 3, E17's recorded
- * implication): a database COPY is produced without WAL journal mode (the
- * recorded measurement — the copy opens in delete journal mode), so a
- * restored database re-executes the required pragmas. Returns the journal
- * mode the file now runs so the caller can ASSERT the restored state.
- */
-export function reexecuteWalMode(path: string): string {
-  const db = new DatabaseSync(path);
-  try {
-    db.exec("PRAGMA foreign_keys = ON");
-    const row = db.prepare("PRAGMA journal_mode = WAL").get() as Record<string, unknown>;
-    const mode = String(Object.values(row)[0]);
-    return mode;
-  } finally {
-    db.close();
-  }
-}

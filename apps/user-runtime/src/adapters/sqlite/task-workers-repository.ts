@@ -19,13 +19,6 @@ import type { SqliteTransactions } from "./transactions.ts";
 /** The task-state lifecycle of one worker incarnation (D32 layer 3). */
 export type TaskWorkerState = "starting" | "running" | "stalled" | "exited" | "killed";
 
-/** Worker states that still describe a live (or possibly-live) process. */
-export const LIVE_TASK_WORKER_STATES: readonly TaskWorkerState[] = [
-  "starting",
-  "running",
-  "stalled",
-];
-
 export interface TaskWorkerRow {
   workspace_id: string;
   run_id: string;

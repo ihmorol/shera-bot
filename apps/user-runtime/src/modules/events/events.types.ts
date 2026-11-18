@@ -13,9 +13,6 @@ import {
   type EventType as ContractEventType,
 } from "@shera-bot/contracts";
 
-/** Streams: the aggregate instance an event belongs to (per-stream sequences). */
-export const ConversationStreamPrefix = "conversation" as const;
-
 export const ConversationCreatedPayload = z.strictObject({
   conversation_id: z.string().min(1),
   workspace_id: z.string().min(1),

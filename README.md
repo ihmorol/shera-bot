@@ -39,7 +39,8 @@ pnpm and Turborepo monorepo. All TypeScript, ESM.
 | `packages/contracts` | Zod schemas. The source of truth for every API shape. |
 | `packages/agent-pack-sdk` | Pack manifest schema, loader, and SHA-256 integrity checks. |
 | `packages/clients` | API clients generated from the contracts (`pnpm gen:clients`). |
-| `packages/pi-protocol`, `packages/provider-contracts`, `packages/observability` | Reserved packages. Still empty; later slices fill them. |
+| `packages/pi-protocol` | The versioned JSONL protocol frames between the runtime and supervised child processes, plus the fake test doubles. Filled in S12. |
+| `packages/provider-contracts`, `packages/observability` | Reserved packages. Still empty; later slices fill them. |
 | `packages/test-kit` | Shared test helpers. |
 | `agent-packs/` | Versioned pack content. `student/v1` is the pinned pack. |
 | `tests/` | Cross-cutting tiers: contract, integration, e2e, recovery, security, benchmark. |
@@ -89,7 +90,7 @@ pnpm mockup:test        # the mockup's regression suite
 
 Integration tests start a real PostgreSQL cluster. Point `SHERA_PG_BIN` at local PostgreSQL 16 binaries first (on Ubuntu: `SHERA_PG_BIN=/usr/lib/postgresql/16/bin`). Live-provider tests are opt-in and never run by default (G7).
 
-The E48 record pins the full suite at 2533 tests in 236 files, with boundary guards, typecheck, and build green. The acceptance gate is separate:
+The hardening-round evidence (2026-11-11) pins the full suite at 2564 tests in 250 files, with boundary guards, typecheck, and build green. The acceptance gate is separate:
 
 ```bash
 pnpm exec playwright install          # once: chromium, firefox, webkit binaries
@@ -98,7 +99,7 @@ pnpm acceptance                       # the 27-row browser + HTTP matrix (report
 
 ## Current status
 
-The 35-slice build plan is COMPLETE (S01–S35, all merged; the map and the per-slice evidence pointers live in [`docs/BUILD_MAP.md`](docs/BUILD_MAP.md)). Final verification 2026-11-10: full suite 2533/2533 green, acceptance GREEN on main.
+The 35-slice build plan is COMPLETE (S01–S35, all merged; the map and the per-slice evidence pointers live in [`docs/BUILD_MAP.md`](docs/BUILD_MAP.md)). Final verification 2026-11-11: full suite 2564/2564 green in 250 files, acceptance GREEN on main (0 partial).
 
 What remains is operational, not construction: the owner's acceptance verdicts (the S34 ledger), the live VM deployment per [`docs/s35-deploy-runbook.md`](docs/s35-deploy-runbook.md), the host-side verification of issues [#83](https://github.com/ihmorol/shera-bot/issues/83)/[#84](https://github.com/ihmorol/shera-bot/issues/84) on the deployment host, and the CI environment fix ([#78](https://github.com/ihmorol/shera-bot/issues/78)). Not yet validated against real services: Google OAuth sign-in and live model providers — [`docs/TRACEABILITY.md`](docs/TRACEABILITY.md) keeps the standing list with evidence.
 

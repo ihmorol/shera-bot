@@ -54,8 +54,8 @@ const PROCESS_EXCEPTIONS = new Set([
   // The S16 fake task worker test double: same rationale as the fake Pi —
   // worker supervision suites must exercise true heartbeat silence, crash
   // exit codes and the SIGTERM→SIGKILL escalation against live child
-  // processes (D32 layer 3, E8). The production task-worker spawn seam will
-  // is the modules/workers/ worker-process-spawn adapter (chunk 3 shipped it
+  // processes (D32 layer 3, E8). The production task-worker spawn seam is
+  // the modules/workers/ worker-process-spawn adapter (chunk 3 shipped it
   // as the named production exception below), and only the factory spawns;
   // the child script itself spawns nothing.
   "apps/user-runtime/src/modules/workers/fake-task-worker.ts",

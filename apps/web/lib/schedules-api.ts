@@ -100,7 +100,7 @@ export async function editTrigger(
   body: EditTriggerBody,
 ): Promise<{ next_occurrence_at: string | null }> {
   return requestRuntime(
-    `/api/runtime/v1/schedules/${triggerId}/edit`,
+    `/api/runtime/v1/schedules/${encodeURIComponent(triggerId)}/edit`,
     (payload) => EditResponse.parse(payload),
     {
       method: "POST",
@@ -119,7 +119,7 @@ export async function pauseTrigger(
   triggerId: string,
 ): Promise<{ trigger_id: string; state: "active" | "paused" }> {
   return requestRuntime(
-    `/api/runtime/v1/schedules/${triggerId}/pause`,
+    `/api/runtime/v1/schedules/${encodeURIComponent(triggerId)}/pause`,
     (payload) => MutateResponse.parse(payload),
     { method: "POST", body: JSON.stringify({ workspace_id: workspaceId, actor: TRIGGER_ACTOR }) },
   ).then((parsed) => ({ trigger_id: parsed.trigger_id, state: parsed.state }));
@@ -130,7 +130,7 @@ export async function resumeTrigger(
   triggerId: string,
 ): Promise<{ trigger_id: string; state: "active" | "paused" }> {
   return requestRuntime(
-    `/api/runtime/v1/schedules/${triggerId}/resume`,
+    `/api/runtime/v1/schedules/${encodeURIComponent(triggerId)}/resume`,
     (payload) => MutateResponse.parse(payload),
     { method: "POST", body: JSON.stringify({ workspace_id: workspaceId, actor: TRIGGER_ACTOR }) },
   ).then((parsed) => ({ trigger_id: parsed.trigger_id, state: parsed.state }));
@@ -142,7 +142,7 @@ export async function fetchFirings(
 ): Promise<TriggerFiringView[]> {
   const query = new URLSearchParams({ workspace_id: workspaceId });
   return requestRuntime(
-    `/api/runtime/v1/schedules/${triggerId}/firings?${query.toString()}`,
+    `/api/runtime/v1/schedules/${encodeURIComponent(triggerId)}/firings?${query.toString()}`,
     (payload) => z.array(FiringView).parse(payload),
   );
 }

@@ -527,6 +527,40 @@ describe("archive extraction: size and count caps", () => {
     expect(existsSync(join(dest, "out"))).toBe(false);
   });
 
+  it("refuses a deflate entry whose header LIES small while the payload inflates over the cap (the inflater rides the per-entry cap)", async () => {
+    const dest = makeTempDir("shera-s19-cap-lie-");
+    // The declared-size pre-check can only refuse an HONEST header: a lying
+    // one declares a size UNDER the cap while the deflate payload inflates
+    // far above it. The inflater itself must carry the cap (maxOutputLength)
+    // so the over-cap payload never materializes — the zip twin of the
+    // tar.gz mid-stream guard above. Without it, inflateRawSync spent the
+    // full inflated memory before the post-hoc length check refused.
+    const bomb = writeStoredZip(
+      [
+        {
+          name: "lie.txt",
+          data: Buffer.alloc(64 * 1024 * 1024, 48),
+          declaredUncompressedSize: 64,
+        },
+      ],
+      8,
+    );
+    // The lie compresses well: the archive itself stays small (the deflate
+    // of 64 MiB of one byte) while the inflated payload is 64 MiB against
+    // the 1 KiB per-entry cap. The archive-file cap stays generous so the
+    // FILE never trips before the INFLATED payload does.
+    expect(bomb.length).toBeLessThan(1024 * 1024);
+    const archive = join(dest, "lie.zip");
+    writeFileSync(archive, bomb);
+    await expect(
+      extractArchiveInto(archive, join(dest, "out"), {
+        ...tightLimits,
+        maxArchiveBytes: 1024 * 1024,
+      }),
+    ).rejects.toThrow(/decompresses above the per-entry cap/);
+    expect(existsSync(join(dest, "out"))).toBe(false);
+  });
+
   it("refuses a tar.gz whose decompressed stream exceeds the cap mid-stream (gzip bomb guard)", async () => {
     const dest = makeTempDir("shera-s19-cap-gzip-");
     // A small compressed file whose INFLATED stream is far over the total cap

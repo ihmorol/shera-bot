@@ -156,4 +156,3 @@ export function verifySnapshotIntegrity(path: string): SnapshotIntegrityResult {
     db.close();
   }
 }
-

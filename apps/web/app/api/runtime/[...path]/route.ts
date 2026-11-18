@@ -25,4 +25,4 @@ async function handle(request: Request): Promise<Response> {
   return proxyToLocalApi(request, upstreamPath);
 }
 
-export { handle as GET, handle as POST };
+export { handle as GET, handle as POST, handle as PUT, handle as DELETE };

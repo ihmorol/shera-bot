@@ -1198,7 +1198,7 @@ describe("runtime proxy route — Next method dispatch", () => {
       }),
       headers: { "content-type": "application/json" },
     });
-    const response = await runtimeProxyRoute.PUT!(request, {} as never);
+    const response = await runtimeProxyRoute.PUT!(request);
 
     expect(response.status).toBe(200);
     const forwarded = calls.at(-1)!;

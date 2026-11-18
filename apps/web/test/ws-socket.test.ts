@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it } from "vitest";
 
-import { RuntimeSocket, buildRequestFrame, parseSocketFrame } from "../lib/ws-socket";
+import { RuntimeSocket, RuntimeSocketError, buildRequestFrame, parseSocketFrame } from "../lib/ws-socket";
 import { startFakeRuntimeWs, type FakeRuntimeWs } from "./helpers/fake-runtime-ws";
 
 /**
@@ -40,6 +40,15 @@ describe("socket frame codec", () => {
       payload: { a: 1 },
     });
     expect(parseSocketFrame("??")).toEqual({ kind: "unknown" });
+  });
+
+  it("returns unknown (never a throw) for frames carrying malformed JSON", () => {
+    // A truncated / corrupt ack or event frame is junk on the wire — the
+    // codec's discriminated result must absorb it, not throw into the socket's
+    // message handler.
+    expect(parseSocketFrame(`43x{"broken`)).toEqual({ kind: "unknown" });
+    expect(parseSocketFrame(`42["stream.event"`)).toEqual({ kind: "unknown" });
+    expect(parseSocketFrame(`42notjson`)).toEqual({ kind: "unknown" });
   });
 
   it("builds acked request frames", () => {
@@ -89,6 +98,30 @@ describe("RuntimeSocket against the fake runtime endpoint", () => {
     });
     server.closeClient();
     await closed;
+    socket.close();
+  });
+
+  it("rejects pending requests when the socket closes before the ack", async () => {
+    const server = await start();
+    const socket = await RuntimeSocket.open(server.url);
+    const pending = socket.request("stream.subscribe", { workspace_id: "ws_account-1" });
+    server.closeClient();
+    // The request() contract: "rejects if the socket closes before the
+    // answer" — the rejection must ride the CLOSE itself, not the 10s ack
+    // timeout, so the live-thread reconnect paths learn immediately. The
+    // race pins that: if the promise were still pending 2s after the close
+    // (waiting on the ack timeout), the close-driven rejection is broken.
+    const outcome = await Promise.race([
+      pending.then(
+        () => "resolved" as const,
+        () => "rejected" as const,
+      ),
+      new Promise<"still-pending">((resolve) => {
+        setTimeout(() => resolve("still-pending"), 2_000);
+      }),
+    ]);
+    expect(outcome).toBe("rejected");
+    await expect(pending).rejects.toBeInstanceOf(RuntimeSocketError);
     socket.close();
   });
 });

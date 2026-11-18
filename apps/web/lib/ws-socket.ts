@@ -48,7 +48,14 @@ export function parseSocketFrame(
   }
   const ackMatch = /^43(\d+)(.*)$/s.exec(data);
   if (ackMatch) {
-    const payload = JSON.parse(ackMatch[2] ?? "[]");
+    let payload: unknown;
+    try {
+      payload = JSON.parse(ackMatch[2] ?? "[]");
+    } catch {
+      // A corrupt frame is junk on the wire, not an exception into the
+      // socket's message handler — the discriminated result absorbs it.
+      return { kind: "unknown" };
+    }
     return {
       kind: "ack",
       id: Number(ackMatch[1]),
@@ -57,7 +64,12 @@ export function parseSocketFrame(
   }
   const eventMatch = /^42(\d+)?(.*)$/s.exec(data);
   if (eventMatch) {
-    const parsed = JSON.parse(eventMatch[2] ?? "[]");
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(eventMatch[2] ?? "[]");
+    } catch {
+      return { kind: "unknown" };
+    }
     if (Array.isArray(parsed) && typeof parsed[0] === "string") {
       return { kind: "event", name: parsed[0], payload: parsed[1] };
     }
@@ -79,13 +91,20 @@ interface RawWebSocket {
   onerror: ((event: unknown) => void) | null;
 }
 
+interface PendingAck {
+  resolve(value: unknown): void;
+  reject(error: unknown): void;
+  timer: ReturnType<typeof setTimeout>;
+}
+
 export class RuntimeSocket {
   private nextAckId = 1;
-  private readonly acks = new Map<number, (value: unknown) => void>();
+  private readonly acks = new Map<number, PendingAck>();
   private readonly frameHandlers = new Set<SocketFrameHandler>();
   private readonly closeHandlers = new Set<() => void>();
   private readonly ws: RawWebSocket;
   private closedByUs = false;
+  private dead = false;
 
   private constructor(ws: RawWebSocket) {
     this.ws = ws;
@@ -99,10 +118,11 @@ export class RuntimeSocket {
           ws.send("3");
           return;
         case "ack": {
-          const resolve = this.acks.get(frame.id);
-          if (resolve) {
+          const pending = this.acks.get(frame.id);
+          if (pending) {
             this.acks.delete(frame.id);
-            resolve(frame.payload);
+            clearTimeout(pending.timer);
+            pending.resolve(frame.payload);
           }
           return;
         }
@@ -116,10 +136,27 @@ export class RuntimeSocket {
       }
     };
     ws.onclose = () => {
-      for (const handler of this.closeHandlers) {
-        handler();
-      }
+      this.handleWsClose();
     };
+  }
+
+  /**
+   * The single close path: every pending request rejects immediately (the
+   * request() contract — "rejects if the socket closes before the answer"),
+   * then close subscribers hear it. Both the handshake-phase onclose (set by
+   * open()) and the post-handshake onclose land here.
+   */
+  private handleWsClose(): void {
+    this.dead = true;
+    const pending = [...this.acks.values()];
+    this.acks.clear();
+    for (const entry of pending) {
+      clearTimeout(entry.timer);
+      entry.reject(new RuntimeSocketError("The socket closed before the request was answered."));
+    }
+    for (const handler of this.closeHandlers) {
+      handler();
+    }
   }
 
   /** Connect and establish the Socket.IO namespace; resolves when ready. */
@@ -138,9 +175,7 @@ export class RuntimeSocket {
       ws.onerror = (event) => fail(event);
       ws.onclose = () => {
         fail(new RuntimeSocketError("The socket closed before the namespace was established."));
-        for (const handler of socket.closeHandlers) {
-          handler();
-        }
+        socket.handleWsClose();
       };
       ws.onopen = () => {
         // The engine.io OPEN packet arrives as a message; the namespace
@@ -169,27 +204,33 @@ export class RuntimeSocket {
   /** One acked request; rejects if the socket closes before the answer. */
   request<T = unknown>(name: string, payload: unknown): Promise<T> {
     return new Promise<T>((resolve, reject) => {
-      if (this.closedByUs) {
+      if (this.closedByUs || this.dead) {
         reject(new RuntimeSocketError("The socket is closed."));
         return;
       }
       const id = this.nextAckId;
       this.nextAckId += 1;
-      const timeout = setTimeout(() => {
-        if (this.acks.has(id)) {
-          this.acks.delete(id);
-          reject(new RuntimeSocketError(`The ${name} request timed out.`));
-        }
-      }, 10_000);
-      this.acks.set(id, (value) => {
-        clearTimeout(timeout);
-        resolve(value as T);
-      });
+      const pending: PendingAck = {
+        resolve: (value) => {
+          clearTimeout(pending.timer);
+          resolve(value as T);
+        },
+        reject: (error) => {
+          clearTimeout(pending.timer);
+          reject(error instanceof Error ? error : new RuntimeSocketError(String(error)));
+        },
+        timer: setTimeout(() => {
+          if (this.acks.delete(id)) {
+            reject(new RuntimeSocketError(`The ${name} request timed out.`));
+          }
+        }, 10_000),
+      };
+      this.acks.set(id, pending);
       try {
         this.ws.send(buildRequestFrame(id, name, payload));
       } catch (error) {
-        clearTimeout(timeout);
         this.acks.delete(id);
+        clearTimeout(pending.timer);
         reject(error instanceof Error ? error : new RuntimeSocketError(String(error)));
       }
     });

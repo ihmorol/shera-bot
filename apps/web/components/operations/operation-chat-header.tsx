@@ -48,6 +48,31 @@ export function OperationDefinitionStrip({
 }
 
 /**
+ * A refused/failed create-run surfaces the runtime's fixed safe message as
+ * ONE muted line under the header (D52 wave B review fix): the earlier
+ * comment claimed "a typed refusal renders as safe copy" while useCreateRun
+ * had no onError wired — this is the now-real behavior. The surface sets
+ * the message from the mutation's onError (safeOperationMessage, the same
+ * pattern as cancelRun and the roster commands), clears it on a new
+ * attempt, and unmount clears it with the surface. Never raw internals
+ * (D23 rule 4/G3).
+ */
+export function OperationCreateRunError({ message }: { message: string | null }) {
+  if (message === null) {
+    return null;
+  }
+  return (
+    <p
+      role="alert"
+      data-testid="operation-create-error"
+      className="shrink-0 bg-surface px-4 pt-2 text-xs text-muted lg:px-6"
+    >
+      {message}
+    </p>
+  );
+}
+
+/**
  * The Operation chat header (UI_DESIGN §S4 + S14, D41): the title with the
  * ad-hoc identity — a small "Ad-hoc" tag for definition-less Operations, and
  * the auto-label name rendered muted/italic (a DERIVED label, never styled
@@ -63,8 +88,10 @@ export function OperationDefinitionStrip({
  * POST /v1/operations/:id/runs and OperationsService.createRun create a
  * CREATED-state run unconditionally once the Operation exists — so the
  * affordance is NOT client-disabled on a guessed rule (G2): the runtime
- * validates the create on submit and a typed refusal renders as safe copy.
- * The title reflects runtime authority, never "I will start".
+ * validates the create on submit, and a typed refusal renders as the
+ * parent's safe alert line under the header (OperationCreateRunError; the
+ * surface wires the mutation's onError). The title reflects runtime
+ * authority, never "I will start".
  */
 export function OperationChatHeader({
   name,

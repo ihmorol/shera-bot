@@ -17,6 +17,7 @@ import { OperationRunsPanel } from "../components/operations/operation-runs-pane
 import { OperationThreadView } from "../components/operations/operation-thread";
 import {
   OperationChatHeader,
+  OperationCreateRunError,
   OperationDefinitionStrip,
 } from "../components/operations/operation-chat-header";
 import {
@@ -724,6 +725,55 @@ describe("New run affordance (D52 wave B, E43 idea 8)", () => {
     // The demo gate and error states pass no onCreateRun — no dead control.
     const html = renderHeader();
     expect(html).not.toContain('aria-label="New run"');
+  });
+});
+
+describe("create-run refusal surfaces as safe copy (D52 wave B review fix)", () => {
+  it("renders the runtime's safe message as one muted alert line under the header", () => {
+    const html = render(
+      createElement(OperationCreateRunError, {
+        message: "The run request is not valid: a workspace_id is required.",
+      }),
+    );
+    expect(html).toContain('role="alert"');
+    expect(html).toContain("The run request is not valid: a workspace_id is required.");
+    // One muted line — never raw internals, never a takeover of the surface.
+    expect(html).toContain("text-muted");
+  });
+
+  it("renders nothing while no failure is recorded", () => {
+    expect(render(createElement(OperationCreateRunError, { message: null }))).toBe("");
+  });
+
+  it("the surface wires the mutation's onError to the safe line — the claim matches reality", () => {
+    // The reviewer found the first cut's claim FALSE: useCreateRun had no
+    // onError wired and createRun.error was consumed nowhere. These pins
+    // hold the wiring to its claim: the safe-message state exists, the
+    // mutation's onError feeds it through the same safe-message helper as
+    // cancelRun, a new attempt clears it, the line renders, and BOTH entry
+    // points (header affordance + runs panel) share the wired handler.
+    const source = readFileSync(
+      join(APP_DIR, "components", "operations", "operation-chat-surface.tsx"),
+      "utf8",
+    );
+    expect(source).toContain("createSafeError");
+    expect(source).toMatch(/setCreateSafeError\(\s*safeOperationMessage/);
+    expect(source).toMatch(/setCreateSafeError\(null\)/);
+    expect(source).toMatch(/<OperationCreateRunError/);
+    expect(source).toMatch(/message=\{createSafeError\}/);
+    expect(source.match(/onCreateRun=\{handleCreateRun\}/g)?.length).toBe(2);
+  });
+
+  it("the surface actually wires the header affordance to the create-run command", () => {
+    // Reviewer gap: deleting the two wiring lines used to pass the whole
+    // suite — the affordance was pinned at the header-component level, not
+    // at the surface's call site.
+    const source = readFileSync(
+      join(APP_DIR, "components", "operations", "operation-chat-surface.tsx"),
+      "utf8",
+    );
+    expect(source).toMatch(/<OperationChatHeader[\s\S]{0,800}?onCreateRun=\{/);
+    expect(source).toMatch(/<OperationChatHeader[\s\S]{0,800}?createPending=\{/);
   });
 });
 

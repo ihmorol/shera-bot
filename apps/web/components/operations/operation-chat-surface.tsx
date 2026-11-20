@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { NewOperationForm } from "@/components/operations/new-operation-form";
 import {
   OperationChatHeader,
+  OperationCreateRunError,
   OperationDefinitionStrip,
 } from "@/components/operations/operation-chat-header";
 import { OperationPackSummary } from "@/components/operations/operation-pack-summary";
@@ -184,6 +185,21 @@ function RuntimeOperationChat({
   const rosterCommand = useRosterCommand(workspaceId, operationId);
   const coordinatorCommand = useCoordinatorCommand(workspaceId, operationId);
   const createRun = useCreateRun(workspaceId, operationId);
+  // D52 wave B review fix: a refused/failed create-run surfaces the
+  // runtime's safe message as ONE muted alert line under the header — set
+  // from the mutation's onError (safeOperationMessage, the same pattern as
+  // cancelRun below), cleared on a new attempt, and cleared with the
+  // surface on unmount (component state). Both entry points (the header
+  // affordance and the runs panel) share this handler, so the refusal
+  // renders whichever button the user pressed.
+  const [createSafeError, setCreateSafeError] = useState<string | null>(null);
+  const handleCreateRun = () => {
+    setCreateSafeError(null);
+    createRun.mutate(undefined, {
+      onError: (error) =>
+        setCreateSafeError(safeOperationMessage(error, "The run could not be started.")),
+    });
+  };
   const sendMessage = useSendOperationMessage(workspaceId, operationId);
   // S22 (PRD §8, AC15): the runs panel's stop control — the idempotent
   // cancel command and the TRUE retry attempt counts (read from each run's
@@ -297,9 +313,11 @@ function RuntimeOperationChat({
         // D52 wave B (E43 idea 8): the "+ New run" affordance in the header.
         // No client-side admission guess (G2): the affordance stays enabled —
         // the runtime validates the create on submit (audit: the POST runs
-        // endpoint has no concurrent-run rule) — and the typed refusal
-        // renders as safe copy through the same hook the runs panel uses.
-        onCreateRun={() => createRun.mutate()}
+        // endpoint has no concurrent-run rule) — and a typed refusal renders
+        // as the safe alert line under the header: onError feeds
+        // createSafeError (OperationCreateRunError), cleared on a new
+        // attempt and with the surface on unmount.
+        onCreateRun={handleCreateRun}
         createPending={createRun.isPending}
         renameEditing={renameEditing}
         renameDraft={renameDraft}
@@ -328,6 +346,12 @@ function RuntimeOperationChat({
           });
         }}
       />
+
+      {/* D52 wave B review fix: a refused/failed create surfaces the runtime's
+          fixed safe message as ONE muted line under the header — the wired
+          reality behind the affordance's runtime-authority claim (D23 rule
+          4: never raw internals). */}
+      <OperationCreateRunError message={createSafeError} />
 
       {/* D52 wave B (E43 idea 2): the definition strip teaches the Pack →
           Operations → Agents hierarchy from the detail read model's own
@@ -472,7 +496,7 @@ function RuntimeOperationChat({
             safeErrorMessage={detail.safeErrorMessage}
             onRetry={detail.refetch}
             createPending={createRun.isPending}
-            onCreateRun={() => createRun.mutate()}
+            onCreateRun={handleCreateRun}
             gitLinkage={gitLinkage.linkage}
             retryAttempts={retryAttempts.data ?? undefined}
             recoveryTimelines={recoveryTimelines}

@@ -39,21 +39,29 @@ function stubStorage(): Map<string, string> {
 }
 
 const originalStorage = globalThis.localStorage;
-const originalWindow = globalThis.window;
+
+/**
+ * One window stub for the whole file — the module binds its storage handler
+ * ONCE for its lifetime, so the stub is a singleton and the captured handler
+ * persists across tests (exactly the production discipline).
+ */
+let capturedStorageHandler: ((event: { key: string | null }) => void) | undefined;
+const windowStub = {
+  addEventListener: vi.fn((type: string, handler: (event: { key: string | null }) => void) => {
+    if (type === "storage") capturedStorageHandler = handler;
+  }),
+  removeEventListener: vi.fn(),
+};
 
 beforeEach(() => {
   stubStorage();
+  vi.stubGlobal("window", windowStub);
   resetChatViewPrefsForTests();
 });
 
 afterEach(() => {
   globalThis.localStorage = originalStorage;
-  if (originalWindow === undefined) {
-    // @ts-expect-error -- restoring the node default (no window)
-    delete globalThis.window;
-  } else {
-    globalThis.window = originalWindow;
-  }
+  vi.unstubAllGlobals();
   resetChatViewPrefsForTests();
 });
 
@@ -67,9 +75,7 @@ describe("chat view preference keys (the persistence contract)", () => {
     const store = stubStorage();
     toggleChatPin("conversation_agent_researcher");
     setChatUnreadMark("conversation_agent_researcher", "unread");
-    expect(store.get("shera-chat-pins")).toBe(
-      JSON.stringify(["conversation_agent_researcher"]),
-    );
+    expect(store.get("shera-chat-pins")).toBe(JSON.stringify(["conversation_agent_researcher"]));
     expect(store.get("shera-chat-unread-marks")).toBe(
       JSON.stringify({ conversation_agent_researcher: "unread" }),
     );
@@ -160,31 +166,24 @@ describe("corrupted storage resilience", () => {
 
 describe("cross-tab sync (the storage event)", () => {
   it("one window listener serves the module lifetime", () => {
-    const addEventListener = vi.fn();
-    globalThis.window = { addEventListener, removeEventListener: vi.fn() } as unknown as Window;
+    expect(windowStub.addEventListener).not.toHaveBeenCalled();
     const first = subscribe(() => undefined);
     const second = subscribe(() => undefined);
     first();
     second();
-    expect(addEventListener).toHaveBeenCalledTimes(1);
-    expect(addEventListener.mock.calls[0]?.[0]).toBe("storage");
+    expect(windowStub.addEventListener).toHaveBeenCalledTimes(1);
+    expect(windowStub.addEventListener.mock.calls[0]?.[0]).toBe("storage");
   });
 
   it("a storage event for a pref key re-reads the other tab's write and notifies", () => {
-    let storageHandler: ((event: { key: string | null }) => void) | undefined;
-    globalThis.window = {
-      addEventListener: (type: string, handler: (event: { key: string | null }) => void) => {
-        if (type === "storage") storageHandler = handler;
-      },
-      removeEventListener: vi.fn(),
-    } as unknown as Window;
     const store = stubStorage();
     const seen: string[][] = [];
-    const unsubscribe = subscribe(() => seen.push(readChatPins()));
+    const unsubscribe = subscribe(() => seen.push([...readChatPins()]));
 
-    // Another tab pins a conversation and writes the key directly.
+    // Another tab pinned a conversation and wrote the key directly; the
+    // storage event fires in THIS document (captured module handler).
     store.set(CHAT_PINS_STORAGE_KEY, JSON.stringify(["conv-other-tab"]));
-    storageHandler?.({ key: CHAT_PINS_STORAGE_KEY });
+    capturedStorageHandler?.({ key: CHAT_PINS_STORAGE_KEY });
 
     expect(readChatPins()).toEqual(["conv-other-tab"]);
     expect(seen).toEqual([["conv-other-tab"]]);
@@ -192,16 +191,9 @@ describe("cross-tab sync (the storage event)", () => {
   });
 
   it("a storage event for an unrelated key does not notify", () => {
-    let storageHandler: ((event: { key: string | null }) => void) | undefined;
-    globalThis.window = {
-      addEventListener: (type: string, handler: (event: { key: string | null }) => void) => {
-        if (type === "storage") storageHandler = handler;
-      },
-      removeEventListener: vi.fn(),
-    } as unknown as Window;
     const seen: number[] = [];
     const unsubscribe = subscribe(() => seen.push(seen.length));
-    storageHandler?.({ key: "unrelated-key" });
+    capturedStorageHandler?.({ key: "unrelated-key" });
     expect(seen).toEqual([]);
     unsubscribe();
   });
@@ -223,33 +215,27 @@ describe("in-memory fallback (storage unavailable)", () => {
 });
 
 describe("the useChatViewPrefs hook", () => {
+  const Probe = () => {
+    const { pins, marks } = useChatViewPrefs();
+    // Plain, unescaped probe values (static markup escapes JSON quotes).
+    return createElement(
+      "span",
+      { "data-testid": "probe" },
+      `pins=${pins.join(",")};marks=${Object.entries(marks)
+        .map(([id, mark]) => `${id}:${mark}`)
+        .join(",")}`,
+    );
+  };
+
   it("renders the session choice as the static snapshot (suites opt in explicitly)", () => {
     setChatUnreadMark("conversation_agent_researcher", "unread");
     toggleChatPin("conversation_agent_researcher");
-    const Probe = () => {
-      const { pins, marks } = useChatViewPrefs();
-      return createElement(
-        "span",
-        { "data-testid": "probe" },
-        JSON.stringify({ pins, marks }),
-      );
-    };
-    const html = renderToStaticMarkup(createElement(Probe));
-    expect(html).toContain(
-      JSON.stringify({
-        pins: ["conversation_agent_researcher"],
-        marks: { conversation_agent_researcher: "unread" },
-      }),
+    expect(renderToStaticMarkup(createElement(Probe))).toContain(
+      "pins=conversation_agent_researcher;marks=conversation_agent_researcher:unread",
     );
   });
 
   it("a fresh session renders the empty defaults (first paint shows no invented state)", () => {
-    const Probe = () => {
-      const { pins, marks } = useChatViewPrefs();
-      return createElement("span", { "data-testid": "probe" }, JSON.stringify({ pins, marks }));
-    };
-    expect(renderToStaticMarkup(createElement(Probe))).toContain(
-      JSON.stringify({ pins: [], marks: {} }),
-    );
+    expect(renderToStaticMarkup(createElement(Probe))).toContain("pins=;marks=");
   });
 });

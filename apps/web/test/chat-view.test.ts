@@ -309,6 +309,14 @@ describe("composer honesty states (D52 wave B — audited placeholder priority)"
     expect(html).toContain('title="No provider is configured for this conversation yet."');
   });
 
+  it("the disabled-without-reason fallback still names the unavailable state (review gap pin)", () => {
+    // The reviewer named this branch untested: a disabled composer whose
+    // caller passed no reason falls back to the S09 unavailable copy.
+    expect(sendButtonTitle({ disabled: true, sending: false, hasDraft: true })).toBe(
+      "Sending is unavailable right now.",
+    );
+  });
+
   it("no invented approval-pending or queue/steer composer states (G2 — runtime audit)", () => {
     // AUDIT (2026-11-21): the runtime allows sends while an approval waits —
     // sendOperationMessage (apps/user-runtime

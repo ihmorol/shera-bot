@@ -6,7 +6,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { NewOperationForm } from "@/components/operations/new-operation-form";
-import { OperationChatHeader } from "@/components/operations/operation-chat-header";
+import {
+  OperationChatHeader,
+  OperationDefinitionStrip,
+} from "@/components/operations/operation-chat-header";
 import { OperationPackSummary } from "@/components/operations/operation-pack-summary";
 import { OperationRosterPanel } from "@/components/operations/operation-roster-panel";
 import { OperationRunsPanel } from "@/components/operations/operation-runs-panel";
@@ -81,6 +84,49 @@ export function OperationChatSurface({ operationId }: { operationId: string }) {
     return <ContainerGate>{null}</ContainerGate>;
   }
   return <RuntimeOperationChat workspaceId={readyWorkspaceId} operationId={operationId} />;
+}
+
+/**
+ * The roster's visibility predicate (D52 wave B render pin): simple mode
+ * defers to the two-way disclosure toggle; advanced mode renders the roster
+ * directly — no toggle state involved. Exported for the mode pins (the full
+ * hook-heavy composition cannot render real data in the static-markup
+ * harness, so the branch predicate is the pinned contract).
+ */
+export function rosterVisibleForMode(advanced: boolean, rosterOpenSimple: boolean): boolean {
+  return advanced || rosterOpenSimple;
+}
+
+/**
+ * Simple mode's ONE roster strip — a two-way toggle (open AND collapse, never
+ * a one-way door; foundation spec-review fix). aria-expanded pairs the state
+ * for screen readers; every state of the control is labelled.
+ */
+export function RosterDisclosureToggle({
+  open,
+  onToggle,
+}: {
+  open: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="shrink-0 border-b border-line bg-surface px-4 lg:px-6">
+      <div className="flex items-center justify-end py-2">
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted transition-colors hover:bg-surface-elevated hover:text-text"
+        >
+          {open ? "Hide roster" : "Manage roster"}
+          <ChevronDown
+            className={cn("size-3.5 transition-transform", open && "rotate-180")}
+            aria-hidden="true"
+          />
+        </button>
+      </div>
+    </div>
+  );
 }
 
 /** The §9 fixture Operation chats stay a labeled demo (§2.4 honesty, G4). */
@@ -159,7 +205,7 @@ function RuntimeOperationChat({
   // advanced mode keeps it always visible (UI_DESIGN §S4).
   const advanced = useAdvancedMode();
   const [rosterOpenSimple, setRosterOpenSimple] = useState(false);
-  const rosterVisible = advanced || rosterOpenSimple;
+  const rosterVisible = rosterVisibleForMode(advanced, rosterOpenSimple);
   // One idempotency key per draft: a retry of the SAME send reuses it (never a
   // duplicated turn); the key rotates only after a send settles successfully.
   const [draftKey, setDraftKey] = useState(() => newMessageDraftKey());
@@ -248,6 +294,13 @@ function RuntimeOperationChat({
         autoLabel={detail.detail?.auto_label ?? false}
         packLabel={packPinning}
         runCount={runs.length}
+        // D52 wave B (E43 idea 8): the "+ New run" affordance in the header.
+        // No client-side admission guess (G2): the affordance stays enabled —
+        // the runtime validates the create on submit (audit: the POST runs
+        // endpoint has no concurrent-run rule) — and the typed refusal
+        // renders as safe copy through the same hook the runs panel uses.
+        onCreateRun={() => createRun.mutate()}
+        createPending={createRun.isPending}
         renameEditing={renameEditing}
         renameDraft={renameDraft}
         renamePending={renameOperation.isPending}
@@ -276,6 +329,12 @@ function RuntimeOperationChat({
         }}
       />
 
+      {/* D52 wave B (E43 idea 2): the definition strip teaches the vocabulary
+          from the runtime's own run count (runs.length — the detail read
+          model's real data; zero renders the rule, never a fake count), in
+          BOTH interface modes. */}
+      <OperationDefinitionStrip runCount={runs.length} />
+
       {/* S14 (UI_DESIGN S6/F6): the collapsible roster + pack skills/connectors
           summary — connectors render the runtime's honest not-configured
           status (D38), never an invented connection. */}
@@ -290,25 +349,13 @@ function RuntimeOperationChat({
       />
 
       {/* Simple mode keeps ONE strip in both directions — open AND collapse —
-          so the roster panel is never a one-way door. aria-expanded pairs the
-          state for screen readers. */}
+          so the roster panel is never a one-way door (extracted as
+          RosterDisclosureToggle, D52 wave B render pin). */}
       {!advanced ? (
-        <div className="shrink-0 border-b border-line bg-surface px-4 lg:px-6">
-          <div className="flex items-center justify-end py-2">
-            <button
-              type="button"
-              onClick={() => setRosterOpenSimple(!rosterOpenSimple)}
-              aria-expanded={rosterVisible}
-              className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted transition-colors hover:bg-surface-elevated hover:text-text"
-            >
-              {rosterOpenSimple ? "Hide roster" : "Manage roster"}
-              <ChevronDown
-                className={cn("size-3.5 transition-transform", rosterOpenSimple && "rotate-180")}
-                aria-hidden="true"
-              />
-            </button>
-          </div>
-        </div>
+        <RosterDisclosureToggle
+          open={rosterOpenSimple}
+          onToggle={() => setRosterOpenSimple(!rosterOpenSimple)}
+        />
       ) : null}
 
       {rosterVisible ? (

@@ -1,8 +1,18 @@
 "use client";
 
-import { Layers, Loader2, Settings2 } from "lucide-react";
+import type { Agent } from "@shera-bot/contracts";
+import { Layers, Loader2, MoreHorizontal, Pin, Settings2 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type RefObject,
+} from "react";
+import { createPortal } from "react-dom";
 
 import { AgentRosterSection } from "@/components/shell/agent-roster";
 import { CreditsPill } from "@/components/shell/credits-pill";
@@ -12,16 +22,27 @@ import { AgentAvatar } from "@/components/chat/agent-avatar";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useAgentRoster } from "@/lib/agent-data";
+import {
+  setChatUnreadMark,
+  toggleChatPin,
+  useChatViewPrefs,
+  type ChatUnreadMark,
+} from "@/lib/chat-view-prefs";
 import { useContainerResolution } from "@/lib/container-connection";
 import {
+  agentById,
   entitySlug,
+  messagesForConversation,
   sessionPresenceFor,
   sidebarModel,
   type AttentionVariant,
+  type ChatMessage,
   type ConversationState,
+  type SessionPresence,
 } from "@/lib/fixtures";
 import { useAdvancedMode, setAdvancedMode } from "@/lib/interface-mode";
 import { useOperationsList } from "@/lib/operation-data";
+import { formatChatTimestamp, useRelativeNow } from "@/lib/relative-time";
 import { routes } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
@@ -184,6 +205,647 @@ export function mergeChatsByRecency<A extends { at: number }, O extends { at: nu
   return [...agentRows, ...operationRows].sort((a, b) => b.at - a.at);
 }
 
+/**
+ * One row of the SIMPLE merged Chats list (wave A chunk A1, D52). Both list
+ * paths (fixture demo + real workspace reads) build these and render them
+ * through {@link SimpleChatRows} so the two-line anatomy exists exactly once.
+ */
+export interface SimpleChatRow {
+  kind: "agent" | "operation";
+  key: string;
+  /**
+   * The row's stable identifier — the pin/copy key of the row menu (chunk
+   * A2). Demo rows carry the fixture conversation id; live rows carry the
+   * runtime record id the row actually holds (the roster payload has no
+   * conversation id — the client never invents one, G4).
+   */
+  conversationId: string;
+  /**
+   * What the menu's copy item is honest about (G4): demo rows copy a
+   * conversation id; live rows hold a runtime record id, so the item names
+   * the record kind instead of a conversation id the row does not have.
+   */
+  copyLabel?: "Copy conversation ID" | "Copy Agent id" | "Copy Operation id" | undefined;
+  href: string;
+  title: string;
+  /** Demo Agent rows carry the full fixture Agent (avatar + presence). */
+  agent?: Agent | null;
+  /** Live Agent rows carry identity-only fields (G4 — nothing fabricated). */
+  hue?: number;
+  glyph?: string;
+  presence?: SessionPresence | undefined;
+  /** Recency sort key; 0 when the record carries no stamp (renders none). */
+  at: number;
+  /** The activity preview line; null renders no line — the row stays quiet. */
+  preview: string | null;
+  /** Demo rows carry the derived §2.1 state; live rows fabricate no state. */
+  state?: ConversationState | undefined;
+  unreadCount?: number;
+  approvalCount?: number;
+  attention?: AttentionVariant | undefined;
+  autoLabel?: boolean;
+  isAdhoc?: boolean;
+}
+
+/**
+ * The read/unread overlay touches ONLY the unread dimension (G4/D26): a
+ * "read" mark suppresses the runtime's unread pill, but approval-required,
+ * failed, and running states always pass through untouched — a client view
+ * preference can never hide a runtime-driven attention state. Exported for
+ * the isolation-contract test.
+ */
+export function stateAfterReadOverlay(
+  mark: ChatUnreadMark | undefined,
+  state: ConversationState | undefined,
+): ConversationState | undefined {
+  if (mark === "read" && state === "unread") return "quiet";
+  return state;
+}
+
+/**
+ * Pin-first ordering (UI_DESIGN §3.4 amendment, D52 wave A): pinned rows
+ * lead the list; recency order survives within the pinned group and the
+ * rest. The input list is already recency-merged (mergeChatsByRecency) —
+ * this only stable-partitions it, never re-introduces attention-rank
+ * ordering (attention states render as markers, not sort keys). Exported
+ * for the order contract test.
+ */
+export function orderChatsPinFirst<T extends { conversationId: string }>(
+  rows: T[],
+  pinnedIds: readonly string[],
+): T[] {
+  if (pinnedIds.length === 0) return rows;
+  const pins = new Set(pinnedIds);
+  const pinned: T[] = [];
+  const rest: T[] = [];
+  for (const row of rows) {
+    (pins.has(row.conversationId) ? pinned : rest).push(row);
+  }
+  return [...pinned, ...rest];
+}
+
+/**
+ * The demo (fixture) preview line: the newest recorded message of the
+ * conversation, prefixed "You: " when the user sent it and attributed by
+ * Agent name inside an Operation chat. Conversations with no recorded
+ * messages preview nothing — the row stays quiet (G4). Demo data only: live
+ * rows render the runtime-derived preview verbatim and never derive one
+ * client-side.
+ */
+export function chatPreviewFromMessages(
+  messages: ChatMessage[],
+  conversationKind: "agent_direct" | "operation",
+): string | null {
+  const newest = messages[messages.length - 1];
+  if (!newest) return null;
+  if (newest.sender.kind === "user") return `You: ${newest.text}`;
+  if (conversationKind === "operation" && newest.sender.kind === "agent") {
+    const agent = agentById(newest.sender.agent_id);
+    return agent ? `${agent.display_name}: ${newest.text}` : newest.text;
+  }
+  return newest.text;
+}
+
+// ---------------------------------------------------------------------------
+// Wave A chunk A2 — the row context menu (E43 §3 contract, D52): pin,
+// read-state overlay, copy conversation id, and the kind-specific last
+// entry. There is NO delete/archive/rename in v1 — conversations persist
+// (PRD §4.2) and the runtime has no such chat-mutation commands, so menu
+// items that would need them are not invented (G2).
+// ---------------------------------------------------------------------------
+
+export type ChatRowMenuEntry =
+  | { kind: "separator" }
+  | {
+      kind: "item";
+      key: string;
+      label: string;
+      /** Navigation items push this route; action items fire onSelect. */
+      href?: string | undefined;
+      onSelect?: (() => void) | undefined;
+      disabled?: boolean | undefined;
+      /** The reason a disabled item cannot fire (title attr; never guessed). */
+      disabledReason?: string | undefined;
+      /** A hover hint — e.g. the local-only nature of the unread overlay. */
+      title?: string | undefined;
+    };
+
+/**
+ * The menu entries for one chat row, in the recorded order. Pure — the
+ * component wires the callbacks and the sheet renders the result.
+ */
+export function chatRowMenuItems(options: {
+  kind: "agent" | "operation";
+  conversationId: string;
+  /** What the copied value honestly is (G4): the row's record kind. */
+  copyLabel?: "Copy conversation ID" | "Copy Agent id" | "Copy Operation id" | undefined;
+  pinned: boolean;
+  mark: ChatUnreadMark | undefined;
+  runtimeUnread: boolean;
+  containerReady: boolean;
+  /** Agent rows: the settings-route slug (settings need the Agent identity). */
+  agentSlug?: string | undefined;
+  /** Operation rows: the operation chat route the "Open roster" item opens. */
+  operationHref?: string | undefined;
+  onTogglePin: () => void;
+  onSetMark: (mark: ChatUnreadMark) => void;
+  onCopy: () => void;
+}): ChatRowMenuEntry[] {
+  const separator: ChatRowMenuEntry = { kind: "separator" };
+  // The overlay wins over runtime state for this browser: an explicit
+  // "unread"/"read" mark decides, otherwise the runtime's own state.
+  const effectivelyUnread =
+    options.mark === "unread" ? true : options.mark === "read" ? false : options.runtimeUnread;
+  return [
+    {
+      kind: "item",
+      key: "pin",
+      label: options.pinned ? "Unpin" : "Pin",
+      onSelect: options.onTogglePin,
+    },
+    {
+      kind: "item",
+      key: "mark",
+      label: effectivelyUnread ? "Mark as read" : "Mark as unread",
+      onSelect: () => options.onSetMark(effectivelyUnread ? "read" : "unread"),
+      ...(effectivelyUnread ? {} : { title: "Marked unread here only" }),
+    },
+    separator,
+    {
+      kind: "item",
+      key: "copy",
+      label: options.copyLabel ?? "Copy conversation ID",
+      onSelect: options.onCopy,
+    },
+    separator,
+    options.kind === "agent"
+      ? {
+          kind: "item",
+          key: "settings",
+          label: "Agent settings",
+          href: routes.settings(`agents/${options.agentSlug ?? ""}`),
+          disabled: !options.containerReady,
+          disabledReason: "Settings need the workspace ready",
+        }
+      : {
+          kind: "item",
+          key: "roster",
+          label: "Open roster",
+          href: options.operationHref,
+          disabled: false,
+        },
+  ];
+}
+
+/**
+ * Viewport clamp for the portal sheet (E43 §3: 8px margins, never off-screen).
+ * Pure — tested directly.
+ */
+export function clampMenuPosition(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  viewportWidth: number,
+  viewportHeight: number,
+): { x: number; y: number } {
+  const margin = 8;
+  return {
+    x: Math.max(margin, Math.min(x, viewportWidth - width - margin)),
+    y: Math.max(margin, Math.min(y, viewportHeight - height - margin)),
+  };
+}
+
+/**
+ * Roving focus over the ENABLED menu items (E43 §3): ArrowDown/ArrowUp wrap,
+ * Home/End jump, anything else is not a focus move. `current` is the index
+ * within the enabled list (-1 when nothing is focused yet). Pure — tested
+ * directly.
+ */
+export function nextMenuFocusIndex(
+  current: number,
+  key: string,
+  enabledCount: number,
+): number | null {
+  if (enabledCount === 0) return null;
+  // Nothing focused yet: ArrowDown enters at the first item, ArrowUp at the
+  // last — the wrap formula below only holds for valid indices.
+  if (current < 0) {
+    if (key === "ArrowDown") return 0;
+    if (key === "ArrowUp") return enabledCount - 1;
+    return null;
+  }
+  switch (key) {
+    case "ArrowDown":
+      return (current + 1) % enabledCount;
+    case "ArrowUp":
+      return (current - 1 + enabledCount) % enabledCount;
+    case "Home":
+      return 0;
+    case "End":
+      return enabledCount - 1;
+    default:
+      return null;
+  }
+}
+
+const MENU_WIDTH = 224;
+const MENU_MARGIN_PX = 8;
+
+/**
+ * The portal sheet (E43 §3 recipe): rounded surface on the elevated token,
+ * 30px min-height rows, 14px text, hairline separators, disabled =
+ * opacity-40 with the reason in the title. Escape closes, roving arrow keys
+ * move focus, viewport-clamped via the caller's position. Exported for the
+ * a11y contract test.
+ */
+export function ChatRowMenuSheet({
+  entries,
+  position,
+  onDismiss,
+  menuRef,
+  copied,
+}: {
+  entries: ChatRowMenuEntry[];
+  position?: { x: number; y: number } | undefined;
+  onDismiss: () => void;
+  /** Ref passthrough so the opener can scope focus + outside-click logic. */
+  menuRef?: RefObject<HTMLDivElement | null> | undefined;
+  /** Copy feedback: the copy item's title flips to "Copied" briefly. */
+  copied?: boolean | undefined;
+}) {
+  const router = useRouter();
+  const internalRef = useRef<HTMLDivElement>(null);
+  const sheetRef = menuRef ?? internalRef;
+
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.key === "Escape") {
+      event.stopPropagation();
+      onDismiss();
+      return;
+    }
+    const enabled = Array.from(
+      sheetRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)') ??
+        [],
+    );
+    const current = enabled.findIndex((item) => item === document.activeElement);
+    const next = nextMenuFocusIndex(current, event.key, enabled.length);
+    if (next === null) return;
+    event.preventDefault();
+    enabled[next]?.focus();
+  };
+
+  return (
+    <div
+      ref={sheetRef}
+      role="menu"
+      data-testid="chat-row-menu"
+      tabIndex={-1}
+      onKeyDown={onKeyDown}
+      className="z-50 w-56 rounded-xl border border-line bg-surface-elevated p-1.5 shadow-lg shadow-black/40"
+      style={position ? { position: "fixed", left: position.x, top: position.y } : undefined}
+    >
+      {entries.map((entry, index) =>
+        entry.kind === "separator" ? (
+          <div key={`sep-${index}`} role="separator" className="mx-1.5 my-1 h-px bg-line" />
+        ) : (
+          <button
+            key={entry.key}
+            type="button"
+            role="menuitem"
+            disabled={entry.disabled}
+            title={
+              entry.disabled
+                ? entry.disabledReason
+                : entry.key === "copy" && copied
+                  ? "Copied"
+                  : entry.title
+            }
+            onClick={() => {
+              if (entry.disabled) return;
+              if (entry.href) router.push(entry.href);
+              entry.onSelect?.();
+              onDismiss();
+            }}
+            className={cn(
+              "flex min-h-[30px] w-full items-center rounded-md px-3 text-left text-sm text-text transition-colors",
+              entry.disabled ? "cursor-default opacity-40" : "hover:bg-surface",
+            )}
+          >
+            <span className="min-w-0 flex-1 truncate">{entry.label}</span>
+          </button>
+        ),
+      )}
+    </div>
+  );
+}
+
+const COPY_FEEDBACK_MS = 1500;
+/** Conservative sheet-height estimate for the viewport clamp (items + padding). */
+const MENU_ESTIMATED_HEIGHT = 168;
+
+/**
+ * One SIMPLE row (wave A): the two-line anatomy inside the row link plus the
+ * menu trigger as a sibling control. The row owns the menu's local state —
+ * right-click and Shift+F10 open the sheet at the pointer, the trigger
+ * anchors it to its own box; Escape/outside-mousedown close it; focus
+ * restores to the opener. The pin glyph, the read/unread overlay, and the
+ * menu all read the same client view store — nothing here writes to the
+ * runtime (G2/G4).
+ */
+function SimpleChatRowItem({
+  row,
+  active,
+  timestamp,
+  containerReady,
+  onNavigate,
+}: {
+  row: SimpleChatRow;
+  active: boolean;
+  timestamp: string | null;
+  containerReady: boolean;
+  onNavigate?: (() => void) | undefined;
+}) {
+  const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState<{ x: number; y: number } | undefined>(undefined);
+  const [copied, setCopied] = useState(false);
+  const openerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const { pins, marks } = useChatViewPrefs();
+  const pinned = pins.includes(row.conversationId);
+  const mark = marks[row.conversationId];
+  // The overlay wins for this browser only: "read" clears the runtime pill,
+  // "unread" forces the local dot (no fake count — G4).
+  const stateAfterOverlay = stateAfterReadOverlay(mark, row.state);
+
+  const close = useCallback(() => {
+    setOpen(false);
+    // Focus returns to the opener (E43 §3 focus discipline).
+    openerRef.current?.focus();
+  }, []);
+
+  const openAt = useCallback((x: number, y: number) => {
+    if (typeof window !== "undefined") {
+      setPosition(
+        clampMenuPosition(
+          x,
+          y,
+          MENU_WIDTH,
+          MENU_ESTIMATED_HEIGHT,
+          window.innerWidth,
+          window.innerHeight,
+        ),
+      );
+    } else {
+      setPosition({ x: MENU_MARGIN_PX, y: MENU_MARGIN_PX });
+    }
+    setCopied(false);
+    setOpen(true);
+  }, []);
+
+  // Outside mousedown closes (the opener's own mousedown lets its click
+  // toggle the menu instead of double-firing).
+  useEffect(() => {
+    if (!open) return;
+    const onMouseDown = (event: MouseEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Node &&
+        (menuRef.current?.contains(target) || openerRef.current?.contains(target))
+      ) {
+        return;
+      }
+      close();
+    };
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [open, close]);
+
+  // Focus the first ENABLED item on open (E43 §3).
+  useEffect(() => {
+    if (!open) return;
+    menuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')?.focus();
+  }, [open]);
+
+  const copyConversationId = useCallback(() => {
+    try {
+      void navigator.clipboard?.writeText(row.conversationId);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), COPY_FEEDBACK_MS);
+    } catch {
+      // Clipboard unavailable — nothing is promised; the id stays in the
+      // conversation record (it renders in the address bar for Operations).
+    }
+  }, [row.conversationId]);
+
+  const entries = chatRowMenuItems({
+    kind: row.kind,
+    conversationId: row.conversationId,
+    copyLabel: row.copyLabel,
+    pinned,
+    mark,
+    runtimeUnread: row.state === "unread",
+    containerReady,
+    agentSlug: row.kind === "agent" ? entitySlug(row.key) : undefined,
+    operationHref: row.kind === "operation" ? row.href : undefined,
+    onTogglePin: () => toggleChatPin(row.conversationId),
+    onSetMark: (nextMark) => setChatUnreadMark(row.conversationId, nextMark),
+    onCopy: copyConversationId,
+  });
+
+  const openFromTrigger = () => {
+    const rect = openerRef.current?.getBoundingClientRect();
+    openAt(
+      rect ? rect.right - MENU_WIDTH : MENU_MARGIN_PX,
+      rect ? rect.bottom + 4 : MENU_MARGIN_PX,
+    );
+  };
+
+  return (
+    <li
+      className="group relative"
+      onContextMenu={(event) => {
+        event.preventDefault();
+        openAt(event.clientX, event.clientY);
+      }}
+      onKeyDown={(event) => {
+        if (event.shiftKey && event.key === "F10") {
+          event.preventDefault();
+          const rect = openerRef.current?.getBoundingClientRect();
+          openAt(rect ? rect.left : MENU_MARGIN_PX, rect ? rect.bottom + 4 : MENU_MARGIN_PX);
+        }
+      }}
+    >
+      <div className={cn(ITEM_BASE, active ? ITEM_ACTIVE : ITEM_IDLE)}>
+        <Link
+          href={row.href}
+          aria-current={active ? "page" : undefined}
+          className="flex min-w-0 flex-1 items-center gap-3"
+          {...(onNavigate ? { onClick: onNavigate } : {})}
+        >
+          {row.agent ? (
+            <AgentAvatar
+              agent={row.agent}
+              size="sm"
+              {...(row.presence ? { presence: row.presence } : {})}
+            />
+          ) : row.hue !== undefined && row.glyph !== undefined ? (
+            <AgentAvatar
+              agent={{
+                agent_id: row.key,
+                display_name: row.title,
+                ui_identity: { avatar_hue: row.hue, initial_glyph: row.glyph },
+              }}
+              size="sm"
+            />
+          ) : (
+            <Layers className="size-4 shrink-0 text-sky" aria-hidden="true" />
+          )}
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-1.5">
+              {pinned ? (
+                <Pin
+                  className="size-3 shrink-0 text-muted"
+                  aria-hidden="true"
+                  data-testid="chat-pin-glyph"
+                />
+              ) : null}
+              <span
+                className={cn(
+                  "min-w-0 truncate",
+                  row.kind === "operation" && row.autoLabel && "italic text-muted",
+                )}
+              >
+                {row.title}
+              </span>
+              {timestamp ? (
+                <span
+                  data-testid="chat-timestamp"
+                  className="ml-auto shrink-0 font-mono text-xs tabular-nums text-muted"
+                >
+                  {timestamp}
+                </span>
+              ) : null}
+            </span>
+            {row.preview ? (
+              <span
+                data-testid="chat-preview-line"
+                title={row.preview}
+                className="block truncate text-xs text-muted"
+              >
+                {row.preview}
+              </span>
+            ) : null}
+          </span>
+          {mark === "unread" ? (
+            <span
+              data-testid="chat-unread-dot"
+              role="img"
+              aria-label="Marked unread here only"
+              title="Marked unread here only"
+              className="size-1.5 shrink-0 rounded-full bg-brand"
+            />
+          ) : null}
+          {stateAfterOverlay ? (
+            <StateTrail
+              state={stateAfterOverlay}
+              unreadCount={row.unreadCount ?? 0}
+              approvalCount={row.approvalCount ?? 0}
+              attention={row.attention}
+            />
+          ) : null}
+          {row.kind === "operation" && row.isAdhoc ? (
+            <span
+              title="Created without a pack definition"
+              className="shrink-0 rounded-full border border-line px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-muted"
+            >
+              Ad-hoc
+            </span>
+          ) : null}
+        </Link>
+        {/* The hover/keyboard-reachable "..." trigger — a sibling of the row
+            link (never nested interactive elements), always in the DOM for
+            keyboard users, revealed on hover or focus. */}
+        <button
+          type="button"
+          ref={openerRef}
+          aria-label={`Chat options for ${row.title}`}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          title="Chat options"
+          onClick={openFromTrigger}
+          className="shrink-0 rounded-md p-1.5 text-muted opacity-0 transition-[opacity,color] hover:bg-surface-elevated hover:text-text focus-visible:opacity-100 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100"
+        >
+          <MoreHorizontal className="size-4" aria-hidden="true" />
+        </button>
+      </div>
+      {open && typeof document !== "undefined"
+        ? createPortal(
+            <ChatRowMenuSheet
+              entries={entries}
+              position={position}
+              onDismiss={close}
+              menuRef={menuRef}
+              copied={copied}
+            />,
+            document.body,
+          )
+        : null}
+    </li>
+  );
+}
+
+/**
+ * The shared SIMPLE row list (wave A): two-line rows — line 1 avatar or
+ * Operation glyph + pin glyph + name + relative timestamp (right-aligned,
+ * tabular numerals, 12px), line 2 the activity preview line. Rows with no
+ * preview stay quiet single-line (G4). Pinned rows lead (§3.4) — the pins
+ * come from the client view store. Exported for the row-anatomy contract
+ * test.
+ */
+export function SimpleChatRows({
+  rows,
+  pathname,
+  onNavigate,
+  now: nowOverride,
+  containerReady = false,
+}: {
+  rows: SimpleChatRow[];
+  pathname: string;
+  onNavigate?: (() => void) | undefined;
+  /**
+   * Clock injection for static renders (tests pin the labels). Unset in the
+   * app: the mount-gated render clock is used and pre-mount rows render no
+   * timestamp rather than guessing one.
+   */
+  now?: number | undefined;
+  /** Whether the workspace container is ready (gates the settings entry). */
+  containerReady?: boolean | undefined;
+}) {
+  const { pins } = useChatViewPrefs();
+  const clockNow = useRelativeNow();
+  const now = nowOverride ?? clockNow;
+  const ordered = orderChatsPinFirst(rows, pins);
+  return (
+    <ul>
+      {ordered.map((row) => {
+        const active = pathname === row.href || pathname.startsWith(`${row.href}/`);
+        const timestamp = formatChatTimestamp(row.at, now);
+        return (
+          <SimpleChatRowItem
+            key={row.key}
+            row={row}
+            active={active}
+            timestamp={timestamp}
+            containerReady={containerReady}
+            onNavigate={onNavigate}
+          />
+        );
+      })}
+    </ul>
+  );
+}
+
 /** The Advanced footer toggle — one quiet control, both modes. */
 function AdvancedToggle() {
   const advanced = useAdvancedMode();
@@ -224,27 +886,40 @@ function SimpleChatListDemo({
 }) {
   const model = sidebarModel();
   const rows = mergeChatsByRecency(
-    model.agents.map((entry) => ({
-      kind: "agent" as const,
+    model.agents.map((entry): SimpleChatRow => ({
+      kind: "agent",
       key: entry.agent.agent_id,
       conversationId: entry.conversation.conversation_id,
       href: routes.agent(entitySlug(entry.agent.agent_id)),
       title: entry.agent.display_name,
       agent: entry.agent,
+      presence: sessionPresenceFor(entry.conversation.conversation_id),
       at: Date.parse(entry.conversation.last_activity_at),
+      // Demo data only: the newest fixture message quotes as the preview
+      // ("You: " for the user's own lines); no messages → a quiet row (G4).
+      preview: chatPreviewFromMessages(
+        messagesForConversation(entry.conversation.conversation_id),
+        entry.conversation.kind,
+      ),
       state: entry.state,
       unreadCount: entry.conversation.unread_count,
       approvalCount: entry.approvalCount,
       attention: entry.attention,
     })),
-    model.operationChats.map((entry) => ({
-      kind: "operation" as const,
+    model.operationChats.map((entry): SimpleChatRow => ({
+      kind: "operation",
       key: entry.operation.operation_id,
       conversationId: entry.conversation.conversation_id,
       href: routes.operation(entry.operation.operation_id),
       title: entry.conversation.title,
       agent: null,
       at: Date.parse(entry.conversation.last_activity_at),
+      // The fixture Operation chats carry no recorded messages — the
+      // derivation returns null and the rows stay preview-less (G4).
+      preview: chatPreviewFromMessages(
+        messagesForConversation(entry.conversation.conversation_id),
+        entry.conversation.kind,
+      ),
       state: entry.state,
       unreadCount: entry.conversation.unread_count,
       approvalCount: entry.approvalCount,
@@ -253,38 +928,12 @@ function SimpleChatListDemo({
   );
 
   return (
-    <ul>
-      {rows.map((row) => {
-        const active = pathname === row.href || pathname.startsWith(`${row.href}/`);
-        return (
-          <li key={row.key}>
-            <Link
-              href={row.href}
-              aria-current={active ? "page" : undefined}
-              className={cn(ITEM_BASE, active ? ITEM_ACTIVE : ITEM_IDLE)}
-              {...(onNavigate ? { onClick: onNavigate } : {})}
-            >
-              {row.agent ? (
-                <AgentAvatar
-                  agent={row.agent}
-                  size="sm"
-                  presence={sessionPresenceFor(row.conversationId)}
-                />
-              ) : (
-                <Layers className="size-4 shrink-0 text-sky" aria-hidden="true" />
-              )}
-              <span className="min-w-0 flex-1 truncate">{row.title}</span>
-              <StateTrail
-                state={row.state}
-                unreadCount={row.unreadCount}
-                approvalCount={row.approvalCount}
-                attention={row.attention}
-              />
-            </Link>
-          </li>
-        );
-      })}
-    </ul>
+    <SimpleChatRows
+      rows={rows}
+      pathname={pathname}
+      onNavigate={onNavigate}
+      containerReady={false}
+    />
   );
 }
 
@@ -300,30 +949,41 @@ function SimpleChatListLive({
 }) {
   const roster = useAgentRoster(workspaceId);
   const operations = useOperationsList(workspaceId);
-  const linkProps = onNavigate ? { onClick: onNavigate } : {};
 
   // Real reads fabricate no state (G4): live rows render quiet — no derived
   // unread/approval markers until the runtime's real tracking lands.
-  const agentRows = roster.agents.map((agent) => ({
-    kind: "agent" as const,
+  const agentRows: SimpleChatRow[] = roster.agents.map((agent) => ({
+    kind: "agent",
     key: agent.agent_id,
+    // The roster payload carries no conversation id — the runtime record id
+    // is the honest stable key for pins and the row menu (chunk A2).
+    conversationId: agent.agent_id,
+    copyLabel: "Copy Agent id",
     href: routes.agent(entitySlug(agent.agent_id)),
     title: agent.display_name,
+    agent: null,
     hue: agent.avatar_hue,
     glyph: agent.initial_glyph,
     at: agent.last_activity ? Date.parse(agent.last_activity.at) : 0,
+    // S30 (E43 idea 4): the runtime derives the preview from its journal —
+    // render it verbatim; null stays a quiet single-line row (G4).
+    preview: agent.last_activity ? agent.last_activity.preview : null,
   }));
-  const operationRows = operations.operations.map((operation) => ({
-    kind: "operation" as const,
+  const operationRows: SimpleChatRow[] = operations.operations.map((operation) => ({
+    kind: "operation",
     key: operation.operation_id,
+    conversationId: operation.operation_id,
+    copyLabel: "Copy Operation id",
     href: routes.operation(operation.operation_id),
     title: operation.name,
+    agent: null,
+    // The runtime derives no last-activity preview for Operations — the
+    // record's updated_at is the honest available stamp (G4); rows stay
+    // preview-less until the runtime adds a field.
+    at: Date.parse(operation.updated_at) || 0,
+    preview: null,
     autoLabel: operation.auto_label,
     isAdhoc: operation.is_adhoc,
-    // The runtime derives no last-activity preview for Operations yet — the
-    // record's updated_at is the honest available sort key (G4); rows stay
-    // preview-less until the runtime adds one.
-    at: Date.parse(operation.updated_at) || 0,
   }));
 
   if (roster.state === "loading" || operations.state === "loading") {
@@ -372,50 +1032,12 @@ function SimpleChatListLive({
   }
 
   return (
-    <ul>
-      {mergeChatsByRecency(agentRows, operationRows).map((row) => {
-        const active = pathname === row.href || pathname.startsWith(`${row.href}/`);
-        return (
-          <li key={row.key}>
-            <Link
-              href={row.href}
-              aria-current={active ? "page" : undefined}
-              className={cn(ITEM_BASE, active ? ITEM_ACTIVE : ITEM_IDLE)}
-              {...linkProps}
-            >
-              {row.kind === "agent" ? (
-                <AgentAvatar
-                  agent={{
-                    agent_id: row.key,
-                    display_name: row.title,
-                    ui_identity: { avatar_hue: row.hue, initial_glyph: row.glyph },
-                  }}
-                  size="sm"
-                />
-              ) : (
-                <Layers className="size-4 shrink-0 text-sky" aria-hidden="true" />
-              )}
-              <span
-                className={cn(
-                  "min-w-0 flex-1 truncate",
-                  row.kind === "operation" && row.autoLabel && "italic text-muted",
-                )}
-              >
-                {row.title}
-              </span>
-              {row.kind === "operation" && row.isAdhoc ? (
-                <span
-                  title="Created without a pack definition"
-                  className="shrink-0 rounded-full border border-line px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-muted"
-                >
-                  Ad-hoc
-                </span>
-              ) : null}
-            </Link>
-          </li>
-        );
-      })}
-    </ul>
+    <SimpleChatRows
+      rows={mergeChatsByRecency(agentRows, operationRows)}
+      pathname={pathname}
+      onNavigate={onNavigate}
+      containerReady={true}
+    />
   );
 }
 

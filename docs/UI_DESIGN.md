@@ -148,7 +148,7 @@ Modals (approval dialog, notification center, roster editor) overlay any route. 
 └──────────────────────────────┘
 ```
 
-**SidebarItem anatomy:** avatar (Agent) or Operations glyph (pack-defined template) / name / trailing state (dot, unread count, approval badge, running spinner) / optional last-activity timestamp on hover.
+**SidebarItem anatomy:** avatar (Agent) or Operations glyph (pack-defined template) / name / trailing state (dot, unread count, approval badge, running spinner) / last-activity timestamp when the record carries a stamp — rendered when available rather than hover-only (D52 wave A; E43 idea 4 anatomy).
 
 - **Agents section** lists the six pack Agents as persistent direct chats (AC3). They are never deletable in v1; each opens Agent settings via context menu.
 - **Operations section** has two visual groups: **pack-defined Operation templates** (launch → preview S5) and **Operation chats** (instances, open directly). Ad-hoc chats are labeled with their roster summary ("Ad-hoc · 3 Agents") until the user names them.
@@ -168,7 +168,7 @@ Modals (approval dialog, notification center, roster editor) overlay any route. 
 
 The client presents two modes over the same data and contracts. Nothing in this section changes §3.2/§S4/§S9 information architecture, D26 event honesty, AC mappings, or the runtime-owned state rules — it changes which presentation a user sees first and how much chrome surrounds it.
 
-- **Simple (default):** one merged, recency-sorted **Chats** list (agent direct chats + Operation chats; the Operations glyph keeps the Operation framing per D41 — this is a presentation merge, not a new chat type), the single most likely next action as a primary button ("New Operation"), and progressive disclosure everywhere else: roster management collapses behind a Manage-roster strip (§S4), settings lead with the core six categories in D16 order under a disclosed Advanced group (§S9), pack-defined Operation templates stay reachable through the New Operation flow.
+- **Simple (default):** one merged, recency-sorted **Chats** list (agent direct chats + Operation chats; the Operations glyph keeps the Operation framing per D41 — this is a presentation merge, not a new chat type; pinned rows lead; recency within the rest), the single most likely next action as a primary button ("New Operation"), and progressive disclosure everywhere else: roster management collapses behind a Manage-roster strip (§S4), settings lead with the core six categories in D16 order under a disclosed Advanced group (§S9), pack-defined Operation templates stay reachable through the New Operation flow.
 - **Advanced:** restores the full documented structures — §3.2's Agents + Operations sections, §S4's always-visible roster panel, §S9's complete fifteen-section register.
 - **Persistence:** `localStorage` key `shera-advanced-mode` ("0" simple / "1" advanced), owned by `apps/web/lib/interface-mode.ts`; first paint is simple. The toggle lives in the sidebar footer. SSR/static snapshots report the session choice so test suites opt into advanced explicitly.
 - **Pattern authority:** OpenMausBot's interface mode is the patterns-not-pixels reference (E43 addendum + D52); OpenMausBot's simple-row discipline (name + one muted preview line; machinery only in advanced) governs the merged Chats rows.

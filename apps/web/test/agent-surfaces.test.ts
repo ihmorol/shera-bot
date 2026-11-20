@@ -105,6 +105,24 @@ describe("sidebar Agents section (live roster, §3.2)", () => {
     expect(html).toContain(ROSTER[0]!.role_description);
   });
 
+  it("renders the relative stamp only when the record carries one (wave A anatomy parity, G4)", () => {
+    const withActivity: AgentRosterEntry[] = ROSTER.map((entry, index) =>
+      index === 0
+        ? {
+            ...entry,
+            last_activity: { at: "2026-09-20T15:40:00Z", preview: "Quarterly review drafted." },
+          }
+        : entry,
+    );
+    const html = render(
+      createElement(AgentRosterSection, { entries: withActivity, state: "ready" }),
+    );
+    expect(html).toContain('data-testid="roster-timestamp"');
+    // Records without a stamp render none — nothing invented.
+    const plain = render(createElement(AgentRosterSection, { entries: ROSTER, state: "ready" }));
+    expect(plain).not.toContain('data-testid="roster-timestamp"');
+  });
+
   it("renders each avatar from the authored identity (hue + glyph, #51 pattern)", () => {
     const html = render(createElement(AgentRosterSection, { entries: ROSTER, state: "ready" }));
     // D18 authored values reach the avatar as CSS custom properties — the

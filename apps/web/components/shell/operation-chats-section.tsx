@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle } from "lucide-react";
 import type { OperationListRow } from "@/lib/operation-api";
+import { formatChatTimestamp, useRelativeNow } from "@/lib/relative-time";
 import { routes } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
@@ -38,6 +39,9 @@ export function LiveOperationChatsSection({
   onNavigate?: (() => void) | undefined;
 }) {
   const linkProps = onNavigate ? { onClick: onNavigate } : {};
+  // The mount-gated render clock (lib/relative-time.ts): pre-mount rows
+  // render no timestamp instead of guessing one (hydration-safe, G4).
+  const now = useRelativeNow();
 
   if (state === "loading") {
     return (
@@ -119,6 +123,15 @@ export function LiveOperationChatsSection({
                 <span className="block truncate text-xs text-muted">
                   pack {operation.pinning.pack_id} v{operation.pinning.pack_version}
                 </span>
+              </span>
+              {/* Wave A row-anatomy parity (D52): the record's updated_at is
+                  the honest available stamp (the runtime derives no preview
+                  for Operations — rows stay preview-less, G4). */}
+              <span
+                data-testid="operation-chat-timestamp"
+                className="shrink-0 self-start font-mono text-xs tabular-nums text-muted"
+              >
+                {formatChatTimestamp(Date.parse(operation.updated_at), now)}
               </span>
             </Link>
           </li>

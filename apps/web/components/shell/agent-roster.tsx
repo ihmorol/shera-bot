@@ -6,6 +6,7 @@ import Link from "next/link";
 import { AgentAvatar } from "@/components/chat/agent-avatar";
 import { Button } from "@/components/ui/button";
 import { entitySlug } from "@/lib/fixtures";
+import { formatChatTimestamp, useRelativeNow } from "@/lib/relative-time";
 import { routes } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
@@ -85,6 +86,9 @@ export function AgentRosterSection({
   onNavigate?: (() => void) | undefined;
 }) {
   const linkProps = onNavigate ? { onClick: onNavigate } : {};
+  // The mount-gated render clock (lib/relative-time.ts): pre-mount rows
+  // render no timestamp instead of guessing one (hydration-safe, G4).
+  const now = useRelativeNow();
 
   return (
     <section>
@@ -155,6 +159,18 @@ export function AgentRosterSection({
                         </span>
                       )}
                     </span>
+                    {/* Wave A row-anatomy parity (D52): the relative stamp of
+                        the runtime-derived last_activity, right-aligned with
+                        tabular numerals — rendered only when the record
+                        actually carries a stamp (G4). */}
+                    {agent.last_activity ? (
+                      <span
+                        data-testid="roster-timestamp"
+                        className="shrink-0 self-start font-mono text-xs tabular-nums text-muted"
+                      >
+                        {formatChatTimestamp(Date.parse(agent.last_activity.at), now)}
+                      </span>
+                    ) : null}
                   </Link>
                   {/* §3.2: the Agents section is fixed — the gear opens the
                       Agent's settings (D16 commands), it never creates. The

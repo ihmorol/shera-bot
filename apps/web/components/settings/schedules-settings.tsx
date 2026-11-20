@@ -7,7 +7,7 @@ import { useContainerResolution } from "@/lib/container-connection";
 import { useOperationsList } from "@/lib/operation-data";
 
 import { Button } from "@/components/ui/button";
-import { ErrorState } from "@/components/shell/states";
+import { EmptyState, ErrorState } from "@/components/shell/states";
 import { useTriggers, useTriggerActions, safeSchedulesMessage } from "@/lib/schedules-data";
 import type { TriggerView } from "@/lib/schedules-api";
 import { routes } from "@/lib/routes";
@@ -331,8 +331,8 @@ function AddTriggerForm({
   }) => void;
   pending: boolean;
   safeError?: string | undefined;
-  /** The form's open state is LIFTED (the empty state's call-to-action and
-   * the collapsed control share it — a cancelled form is reopenable). */
+  /** The form's open state is LIFTED (the collapsed control and the
+   * auto-open-on-empty default share it — a cancelled form is reopenable). */
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -572,25 +572,6 @@ function LoadingState() {
   );
 }
 
-function EmptyState({ onNew }: { onNew: () => void }) {
-  return (
-    <div className="rounded-2xl border border-line bg-surface px-5 py-8 text-center">
-      <p className="text-sm font-medium text-text">No triggers yet</p>
-      <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-muted">
-        Schedules, file and Git watchers, webhooks, and condition triggers live here. A trigger runs
-        as a task in one of your Operations — created only from typed configuration, never from
-        chat.
-      </p>
-      <div className="mt-4 flex justify-center">
-        <Button variant="outline" onClick={onNew}>
-          <Plus className="size-4" aria-hidden="true" />
-          Create the first trigger
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 export interface SchedulesSettingsViewProps {
   operations: Array<{ operation_id: string; name: string }>;
   triggers: TriggerView[];
@@ -661,7 +642,17 @@ export function SchedulesSettingsView(props: SchedulesSettingsViewProps) {
       />
 
       {triggers.length === 0 ? (
-        <EmptyState onNew={() => setCreateOpen(true)} />
+        // D52 wave E: the shared value-promise formula — one schedule-clock
+        // glyph, one sentence naming what will appear. No CTA of its own: the
+        // "New trigger" affordance sits directly above (and the create form
+        // auto-opens on a fresh surface), so an empty-state button would
+        // duplicate a control that is already adjacent (the wave A sidebar
+        // precedent; G4).
+        <EmptyState
+          testId="schedules-empty"
+          icon={CalendarClock}
+          message="No triggers yet. Schedules, watchers, and webhooks for your Operations appear here."
+        />
       ) : (
         <ul className="space-y-4" data-testid="schedule-trigger-list">
           {triggers.map((trigger) => (

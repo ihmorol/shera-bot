@@ -1,13 +1,16 @@
 import { AlertTriangle } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /**
  * §2.4 state language shared by the data surfaces (sidebar, chat list,
- * thread): layout-matched loading skeletons (never spinners) and the error
+ * thread): layout-matched loading skeletons (never spinners), the error
  * state — a redacted `safe_message` only, with retry when the failure is
- * retryable (D23 rule 4: internal details never render).
+ * retryable (D23 rule 4: internal details never render) — and the shared
+ * empty state (D52 wave E): the E43 pattern 3 value-promise formula.
  *
  * The fixture-backed demo has no async surface, so nothing renders these
  * during the demo: ThreadSkeleton and ErrorState render under AgentChatView's
@@ -108,6 +111,44 @@ export function ErrorState({
           Retry
         </Button>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * The shared empty state (D52 wave E): the value-promise formula from the
+ * pattern annex §6 / E43 pattern 3 — ONE icon, ONE value-promise sentence,
+ * at most one CTA, and a CTA only when the caller surface actually owns
+ * that action (G4: the promise names only what the runtime records, and no
+ * action is invented). 14px muted text, centered, never more than two
+ * lines. Loading and error keep their own shapes above — this primitive is
+ * for the EMPTY state only.
+ *
+ * NOT the `EmptyState` in ./surface-frame.tsx (the older thread/operation
+ * minimal variant with the `explanation` prop — different contract). The
+ * two coexist by design until a wave owning surface-frame consolidates
+ * them; import THIS one for new surfaces unless the surface-frame shape is
+ * what the caller already renders.
+ */
+export function EmptyState({
+  icon: Icon,
+  message,
+  action,
+  testId,
+}: {
+  icon?: LucideIcon | undefined;
+  message: string;
+  action?: ReactNode;
+  testId?: string | undefined;
+}) {
+  return (
+    <div
+      data-testid={testId}
+      className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center"
+    >
+      {Icon ? <Icon className="size-8 shrink-0 text-muted" aria-hidden="true" /> : null}
+      <p className="max-w-sm text-sm leading-relaxed text-muted">{message}</p>
+      {action ? <div className="mt-1">{action}</div> : null}
     </div>
   );
 }

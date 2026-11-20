@@ -172,7 +172,7 @@ The client presents two modes over the same data and contracts. Nothing in this 
 - **Advanced:** restores the full documented structures — §3.2's Agents + Operations sections, §S4's always-visible roster panel, §S9's complete fifteen-section register.
 - **Persistence:** `localStorage` key `shera-advanced-mode` ("0" simple / "1" advanced), owned by `apps/web/lib/interface-mode.ts`; first paint is simple. The toggle lives in the sidebar footer. SSR/static snapshots report the session choice so test suites opt into advanced explicitly.
 - **Pattern authority:** OpenMausBot's interface mode is the patterns-not-pixels reference (E43 addendum + D52); OpenMausBot's simple-row discipline (name + one muted preview line; machinery only in advanced) governs the merged Chats rows.
-- **Empty-state voice (§2.4 refinement):** empty states in simple mode name what will appear and offer the single most likely next action — one line of value promise, one primary CTA (E43 addendum pattern 3), rendered only from records the runtime actually holds (G4).
+- **Empty-state voice (§2.4 refinement):** empty states in simple mode name what will appear and offer the single most likely next action — one line of value promise, one primary CTA **or none when the surface owns no in-surface action** (the adjacent affordance stands in; E43 addendum pattern 3's "one CTA (or none)"), rendered only from records the runtime actually holds (G4).
 
 ---
 

@@ -479,7 +479,7 @@ export function ChatRowMenuSheet({
       data-testid="chat-row-menu"
       tabIndex={-1}
       onKeyDown={onKeyDown}
-      className="z-50 w-56 rounded-xl border border-line bg-surface-elevated p-1.5 shadow-lg"
+      className="z-50 w-56 rounded-xl border border-line bg-surface-elevated p-1.5 shadow-lg shadow-black/40"
       style={position ? { position: "fixed", left: position.x, top: position.y } : undefined}
     >
       {entries.map((entry, index) =>
@@ -750,7 +750,7 @@ function SimpleChatRowItem({
           aria-expanded={open}
           title="Chat options"
           onClick={openFromTrigger}
-          className="shrink-0 rounded-md p-1.5 text-muted opacity-0 transition-[opacity,color] hover:bg-surface-elevated hover:text-text focus-visible:opacity-100 group-hover:opacity-100"
+          className="shrink-0 rounded-md p-1.5 text-muted opacity-0 transition-[opacity,color] hover:bg-surface-elevated hover:text-text focus-visible:opacity-100 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100"
         >
           <MoreHorizontal className="size-4" aria-hidden="true" />
         </button>

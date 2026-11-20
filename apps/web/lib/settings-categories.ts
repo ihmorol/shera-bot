@@ -103,3 +103,26 @@ export const SETTINGS_CATEGORIES: readonly SettingsCategory[] = [
 ];
 
 export const SETTINGS_CATEGORY_SLUGS: readonly string[] = SETTINGS_CATEGORIES.map((c) => c.slug);
+
+/**
+ * Owner direction (2026-11-20): the overview leads with the categories a
+ * student actually configures; the machinery stays reachable under the
+ * collapsed "Advanced" group. The D16 register and its recorded order are
+ * untouched — this only groups the overview index.
+ */
+export const SETTINGS_CORE_SLUGS: readonly string[] = [
+  "account",
+  "agents",
+  "providers",
+  "credits",
+  "notifications",
+  "memory",
+];
+
+export const CORE_SETTINGS_CATEGORIES: readonly SettingsCategory[] = SETTINGS_CATEGORIES.filter(
+  (category) => SETTINGS_CORE_SLUGS.includes(category.slug),
+);
+
+export const ADVANCED_SETTINGS_CATEGORIES: readonly SettingsCategory[] = SETTINGS_CATEGORIES.filter(
+  (category) => !SETTINGS_CORE_SLUGS.includes(category.slug),
+);

@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronDown } from "lucide-react";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -19,6 +20,7 @@ import type { AgentRosterSummary } from "@/lib/agent-api";
 import { useAgentRoster as useWorkspaceRoster } from "@/lib/agent-data";
 import { useContainerResolution, useSessionIdentity } from "@/lib/container-connection";
 import { operationInstanceById, rosterSubtitle } from "@/lib/fixtures";
+import { useAdvancedMode } from "@/lib/interface-mode";
 import { findOperationTemplate } from "@/lib/navigation";
 import {
   candidateAgentsForOperation,
@@ -151,6 +153,12 @@ function RuntimeOperationChat({
   const [renameDraft, setRenameDraft] = useState("");
   const [renameErrorMessage, setRenameErrorMessage] = useState<string | null>(null);
   const [packSummaryOpen, setPackSummaryOpen] = useState(false);
+  // Simple mode (owner direction, 2026-11-20): the roster management panel is
+  // machinery, not the conversation — collapsed behind one quiet strip;
+  // advanced mode keeps it always visible (UI_DESIGN §S4).
+  const advanced = useAdvancedMode();
+  const [rosterOpenSimple, setRosterOpenSimple] = useState(false);
+  const rosterVisible = advanced || rosterOpenSimple;
   // One idempotency key per draft: a retry of the SAME send reuses it (never a
   // duplicated turn); the key rotates only after a send settles successfully.
   const [draftKey, setDraftKey] = useState(() => newMessageDraftKey());
@@ -280,73 +288,89 @@ function RuntimeOperationChat({
         onRetry={detail.refetch}
       />
 
-      <OperationRosterPanel
-        roster={rosterMembers}
-        identities={workspaceRoster.agents}
-        coordinatorAgentId={operation?.coordinator_agent_id ?? "none"}
-        state={detail.state === "ready" ? "ready" : detail.state}
-        safeErrorMessage={detail.safeErrorMessage ?? workspaceRoster.safeErrorMessage}
-        onRetry={detail.refetch}
-        candidates={candidates}
-        confirmingAdd={confirmingAdd}
-        pending={pending}
-        refusalMessage={refusalMessage}
-        persistedRefusalMessage={detail.detail?.recent_refusals[0]?.message ?? null}
-        onAddClick={(candidate) => {
-          setRefusalMessage(null);
-          setConfirmingAdd(candidate);
-        }}
-        onConfirmAdd={() => {
-          if (!confirmingAdd) return;
-          const candidate = confirmingAdd;
-          setConfirmingAdd(null);
-          rosterCommand.mutate(
-            {
-              type: "operation.add_roster_agent",
-              agent_id: candidate.agent_id,
-              pack_id: operation?.pinning.pack_id ?? "student",
-              pack_version: operation?.pinning.pack_version ?? "1.0.0",
-              risk: samePackAddRisk(),
-            },
-            {
-              onSuccess: (outcome) => {
-                if (outcome.outcome === "refused") {
-                  // The runtime's fixed safe copy renders verbatim (D36/G3).
-                  setRefusalMessage(outcome.refusal.message);
-                }
+      {rosterVisible ? (
+        <OperationRosterPanel
+          roster={rosterMembers}
+          identities={workspaceRoster.agents}
+          coordinatorAgentId={operation?.coordinator_agent_id ?? "none"}
+          state={detail.state === "ready" ? "ready" : detail.state}
+          safeErrorMessage={detail.safeErrorMessage ?? workspaceRoster.safeErrorMessage}
+          onRetry={detail.refetch}
+          candidates={candidates}
+          confirmingAdd={confirmingAdd}
+          pending={pending}
+          refusalMessage={refusalMessage}
+          persistedRefusalMessage={detail.detail?.recent_refusals[0]?.message ?? null}
+          onAddClick={(candidate) => {
+            setRefusalMessage(null);
+            setConfirmingAdd(candidate);
+          }}
+          onConfirmAdd={() => {
+            if (!confirmingAdd) return;
+            const candidate = confirmingAdd;
+            setConfirmingAdd(null);
+            rosterCommand.mutate(
+              {
+                type: "operation.add_roster_agent",
+                agent_id: candidate.agent_id,
+                pack_id: operation?.pinning.pack_id ?? "student",
+                pack_version: operation?.pinning.pack_version ?? "1.0.0",
+                risk: samePackAddRisk(),
               },
-              onError: (error) =>
-                // A typed failure (e.g. a raced removal) surfaces its safe
-                // message — never silently swallowed, never raw internals.
-                setRefusalMessage(
-                  safeOperationMessage(error, "The roster command was not accepted."),
-                ),
-            },
-          );
-        }}
-        onCancelAdd={() => setConfirmingAdd(null)}
-        onRemove={(agentId) => {
-          setRefusalMessage(null);
-          rosterCommand.mutate(
-            { type: "operation.remove_roster_agent", agent_id: agentId },
-            {
-              onSuccess: (outcome) => {
-                if (outcome.outcome === "refused") {
-                  setRefusalMessage(outcome.refusal.message);
-                }
+              {
+                onSuccess: (outcome) => {
+                  if (outcome.outcome === "refused") {
+                    // The runtime's fixed safe copy renders verbatim (D36/G3).
+                    setRefusalMessage(outcome.refusal.message);
+                  }
+                },
+                onError: (error) =>
+                  // A typed failure (e.g. a raced removal) surfaces its safe
+                  // message — never silently swallowed, never raw internals.
+                  setRefusalMessage(
+                    safeOperationMessage(error, "The roster command was not accepted."),
+                  ),
               },
-              onError: (error) =>
-                setRefusalMessage(
-                  safeOperationMessage(error, "The roster command was not accepted."),
-                ),
-            },
-          );
-        }}
-        onCoordinatorChange={(coordinatorAgentId) => {
-          setRefusalMessage(null);
-          coordinatorCommand.mutate(coordinatorAgentId);
-        }}
-      />
+            );
+          }}
+          onCancelAdd={() => setConfirmingAdd(null)}
+          onRemove={(agentId) => {
+            setRefusalMessage(null);
+            rosterCommand.mutate(
+              { type: "operation.remove_roster_agent", agent_id: agentId },
+              {
+                onSuccess: (outcome) => {
+                  if (outcome.outcome === "refused") {
+                    setRefusalMessage(outcome.refusal.message);
+                  }
+                },
+                onError: (error) =>
+                  setRefusalMessage(
+                    safeOperationMessage(error, "The roster command was not accepted."),
+                  ),
+              },
+            );
+          }}
+          onCoordinatorChange={(coordinatorAgentId) => {
+            setRefusalMessage(null);
+            coordinatorCommand.mutate(coordinatorAgentId);
+          }}
+        />
+      ) : (
+        // Simple mode: one quiet strip opens the roster management panel.
+        <div className="shrink-0 border-b border-line bg-surface px-4 lg:px-6">
+          <div className="flex items-center justify-end py-2">
+            <button
+              type="button"
+              onClick={() => setRosterOpenSimple(true)}
+              className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted transition-colors hover:bg-surface-elevated hover:text-text"
+            >
+              Manage roster
+              <ChevronDown className="size-3.5" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto] lg:grid-cols-[minmax(0,1fr)_19rem] lg:grid-rows-1">
         <OperationThreadView

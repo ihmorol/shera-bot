@@ -16,9 +16,9 @@ export const metadata: Metadata = {
  * workspace → container first (S05 session + S06 provisioning) and surfaces
  * the lifecycle honestly — the one-time "prepare your workspace" step is an
  * explicit action here, never part of sign-in (owner-call disclosure, S09
- * PR). A ready workspace renders the dashboard, which for now is the empty
- * Agent state; the last-conversation redirect needs the real conversation
- * index (later chunk).
+ * PR). Owner direction (2026-11-20): the ready state stays minimal — one
+ * primary action (start an Operation) and at most one secondary (a direct
+ * chat); the conversation list lives in the sidebar.
  */
 export default function DashboardPage() {
   const firstAgent = PACK_AGENTS[0];
@@ -30,11 +30,16 @@ export default function DashboardPage() {
   return (
     <SurfaceFrame title="Pick a conversation">
       <EmptyState
-        explanation="Pick an Agent to start a conversation, or launch a pack-defined Operation from the sidebar."
+        explanation="Pick up a chat from the sidebar, or start a pack-defined Operation."
         action={
-          <Button asChild>
-            <Link href={routes.agent(firstAgent.slug)}>Chat with {firstAgent.name}</Link>
-          </Button>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <Button asChild>
+              <Link href={routes.operationNew()}>New Operation</Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href={routes.agent(firstAgent.slug)}>Chat with {firstAgent.name}</Link>
+            </Button>
+          </div>
         }
       />
     </SurfaceFrame>

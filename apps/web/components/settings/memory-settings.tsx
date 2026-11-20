@@ -564,9 +564,7 @@ function PublicationQueueCard({
       >
         <h2 className="text-sm font-semibold text-text">Publication queue</h2>
         <p className="mt-1 text-xs leading-relaxed text-muted">
-          Nothing is waiting for your decision. Private and sensitive memories land here when an
-          Agent proposes one or when you request a publication — nothing is shared until you approve
-          it.
+          Nothing is waiting for your decision. Publication requests land here for your approval.
         </p>
       </section>
     );
@@ -802,7 +800,7 @@ export function MemorySettingsView(props: MemorySettingsViewProps) {
             {entries.length === 0 ? (
               <p className="rounded-2xl border border-dashed border-line px-4 py-3 text-xs leading-relaxed text-muted">
                 {scope === "agent_private"
-                  ? "No Agent has a private memory yet. When one learns from your work, it appears here — visible only to that Agent until you share it."
+                  ? "No private memories yet. What an Agent remembers for itself shows up here."
                   : scope === "workspace"
                     ? "Nothing is remembered for this workspace yet. Agents remember what matters as you work with them."
                     : "Nothing in this scope yet."}

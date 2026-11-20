@@ -169,7 +169,6 @@ function renderCenter(props: ViewProps = {}): string {
       safeErrorMessage: props.safeErrorMessage,
       onMarkRead: () => undefined,
       onMute: () => undefined,
-      onClose: () => undefined,
       onOpenSettings: () => undefined,
       ...props,
     }),
@@ -266,7 +265,6 @@ describe("Notification center view (S10)", () => {
         onMute: (id: string) => {
           muted.push(id);
         },
-        onClose: () => undefined,
         onOpenSettings: () => undefined,
       }),
     );

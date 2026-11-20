@@ -16,6 +16,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { EmptyState } from "@/components/shell/states";
 import {
   useNotificationCommands,
   useNotifications,
@@ -41,10 +42,11 @@ import { cn } from "@/lib/utils";
  * anything; an approval item's mute creates the S20 approval-scope mute).
  *
  * The badge mirrors the unread rows (§3.2: badge counts mirror the sidebar
- * states). The empty state carries the E43 pattern: a one-line value promise
- * naming what will appear, from the runtime's own records, plus a single
- * primary CTA. Every state is real: loading skeleton, typed error with
- * retry, empty — no fabricated rows, ever (G4).
+ * states). The empty state carries the wave E formula (D52; E43 pattern 3):
+ * one bell glyph and a one-line value promise naming what will appear, from
+ * the runtime's own records — and no CTA, because an empty center owns no
+ * in-surface action (G4). Every state is real: loading skeleton, typed error
+ * with retry, empty — no fabricated rows, ever (G4).
  */
 
 export type NotificationRow = NotificationView;
@@ -136,7 +138,6 @@ export interface NotificationCenterViewProps {
   safeErrorMessage?: string | undefined;
   onMarkRead: (notificationId: string) => void;
   onMute: (notificationId: string) => void;
-  onClose: () => void;
   onOpenSettings: () => void;
 }
 
@@ -189,18 +190,11 @@ export function NotificationCenterView(props: NotificationCenterViewProps) {
             </p>
           </div>
         ) : rows.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
-            <Bell className="size-8 text-muted" aria-hidden="true" />
-            <p className="max-w-xs text-sm text-text">
-              Notifications will appear here when a task finishes, fails, needs your approval, or
-              hits a snag — each with a direct link to the conversation.
-            </p>
-            <Button asChild data-testid="notification-empty-cta">
-              <Link href={routes.app()} onClick={props.onClose}>
-                Pick an Agent to start
-              </Link>
-            </Button>
-          </div>
+          <EmptyState
+            testId="notification-empty"
+            icon={Bell}
+            message="Nothing for you yet. Approvals, completions, and failures show up here."
+          />
         ) : (
           <ul className="divide-y divide-line">
             {rows.map((row) => (
@@ -485,7 +479,6 @@ function NotificationCenterHost({
           safeErrorMessage={query.safeErrorMessage}
           onMarkRead={markRead}
           onMute={mute}
-          onClose={() => onOpenChange(false)}
           onOpenSettings={() => {
             onOpenChange(false);
             onNavigate?.();

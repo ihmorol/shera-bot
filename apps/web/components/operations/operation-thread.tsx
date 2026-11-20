@@ -267,11 +267,25 @@ export function OperationThreadView({
               }
             }}
             rows={2}
-            placeholder="Message the Operation — @ to address an Agent"
+            // The placeholder priority (D52 wave B, audited 2026-11-21): the
+            // disabled/send-pending state keeps this neutral prompt (a send
+            // in flight carries its status on the button's title, not by
+            // hijacking the prompt); NO approval-pending state exists — the
+            // runtime allows sends while an approval waits (sendOperationMessage
+            // has no approval-pending gate); disconnection is the banner's
+            // state (lib/connection), never the placeholder's.
+            placeholder="Message the Operation (@ to address an Agent)"
             className="min-h-0 flex-1 resize-none rounded-lg border border-line bg-surface px-3 py-2 text-sm text-text placeholder:text-muted"
           />
           {canSend ? (
-            <Button size="icon" aria-label="Send message" disabled={sendPending} onClick={onSend}>
+            <Button
+              size="icon"
+              aria-label="Send message"
+              // Disabled-with-reason while the send is in flight (craft rule).
+              title={sendPending ? "Sending…" : "Send message"}
+              disabled={sendPending}
+              onClick={onSend}
+            >
               <Send aria-hidden="true" />
             </Button>
           ) : null}

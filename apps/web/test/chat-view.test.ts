@@ -318,7 +318,10 @@ describe("composer honesty states (D52 wave B — audited placeholder priority)"
     // approval above to continue' state (honesty over drama), and Shera's
     // runtime has no steer-while-running command, so the OpenMausBot
     // queue/steer labels are NOT ported (a future-runtime item, not UI).
-    const composerSource = readFileSync(join(APP_DIR, "components", "chat", "composer.tsx"), "utf8");
+    const composerSource = readFileSync(
+      join(APP_DIR, "components", "chat", "composer.tsx"),
+      "utf8",
+    );
     const threadSource = readFileSync(
       join(APP_DIR, "components", "operations", "operation-thread.tsx"),
       "utf8",

@@ -195,7 +195,7 @@ function VersionHistory({
                   Restore
                 </Button>
               ) : (
-                <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted">
+                <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted">
                   current
                 </span>
               )}
@@ -795,7 +795,7 @@ export function MemorySettingsView(props: MemorySettingsViewProps) {
           >
             <div className="mb-2 flex items-baseline justify-between">
               <h2 className="text-sm font-semibold text-text">{memoryScopeLabel(scope)} memory</h2>
-              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted">
+              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted">
                 {entries.length} {entries.length === 1 ? "entry" : "entries"}
               </span>
             </div>

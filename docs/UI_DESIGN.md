@@ -121,6 +121,8 @@ Modals (approval dialog, notification center, roster editor) overlay any route. 
 
 ### 3.2 Sidebar specification (PRD §4.1, D29, D41)
 
+> **Interface mode (D52, 2026-11-21):** the structures in §3.2, §S4, and §S9 describe the **ADVANCED** presentation and remain its authority. The client defaults to **SIMPLE** mode — one merged, recency-sorted Chats list, single primary action, machinery on request — per [`decisions/owner-decision-d52-interface-mode-ui-migration-2026-11-21.md`](decisions/owner-decision-d52-interface-mode-ui-migration-2026-11-21.md). See §3.4. In simple mode the two-section data model below is unchanged; the Layers glyph and Operation naming keep the Operation framing.
+
 ```
 ┌──────────────────────────────┐
 │ [logo] Shera Bot      [ bell │  ← global chrome row
@@ -161,6 +163,16 @@ Modals (approval dialog, notification center, roster editor) overlay any route. 
 - **Recovery banner** (S11): top-of-app banner when any task is `RECOVERY_REQUIRED` or the container is recovering (PRD §13: "The dashboard shows recovery status").
 - **Credits pill** (footer): Shera credits remaining; reserved amount on hover (D21).
 - **Account menu**: profile (Google identity), tier badge (Light/Balanced/Heavy — simulated, PRD §3.2), settings link, storage usage summary (warn at ≥80% per PRD §12).
+
+### 3.4 Interface mode (D52, 2026-11-21)
+
+The client presents two modes over the same data and contracts. Nothing in this section changes §3.2/§S4/§S9 information architecture, D26 event honesty, AC mappings, or the runtime-owned state rules — it changes which presentation a user sees first and how much chrome surrounds it.
+
+- **Simple (default):** one merged, recency-sorted **Chats** list (agent direct chats + Operation chats; the Operations glyph keeps the Operation framing per D41 — this is a presentation merge, not a new chat type), the single most likely next action as a primary button ("New Operation"), and progressive disclosure everywhere else: roster management collapses behind a Manage-roster strip (§S4), settings lead with the core six categories in D16 order under a disclosed Advanced group (§S9), pack-defined Operation templates stay reachable through the New Operation flow.
+- **Advanced:** restores the full documented structures — §3.2's Agents + Operations sections, §S4's always-visible roster panel, §S9's complete fifteen-section register.
+- **Persistence:** `localStorage` key `shera-advanced-mode` ("0" simple / "1" advanced), owned by `apps/web/lib/interface-mode.ts`; first paint is simple. The toggle lives in the sidebar footer. SSR/static snapshots report the session choice so test suites opt into advanced explicitly.
+- **Pattern authority:** OpenMausBot's interface mode is the patterns-not-pixels reference (E43 addendum + D52); OpenMausBot's simple-row discipline (name + one muted preview line; machinery only in advanced) governs the merged Chats rows.
+- **Empty-state voice (§2.4 refinement):** empty states in simple mode name what will appear and offer the single most likely next action — one line of value promise, one primary CTA (E43 addendum pattern 3), rendered only from records the runtime actually holds (G4).
 
 ---
 

@@ -1,7 +1,7 @@
 # Shera Bot — Decision and Requirement Traceability
 
 **Status:** Working traceability baseline for the synchronized PRD and the post-PRD decision records.  
-**Last updated:** 2026-10-01 (S09 chunk 3 — evidence appended to the D26/D34/E8/E10/E13 rows; no decision statuses changed)  
+**Last updated:** 2026-11-21 (D52 interface-mode row added — PR [D52 wave](https://github.com/ihmorol/shera-bot/pull/92); no earlier row changed)  
 **Canonical vocabulary:** [`GLOSSARY.md`](GLOSSARY.md)  
 **Decision index:** [`decisions/README.md`](decisions/README.md)  
 **Full session evidence:** `history/2026-09-08-to-2026-09-11/README.md` — removed from the working tree in commit `9d8b81c`; retrieve from Git history (for example `cea3ba1`) or the local `.session-archive/` copy.
@@ -83,6 +83,7 @@ On 2026-09-19 the owner directed dual harness support — "i want pi as a defaul
 | D51 | Confirmed | Owner instruction 2026-09-19 (verbatim in [`decisions/owner-decision-d51-dual-harness-2026-09-19.md`](decisions/owner-decision-d51-dual-harness-2026-09-19.md)) | Extends D13/D14 — Pi remains the default harness; E17's seam is the default path | §§5, 17, 19, 22 | Harness-field contract tests (S10); settings QA (S11); dual-harness supervision tests (S12); harness-agnostic gateway seam (S07); Hermes path blocked on owner-supplied upstream evidence |
 | SYNC-2 | Confirmed | Owner instruction 2026-09-17 (same message as D46) | Records the 2026-09-17 PRD sync | §§5, 9, 15, 21–22 | PRD header/sections updated; this file updated |
 | SYNC-3 | Confirmed | Owner instruction 2026-09-19 (same message as D51) | Records the 2026-09-19 dual-harness PRD sync | §§5, 17, 19, 22 | PRD header/sections updated; this file updated |
+| D52 | Confirmed (owner-directed) | Owner instructions 2026-11-20 + 2026-11-21 (verbatim in [`decisions/owner-decision-d52-interface-mode-ui-migration-2026-11-21.md`](decisions/owner-decision-d52-interface-mode-ui-migration-2026-11-21.md)) | Refines D41 (two-section sidebar stays the data model; simple mode is the presentation default); extends the E43 addendum idea map to an executed wave; supersedes nothing | §§4.1, 21 (items 2, 17) | Interface-mode suite (`apps/web/test/interface-mode.test.ts`) + web vitest green at the record's filing; each migration wave verifies itself in its own PR; UI_DESIGN §3.4 added; SYNC-4 PRD text sync NOT performed — awaits explicit owner instruction |
 | E1 | Engineering | PRD §24 delegation; D42 refinement | — | §6 | Admission/queue/resource tests |
 | E2 | Engineering | PRD §24 delegation; D26 extension | — | §14 | Event retention/cursor tests |
 | E3 | Engineering | PRD §24 delegation; PRD §8 timing | — | §8 | Reminder scheduler tests |

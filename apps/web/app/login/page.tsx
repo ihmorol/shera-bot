@@ -23,7 +23,7 @@ export default function LoginPage() {
           <a href={routes.controlPlaneSignIn()}>Sign in with Google</a>
         </Button>
         <p className="mt-4 text-xs text-muted">
-          Sign in with your Google account. Private prototype access is capped at five accounts.
+          Private prototype — access is capped at five accounts.
         </p>
       </div>
     </main>

@@ -36,6 +36,14 @@ import { cn } from "@/lib/utils";
  * Agent's settings surface; the per-conversation override lives in the chat
  * header — this surface links to both rather than duplicating them (D39: one
  * setting, one surface).
+ *
+ * D52 wave D (E43 §5 + docs/research/openmausbot-ui-patterns-2026-11-21.md
+ * §5): each row carries a connection-state chip rendered from the runtime's
+ * typed states only — a settled connection-test answer ("Connected" success
+ * tint / "Test failed" warning tint, the failure's typed safe_message staying
+ * in the row's test note) or an api_key row's incomplete key setup ("Setup
+ * required", warning tint). Every chip pairs its tint with a status word and
+ * an sr-only tail; color is never the only signal.
  */
 
 export type ProvidersSurfaceState = "ready" | "loading" | "error";
@@ -134,6 +142,74 @@ function StatusChip({ enabled }: { enabled: boolean }) {
       {enabled ? "Enabled" : "Disabled"}
     </span>
   );
+}
+
+/**
+ * The connection-state chip (D52 wave D, research annex §5 status chip,
+ * tinted per UI_DESIGN §2.1): rendered ONLY from the runtime's typed states —
+ * a settled connection-test answer (ok / typed failure) or the derived
+ * key-setup state of an api_key row (no stored hint = setup incomplete).
+ * Every chip pairs its tint with a visible status word and an sr-only tail,
+ * so color is never the only signal. A row with a stored key and no settled
+ * test shows no chip — the Enabled/Disabled chip carries the row state.
+ */
+function ConnectionChip({
+  provider,
+  testResult,
+}: {
+  provider: ProviderView;
+  testResult: ConnectionTestState | null | undefined;
+}) {
+  const settled =
+    testResult != null && testResult.providerId === provider.id && testResult.state !== "pending"
+      ? testResult
+      : null;
+  if (settled && settled.result.ok) {
+    return (
+      <span
+        className={cn(
+          "flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px]",
+          "border-live/40 bg-live/10 text-live",
+        )}
+      >
+        <span aria-hidden="true" className="size-1.5 rounded-full bg-live" />
+        Connected
+        <span className="sr-only"> — connection test passed</span>
+      </span>
+    );
+  }
+  if (settled && !settled.result.ok) {
+    // The typed failure's safe_message renders in full in the row's test
+    // note; the chip is the scannable marker for it.
+    return (
+      <span
+        className={cn(
+          "flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px]",
+          "border-approval/40 bg-approval/10 text-approval",
+        )}
+      >
+        <span aria-hidden="true" className="size-1.5 rounded-full bg-approval" />
+        Test failed
+        <span className="sr-only"> — connection test failed; the reason is listed below</span>
+      </span>
+    );
+  }
+  const setupIncomplete = provider.api_mode === "api_key" && provider.credential_hint === null;
+  if (setupIncomplete) {
+    return (
+      <span
+        className={cn(
+          "flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px]",
+          "border-approval/40 bg-approval/10 text-approval",
+        )}
+      >
+        <span aria-hidden="true" className="size-1.5 rounded-full bg-approval" />
+        Setup required
+        <span className="sr-only"> — add a key to make this provider usable</span>
+      </span>
+    );
+  }
+  return null;
 }
 
 function SavedBadge({ visible }: { visible: boolean }) {
@@ -533,6 +609,7 @@ function ProviderRow({
           </p>
         </div>
         <StatusChip enabled={provider.status === "enabled"} />
+        <ConnectionChip provider={provider} testResult={lastTestResult} />
         <SavedBadge visible={saved} />
       </div>
 

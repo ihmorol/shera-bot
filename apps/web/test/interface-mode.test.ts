@@ -10,13 +10,18 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: () => undefined, replace: () => undefined, refresh: () => undefined }),
 }));
 
-import { SidebarContent } from "../components/shell/sidebar-content";
+import { SidebarContent, mergeChatsByRecency } from "../components/shell/sidebar-content";
 import {
   ADVANCED_SETTINGS_CATEGORIES,
   CORE_SETTINGS_CATEGORIES,
   SETTINGS_CATEGORIES,
 } from "../lib/settings-categories";
-import { readAdvancedMode, setAdvancedMode } from "../lib/interface-mode";
+import {
+  readAdvancedMode,
+  resetSessionChoice,
+  setAdvancedMode,
+  subscribe,
+} from "../lib/interface-mode";
 
 const render = (element: React.ReactElement): string =>
   renderToStaticMarkup(createElement(QueryClientProvider, { client: new QueryClient() }, element));
@@ -38,6 +43,53 @@ describe("interface mode (owner direction, 2026-11-20)", () => {
     expect(readAdvancedMode()).toBe(true);
     setAdvancedMode(false);
     expect(readAdvancedMode()).toBe(false);
+  });
+
+  it("a truly fresh document (no session choice, no storage) reads simple", () => {
+    resetSessionChoice();
+    expect(readAdvancedMode()).toBe(false);
+  });
+
+  it("the localStorage layer parses '1'/'0' and falls back to simple otherwise", () => {
+    const store = new Map<string, string>();
+    const original = globalThis.localStorage;
+    globalThis.localStorage = {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => void store.set(key, value),
+      removeItem: (key: string) => void store.delete(key),
+    } as Storage;
+    try {
+      resetSessionChoice();
+      store.set("shera-advanced-mode", "1");
+      expect(readAdvancedMode()).toBe(true);
+      store.set("shera-advanced-mode", "0");
+      expect(readAdvancedMode()).toBe(false);
+      store.set("shera-advanced-mode", "garbage");
+      expect(readAdvancedMode()).toBe(false);
+      // Writes persist through the same key.
+      setAdvancedMode(true);
+      expect(store.get("shera-advanced-mode")).toBe("1");
+      setAdvancedMode(false);
+      expect(store.get("shera-advanced-mode")).toBe("0");
+    } finally {
+      globalThis.localStorage = original;
+      resetSessionChoice();
+    }
+  });
+
+  it("subscribe/unsubscribe/subscribe keeps notifying — one listener for the module lifetime", () => {
+    const seen: boolean[] = [];
+    const observer = () => seen.push(readAdvancedMode());
+    const unsubscribe = subscribe(observer);
+    setAdvancedMode(true);
+    unsubscribe();
+    setAdvancedMode(false);
+    expect(seen).toEqual([true]);
+    const resubscribe = subscribe(observer);
+    setAdvancedMode(true);
+    resubscribe();
+    expect(seen).toEqual([true, true]);
+    setAdvancedMode(false);
   });
 
   it("the simple sidebar renders one merged chat list — direct chats and Operation chats together", () => {
@@ -62,6 +114,26 @@ describe("interface mode (owner direction, 2026-11-20)", () => {
     expect(html).toContain("Active chats");
     expect(html).toContain("Exam Preparation"); // the template gallery is back
     expect(html).toContain("student pack v1");
+  });
+});
+
+describe("merged Chats recency order (D52, spec-review fix)", () => {
+  it("agent and Operation rows interleave by their recorded timestamps, newest first, agents winning ties", () => {
+    const agentRows = [
+      { kind: "agent" as const, key: "a-old", at: 100 },
+      { kind: "agent" as const, key: "a-new", at: 300 },
+    ];
+    const operationRows = [
+      { kind: "operation" as const, key: "op-mid", at: 200 },
+      { kind: "operation" as const, key: "op-tie", at: 300 },
+    ];
+    const merged = mergeChatsByRecency(agentRows, operationRows);
+    expect(merged.map((row) => `${row.kind}:${row.key}`)).toEqual([
+      "agent:a-new", // 300, agent rows win the tie with stable insertion order
+      "operation:op-tie", // 300
+      "operation:op-mid", // 200
+      "agent:a-old", // 100
+    ]);
   });
 });
 

@@ -55,18 +55,29 @@ export function setAdvancedMode(enabled: boolean): void {
   for (const listener of listeners) listener();
 }
 
-function subscribe(listener: () => void): () => void {
+/** The store's raw subscription (exported for test pinning of the lifecycle). */
+export function subscribe(listener: () => void): () => void {
   listeners.add(listener);
-  if (listeners.size === 1 && typeof window !== "undefined") {
-    window.addEventListener("storage", (event) => {
-      if (event.key !== ADVANCED_MODE_KEY && event.key !== null) return;
-      sessionChoice = undefined;
-      for (const other of listeners) other();
-    });
-  }
+  ensureWindowListener();
   return () => {
     listeners.delete(listener);
   };
+}
+
+/**
+ * One window listener for the module's lifetime (mounted on the first
+ * subscribe, never removed — the module lives as long as the page): React
+ * remount cycles must not accumulate duplicate storage handlers.
+ */
+let windowListenerBound = false;
+function ensureWindowListener(): void {
+  if (windowListenerBound || typeof window === "undefined") return;
+  windowListenerBound = true;
+  window.addEventListener("storage", (event) => {
+    if (event.key !== ADVANCED_MODE_KEY && event.key !== null) return;
+    sessionChoice = undefined;
+    for (const other of listeners) other();
+  });
 }
 
 /**
@@ -76,4 +87,9 @@ function subscribe(listener: () => void): () => void {
  */
 export function useAdvancedMode(): boolean {
   return useSyncExternalStore(subscribe, readAdvancedMode, () => sessionChoice ?? false);
+}
+
+/** Test hook: back to the truly fresh state (no session choice, storage read). */
+export function resetSessionChoice(): void {
+  sessionChoice = undefined;
 }

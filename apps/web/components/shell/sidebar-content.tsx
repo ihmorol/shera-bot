@@ -171,6 +171,19 @@ const ITEM_BASE = "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transiti
 const ITEM_ACTIVE = "bg-surface-elevated text-text";
 const ITEM_IDLE = "text-muted hover:bg-surface-elevated hover:text-text";
 
+/**
+ * The merged Chats list is recency-sorted (D52, UI_DESIGN §3.4): agent
+ * direct chats and Operation chats interleave by their own recorded
+ * timestamps, newest first, agent rows winning ties (stable sort keeps
+ * roster order within a tie). Exported for the order contract test.
+ */
+export function mergeChatsByRecency<A extends { at: number }, O extends { at: number }>(
+  agentRows: A[],
+  operationRows: O[],
+): (A | O)[] {
+  return [...agentRows, ...operationRows].sort((a, b) => b.at - a.at);
+}
+
 /** The Advanced footer toggle — one quiet control, both modes. */
 function AdvancedToggle() {
   const advanced = useAdvancedMode();
@@ -210,8 +223,8 @@ function SimpleChatListDemo({
   onNavigate?: (() => void) | undefined;
 }) {
   const model = sidebarModel();
-  const rows = [
-    ...model.agents.map((entry) => ({
+  const rows = mergeChatsByRecency(
+    model.agents.map((entry) => ({
       kind: "agent" as const,
       key: entry.agent.agent_id,
       conversationId: entry.conversation.conversation_id,
@@ -224,7 +237,7 @@ function SimpleChatListDemo({
       approvalCount: entry.approvalCount,
       attention: entry.attention,
     })),
-    ...model.operationChats.map((entry) => ({
+    model.operationChats.map((entry) => ({
       kind: "operation" as const,
       key: entry.operation.operation_id,
       conversationId: entry.conversation.conversation_id,
@@ -237,7 +250,7 @@ function SimpleChatListDemo({
       approvalCount: entry.approvalCount,
       attention: entry.attention,
     })),
-  ].sort((a, b) => b.at - a.at);
+  );
 
   return (
     <ul>
@@ -307,7 +320,10 @@ function SimpleChatListLive({
     title: operation.name,
     autoLabel: operation.auto_label,
     isAdhoc: operation.is_adhoc,
-    at: 0,
+    // The runtime derives no last-activity preview for Operations yet — the
+    // record's updated_at is the honest available sort key (G4); rows stay
+    // preview-less until the runtime adds one.
+    at: Date.parse(operation.updated_at) || 0,
   }));
 
   if (roster.state === "loading" || operations.state === "loading") {
@@ -345,9 +361,19 @@ function SimpleChatListLive({
     );
   }
 
+  // §2.4 + §3.4: the live merged list defines its empty state — one line
+  // naming what will appear; the New Operation action sits directly above.
+  if (agentRows.length === 0 && operationRows.length === 0) {
+    return (
+      <p className="px-3 py-2 text-sm text-muted" role="status">
+        No conversations yet. Agent chats and Operations appear here.
+      </p>
+    );
+  }
+
   return (
     <ul>
-      {[...agentRows, ...operationRows].map((row) => {
+      {mergeChatsByRecency(agentRows, operationRows).map((row) => {
         const active = pathname === row.href || pathname.startsWith(`${row.href}/`);
         return (
           <li key={row.key}>
@@ -362,7 +388,7 @@ function SimpleChatListLive({
                   agent={{
                     agent_id: row.key,
                     display_name: row.title,
-                    ui_identity: { avatar_hue: row.hue ?? 217, initial_glyph: row.glyph ?? "" },
+                    ui_identity: { avatar_hue: row.hue, initial_glyph: row.glyph },
                   }}
                   size="sm"
                 />

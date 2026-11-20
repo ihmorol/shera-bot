@@ -16,7 +16,9 @@ import { cn } from "@/lib/utils";
  * order, each linking its real section — the index never advertises a section
  * that cannot render (G4). Owner direction (2026-11-20): the core six lead;
  * the remaining nine live under one collapsed "Advanced" disclosure (still
- * rendered and reachable, never hidden from assistive tech). The recorded
+ * rendered and one click away; closed disclosure content is hidden from
+ * assistive tech until expanded, so the <summary> itself carries the group's
+ * name and expanded state). The recorded
  * read-only categories carry the decision's own words instead of an invented
  * control (G4/G5).
  */

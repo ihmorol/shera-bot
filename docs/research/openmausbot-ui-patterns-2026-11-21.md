@@ -323,7 +323,7 @@ its title; "You" for the person, the bot's name for the agent; numbers spelled a
    rail + status chip, scope toggle ("Only this thread" / "Pack default" in Shera vocabulary), suggested-5 + show-all,
    dimmed-with-reason panes, effort chips with "let the provider decide" default.
 6. **Empty states / definition strips** → use the formula: icon + one value sentence + one CTA; automations-style
-   "+ new" dialog that delegates to an Agent via a normal chat message ("Set it up") with an expert escape hatch
+   "+ new" dialog that delegates to an Agent via a normal chat message ("Set it up") with a manual escape hatch
    ("Set it up yourself").
 7. **Composer** → adopt the placeholder state machine and action-labeled send button (queue/steer variants) for the
    Operation chat surface; "+ new Operation" stays in the sidebar rows, not the composer.

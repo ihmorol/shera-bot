@@ -22,6 +22,7 @@ import { useContainerResolution, useSessionIdentity } from "@/lib/container-conn
 import { operationInstanceById, rosterSubtitle } from "@/lib/fixtures";
 import { useAdvancedMode } from "@/lib/interface-mode";
 import { findOperationTemplate } from "@/lib/navigation";
+import { cn } from "@/lib/utils";
 import {
   candidateAgentsForOperation,
   createOperationOutcomeMessage,
@@ -288,6 +289,28 @@ function RuntimeOperationChat({
         onRetry={detail.refetch}
       />
 
+      {/* Simple mode keeps ONE strip in both directions — open AND collapse —
+          so the roster panel is never a one-way door. aria-expanded pairs the
+          state for screen readers. */}
+      {!advanced ? (
+        <div className="shrink-0 border-b border-line bg-surface px-4 lg:px-6">
+          <div className="flex items-center justify-end py-2">
+            <button
+              type="button"
+              onClick={() => setRosterOpenSimple(!rosterOpenSimple)}
+              aria-expanded={rosterVisible}
+              className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted transition-colors hover:bg-surface-elevated hover:text-text"
+            >
+              {rosterOpenSimple ? "Hide roster" : "Manage roster"}
+              <ChevronDown
+                className={cn("size-3.5 transition-transform", rosterOpenSimple && "rotate-180")}
+                aria-hidden="true"
+              />
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {rosterVisible ? (
         <OperationRosterPanel
           roster={rosterMembers}
@@ -356,21 +379,7 @@ function RuntimeOperationChat({
             coordinatorCommand.mutate(coordinatorAgentId);
           }}
         />
-      ) : (
-        // Simple mode: one quiet strip opens the roster management panel.
-        <div className="shrink-0 border-b border-line bg-surface px-4 lg:px-6">
-          <div className="flex items-center justify-end py-2">
-            <button
-              type="button"
-              onClick={() => setRosterOpenSimple(true)}
-              className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted transition-colors hover:bg-surface-elevated hover:text-text"
-            >
-              Manage roster
-              <ChevronDown className="size-3.5" aria-hidden="true" />
-            </button>
-          </div>
-        </div>
-      )}
+      ) : null}
 
       <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto] lg:grid-cols-[minmax(0,1fr)_19rem] lg:grid-rows-1">
         <OperationThreadView

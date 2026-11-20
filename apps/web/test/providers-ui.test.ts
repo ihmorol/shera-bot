@@ -185,6 +185,55 @@ describe("Providers & models settings (UI_DESIGN §S9, AC10)", () => {
   });
 });
 
+describe("connection status chips (D52 wave D — runtime typed states, §2.1 tints)", () => {
+  it("an api_key provider with no stored key carries the Setup required chip (warning tint, sr-only tail)", () => {
+    const html = view({ providers: [{ ...KEYED, credential_hint: null }] });
+    expect(html).toContain("Setup required");
+    expect(html).toContain("bg-approval/10");
+    expect(html).toContain("sr-only");
+  });
+
+  it("a passing connection test renders the Connected chip (success tint, sr-only tail)", () => {
+    const html = view({
+      lastTestResult: {
+        providerId: KEYED.id,
+        state: "ok",
+        result: { ok: true, checked_model: "gpt-4o-mini", latency_ms: 42 },
+      },
+    });
+    expect(html).toContain("Connected");
+    expect(html).toContain("bg-live/10");
+    expect(html).toContain("sr-only");
+    // The existing honest note (checked model + latency) stays alongside.
+    expect(html).toContain("Connection OK");
+  });
+
+  it("a failed connection test renders the Test failed chip (warning tint); the typed safe_message stays the reason", () => {
+    const html = view({
+      lastTestResult: {
+        providerId: KEYED.id,
+        state: "failed",
+        result: {
+          ok: false,
+          code: "PROVIDER_CONNECTION_TEST_AUTH_FAILED",
+          safe_message: "The provider rejected the credential (HTTP 401).",
+          http_status: 401,
+        },
+      },
+    });
+    expect(html).toContain("Test failed");
+    expect(html).toContain("bg-approval/10");
+    expect(html).toContain("The provider rejected the credential (HTTP 401).");
+  });
+
+  it("a provider with a stored key and no settled test shows no connection chip", () => {
+    const html = view();
+    expect(html).not.toContain("Setup required");
+    expect(html).not.toContain("Connected");
+    expect(html).not.toContain("Test failed");
+  });
+});
+
 describe("per-Agent default provider assignment (AC11)", () => {
   const AGENT_SETTINGS_PATH = "components/settings/agent-settings.tsx";
 

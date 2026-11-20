@@ -280,7 +280,7 @@ describe("Notification center view (S10)", () => {
     const html = renderCenter({ rows: [] });
     expect(html).toContain('data-testid="notification-empty"');
     expect(html).toContain(
-      "Nothing for you yet. Approvals, completions, and failures show up here.",
+      "Nothing for you yet. Approvals, completions, failures, and recoveries show up here.",
     );
     // ONE glyph: the bell. 14px muted register.
     expect(html).toContain("lucide-bell");

@@ -651,7 +651,7 @@ export function SchedulesSettingsView(props: SchedulesSettingsViewProps) {
         <EmptyState
           testId="schedules-empty"
           icon={CalendarClock}
-          message="No triggers yet. Schedules and watchers for your Operations appear here."
+          message="No triggers yet. Schedules, watchers, and webhooks for your Operations appear here."
         />
       ) : (
         <ul className="space-y-4" data-testid="schedule-trigger-list">

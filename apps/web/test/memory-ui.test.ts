@@ -209,6 +209,11 @@ describe("S29 — the publication queue (AC27)", () => {
       "No private memories yet. What an Agent remembers for itself shows up here.",
     );
     expect(html).not.toContain("visible only to that Agent until you share it");
+    // The workspace strip's promise is pinned too (review gap: it was
+    // claimed "audited satisfied" without an assertion).
+    expect(html).toContain(
+      "Nothing is remembered for this workspace yet. Agents remember what matters as you work with them.",
+    );
   });
 
   it("a pending request renders its entry, proposer, and both decisions", () => {

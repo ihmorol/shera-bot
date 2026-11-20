@@ -193,7 +193,7 @@ export function NotificationCenterView(props: NotificationCenterViewProps) {
           <EmptyState
             testId="notification-empty"
             icon={Bell}
-            message="Nothing for you yet. Approvals, completions, and failures show up here."
+            message="Nothing for you yet. Approvals, completions, failures, and recoveries show up here."
           />
         ) : (
           <ul className="divide-y divide-line">

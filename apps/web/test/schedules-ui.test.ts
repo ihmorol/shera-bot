@@ -138,13 +138,25 @@ describe("S28 — the empty state (D52 wave E value-promise formula)", () => {
     const html = renderView([], { defaultCreateOpen: false });
     expect(html).toContain('data-testid="schedules-empty"');
     expect(html).toContain(
-      "No triggers yet. Schedules and watchers for your Operations appear here.",
+      "No triggers yet. Schedules, watchers, and webhooks for your Operations appear here.",
     );
     // ONE glyph — the schedule clock; the retired two-sentence body and its
     // design-rule aside are gone from the empty state.
     expect(html).toContain("lucide-calendar-clock");
     expect(html).not.toContain("Create the first trigger");
     expect(html).not.toContain("never from chat");
+  });
+
+  it("an empty surface auto-opens the typed create form — the no-CTA rationale is pinned behavior", () => {
+    // No defaultCreateOpen prop: the pre-existing auto-open default applies
+    // (open ?? default ?? triggers.length === 0), so the form stands open
+    // above the empty state and the collapsed "New trigger" button is gone.
+    const html = renderView([]);
+    expect(html).not.toContain("New trigger");
+    // With the default overridden, the collapsed affordance is present
+    // above the empty state — the adjacent action exists either way.
+    const closed = renderView([], { defaultCreateOpen: false });
+    expect(closed).toContain("New trigger");
   });
 });
 

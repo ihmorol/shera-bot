@@ -123,6 +123,12 @@ export function ErrorState({
  * action is invented). 14px muted text, centered, never more than two
  * lines. Loading and error keep their own shapes above — this primitive is
  * for the EMPTY state only.
+ *
+ * NOT the `EmptyState` in ./surface-frame.tsx (the older thread/operation
+ * minimal variant with the `explanation` prop — different contract). The
+ * two coexist by design until a wave owning surface-frame consolidates
+ * them; import THIS one for new surfaces unless the surface-frame shape is
+ * what the caller already renders.
  */
 export function EmptyState({
   icon: Icon,

@@ -760,6 +760,23 @@ describe("interface mode render pins (D52 wave B — foundation spec-review foll
   });
 });
 
+describe("Operation thread composer honesty (D52 wave B — audited placeholder priority)", () => {
+  it("the Operation placeholder names the Operation and the @ affordance", () => {
+    const html = renderThread({ composerValue: "hello" });
+    expect(html).toContain('placeholder="Message the Operation (@ to address an Agent)"');
+  });
+
+  it("the send button names the action; while a send is pending it is disabled with its status", () => {
+    const idle = renderThread({ composerValue: "hello" });
+    expect(idle).toContain('aria-label="Send message"');
+    expect(idle).toContain('title="Send message"');
+
+    const pending = renderThread({ composerValue: "hello", sendPending: true });
+    expect(pending).toMatch(/\bdisabled=""/);
+    expect(pending).toContain('title="Sending…"');
+  });
+});
+
 // ---------------------------------------------------------------------------
 // 5. Ad-hoc creation form (S6 entry point to the chat)
 // ---------------------------------------------------------------------------

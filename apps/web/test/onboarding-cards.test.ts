@@ -273,7 +273,10 @@ describe("D52 wave C — interview-card mechanics", () => {
     snapshot({
       steps: snapshot().steps.map((step) =>
         step.step === "welcome"
-          ? { ...step, answer: { option_id: optionId, free_text: freeText, answered_at: answeredAt } }
+          ? {
+              ...step,
+              answer: { option_id: optionId, free_text: freeText, answered_at: answeredAt },
+            }
           : step,
       ),
     });

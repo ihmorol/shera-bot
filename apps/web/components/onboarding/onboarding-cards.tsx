@@ -56,9 +56,7 @@ const CHIP_KEYS = ["A", "B", "C", "D", "E", "F", "G", "H"];
 
 /** One resolved keyboard action for the choice radiogroup. */
 export type ChipKeyAction =
-  | { kind: "move"; to: number }
-  | { kind: "answer"; at: number }
-  | { kind: "none" };
+  { kind: "move"; to: number } | { kind: "answer"; at: number } | { kind: "none" };
 
 /**
  * The radiogroup's keyboard contract, pure so it stays directly testable:
@@ -375,7 +373,12 @@ export function OnboardingCardsView({
         </p>
       ) : null}
 
-      <OnboardingStepBody key={current.step} current={current} typedPast={typedPast} onAnswer={onAnswer} />
+      <OnboardingStepBody
+        key={current.step}
+        current={current}
+        typedPast={typedPast}
+        onAnswer={onAnswer}
+      />
 
       <p className="mt-2 text-[11px] text-muted">
         Not now keeps your answers — reopen it anytime from Settings → Account.

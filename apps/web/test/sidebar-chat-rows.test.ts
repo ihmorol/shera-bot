@@ -17,7 +17,11 @@ import {
 import { formatChatTimestamp } from "../lib/relative-time";
 import { agentById, messagesForConversation } from "../lib/fixtures";
 import { routes } from "../lib/routes";
-import { resetChatViewPrefsForTests, setChatUnreadMark, toggleChatPin } from "../lib/chat-view-prefs";
+import {
+  resetChatViewPrefsForTests,
+  setChatUnreadMark,
+  toggleChatPin,
+} from "../lib/chat-view-prefs";
 
 /**
  * Wave A chunk A1 (D52; E43 §5 patterns-not-pixels) — the SIMPLE merged Chats
@@ -432,9 +436,8 @@ describe("row menu items (order, labels, reasons)", () => {
       agentSlug: "researcher",
       ...noops,
     });
-    expect(overlayUnread.find((e) => e.kind === "item" && e.key === "mark")?.label).toBe(
-      "Mark as read",
-    );
+    const unreadItem = overlayUnread.find((e) => e.kind === "item" && e.key === "mark");
+    expect(unreadItem?.kind === "item" && unreadItem.label).toBe("Mark as read");
 
     const overlayRead = chatRowMenuItems({
       kind: "agent",
@@ -447,7 +450,7 @@ describe("row menu items (order, labels, reasons)", () => {
       ...noops,
     });
     const markItem = overlayRead.find((e) => e.kind === "item" && e.key === "mark");
-    expect(markItem?.label).toBe("Mark as unread");
+    expect(markItem?.kind === "item" && markItem.label).toBe("Mark as unread");
     // The overlay is browser-local — the title says so.
     expect(markItem?.kind === "item" && markItem.title).toBe("Marked unread here only");
   });
@@ -544,9 +547,7 @@ describe("the chat row menu sheet (a11y)", () => {
   });
 
   const renderSheet = (): string =>
-    renderToStaticMarkup(
-      createElement(ChatRowMenuSheet, { entries, onDismiss: () => undefined }),
-    );
+    renderToStaticMarkup(createElement(ChatRowMenuSheet, { entries, onDismiss: () => undefined }));
 
   it("renders role=menu with role=menuitem rows, hairline separators, and the 30px/14px recipe", () => {
     const html = renderSheet();

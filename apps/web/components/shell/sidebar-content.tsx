@@ -1,9 +1,18 @@
 "use client";
 
 import type { Agent } from "@shera-bot/contracts";
-import { Layers, Loader2, Pin, Settings2 } from "lucide-react";
+import { Layers, Loader2, MoreHorizontal, Pin, Settings2 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type RefObject,
+} from "react";
+import { createPortal } from "react-dom";
 
 import { AgentRosterSection } from "@/components/shell/agent-roster";
 import { CreditsPill } from "@/components/shell/credits-pill";
@@ -13,6 +22,12 @@ import { AgentAvatar } from "@/components/chat/agent-avatar";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useAgentRoster } from "@/lib/agent-data";
+import {
+  setChatUnreadMark,
+  toggleChatPin,
+  useChatViewPrefs,
+  type ChatUnreadMark,
+} from "@/lib/chat-view-prefs";
 import { useContainerResolution } from "@/lib/container-connection";
 import {
   agentById,
@@ -270,23 +285,508 @@ export function chatPreviewFromMessages(
   return newest.text;
 }
 
+// ---------------------------------------------------------------------------
+// Wave A chunk A2 — the row context menu (E43 §3 contract, D52): pin,
+// read-state overlay, copy conversation id, and the kind-specific last
+// entry. There is NO delete/archive/rename in v1 — conversations persist
+// (PRD §4.2) and the runtime has no such chat-mutation commands, so menu
+// items that would need them are not invented (G2).
+// ---------------------------------------------------------------------------
+
+export type ChatRowMenuEntry =
+  | { kind: "separator" }
+  | {
+      kind: "item";
+      key: string;
+      label: string;
+      /** Navigation items push this route; action items fire onSelect. */
+      href?: string | undefined;
+      onSelect?: (() => void) | undefined;
+      disabled?: boolean | undefined;
+      /** The reason a disabled item cannot fire (title attr; never guessed). */
+      disabledReason?: string | undefined;
+      /** A hover hint — e.g. the local-only nature of the unread overlay. */
+      title?: string | undefined;
+    };
+
 /**
- * The shared SIMPLE row list (wave A chunk A1): two-line rows — line 1
- * avatar or Operation glyph + pin glyph + name + relative timestamp
- * (right-aligned, tabular numerals, 12px), line 2 the activity preview
- * line. Rows with no preview stay quiet single-line (G4). Pinned rows lead
- * (§3.4); the caller passes the recency-merged list and the pinned ids.
- * Exported for the row-anatomy contract test.
+ * The menu entries for one chat row, in the recorded order. Pure — the
+ * component wires the callbacks and the sheet renders the result.
+ */
+export function chatRowMenuItems(options: {
+  kind: "agent" | "operation";
+  conversationId: string;
+  pinned: boolean;
+  mark: ChatUnreadMark | undefined;
+  runtimeUnread: boolean;
+  containerReady: boolean;
+  /** Agent rows: the settings-route slug (settings need the Agent identity). */
+  agentSlug?: string | undefined;
+  /** Operation rows: the operation chat route the "Open roster" item opens. */
+  operationHref?: string | undefined;
+  onTogglePin: () => void;
+  onSetMark: (mark: ChatUnreadMark) => void;
+  onCopy: () => void;
+}): ChatRowMenuEntry[] {
+  const separator: ChatRowMenuEntry = { kind: "separator" };
+  // The overlay wins over runtime state for this browser: an explicit
+  // "unread"/"read" mark decides, otherwise the runtime's own state.
+  const effectivelyUnread =
+    options.mark === "unread" ? true : options.mark === "read" ? false : options.runtimeUnread;
+  return [
+    {
+      kind: "item",
+      key: "pin",
+      label: options.pinned ? "Unpin" : "Pin",
+      onSelect: options.onTogglePin,
+    },
+    {
+      kind: "item",
+      key: "mark",
+      label: effectivelyUnread ? "Mark as read" : "Mark as unread",
+      onSelect: () => options.onSetMark(effectivelyUnread ? "read" : "unread"),
+      ...(effectivelyUnread ? {} : { title: "Marked unread here only" }),
+    },
+    separator,
+    {
+      kind: "item",
+      key: "copy",
+      label: "Copy conversation ID",
+      onSelect: options.onCopy,
+    },
+    separator,
+    options.kind === "agent"
+      ? {
+          kind: "item",
+          key: "settings",
+          label: "Agent settings",
+          href: routes.settings(`agents/${options.agentSlug ?? ""}`),
+          disabled: !options.containerReady,
+          disabledReason: "Settings need the workspace ready",
+        }
+      : {
+          kind: "item",
+          key: "roster",
+          label: "Open roster",
+          href: options.operationHref,
+          disabled: false,
+        },
+  ];
+}
+
+/**
+ * Viewport clamp for the portal sheet (E43 §3: 8px margins, never off-screen).
+ * Pure — tested directly.
+ */
+export function clampMenuPosition(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  viewportWidth: number,
+  viewportHeight: number,
+): { x: number; y: number } {
+  const margin = 8;
+  return {
+    x: Math.max(margin, Math.min(x, viewportWidth - width - margin)),
+    y: Math.max(margin, Math.min(y, viewportHeight - height - margin)),
+  };
+}
+
+/**
+ * Roving focus over the ENABLED menu items (E43 §3): ArrowDown/ArrowUp wrap,
+ * Home/End jump, anything else is not a focus move. `current` is the index
+ * within the enabled list (-1 when nothing is focused yet). Pure — tested
+ * directly.
+ */
+export function nextMenuFocusIndex(
+  current: number,
+  key: string,
+  enabledCount: number,
+): number | null {
+  if (enabledCount === 0) return null;
+  // Nothing focused yet: ArrowDown enters at the first item, ArrowUp at the
+  // last — the wrap formula below only holds for valid indices.
+  if (current < 0) {
+    if (key === "ArrowDown") return 0;
+    if (key === "ArrowUp") return enabledCount - 1;
+    return null;
+  }
+  switch (key) {
+    case "ArrowDown":
+      return (current + 1) % enabledCount;
+    case "ArrowUp":
+      return (current - 1 + enabledCount) % enabledCount;
+    case "Home":
+      return 0;
+    case "End":
+      return enabledCount - 1;
+    default:
+      return null;
+  }
+}
+
+const MENU_WIDTH = 224;
+const MENU_MARGIN_PX = 8;
+
+/**
+ * The portal sheet (E43 §3 recipe): rounded surface on the elevated token,
+ * 30px min-height rows, 14px text, hairline separators, disabled =
+ * opacity-40 with the reason in the title. Escape closes, roving arrow keys
+ * move focus, viewport-clamped via the caller's position. Exported for the
+ * a11y contract test.
+ */
+export function ChatRowMenuSheet({
+  entries,
+  position,
+  onDismiss,
+  menuRef,
+  copied,
+}: {
+  entries: ChatRowMenuEntry[];
+  position?: { x: number; y: number } | undefined;
+  onDismiss: () => void;
+  /** Ref passthrough so the opener can scope focus + outside-click logic. */
+  menuRef?: RefObject<HTMLDivElement | null> | undefined;
+  /** Copy feedback: the copy item's title flips to "Copied" briefly. */
+  copied?: boolean | undefined;
+}) {
+  const router = useRouter();
+  const internalRef = useRef<HTMLDivElement>(null);
+  const sheetRef = menuRef ?? internalRef;
+
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.key === "Escape") {
+      event.stopPropagation();
+      onDismiss();
+      return;
+    }
+    const enabled = Array.from(
+      sheetRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)') ??
+        [],
+    );
+    const current = enabled.findIndex((item) => item === document.activeElement);
+    const next = nextMenuFocusIndex(current, event.key, enabled.length);
+    if (next === null) return;
+    event.preventDefault();
+    enabled[next]?.focus();
+  };
+
+  return (
+    <div
+      ref={sheetRef}
+      role="menu"
+      data-testid="chat-row-menu"
+      tabIndex={-1}
+      onKeyDown={onKeyDown}
+      className="z-50 w-56 rounded-xl border border-line bg-surface-elevated p-1.5 shadow-lg"
+      style={position ? { position: "fixed", left: position.x, top: position.y } : undefined}
+    >
+      {entries.map((entry, index) =>
+        entry.kind === "separator" ? (
+          <div key={`sep-${index}`} role="separator" className="mx-1.5 my-1 h-px bg-line" />
+        ) : (
+          <button
+            key={entry.key}
+            type="button"
+            role="menuitem"
+            disabled={entry.disabled}
+            title={
+              entry.disabled
+                ? entry.disabledReason
+                : entry.key === "copy" && copied
+                  ? "Copied"
+                  : entry.title
+            }
+            onClick={() => {
+              if (entry.disabled) return;
+              if (entry.href) router.push(entry.href);
+              entry.onSelect?.();
+              onDismiss();
+            }}
+            className={cn(
+              "flex min-h-[30px] w-full items-center rounded-md px-3 text-left text-sm text-text transition-colors",
+              entry.disabled ? "cursor-default opacity-40" : "hover:bg-surface",
+            )}
+          >
+            <span className="min-w-0 flex-1 truncate">{entry.label}</span>
+          </button>
+        ),
+      )}
+    </div>
+  );
+}
+
+const COPY_FEEDBACK_MS = 1500;
+/** Conservative sheet-height estimate for the viewport clamp (items + padding). */
+const MENU_ESTIMATED_HEIGHT = 168;
+
+/**
+ * One SIMPLE row (wave A): the two-line anatomy inside the row link plus the
+ * menu trigger as a sibling control. The row owns the menu's local state —
+ * right-click and Shift+F10 open the sheet at the pointer, the trigger
+ * anchors it to its own box; Escape/outside-mousedown close it; focus
+ * restores to the opener. The pin glyph, the read/unread overlay, and the
+ * menu all read the same client view store — nothing here writes to the
+ * runtime (G2/G4).
+ */
+function SimpleChatRowItem({
+  row,
+  active,
+  timestamp,
+  containerReady,
+  onNavigate,
+}: {
+  row: SimpleChatRow;
+  active: boolean;
+  timestamp: string | null;
+  containerReady: boolean;
+  onNavigate?: (() => void) | undefined;
+}) {
+  const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState<{ x: number; y: number } | undefined>(undefined);
+  const [copied, setCopied] = useState(false);
+  const openerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const { pins, marks } = useChatViewPrefs();
+  const pinned = pins.includes(row.conversationId);
+  const mark = marks[row.conversationId];
+  // The overlay wins for this browser only: "read" clears the runtime pill,
+  // "unread" forces the local dot (no fake count — G4).
+  const stateAfterOverlay = mark === "read" && row.state === "unread" ? "quiet" : row.state;
+
+  const close = useCallback(() => {
+    setOpen(false);
+    // Focus returns to the opener (E43 §3 focus discipline).
+    openerRef.current?.focus();
+  }, []);
+
+  const openAt = useCallback((x: number, y: number) => {
+    if (typeof window !== "undefined") {
+      setPosition(
+        clampMenuPosition(
+          x,
+          y,
+          MENU_WIDTH,
+          MENU_ESTIMATED_HEIGHT,
+          window.innerWidth,
+          window.innerHeight,
+        ),
+      );
+    } else {
+      setPosition({ x: MENU_MARGIN_PX, y: MENU_MARGIN_PX });
+    }
+    setCopied(false);
+    setOpen(true);
+  }, []);
+
+  // Outside mousedown closes (the opener's own mousedown lets its click
+  // toggle the menu instead of double-firing).
+  useEffect(() => {
+    if (!open) return;
+    const onMouseDown = (event: MouseEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Node &&
+        (menuRef.current?.contains(target) || openerRef.current?.contains(target))
+      ) {
+        return;
+      }
+      close();
+    };
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [open, close]);
+
+  // Focus the first ENABLED item on open (E43 §3).
+  useEffect(() => {
+    if (!open) return;
+    menuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')?.focus();
+  }, [open]);
+
+  const copyConversationId = useCallback(() => {
+    try {
+      void navigator.clipboard?.writeText(row.conversationId);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), COPY_FEEDBACK_MS);
+    } catch {
+      // Clipboard unavailable — nothing is promised; the id stays in the
+      // conversation record (it renders in the address bar for Operations).
+    }
+  }, [row.conversationId]);
+
+  const entries = chatRowMenuItems({
+    kind: row.kind,
+    conversationId: row.conversationId,
+    pinned,
+    mark,
+    runtimeUnread: row.state === "unread",
+    containerReady,
+    agentSlug: row.kind === "agent" ? entitySlug(row.key) : undefined,
+    operationHref: row.kind === "operation" ? row.href : undefined,
+    onTogglePin: () => toggleChatPin(row.conversationId),
+    onSetMark: (nextMark) => setChatUnreadMark(row.conversationId, nextMark),
+    onCopy: copyConversationId,
+  });
+
+  const openFromTrigger = () => {
+    const rect = openerRef.current?.getBoundingClientRect();
+    openAt(
+      rect ? rect.right - MENU_WIDTH : MENU_MARGIN_PX,
+      rect ? rect.bottom + 4 : MENU_MARGIN_PX,
+    );
+  };
+
+  return (
+    <li
+      className="group relative"
+      onContextMenu={(event) => {
+        event.preventDefault();
+        openAt(event.clientX, event.clientY);
+      }}
+      onKeyDown={(event) => {
+        if (event.shiftKey && event.key === "F10") {
+          event.preventDefault();
+          const rect = openerRef.current?.getBoundingClientRect();
+          openAt(rect ? rect.left : MENU_MARGIN_PX, rect ? rect.bottom + 4 : MENU_MARGIN_PX);
+        }
+      }}
+    >
+      <div className={cn(ITEM_BASE, active ? ITEM_ACTIVE : ITEM_IDLE)}>
+        <Link
+          href={row.href}
+          aria-current={active ? "page" : undefined}
+          className="flex min-w-0 flex-1 items-center gap-3"
+          {...(onNavigate ? { onClick: onNavigate } : {})}
+        >
+          {row.agent ? (
+            <AgentAvatar
+              agent={row.agent}
+              size="sm"
+              {...(row.presence ? { presence: row.presence } : {})}
+            />
+          ) : row.hue !== undefined && row.glyph !== undefined ? (
+            <AgentAvatar
+              agent={{
+                agent_id: row.key,
+                display_name: row.title,
+                ui_identity: { avatar_hue: row.hue, initial_glyph: row.glyph },
+              }}
+              size="sm"
+            />
+          ) : (
+            <Layers className="size-4 shrink-0 text-sky" aria-hidden="true" />
+          )}
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-1.5">
+              {pinned ? (
+                <Pin
+                  className="size-3 shrink-0 text-muted"
+                  aria-hidden="true"
+                  data-testid="chat-pin-glyph"
+                />
+              ) : null}
+              <span
+                className={cn(
+                  "min-w-0 truncate",
+                  row.kind === "operation" && row.autoLabel && "italic text-muted",
+                )}
+              >
+                {row.title}
+              </span>
+              {timestamp ? (
+                <span
+                  data-testid="chat-timestamp"
+                  className="ml-auto shrink-0 font-mono text-xs tabular-nums text-muted"
+                >
+                  {timestamp}
+                </span>
+              ) : null}
+            </span>
+            {row.preview ? (
+              <span
+                data-testid="chat-preview-line"
+                title={row.preview}
+                className="block truncate text-xs text-muted"
+              >
+                {row.preview}
+              </span>
+            ) : null}
+          </span>
+          {mark === "unread" ? (
+            <span
+              data-testid="chat-unread-dot"
+              role="img"
+              aria-label="Marked unread here only"
+              title="Marked unread here only"
+              className="size-1.5 shrink-0 rounded-full bg-brand"
+            />
+          ) : null}
+          {stateAfterOverlay ? (
+            <StateTrail
+              state={stateAfterOverlay}
+              unreadCount={row.unreadCount ?? 0}
+              approvalCount={row.approvalCount ?? 0}
+              attention={row.attention}
+            />
+          ) : null}
+          {row.kind === "operation" && row.isAdhoc ? (
+            <span
+              title="Created without a pack definition"
+              className="shrink-0 rounded-full border border-line px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-muted"
+            >
+              Ad-hoc
+            </span>
+          ) : null}
+        </Link>
+        {/* The hover/keyboard-reachable "..." trigger — a sibling of the row
+            link (never nested interactive elements), always in the DOM for
+            keyboard users, revealed on hover or focus. */}
+        <button
+          type="button"
+          ref={openerRef}
+          aria-label={`Chat options for ${row.title}`}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          title="Chat options"
+          onClick={openFromTrigger}
+          className="shrink-0 rounded-md p-1.5 text-muted opacity-0 transition-[opacity,color] hover:bg-surface-elevated hover:text-text focus-visible:opacity-100 group-hover:opacity-100"
+        >
+          <MoreHorizontal className="size-4" aria-hidden="true" />
+        </button>
+      </div>
+      {open && typeof document !== "undefined"
+        ? createPortal(
+            <ChatRowMenuSheet
+              entries={entries}
+              position={position}
+              onDismiss={close}
+              menuRef={menuRef}
+              copied={copied}
+            />,
+            document.body,
+          )
+        : null}
+    </li>
+  );
+}
+
+/**
+ * The shared SIMPLE row list (wave A): two-line rows — line 1 avatar or
+ * Operation glyph + pin glyph + name + relative timestamp (right-aligned,
+ * tabular numerals, 12px), line 2 the activity preview line. Rows with no
+ * preview stay quiet single-line (G4). Pinned rows lead (§3.4) — the pins
+ * come from the client view store. Exported for the row-anatomy contract
+ * test.
  */
 export function SimpleChatRows({
   rows,
-  pinnedIds = [],
   pathname,
   onNavigate,
   now: nowOverride,
+  containerReady = false,
 }: {
   rows: SimpleChatRow[];
-  pinnedIds?: readonly string[];
   pathname: string;
   onNavigate?: (() => void) | undefined;
   /**
@@ -295,96 +795,27 @@ export function SimpleChatRows({
    * timestamp rather than guessing one.
    */
   now?: number | undefined;
+  /** Whether the workspace container is ready (gates the settings entry). */
+  containerReady?: boolean | undefined;
 }) {
+  const { pins } = useChatViewPrefs();
   const clockNow = useRelativeNow();
   const now = nowOverride ?? clockNow;
-  const ordered = orderChatsPinFirst(rows, pinnedIds);
+  const ordered = orderChatsPinFirst(rows, pins);
   return (
     <ul>
       {ordered.map((row) => {
         const active = pathname === row.href || pathname.startsWith(`${row.href}/`);
-        const pinned = pinnedIds.includes(row.conversationId);
         const timestamp = formatChatTimestamp(row.at, now);
         return (
-          <li key={row.key}>
-            <Link
-              href={row.href}
-              aria-current={active ? "page" : undefined}
-              className={cn(ITEM_BASE, active ? ITEM_ACTIVE : ITEM_IDLE)}
-              {...(onNavigate ? { onClick: onNavigate } : {})}
-            >
-              {row.agent ? (
-                <AgentAvatar
-                  agent={row.agent}
-                  size="sm"
-                  {...(row.presence ? { presence: row.presence } : {})}
-                />
-              ) : row.hue !== undefined && row.glyph !== undefined ? (
-                <AgentAvatar
-                  agent={{
-                    agent_id: row.key,
-                    display_name: row.title,
-                    ui_identity: { avatar_hue: row.hue, initial_glyph: row.glyph },
-                  }}
-                  size="sm"
-                />
-              ) : (
-                <Layers className="size-4 shrink-0 text-sky" aria-hidden="true" />
-              )}
-              <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-1.5">
-                  {pinned ? (
-                    <Pin
-                      className="size-3 shrink-0 text-muted"
-                      aria-hidden="true"
-                      data-testid="chat-pin-glyph"
-                    />
-                  ) : null}
-                  <span
-                    className={cn(
-                      "min-w-0 truncate",
-                      row.kind === "operation" && row.autoLabel && "italic text-muted",
-                    )}
-                  >
-                    {row.title}
-                  </span>
-                  {timestamp ? (
-                    <span
-                      data-testid="chat-timestamp"
-                      className="ml-auto shrink-0 font-mono text-xs tabular-nums text-muted"
-                    >
-                      {timestamp}
-                    </span>
-                  ) : null}
-                </span>
-                {row.preview ? (
-                  <span
-                    data-testid="chat-preview-line"
-                    title={row.preview}
-                    className="block truncate text-xs text-muted"
-                  >
-                    {row.preview}
-                  </span>
-                ) : null}
-              </span>
-              {row.state ? (
-                <StateTrail
-                  state={row.state}
-                  unreadCount={row.unreadCount ?? 0}
-                  approvalCount={row.approvalCount ?? 0}
-                  attention={row.attention}
-                />
-              ) : null}
-              {row.kind === "operation" && row.isAdhoc ? (
-                <span
-                  title="Created without a pack definition"
-                  className="shrink-0 rounded-full border border-line px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-muted"
-                >
-                  Ad-hoc
-                </span>
-              ) : null}
-            </Link>
-          </li>
+          <SimpleChatRowItem
+            key={row.key}
+            row={row}
+            active={active}
+            timestamp={timestamp}
+            containerReady={containerReady}
+            onNavigate={onNavigate}
+          />
         );
       })}
     </ul>
@@ -472,7 +903,14 @@ function SimpleChatListDemo({
     })),
   );
 
-  return <SimpleChatRows rows={rows} pathname={pathname} onNavigate={onNavigate} pinnedIds={[]} />;
+  return (
+    <SimpleChatRows
+      rows={rows}
+      pathname={pathname}
+      onNavigate={onNavigate}
+      containerReady={false}
+    />
+  );
 }
 
 /** The SIMPLE chat list over the REAL workspace reads (S11/S14 discipline). */
@@ -572,7 +1010,7 @@ function SimpleChatListLive({
       rows={mergeChatsByRecency(agentRows, operationRows)}
       pathname={pathname}
       onNavigate={onNavigate}
-      pinnedIds={[]}
+      containerReady={true}
     />
   );
 }

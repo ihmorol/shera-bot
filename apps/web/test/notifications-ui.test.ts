@@ -278,12 +278,18 @@ describe("Notification center view (S10)", () => {
     expect(muted).toEqual([]);
   });
 
-  it("the empty state carries the one-line value promise and a single primary CTA (E43)", () => {
+  it("the empty state names what will appear and invents no CTA (annex §6, D52 wave E)", () => {
     const html = renderCenter({ rows: [] });
+    expect(html).toContain('data-testid="notification-empty"');
     expect(html).toContain(
-      "Notifications will appear here when a task finishes, fails, needs your approval, or hits a snag",
+      "Nothing for you yet. Approvals, completions, and failures show up here.",
     );
-    expect(html).toContain('data-testid="notification-empty-cta"');
+    // ONE glyph: the bell. 14px muted register.
+    expect(html).toContain("lucide-bell");
+    // No CTA: an empty center offers no in-surface action — the header's
+    // Settings control is the panel's affordance, not the empty state's.
+    expect(html).not.toContain("notification-empty-cta");
+    expect(html).not.toContain("Pick an Agent to start");
   });
 
   it("failures render the typed safe message with a retry — never a fabricated list", () => {

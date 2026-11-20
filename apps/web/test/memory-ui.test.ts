@@ -190,11 +190,25 @@ describe("S29 — provenance (the D37 display rule)", () => {
 });
 
 describe("S29 — the publication queue (AC27)", () => {
-  it("an empty queue teaches the boundary instead of showing nothing", () => {
+  it("an empty queue is a two-line value promise (annex §6, D52 wave E)", () => {
     const html = renderView(memoryView());
     expect(html).toContain("Publication queue");
-    expect(html).toContain("Nothing is waiting for your decision");
-    expect(html).toContain("nothing is shared until you approve it");
+    expect(html).toContain(
+      "Nothing is waiting for your decision. Publication requests land here for your approval.",
+    );
+    expect(html).not.toContain("nothing is shared until you approve it");
+  });
+
+  it("empty scope strips name what will appear in two short sentences (D52 wave E)", () => {
+    const html = renderView(
+      memoryView({
+        scopes: { account: [], workspace: [], operation: [], task: [], agent_private: [] },
+      }),
+    );
+    expect(html).toContain(
+      "No private memories yet. What an Agent remembers for itself shows up here.",
+    );
+    expect(html).not.toContain("visible only to that Agent until you share it");
   });
 
   it("a pending request renders its entry, proposer, and both decisions", () => {

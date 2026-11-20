@@ -133,6 +133,21 @@ describe("S28 — the truthful readout (AC9)", () => {
   });
 });
 
+describe("S28 — the empty state (D52 wave E value-promise formula)", () => {
+  it("names what will appear with one icon and no invented CTA — the create affordance sits above", () => {
+    const html = renderView([], { defaultCreateOpen: false });
+    expect(html).toContain('data-testid="schedules-empty"');
+    expect(html).toContain(
+      "No triggers yet. Schedules and watchers for your Operations appear here.",
+    );
+    // ONE glyph — the schedule clock; the retired two-sentence body and its
+    // design-rule aside are gone from the empty state.
+    expect(html).toContain("lucide-calendar-clock");
+    expect(html).not.toContain("Create the first trigger");
+    expect(html).not.toContain("never from chat");
+  });
+});
+
 describe("S28 — the no-local-schedule-math guard (AC9's truth source)", () => {
   const webRoot = resolve(here, "..");
   const offenders: string[] = [];

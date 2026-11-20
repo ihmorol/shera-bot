@@ -1,6 +1,7 @@
 "use client";
 
-import { Layers, Loader2, Settings2 } from "lucide-react";
+import type { Agent } from "@shera-bot/contracts";
+import { Layers, Loader2, Pin, Settings2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -14,14 +15,19 @@ import { Separator } from "@/components/ui/separator";
 import { useAgentRoster } from "@/lib/agent-data";
 import { useContainerResolution } from "@/lib/container-connection";
 import {
+  agentById,
   entitySlug,
+  messagesForConversation,
   sessionPresenceFor,
   sidebarModel,
   type AttentionVariant,
+  type ChatMessage,
   type ConversationState,
+  type SessionPresence,
 } from "@/lib/fixtures";
 import { useAdvancedMode, setAdvancedMode } from "@/lib/interface-mode";
 import { useOperationsList } from "@/lib/operation-data";
+import { formatChatTimestamp, useRelativeNow } from "@/lib/relative-time";
 import { routes } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
@@ -184,6 +190,207 @@ export function mergeChatsByRecency<A extends { at: number }, O extends { at: nu
   return [...agentRows, ...operationRows].sort((a, b) => b.at - a.at);
 }
 
+/**
+ * One row of the SIMPLE merged Chats list (wave A chunk A1, D52). Both list
+ * paths (fixture demo + real workspace reads) build these and render them
+ * through {@link SimpleChatRows} so the two-line anatomy exists exactly once.
+ */
+export interface SimpleChatRow {
+  kind: "agent" | "operation";
+  key: string;
+  /**
+   * The row's stable identifier — the pin/copy key of the row menu (chunk
+   * A2). Demo rows carry the fixture conversation id; live rows carry the
+   * runtime record id the row actually holds (the roster payload has no
+   * conversation id — the client never invents one, G4).
+   */
+  conversationId: string;
+  href: string;
+  title: string;
+  /** Demo Agent rows carry the full fixture Agent (avatar + presence). */
+  agent?: Agent | null;
+  /** Live Agent rows carry identity-only fields (G4 — nothing fabricated). */
+  hue?: number;
+  glyph?: string;
+  presence?: SessionPresence | undefined;
+  /** Recency sort key; 0 when the record carries no stamp (renders none). */
+  at: number;
+  /** The activity preview line; null renders no line — the row stays quiet. */
+  preview: string | null;
+  /** Demo rows carry the derived §2.1 state; live rows fabricate no state. */
+  state?: ConversationState | undefined;
+  unreadCount?: number;
+  approvalCount?: number;
+  attention?: AttentionVariant | undefined;
+  autoLabel?: boolean;
+  isAdhoc?: boolean;
+}
+
+/**
+ * Pin-first ordering (UI_DESIGN §3.4 amendment, D52 wave A): pinned rows
+ * lead the list; recency order survives within the pinned group and the
+ * rest. The input list is already recency-merged (mergeChatsByRecency) —
+ * this only stable-partitions it, never re-introduces attention-rank
+ * ordering (attention states render as markers, not sort keys). Exported
+ * for the order contract test.
+ */
+export function orderChatsPinFirst<T extends { conversationId: string }>(
+  rows: T[],
+  pinnedIds: readonly string[],
+): T[] {
+  if (pinnedIds.length === 0) return rows;
+  const pins = new Set(pinnedIds);
+  const pinned: T[] = [];
+  const rest: T[] = [];
+  for (const row of rows) {
+    (pins.has(row.conversationId) ? pinned : rest).push(row);
+  }
+  return [...pinned, ...rest];
+}
+
+/**
+ * The demo (fixture) preview line: the newest recorded message of the
+ * conversation, prefixed "You: " when the user sent it and attributed by
+ * Agent name inside an Operation chat. Conversations with no recorded
+ * messages preview nothing — the row stays quiet (G4). Demo data only: live
+ * rows render the runtime-derived preview verbatim and never derive one
+ * client-side.
+ */
+export function chatPreviewFromMessages(
+  messages: ChatMessage[],
+  conversationKind: "agent_direct" | "operation",
+): string | null {
+  const newest = messages[messages.length - 1];
+  if (!newest) return null;
+  if (newest.sender.kind === "user") return `You: ${newest.text}`;
+  if (conversationKind === "operation" && newest.sender.kind === "agent") {
+    const agent = agentById(newest.sender.agent_id);
+    return agent ? `${agent.display_name}: ${newest.text}` : newest.text;
+  }
+  return newest.text;
+}
+
+/**
+ * The shared SIMPLE row list (wave A chunk A1): two-line rows — line 1
+ * avatar or Operation glyph + pin glyph + name + relative timestamp
+ * (right-aligned, tabular numerals, 12px), line 2 the activity preview
+ * line. Rows with no preview stay quiet single-line (G4). Pinned rows lead
+ * (§3.4); the caller passes the recency-merged list and the pinned ids.
+ * Exported for the row-anatomy contract test.
+ */
+export function SimpleChatRows({
+  rows,
+  pinnedIds = [],
+  pathname,
+  onNavigate,
+  now: nowOverride,
+}: {
+  rows: SimpleChatRow[];
+  pinnedIds?: readonly string[];
+  pathname: string;
+  onNavigate?: (() => void) | undefined;
+  /**
+   * Clock injection for static renders (tests pin the labels). Unset in the
+   * app: the mount-gated render clock is used and pre-mount rows render no
+   * timestamp rather than guessing one.
+   */
+  now?: number | undefined;
+}) {
+  const clockNow = useRelativeNow();
+  const now = nowOverride ?? clockNow;
+  const ordered = orderChatsPinFirst(rows, pinnedIds);
+  return (
+    <ul>
+      {ordered.map((row) => {
+        const active = pathname === row.href || pathname.startsWith(`${row.href}/`);
+        const pinned = pinnedIds.includes(row.conversationId);
+        const timestamp = formatChatTimestamp(row.at, now);
+        return (
+          <li key={row.key}>
+            <Link
+              href={row.href}
+              aria-current={active ? "page" : undefined}
+              className={cn(ITEM_BASE, active ? ITEM_ACTIVE : ITEM_IDLE)}
+              {...(onNavigate ? { onClick: onNavigate } : {})}
+            >
+              {row.agent ? (
+                <AgentAvatar
+                  agent={row.agent}
+                  size="sm"
+                  {...(row.presence ? { presence: row.presence } : {})}
+                />
+              ) : row.hue !== undefined && row.glyph !== undefined ? (
+                <AgentAvatar
+                  agent={{
+                    agent_id: row.key,
+                    display_name: row.title,
+                    ui_identity: { avatar_hue: row.hue, initial_glyph: row.glyph },
+                  }}
+                  size="sm"
+                />
+              ) : (
+                <Layers className="size-4 shrink-0 text-sky" aria-hidden="true" />
+              )}
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-1.5">
+                  {pinned ? (
+                    <Pin
+                      className="size-3 shrink-0 text-muted"
+                      aria-hidden="true"
+                      data-testid="chat-pin-glyph"
+                    />
+                  ) : null}
+                  <span
+                    className={cn(
+                      "min-w-0 truncate",
+                      row.kind === "operation" && row.autoLabel && "italic text-muted",
+                    )}
+                  >
+                    {row.title}
+                  </span>
+                  {timestamp ? (
+                    <span
+                      data-testid="chat-timestamp"
+                      className="ml-auto shrink-0 font-mono text-xs tabular-nums text-muted"
+                    >
+                      {timestamp}
+                    </span>
+                  ) : null}
+                </span>
+                {row.preview ? (
+                  <span
+                    data-testid="chat-preview-line"
+                    title={row.preview}
+                    className="block truncate text-xs text-muted"
+                  >
+                    {row.preview}
+                  </span>
+                ) : null}
+              </span>
+              {row.state ? (
+                <StateTrail
+                  state={row.state}
+                  unreadCount={row.unreadCount ?? 0}
+                  approvalCount={row.approvalCount ?? 0}
+                  attention={row.attention}
+                />
+              ) : null}
+              {row.kind === "operation" && row.isAdhoc ? (
+                <span
+                  title="Created without a pack definition"
+                  className="shrink-0 rounded-full border border-line px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-muted"
+                >
+                  Ad-hoc
+                </span>
+              ) : null}
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 /** The Advanced footer toggle — one quiet control, both modes. */
 function AdvancedToggle() {
   const advanced = useAdvancedMode();
@@ -224,27 +431,40 @@ function SimpleChatListDemo({
 }) {
   const model = sidebarModel();
   const rows = mergeChatsByRecency(
-    model.agents.map((entry) => ({
-      kind: "agent" as const,
+    model.agents.map((entry): SimpleChatRow => ({
+      kind: "agent",
       key: entry.agent.agent_id,
       conversationId: entry.conversation.conversation_id,
       href: routes.agent(entitySlug(entry.agent.agent_id)),
       title: entry.agent.display_name,
       agent: entry.agent,
+      presence: sessionPresenceFor(entry.conversation.conversation_id),
       at: Date.parse(entry.conversation.last_activity_at),
+      // Demo data only: the newest fixture message quotes as the preview
+      // ("You: " for the user's own lines); no messages → a quiet row (G4).
+      preview: chatPreviewFromMessages(
+        messagesForConversation(entry.conversation.conversation_id),
+        entry.conversation.kind,
+      ),
       state: entry.state,
       unreadCount: entry.conversation.unread_count,
       approvalCount: entry.approvalCount,
       attention: entry.attention,
     })),
-    model.operationChats.map((entry) => ({
-      kind: "operation" as const,
+    model.operationChats.map((entry): SimpleChatRow => ({
+      kind: "operation",
       key: entry.operation.operation_id,
       conversationId: entry.conversation.conversation_id,
       href: routes.operation(entry.operation.operation_id),
       title: entry.conversation.title,
       agent: null,
       at: Date.parse(entry.conversation.last_activity_at),
+      // The fixture Operation chats carry no recorded messages — the
+      // derivation returns null and the rows stay preview-less (G4).
+      preview: chatPreviewFromMessages(
+        messagesForConversation(entry.conversation.conversation_id),
+        entry.conversation.kind,
+      ),
       state: entry.state,
       unreadCount: entry.conversation.unread_count,
       approvalCount: entry.approvalCount,
@@ -252,40 +472,7 @@ function SimpleChatListDemo({
     })),
   );
 
-  return (
-    <ul>
-      {rows.map((row) => {
-        const active = pathname === row.href || pathname.startsWith(`${row.href}/`);
-        return (
-          <li key={row.key}>
-            <Link
-              href={row.href}
-              aria-current={active ? "page" : undefined}
-              className={cn(ITEM_BASE, active ? ITEM_ACTIVE : ITEM_IDLE)}
-              {...(onNavigate ? { onClick: onNavigate } : {})}
-            >
-              {row.agent ? (
-                <AgentAvatar
-                  agent={row.agent}
-                  size="sm"
-                  presence={sessionPresenceFor(row.conversationId)}
-                />
-              ) : (
-                <Layers className="size-4 shrink-0 text-sky" aria-hidden="true" />
-              )}
-              <span className="min-w-0 flex-1 truncate">{row.title}</span>
-              <StateTrail
-                state={row.state}
-                unreadCount={row.unreadCount}
-                approvalCount={row.approvalCount}
-                attention={row.attention}
-              />
-            </Link>
-          </li>
-        );
-      })}
-    </ul>
-  );
+  return <SimpleChatRows rows={rows} pathname={pathname} onNavigate={onNavigate} pinnedIds={[]} />;
 }
 
 /** The SIMPLE chat list over the REAL workspace reads (S11/S14 discipline). */
@@ -300,30 +487,39 @@ function SimpleChatListLive({
 }) {
   const roster = useAgentRoster(workspaceId);
   const operations = useOperationsList(workspaceId);
-  const linkProps = onNavigate ? { onClick: onNavigate } : {};
 
   // Real reads fabricate no state (G4): live rows render quiet — no derived
   // unread/approval markers until the runtime's real tracking lands.
-  const agentRows = roster.agents.map((agent) => ({
-    kind: "agent" as const,
+  const agentRows: SimpleChatRow[] = roster.agents.map((agent) => ({
+    kind: "agent",
     key: agent.agent_id,
+    // The roster payload carries no conversation id — the runtime record id
+    // is the honest stable key for pins and the row menu (chunk A2).
+    conversationId: agent.agent_id,
     href: routes.agent(entitySlug(agent.agent_id)),
     title: agent.display_name,
+    agent: null,
     hue: agent.avatar_hue,
     glyph: agent.initial_glyph,
     at: agent.last_activity ? Date.parse(agent.last_activity.at) : 0,
+    // S30 (E43 idea 4): the runtime derives the preview from its journal —
+    // render it verbatim; null stays a quiet single-line row (G4).
+    preview: agent.last_activity ? agent.last_activity.preview : null,
   }));
-  const operationRows = operations.operations.map((operation) => ({
-    kind: "operation" as const,
+  const operationRows: SimpleChatRow[] = operations.operations.map((operation) => ({
+    kind: "operation",
     key: operation.operation_id,
+    conversationId: operation.operation_id,
     href: routes.operation(operation.operation_id),
     title: operation.name,
+    agent: null,
+    // The runtime derives no last-activity preview for Operations — the
+    // record's updated_at is the honest available stamp (G4); rows stay
+    // preview-less until the runtime adds a field.
+    at: Date.parse(operation.updated_at) || 0,
+    preview: null,
     autoLabel: operation.auto_label,
     isAdhoc: operation.is_adhoc,
-    // The runtime derives no last-activity preview for Operations yet — the
-    // record's updated_at is the honest available sort key (G4); rows stay
-    // preview-less until the runtime adds one.
-    at: Date.parse(operation.updated_at) || 0,
   }));
 
   if (roster.state === "loading" || operations.state === "loading") {
@@ -372,50 +568,12 @@ function SimpleChatListLive({
   }
 
   return (
-    <ul>
-      {mergeChatsByRecency(agentRows, operationRows).map((row) => {
-        const active = pathname === row.href || pathname.startsWith(`${row.href}/`);
-        return (
-          <li key={row.key}>
-            <Link
-              href={row.href}
-              aria-current={active ? "page" : undefined}
-              className={cn(ITEM_BASE, active ? ITEM_ACTIVE : ITEM_IDLE)}
-              {...linkProps}
-            >
-              {row.kind === "agent" ? (
-                <AgentAvatar
-                  agent={{
-                    agent_id: row.key,
-                    display_name: row.title,
-                    ui_identity: { avatar_hue: row.hue, initial_glyph: row.glyph },
-                  }}
-                  size="sm"
-                />
-              ) : (
-                <Layers className="size-4 shrink-0 text-sky" aria-hidden="true" />
-              )}
-              <span
-                className={cn(
-                  "min-w-0 flex-1 truncate",
-                  row.kind === "operation" && row.autoLabel && "italic text-muted",
-                )}
-              >
-                {row.title}
-              </span>
-              {row.kind === "operation" && row.isAdhoc ? (
-                <span
-                  title="Created without a pack definition"
-                  className="shrink-0 rounded-full border border-line px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-muted"
-                >
-                  Ad-hoc
-                </span>
-              ) : null}
-            </Link>
-          </li>
-        );
-      })}
-    </ul>
+    <SimpleChatRows
+      rows={mergeChatsByRecency(agentRows, operationRows)}
+      pathname={pathname}
+      onNavigate={onNavigate}
+      pinnedIds={[]}
+    />
   );
 }
 

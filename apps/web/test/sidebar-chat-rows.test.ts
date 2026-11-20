@@ -69,6 +69,7 @@ describe("chat timestamp formatter", () => {
     expect(formatChatTimestamp(0, NOW)).toBeNull();
     expect(formatChatTimestamp(-5, NOW)).toBeNull();
     expect(formatChatTimestamp(Number.NaN, NOW)).toBeNull();
+    expect(formatChatTimestamp(NOW, 0)).toBeNull(); // the pre-mount clock
   });
 });
 
@@ -122,13 +123,19 @@ describe("demo chat preview derivation", () => {
 
   it("quotes the newest Agent line unprefixed in a direct chat", () => {
     expect(
-      chatPreviewFromMessages(messagesForConversation("conversation_agent_researcher"), "agent_direct"),
+      chatPreviewFromMessages(
+        messagesForConversation("conversation_agent_researcher"),
+        "agent_direct",
+      ),
     ).toMatch(/^Done — the digest/);
   });
 
   it("keeps the system line as recorded (a recovery notice previews as itself)", () => {
     expect(
-      chatPreviewFromMessages(messagesForConversation("conversation_agent_developer"), "agent_direct"),
+      chatPreviewFromMessages(
+        messagesForConversation("conversation_agent_developer"),
+        "agent_direct",
+      ),
     ).toMatch(/^A run in this conversation needs recovery/);
   });
 
@@ -141,7 +148,10 @@ describe("demo chat preview derivation", () => {
 
   it("returns null for a conversation with no messages — the row stays quiet (G4)", () => {
     expect(
-      chatPreviewFromMessages(messagesForConversation("conversation_op_research_paper"), "operation"),
+      chatPreviewFromMessages(
+        messagesForConversation("conversation_op_research_paper"),
+        "operation",
+      ),
     ).toBeNull();
   });
 });
@@ -156,7 +166,7 @@ const baseRow: SimpleChatRow = {
   conversationId: "conversation_agent_general_assistant",
   href: "/app/agent/general-assistant",
   title: "General Assistant",
-  agent: agentById("agent_general_assistant"),
+  agent: agentById("agent_general_assistant") ?? null,
   at: Date.parse("2026-09-20T10:16:00Z"),
   preview: "You: Go ahead — focus on 2024 or later.",
   state: "unread",
@@ -170,7 +180,7 @@ const renderRows = (rows: SimpleChatRow[], pinnedIds: string[] = []): string =>
     createElement(
       QueryClientProvider,
       { client: new QueryClient() },
-      createElement(SimpleChatRows, { rows, pinnedIds, pathname: "/app" }),
+      createElement(SimpleChatRows, { rows, pinnedIds, pathname: "/app", now: NOW }),
     ),
   );
 
@@ -178,10 +188,16 @@ describe("simple chat row anatomy", () => {
   it("renders two lines: name + right-aligned timestamp, then the preview line", () => {
     const html = renderRows([baseRow]);
     expect(html).toContain('data-testid="chat-timestamp"');
+    expect(html).toContain("5 h ago"); // 10:16 against the pinned 16:10 clock
     expect(html).toContain('data-testid="chat-preview-line"');
     expect(html).toContain("You: Go ahead — focus on 2024 or later.");
     // The timestamp span trails the name on line one (ml-auto right-align).
     expect(html).toMatch(/ml-auto[^"]*"[^>]*>/);
+  });
+
+  it("renders a short date for stamps older than the relative window", () => {
+    const html = renderRows([{ ...baseRow, at: NOW - 8 * 24 * 3600_000 }]);
+    expect(html).toMatch(/data-testid="chat-timestamp"[^>]*>Sep 12</);
   });
 
   it("renders the tabular-num timestamp class (relative, 12px, mono meta)", () => {
@@ -214,7 +230,19 @@ describe("simple chat row anatomy", () => {
   });
 
   it("pinned rows lead the rendered list; the rest keeps recency order", () => {
-    const newer: SimpleChatRow = { ...baseRow, key: "op_newer", conversationId: "conv_newer", href: "/app/operation/op_newer", title: "Newer Operation", agent: null, kind: "operation", at: Date.parse("2026-09-20T16:05:00Z"), preview: null, state: "quiet", unreadCount: 0 };
+    const newer: SimpleChatRow = {
+      ...baseRow,
+      key: "op_newer",
+      conversationId: "conv_newer",
+      href: "/app/operation/op_newer",
+      title: "Newer Operation",
+      agent: null,
+      kind: "operation",
+      at: Date.parse("2026-09-20T16:05:00Z"),
+      preview: null,
+      state: "quiet",
+      unreadCount: 0,
+    };
     const html = renderRows([newer, baseRow], [baseRow.conversationId]);
     expect(html.indexOf("/app/agent/general-assistant")).toBeLessThan(
       html.indexOf("/app/operation/op_newer"),
@@ -257,23 +285,28 @@ const renderSidebar = async (): Promise<string> => {
   const { setAdvancedMode } = await import("../lib/interface-mode");
   setAdvancedMode(false);
   return renderToStaticMarkup(
-    createElement(QueryClientProvider, { client: new QueryClient() }, createElement(SidebarContent)),
+    createElement(
+      QueryClientProvider,
+      { client: new QueryClient() },
+      createElement(SidebarContent),
+    ),
   );
 };
 
 describe("the merged Chats list (demo model, simple mode)", () => {
-  it("every row carries a timestamp; previews render only where the fixture model has messages", async () => {
+  it("previews render only where the fixture model has messages — no invented lines", async () => {
     const html = await renderSidebar();
-    // 6 agent rows + 2 Operation rows = 8 timestamps.
-    expect(html.match(/data-testid="chat-timestamp"/g)?.length).toBe(8);
     // The two fixture Operation chats have NO recorded messages — no invented
     // preview lines; the six agent chats preview their newest fixture line.
     expect(html.match(/data-testid="chat-preview-line"/g)?.length).toBe(6);
     expect(html).toContain("You: Go ahead — focus on 2024 or later.");
   });
 
-  it("the relative timestamp renders a short date for the old fixture data (<7d rule)", async () => {
+  it("a static render claims no clock precision — timestamps mount with the render clock", async () => {
     const html = await renderSidebar();
-    expect(html).toMatch(/data-testid="chat-timestamp"[^>]*>(Sep \d{1,2})</);
+    // The render clock is mount-gated (lib/relative-time.ts): server and
+    // first client renders agree on "no timestamp yet" instead of a label
+    // that would drift between them (hydration honesty, G4).
+    expect(html).not.toContain('data-testid="chat-timestamp"');
   });
 });

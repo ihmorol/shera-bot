@@ -15,7 +15,7 @@ import { Bell } from "lucide-react";
 
 import { EmptyState } from "../components/shell/states";
 
-function render(props: Record<string, unknown>): string {
+function render(props: Parameters<typeof EmptyState>[0]): string {
   return renderToStaticMarkup(createElement(EmptyState, props));
 }
 

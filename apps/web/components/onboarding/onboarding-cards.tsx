@@ -179,10 +179,12 @@ function AskerHeader({
 function OnboardingStepBody({
   current,
   typedPast,
+  commandSafeError,
   onAnswer,
 }: {
   current: StepView;
   typedPast: boolean;
+  commandSafeError?: string | undefined;
   onAnswer: (step: string, optionId: string, freeText: string | null) => void;
 }) {
   const answeredIndex = current.options.findIndex(
@@ -191,6 +193,10 @@ function OnboardingStepBody({
   const [focusedChip, setFocusedChip] = useState(answeredIndex >= 0 ? answeredIndex : 0);
   const [picked, setPicked] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  // A refused answer is NOT a recorded one: while the safe error stands, the
+  // picked tint drops (derived — no effect cascade). The step does not advance
+  // on failure, so without this the chip would read as recorded indefinitely.
+  const pickedEffective = commandSafeError ? null : picked;
 
   const answer = (optionId: string) => {
     setPicked(optionId);
@@ -236,7 +242,7 @@ function OnboardingStepBody({
       >
         {current.options.map((option, index) => {
           const recorded = current.answer?.option_id === option.option_id;
-          const marked = picked === option.option_id || recorded;
+          const marked = pickedEffective === option.option_id || recorded;
           return (
             <button
               key={option.option_id}
@@ -377,6 +383,7 @@ export function OnboardingCardsView({
         key={current.step}
         current={current}
         typedPast={typedPast}
+        commandSafeError={commandSafeError}
         onAnswer={onAnswer}
       />
 

@@ -15,6 +15,14 @@ import {
 import { OperationRosterPanel } from "../components/operations/operation-roster-panel";
 import { OperationRunsPanel } from "../components/operations/operation-runs-panel";
 import { OperationThreadView } from "../components/operations/operation-thread";
+import {
+  OperationChatHeader,
+  OperationDefinitionStrip,
+} from "../components/operations/operation-chat-header";
+import {
+  RosterDisclosureToggle,
+  rosterVisibleForMode,
+} from "../components/operations/operation-chat-surface";
 import { NewOperationForm } from "../components/operations/new-operation-form";
 import {
   buildOperationRosterCommand,
@@ -618,7 +626,142 @@ describe("Operation runs panel (§S4, D31/D34/D8)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 4. Ad-hoc creation form (S6 entry point to the chat)
+// 4. D52 wave B — definition strip (E43 idea 2), New run affordance (E43
+//    idea 8), and the interface-mode render pins (foundation spec-review
+//    follow-up)
+// ---------------------------------------------------------------------------
+
+describe("Operation definition strip (D52 wave B, E43 idea 2)", () => {
+  const renderStrip = (runCount: number) =>
+    render(createElement(OperationDefinitionStrip, { runCount }));
+
+  it("teaches the vocabulary in one line, from the runtime's own run count", () => {
+    const html = renderStrip(2);
+    expect(html).toContain("2 runs so far. Each run keeps its own task, events, and cost.");
+    // The leading word is the mono uppercase eyebrow (UI_DESIGN §2.1).
+    expect(html).toMatch(/font-mono[^"]*uppercase[^"]*tracking-\[0\.16em\]/);
+    expect(html).toContain(">Operation</span>");
+    // One line — truncate, never a wrapped lesson.
+    expect(html).toContain("truncate");
+  });
+
+  it("with zero runs it states the rule and invents no count (G4)", () => {
+    const html = renderStrip(0);
+    expect(html).toContain("every run keeps its own task, events, and cost.");
+    expect(html).not.toContain("runs so far");
+  });
+
+  it("reads one run in the singular", () => {
+    const html = renderStrip(1);
+    expect(html).toContain("1 run so far. Each run keeps its own task, events, and cost.");
+  });
+});
+
+describe("New run affordance (D52 wave B, E43 idea 8)", () => {
+  const renderHeader = (props: Record<string, unknown> = {}) =>
+    render(
+      createElement(OperationChatHeader, {
+        name: "Research Paper",
+        isAdhoc: false,
+        autoLabel: false,
+        packLabel: "student v1.0.0",
+        runCount: 2,
+        renameEditing: false,
+        renameDraft: "",
+        renamePending: false,
+        renameErrorMessage: null,
+        onRenameStart: () => undefined,
+        onRenameCancel: () => undefined,
+        onRenameDraftChange: () => undefined,
+        onRenameSubmit: () => undefined,
+        ...props,
+      }),
+    );
+
+  const newRunButton = (html: string): string | undefined =>
+    html.split(/<button\b/).find((segment) => segment.includes('aria-label="New run"'));
+
+  it("lives in the header, enabled — the runtime validates the create on submit (G2)", () => {
+    // AUDIT (2026-11-21): the runtime has NO admission rule forbidding a
+    // second concurrent run — POST /v1/operations/:id/runs (local-api app.ts)
+    // and OperationsService.createRun (operations.service.ts) create a
+    // CREATED-state run unconditionally once the Operation exists. So the
+    // affordance is NOT client-disabled on a guessed rule: the runtime
+    // validates on submit, and a typed refusal renders as safe copy.
+    const html = renderHeader({ onCreateRun: () => undefined });
+    expect(html).toContain("New run");
+    // The wording reflects runtime authority, never "I will start".
+    expect(html).toContain('title="The runtime starts the run"');
+    const button = newRunButton(html);
+    expect(button).toBeDefined();
+    expect(button).not.toMatch(/disabled=""/);
+  });
+
+  it("is disabled with its reason while the creation command is in flight", () => {
+    const html = renderHeader({ onCreateRun: () => undefined, createPending: true });
+    const button = newRunButton(html);
+    expect(button).toBeDefined();
+    expect(button).toMatch(/disabled=""/);
+    // Every disabled control carries its reason (craft rule).
+    expect(html).toContain('title="The runtime is starting the run"');
+  });
+
+  it("renders without the affordance when no create command is wired", () => {
+    // The demo gate and error states pass no onCreateRun — no dead control.
+    const html = renderHeader();
+    expect(html).not.toContain('aria-label="New run"');
+  });
+});
+
+describe("interface mode render pins (D52 wave B — foundation spec-review follow-up)", () => {
+  it("simple mode keeps the Manage-roster toggle two-way — label flips, aria-expanded tracks", () => {
+    const closed = render(
+      createElement(RosterDisclosureToggle, { open: false, onToggle: () => undefined }),
+    );
+    expect(closed).toContain("Manage roster");
+    expect(closed).toContain('aria-expanded="false"');
+
+    const open = render(
+      createElement(RosterDisclosureToggle, { open: true, onToggle: () => undefined }),
+    );
+    expect(open).toContain("Hide roster");
+    expect(open).toContain('aria-expanded="true"');
+  });
+
+  it("the roster visibility predicate admits the roster in advanced mode without the toggle", () => {
+    // Simple: the toggle decides. Advanced: the roster renders directly —
+    // no toggle state involved.
+    expect(rosterVisibleForMode(false, false)).toBe(false);
+    expect(rosterVisibleForMode(false, true)).toBe(true);
+    expect(rosterVisibleForMode(true, false)).toBe(true);
+    expect(rosterVisibleForMode(true, true)).toBe(true);
+  });
+
+  it("simple mode still renders the pack summary, the runs panel, and the strip — in both modes", () => {
+    // Source-level pin: the composed RuntimeOperationChat keeps the pack
+    // summary and the runs panel OUTSIDE any mode branch, and the definition
+    // strip renders in BOTH modes (it teaches the vocabulary where users
+    // actually are). What remains unpinned: the full hook-heavy composition
+    // (container resolution gate + async reads) cannot render real data in
+    // this static-markup harness — these pins cover the extracted stateless
+    // pieces and the branch predicate.
+    const source = readFileSync(
+      join(APP_DIR, "components", "operations", "operation-chat-surface.tsx"),
+      "utf8",
+    );
+    expect(source).toContain("<OperationPackSummary");
+    expect(source).toContain("<OperationRunsPanel");
+    expect(source).toContain("<OperationDefinitionStrip");
+    // The disclosure toggle is the ONLY mode-conditional chrome, and the
+    // roster panel renders behind the shared predicate.
+    expect(source).toMatch(/!\s*advanced\s*\?[\s\S]{0,400}?RosterDisclosureToggle/);
+    expect(source).toMatch(/rosterVisibleForMode\(/);
+    expect(source).toMatch(/rosterVisible\s*\?\s*\(/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5. Ad-hoc creation form (S6 entry point to the chat)
 // ---------------------------------------------------------------------------
 
 describe("New Operation form (S6, D29/D31)", () => {
@@ -668,7 +811,7 @@ describe("New Operation form (S6, D29/D31)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 5. The typed Operation client through the same-origin proxy
+// 6. The typed Operation client through the same-origin proxy
 // ---------------------------------------------------------------------------
 
 function jsonResponse(status: number, body: unknown): Response {

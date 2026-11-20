@@ -393,6 +393,31 @@ describe("row menu items (order, labels, reasons)", () => {
     }
   });
 
+  it("the copy item names what the copied value honestly is (G4): demo rows copy a conversation id, live rows name the runtime record", () => {
+    const copyLabelOf = (
+      copyLabel: "Copy conversation ID" | "Copy Agent id" | "Copy Operation id" | undefined,
+    ) => {
+      const entries = chatRowMenuItems({
+        kind: "agent",
+        conversationId: "agent_researcher",
+        copyLabel,
+        pinned: false,
+        mark: undefined,
+        runtimeUnread: false,
+        containerReady: true,
+        agentSlug: "researcher",
+        ...noops,
+      });
+      return labelsOf(entries)[3];
+    };
+    // Demo rows (fixture conversation ids) keep the conversation-id label.
+    expect(copyLabelOf(undefined)).toBe("Copy conversation ID");
+    // Live Agent rows hold agent_id (no conversation id client-side) — the
+    // item says so instead of a label the row cannot honor.
+    expect(copyLabelOf("Copy Agent id")).toBe("Copy Agent id");
+    expect(copyLabelOf("Copy Operation id")).toBe("Copy Operation id");
+  });
+
   it("a pinned row offers Unpin; a runtime-unread row offers Mark as read", () => {
     const pinned = labelsOf(
       chatRowMenuItems({

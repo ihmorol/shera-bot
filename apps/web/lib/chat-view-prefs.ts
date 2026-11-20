@@ -119,10 +119,6 @@ export function readChatPins(): string[] {
   return pins;
 }
 
-export function isChatPinned(conversationId: string): boolean {
-  return readChatPins().includes(conversationId);
-}
-
 /** Pin or unpin; returns the new pin list (insertion order preserved). */
 export function toggleChatPin(conversationId: string): string[] {
   ensureInitialized();

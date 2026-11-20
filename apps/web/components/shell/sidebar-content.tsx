@@ -220,6 +220,12 @@ export interface SimpleChatRow {
    * conversation id — the client never invents one, G4).
    */
   conversationId: string;
+  /**
+   * What the menu's copy item is honest about (G4): demo rows copy a
+   * conversation id; live rows hold a runtime record id, so the item names
+   * the record kind instead of a conversation id the row does not have.
+   */
+  copyLabel?: "Copy conversation ID" | "Copy Agent id" | "Copy Operation id" | undefined;
   href: string;
   title: string;
   /** Demo Agent rows carry the full fixture Agent (avatar + presence). */
@@ -316,6 +322,8 @@ export type ChatRowMenuEntry =
 export function chatRowMenuItems(options: {
   kind: "agent" | "operation";
   conversationId: string;
+  /** What the copied value honestly is (G4): the row's record kind. */
+  copyLabel?: "Copy conversation ID" | "Copy Agent id" | "Copy Operation id" | undefined;
   pinned: boolean;
   mark: ChatUnreadMark | undefined;
   runtimeUnread: boolean;
@@ -351,7 +359,7 @@ export function chatRowMenuItems(options: {
     {
       kind: "item",
       key: "copy",
-      label: "Copy conversation ID",
+      label: options.copyLabel ?? "Copy conversation ID",
       onSelect: options.onCopy,
     },
     separator,
@@ -618,6 +626,7 @@ function SimpleChatRowItem({
   const entries = chatRowMenuItems({
     kind: row.kind,
     conversationId: row.conversationId,
+    copyLabel: row.copyLabel,
     pinned,
     mark,
     runtimeUnread: row.state === "unread",
@@ -934,6 +943,7 @@ function SimpleChatListLive({
     // The roster payload carries no conversation id — the runtime record id
     // is the honest stable key for pins and the row menu (chunk A2).
     conversationId: agent.agent_id,
+    copyLabel: "Copy Agent id",
     href: routes.agent(entitySlug(agent.agent_id)),
     title: agent.display_name,
     agent: null,
@@ -948,6 +958,7 @@ function SimpleChatListLive({
     kind: "operation",
     key: operation.operation_id,
     conversationId: operation.operation_id,
+    copyLabel: "Copy Operation id",
     href: routes.operation(operation.operation_id),
     title: operation.name,
     agent: null,

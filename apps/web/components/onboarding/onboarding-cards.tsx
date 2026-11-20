@@ -1,7 +1,7 @@
 "use client";
 
 import { Check } from "lucide-react";
-import { useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useSessionIdentity } from "@/lib/container-connection";
@@ -332,6 +332,18 @@ export function OnboardingCardsView({
   onDismiss,
 }: OnboardingCardsViewProps) {
   const current = snapshot.steps.find((step) => step.step === snapshot.current_step);
+  // Focus returns to the content after every answer (the E43 §4 settle
+  // mechanic's focus half): the keyed step body remounts on advance, which
+  // would otherwise drop the keyboard user to <body>. When the step ADVANCES
+  // while mounted, the settle receipt takes the tab stop. First mount
+  // (including a resume with prior answers) never steals focus.
+  const settledRef = useRef<HTMLParagraphElement>(null);
+  const lastStepRef = useRef<string | null>(null);
+  useEffect(() => {
+    const advanced = lastStepRef.current !== null && snapshot.current_step !== lastStepRef.current;
+    lastStepRef.current = snapshot.current_step;
+    if (advanced) settledRef.current?.focus();
+  }, [snapshot]);
 
   if (snapshot.status !== "pending" || !current) {
     // Zero-config start: nothing blocks the product (D16). The interview
@@ -374,7 +386,12 @@ export function OnboardingCardsView({
       ) : null}
 
       {settledLine ? (
-        <p data-testid="onboarding-settled" className="mt-3 truncate text-sm text-text">
+        <p
+          ref={settledRef}
+          tabIndex={-1}
+          data-testid="onboarding-settled"
+          className="mt-3 truncate text-sm text-text"
+        >
           {settledLine}
         </p>
       ) : null}

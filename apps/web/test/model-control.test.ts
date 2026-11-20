@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import { ModelControl } from "../components/chat/model-control";
 import { AgentChatView } from "../components/chat/agent-chat-view";
 import { agentById, buildThread, conversationForAgent } from "../lib/fixtures";
+import type { ProviderView } from "@shera-bot/contracts";
 import type { EffectiveProviderState } from "../lib/provider-data";
 
 /**
@@ -45,7 +46,7 @@ const UNCONFIGURED: EffectiveProviderState = {
     "No provider is configured for this conversation yet. Configure one in Settings → Providers & models, or set the Agent's default.",
 };
 
-const PROVIDERS = [
+const PROVIDERS: ProviderView[] = [
   {
     id: "prov_platform_openai",
     workspace_id: "ws_1",
@@ -177,5 +178,74 @@ describe("runtime composer gating (D17/G4, real effective readout)", () => {
     const html = runtimeView(UNCONFIGURED);
     // The S08 fixture demo stream's text must never render on a real row.
     expect(html).not.toContain("spaced repetition outperforms massed practice");
+  });
+});
+
+describe("dimmed-with-reason picker (D52 wave D; E43 §5 + research annex §5/§9)", () => {
+  const KEYLESS: ProviderView = {
+    ...PROVIDERS[0]!,
+    id: "prov_platform_keyless",
+    display_name: "Keyless Endpoint",
+    credential_hint: null,
+  };
+  const DISABLED: ProviderView = {
+    ...PROVIDERS[0]!,
+    id: "prov_disabled_one",
+    display_name: "Turned-off Provider",
+    status: "disabled",
+  };
+  const control = (state: EffectiveProviderState, providers: typeof PROVIDERS): string =>
+    render(
+      createElement(ModelControl, {
+        state,
+        providers,
+        onApplyOverride: () => undefined,
+        onClearOverride: () => undefined,
+      }),
+    );
+
+  it("the collapsed trigger carries the runtime's typed reason in title and aria-label (G4)", () => {
+    const html = control(UNCONFIGURED, []);
+    // The reason is the runtime's safe_message — never a generic guess. The
+    // static markup HTML-escapes the arrow, so the assertion stops before it.
+    expect(html).toContain("Configure one in Settings");
+    expect(html).toMatch(/aria-label="[^"]*Configure one in Settings/);
+  });
+
+  it("the trigger shows an attention dot only when a configuration block applies", () => {
+    expect(control(UNCONFIGURED, [])).toContain('data-attention="true"');
+    expect(control(CONFIGURED, PROVIDERS)).not.toContain('data-attention="true"');
+  });
+
+  it("the trigger pill shows a provider mark for a configured provider (pattern §5)", () => {
+    const configured = control(CONFIGURED, PROVIDERS);
+    expect(configured).toContain('data-provider-mark="P"');
+    // No provider, no mark — the attention dot takes the slot instead.
+    expect(control(UNCONFIGURED, [])).not.toContain("data-provider-mark");
+  });
+
+  it("a disabled catalog entry renders as a dimmed row with its reason and the settings link", () => {
+    const source = readFileSync(join(APP_DIR, "components/chat/model-control.tsx"), "utf8");
+    // The route exists (routes.settings("providers")), so the reason links to it.
+    expect(source).toContain("Turned off in Providers & models");
+    expect(source).toContain('routes.settings("providers")');
+    // Blocked entries live in the pane, never on the closed trigger: a
+    // configured control over a catalog with blocked rows stays calm.
+    const html = control(CONFIGURED, [PROVIDERS[0]!, DISABLED, KEYLESS]);
+    expect(html).toContain('data-provider-mark="P"');
+    expect(html).not.toContain('data-attention="true"');
+  });
+
+  it("a keyless enabled catalog entry and an empty catalog render the setup explanation — no invented count", () => {
+    const source = readFileSync(join(APP_DIR, "components/chat/model-control.tsx"), "utf8");
+    // The runtime payload (ProviderView / ProvidersResponse) carries no model
+    // count — only default_model_id — so the pane carries no count (audit, D52).
+    expect(source).toContain("Models will appear after setup.");
+  });
+
+  it("the scope line uses Shera vocabulary — Only this chat / Agent default", () => {
+    const source = readFileSync(join(APP_DIR, "components/chat/model-control.tsx"), "utf8");
+    expect(source).toContain("Only this chat");
+    expect(source).toContain("Agent default");
   });
 });

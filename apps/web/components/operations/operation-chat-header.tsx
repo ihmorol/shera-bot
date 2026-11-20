@@ -6,24 +6,42 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /**
- * The Operation definition strip (D52 wave B, E43 idea 2): ONE line under
- * the Operation header that teaches the vocabulary from the runtime's own
- * counts (G4 — basis-anchored, never invented): "Operation — {N} runs so
- * far. Each run keeps its own task, events, and cost." With zero runs the
- * strip states the rule and invents no count. The leading word is the mono
- * uppercase eyebrow (UI_DESIGN §2.1); the sentence is body type, muted, one
- * line. It renders in BOTH interface modes — it teaches where users are.
+ * The Operation definition strip (D52 wave B, E43 idea 2 — the deliverable
+ * is a Pack → Operations → Agents definition strip): ONE line under the
+ * Operation header that teaches the hierarchy from the runtime's own read
+ * model (G4 — basis-anchored, never invented): "Operation — {pack_id} pack
+ * · {N} Agents · {N_runs} runs so far — each run keeps its own task,
+ * events, and cost." With zero runs it states the rule over the real pack
+ * and roster and invents no run count; before the read model lands it
+ * renders nothing at all rather than inventing a basis. The leading word is
+ * the mono uppercase eyebrow (UI_DESIGN §2.1); the sentence is body type,
+ * muted, one line. It renders in BOTH interface modes — it teaches where
+ * users are.
  */
-export function OperationDefinitionStrip({ runCount }: { runCount: number }) {
-  const sentence =
+export function OperationDefinitionStrip({
+  packId,
+  agentCount,
+  runCount,
+}: {
+  packId: string | null;
+  agentCount: number | null;
+  runCount: number;
+}) {
+  if (packId === null || agentCount === null) {
+    // G4: the strip teaches from the runtime's own counts — with no read
+    // model yet it renders nothing rather than inventing a basis.
+    return null;
+  }
+  const agentWord = agentCount === 1 ? "Agent" : "Agents";
+  const body =
     runCount > 0
-      ? `${runCount} ${runCount === 1 ? "run" : "runs"} so far. Each run keeps its own task, events, and cost.`
-      : "every run keeps its own task, events, and cost.";
+      ? `${packId} pack · ${agentCount} ${agentWord} · ${runCount} ${runCount === 1 ? "run" : "runs"} so far — each run keeps its own task, events, and cost.`
+      : `${packId} pack · ${agentCount} ${agentWord} — every run keeps its own task, events, and cost.`;
   return (
     <div data-testid="operation-definition-strip" className="shrink-0 bg-surface px-4 lg:px-6">
       <p className="flex min-w-0 items-baseline gap-1.5 py-2 text-sm text-muted">
         <span className="shrink-0 font-mono text-xs uppercase tracking-[0.16em]">Operation</span>
-        <span className="min-w-0 truncate">— {sentence}</span>
+        <span className="min-w-0 truncate">— {body}</span>
       </p>
     </div>
   );

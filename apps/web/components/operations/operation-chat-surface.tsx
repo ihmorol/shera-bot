@@ -329,11 +329,16 @@ function RuntimeOperationChat({
         }}
       />
 
-      {/* D52 wave B (E43 idea 2): the definition strip teaches the vocabulary
-          from the runtime's own run count (runs.length — the detail read
-          model's real data; zero renders the rule, never a fake count), in
-          BOTH interface modes. */}
-      <OperationDefinitionStrip runCount={runs.length} />
+      {/* D52 wave B (E43 idea 2): the definition strip teaches the Pack →
+          Operations → Agents hierarchy from the detail read model's own
+          anchors — the pinned pack id, the roster count, the real run count
+          (zero runs render the rule, never a fake count; before the payload
+          lands the strip renders nothing, G4) — in BOTH interface modes. */}
+      <OperationDefinitionStrip
+        packId={detail.detail ? detail.detail.operation.pinning.pack_id : null}
+        agentCount={detail.detail ? detail.detail.roster.length : null}
+        runCount={runs.length}
+      />
 
       {/* S14 (UI_DESIGN S6/F6): the collapsible roster + pack skills/connectors
           summary — connectors render the runtime's honest not-configured

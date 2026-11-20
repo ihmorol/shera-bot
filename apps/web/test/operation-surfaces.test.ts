@@ -631,13 +631,18 @@ describe("Operation runs panel (§S4, D31/D34/D8)", () => {
 //    follow-up)
 // ---------------------------------------------------------------------------
 
-describe("Operation definition strip (D52 wave B, E43 idea 2)", () => {
-  const renderStrip = (runCount: number) =>
-    render(createElement(OperationDefinitionStrip, { runCount }));
+describe("Operation definition strip (D52 wave B review fix — the full hierarchy)", () => {
+  const renderStrip = (props: {
+    packId: string | null;
+    agentCount: number | null;
+    runCount: number;
+  }) => render(createElement(OperationDefinitionStrip, props));
 
-  it("teaches the vocabulary in one line, from the runtime's own run count", () => {
-    const html = renderStrip(2);
-    expect(html).toContain("2 runs so far. Each run keeps its own task, events, and cost.");
+  it("teaches the Pack → Operations → Agents hierarchy in one line, from the runtime's own counts", () => {
+    const html = renderStrip({ packId: "student", agentCount: 2, runCount: 2 });
+    expect(html).toContain(
+      "student pack · 2 Agents · 2 runs so far — each run keeps its own task, events, and cost.",
+    );
     // The leading word is the mono uppercase eyebrow (UI_DESIGN §2.1).
     expect(html).toMatch(/font-mono[^"]*uppercase[^"]*tracking-\[0\.16em\]/);
     expect(html).toContain(">Operation</span>");
@@ -645,15 +650,24 @@ describe("Operation definition strip (D52 wave B, E43 idea 2)", () => {
     expect(html).toContain("truncate");
   });
 
-  it("with zero runs it states the rule and invents no count (G4)", () => {
-    const html = renderStrip(0);
-    expect(html).toContain("every run keeps its own task, events, and cost.");
+  it("with zero runs it states the rule over the real pack and roster and invents no run count (G4)", () => {
+    const html = renderStrip({ packId: "student", agentCount: 2, runCount: 0 });
+    expect(html).toContain(
+      "student pack · 2 Agents — every run keeps its own task, events, and cost.",
+    );
     expect(html).not.toContain("runs so far");
   });
 
   it("reads one run in the singular", () => {
-    const html = renderStrip(1);
-    expect(html).toContain("1 run so far. Each run keeps its own task, events, and cost.");
+    const html = renderStrip({ packId: "student", agentCount: 3, runCount: 1 });
+    expect(html).toContain(
+      "student pack · 3 Agents · 1 run so far — each run keeps its own task, events, and cost.",
+    );
+  });
+
+  it("renders nothing before the read model lands — no invented pack, roster, or count (G4)", () => {
+    expect(renderStrip({ packId: null, agentCount: null, runCount: 0 })).toBe("");
+    expect(renderStrip({ packId: "student", agentCount: null, runCount: 2 })).toBe("");
   });
 });
 

@@ -248,6 +248,21 @@ export interface SimpleChatRow {
 }
 
 /**
+ * The read/unread overlay touches ONLY the unread dimension (G4/D26): a
+ * "read" mark suppresses the runtime's unread pill, but approval-required,
+ * failed, and running states always pass through untouched — a client view
+ * preference can never hide a runtime-driven attention state. Exported for
+ * the isolation-contract test.
+ */
+export function stateAfterReadOverlay(
+  mark: ChatUnreadMark | undefined,
+  state: ConversationState | undefined,
+): ConversationState | undefined {
+  if (mark === "read" && state === "unread") return "quiet";
+  return state;
+}
+
+/**
  * Pin-first ordering (UI_DESIGN §3.4 amendment, D52 wave A): pinned rows
  * lead the list; recency order survives within the pinned group and the
  * rest. The input list is already recency-merged (mergeChatsByRecency) —
@@ -561,7 +576,7 @@ function SimpleChatRowItem({
   const mark = marks[row.conversationId];
   // The overlay wins for this browser only: "read" clears the runtime pill,
   // "unread" forces the local dot (no fake count — G4).
-  const stateAfterOverlay = mark === "read" && row.state === "unread" ? "quiet" : row.state;
+  const stateAfterOverlay = stateAfterReadOverlay(mark, row.state);
 
   const close = useCallback(() => {
     setOpen(false);

@@ -45,3 +45,15 @@
 - Simple-mode implementation verified at filing: vitest apps/web 736/736 (48 files, including 5 new interface-mode tests), `tsc --noEmit` clean, eslint clean, prettier clean, `impeccable detect` zero findings on every touched surface, Playwright visual passes on the simple sidebar (dev server, localStorage flip — machine-local evidence, not committed).
 - Each migration wave verifies itself in its own PR (tests + gates + review record); this record is the product authorization those PRs cite.
 - The two owner instructions above are preserved verbatim in this record; the 2026-11-20 session's remaining evidence (Playwright screenshots at `/tmp/shera-shots/`) is machine-local and reproducible per the harness scripts.
+
+---
+
+## Addendum 2026-11-21 (wave A execution refinements, recorded per G5)
+
+Wave A's review surfaced that the migration executions refined two phrasings of this record and added one entry point. Recorded here so the decision record and the shipped spec never disagree (the spec amendment alone would be a silent conflict resolution):
+
+1. **Ordering refinement.** Decision §1 and the implementation section describe the simple list as "recency-sorted" without exception. Wave A ships **"pinned rows lead; recency within the rest"** (the pin is a client view preference from this record's implementation section; the recency rule governs the remaining rows unchanged). UI_DESIGN §3.4 carries the same clause. The recency claim otherwise stands; the attention states continue to render as markers, never as reorder rules.
+2. **The row context menu's "Open roster" entry** (Operation rows) is authorized as part of the E43 §3 transposition: it is an entry point to the existing Manage-roster machinery, not new machinery; §S4's "roster editing opens on the Operation chat screen" is unchanged. "Agent settings" was already bound by UI_DESIGN §3.2 ("each opens Agent settings via context menu").
+3. **Advanced-row timestamps render always-on** when the record carries a stamp (previously specified hover-only in UI_DESIGN §3.2's anatomy; amended there in the same PR). E43 idea 4's row anatomy ("+ timestamp") is the source.
+
+Evidence: PR #94 (branch `ui/wave-a-sidebar`), the two-axis review records on that PR, and `docs/research/openmausbot-ui-patterns-2026-11-21.md` §2/§3.

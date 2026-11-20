@@ -148,7 +148,7 @@ Modals (approval dialog, notification center, roster editor) overlay any route. 
 └──────────────────────────────┘
 ```
 
-**SidebarItem anatomy:** avatar (Agent) or Operations glyph (pack-defined template) / name / trailing state (dot, unread count, approval badge, running spinner) / optional last-activity timestamp on hover.
+**SidebarItem anatomy:** avatar (Agent) or Operations glyph (pack-defined template) / name / trailing state (dot, unread count, approval badge, running spinner) / last-activity timestamp when the record carries a stamp — rendered when available rather than hover-only (D52 wave A; E43 idea 4 anatomy).
 
 - **Agents section** lists the six pack Agents as persistent direct chats (AC3). They are never deletable in v1; each opens Agent settings via context menu.
 - **Operations section** has two visual groups: **pack-defined Operation templates** (launch → preview S5) and **Operation chats** (instances, open directly). Ad-hoc chats are labeled with their roster summary ("Ad-hoc · 3 Agents") until the user names them.

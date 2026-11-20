@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { createElement } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -12,6 +15,7 @@ import {
   nextMenuFocusIndex,
   orderChatsPinFirst,
   SimpleChatRows,
+  stateAfterReadOverlay,
   type SimpleChatRow,
 } from "../components/shell/sidebar-content";
 import { formatChatTimestamp } from "../lib/relative-time";
@@ -630,5 +634,33 @@ describe("pins and overlays through the real store wiring", () => {
     expect(marked).toContain('data-testid="chat-unread-dot"');
     expect(marked).toContain("Marked unread here only");
     expect(marked).not.toContain('class="inline-flex min-w-5'); // no count pill
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9. Read-overlay state isolation (wave A spec-review pin) + copy-label wiring
+// ---------------------------------------------------------------------------
+
+describe("read-overlay state isolation", () => {
+  it("the overlay touches ONLY the unread dimension — approval, failure, running, and quiet states pass through untouched", () => {
+    expect(stateAfterReadOverlay("read", "approval_required")).toBe("approval_required");
+    expect(stateAfterReadOverlay("read", "failed")).toBe("failed");
+    expect(stateAfterReadOverlay("read", "running")).toBe("running");
+    expect(stateAfterReadOverlay("read", "quiet")).toBe("quiet");
+    expect(stateAfterReadOverlay("read", "unread")).toBe("quiet");
+    expect(stateAfterReadOverlay("unread", "unread")).toBe("unread");
+    expect(stateAfterReadOverlay(undefined, "unread")).toBe("unread");
+    expect(stateAfterReadOverlay("unread", undefined)).toBeUndefined();
+    expect(stateAfterReadOverlay(undefined, undefined)).toBeUndefined();
+  });
+
+  it("live rows wire the honest copy labels through the menu (source pin)", () => {
+    const source = readFileSync(
+      join(import.meta.dirname, "../components/shell/sidebar-content.tsx"),
+      "utf8",
+    );
+    expect(source).toContain('copyLabel: "Copy Agent id"');
+    expect(source).toContain('copyLabel: "Copy Operation id"');
+    expect(source).toContain("copyLabel: row.copyLabel");
   });
 });

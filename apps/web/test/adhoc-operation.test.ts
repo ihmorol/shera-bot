@@ -413,6 +413,11 @@ describe("Sidebar live Operation chats (§3.2 + S14)", () => {
     const html = renderSection();
     expect(html).toContain("Ad-hoc");
     expect(html).toMatch(/italic/);
+  });
+
+  it("renders the record's updated_at stamp (wave A row-anatomy parity, D52)", () => {
+    const html = renderSection();
+    expect(html).toContain('data-testid="operation-chat-timestamp"');
 
     const named = renderSection({
       operations: [{ ...row({ name: "Weekly Review" }), is_adhoc: true, auto_label: false }],

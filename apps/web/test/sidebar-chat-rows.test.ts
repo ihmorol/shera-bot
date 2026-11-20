@@ -1,16 +1,23 @@
 import { createElement } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   chatPreviewFromMessages,
+  chatRowMenuItems,
+  clampMenuPosition,
+  type ChatRowMenuEntry,
+  ChatRowMenuSheet,
+  nextMenuFocusIndex,
   orderChatsPinFirst,
   SimpleChatRows,
   type SimpleChatRow,
 } from "../components/shell/sidebar-content";
 import { formatChatTimestamp } from "../lib/relative-time";
 import { agentById, messagesForConversation } from "../lib/fixtures";
+import { routes } from "../lib/routes";
+import { resetChatViewPrefsForTests, setChatUnreadMark, toggleChatPin } from "../lib/chat-view-prefs";
 
 /**
  * Wave A chunk A1 (D52; E43 §5 patterns-not-pixels) — the SIMPLE merged Chats
@@ -175,14 +182,18 @@ const baseRow: SimpleChatRow = {
   attention: undefined,
 };
 
-const renderRows = (rows: SimpleChatRow[], pinnedIds: string[] = []): string =>
+const renderRows = (rows: SimpleChatRow[]): string =>
   renderToStaticMarkup(
     createElement(
       QueryClientProvider,
       { client: new QueryClient() },
-      createElement(SimpleChatRows, { rows, pinnedIds, pathname: "/app", now: NOW }),
+      createElement(SimpleChatRows, { rows, pathname: "/app", now: NOW }),
     ),
   );
+
+afterEach(() => {
+  resetChatViewPrefsForTests();
+});
 
 describe("simple chat row anatomy", () => {
   it("renders two lines: name + right-aligned timestamp, then the preview line", () => {
@@ -225,7 +236,8 @@ describe("simple chat row anatomy", () => {
   it("renders the pin glyph only on pinned rows", () => {
     const unpinned = renderRows([baseRow]);
     expect(unpinned).not.toContain('data-testid="chat-pin-glyph"');
-    const pinned = renderRows([baseRow], [baseRow.conversationId]);
+    toggleChatPin(baseRow.conversationId);
+    const pinned = renderRows([baseRow]);
     expect(pinned).toContain('data-testid="chat-pin-glyph"');
   });
 
@@ -243,7 +255,8 @@ describe("simple chat row anatomy", () => {
       state: "quiet",
       unreadCount: 0,
     };
-    const html = renderRows([newer, baseRow], [baseRow.conversationId]);
+    toggleChatPin(baseRow.conversationId);
+    const html = renderRows([newer, baseRow]);
     expect(html.indexOf("/app/agent/general-assistant")).toBeLessThan(
       html.indexOf("/app/operation/op_newer"),
     );
@@ -308,5 +321,288 @@ describe("the merged Chats list (demo model, simple mode)", () => {
     // first client renders agree on "no timestamp yet" instead of a label
     // that would drift between them (hydration honesty, G4).
     expect(html).not.toContain('data-testid="chat-timestamp"');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6. Wave A chunk A2 — the row context menu: item contract (pure)
+// ---------------------------------------------------------------------------
+
+describe("row menu items (order, labels, reasons)", () => {
+  const noops = {
+    onTogglePin: () => undefined,
+    onSetMark: () => undefined,
+    onCopy: () => undefined,
+  };
+  const labelsOf = (entries: ChatRowMenuEntry[]): string[] =>
+    entries.map((entry) => (entry.kind === "item" ? entry.label : "---"));
+
+  it("agent rows: Pin → read-state → — → Copy conversation ID → — → Agent settings", () => {
+    const entries = chatRowMenuItems({
+      kind: "agent",
+      conversationId: "conversation_agent_general_assistant",
+      pinned: false,
+      mark: undefined,
+      runtimeUnread: false,
+      containerReady: true,
+      agentSlug: "general-assistant",
+      ...noops,
+    });
+    expect(labelsOf(entries)).toEqual([
+      "Pin",
+      "Mark as unread",
+      "---",
+      "Copy conversation ID",
+      "---",
+      "Agent settings",
+    ]);
+    const settings = entries.at(-1);
+    expect(settings?.kind).toBe("item");
+    if (settings?.kind === "item") {
+      expect(settings.href).toBe(routes.settings("agents/general-assistant"));
+      expect(settings.disabled).toBe(false);
+    }
+  });
+
+  it("operation rows end with Open roster pointing at the operation chat", () => {
+    const entries = chatRowMenuItems({
+      kind: "operation",
+      conversationId: "conversation_op_research_paper",
+      pinned: false,
+      mark: undefined,
+      runtimeUnread: false,
+      containerReady: true,
+      operationHref: routes.operation("chat-research-paper"),
+      ...noops,
+    });
+    expect(labelsOf(entries)).toEqual([
+      "Pin",
+      "Mark as unread",
+      "---",
+      "Copy conversation ID",
+      "---",
+      "Open roster",
+    ]);
+    const roster = entries.at(-1);
+    if (roster?.kind === "item") {
+      expect(roster.href).toBe("/app/operation/chat-research-paper");
+    }
+  });
+
+  it("a pinned row offers Unpin; a runtime-unread row offers Mark as read", () => {
+    const pinned = labelsOf(
+      chatRowMenuItems({
+        kind: "agent",
+        conversationId: "conv",
+        pinned: true,
+        mark: undefined,
+        runtimeUnread: false,
+        containerReady: true,
+        agentSlug: "researcher",
+        ...noops,
+      }),
+    );
+    expect(pinned[0]).toBe("Unpin");
+    expect(pinned[1]).toBe("Mark as unread");
+
+    const unread = labelsOf(
+      chatRowMenuItems({
+        kind: "agent",
+        conversationId: "conv",
+        pinned: false,
+        mark: undefined,
+        runtimeUnread: true,
+        containerReady: true,
+        agentSlug: "researcher",
+        ...noops,
+      }),
+    );
+    expect(unread[0]).toBe("Pin");
+    expect(unread[1]).toBe("Mark as read");
+  });
+
+  it("the overlay wins over runtime state for the read-state item", () => {
+    const overlayUnread = chatRowMenuItems({
+      kind: "agent",
+      conversationId: "conv",
+      pinned: false,
+      mark: "unread",
+      runtimeUnread: false,
+      containerReady: true,
+      agentSlug: "researcher",
+      ...noops,
+    });
+    expect(overlayUnread.find((e) => e.kind === "item" && e.key === "mark")?.label).toBe(
+      "Mark as read",
+    );
+
+    const overlayRead = chatRowMenuItems({
+      kind: "agent",
+      conversationId: "conv",
+      pinned: false,
+      mark: "read",
+      runtimeUnread: true,
+      containerReady: true,
+      agentSlug: "researcher",
+      ...noops,
+    });
+    const markItem = overlayRead.find((e) => e.kind === "item" && e.key === "mark");
+    expect(markItem?.label).toBe("Mark as unread");
+    // The overlay is browser-local — the title says so.
+    expect(markItem?.kind === "item" && markItem.title).toBe("Marked unread here only");
+  });
+
+  it("Agent settings is disabled with its reason when the container is not ready; Open roster never is", () => {
+    const agentEntries = chatRowMenuItems({
+      kind: "agent",
+      conversationId: "conv",
+      pinned: false,
+      mark: undefined,
+      runtimeUnread: false,
+      containerReady: false,
+      agentSlug: "researcher",
+      ...noops,
+    });
+    const settings = agentEntries.at(-1);
+    expect(settings?.kind === "item" && settings.disabled).toBe(true);
+    expect(settings?.kind === "item" && settings.disabledReason).toBe(
+      "Settings need the workspace ready",
+    );
+
+    const operationEntries = chatRowMenuItems({
+      kind: "operation",
+      conversationId: "conv",
+      pinned: false,
+      mark: undefined,
+      runtimeUnread: false,
+      containerReady: false,
+      operationHref: "/app/operation/op",
+      ...noops,
+    });
+    const roster = operationEntries.at(-1);
+    expect(roster?.kind === "item" && roster.disabled).toBe(false);
+  });
+
+  it("no delete/archive/rename exists in v1 — persistent chats, and the runtime has no such commands (G2)", () => {
+    const entries = chatRowMenuItems({
+      kind: "agent",
+      conversationId: "conv",
+      pinned: false,
+      mark: undefined,
+      runtimeUnread: false,
+      containerReady: true,
+      agentSlug: "researcher",
+      ...noops,
+    });
+    expect(labelsOf(entries).join(" | ").toLowerCase()).not.toMatch(/delete|archive|rename/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7. Wave A chunk A2 — menu geometry + roving focus (pure)
+// ---------------------------------------------------------------------------
+
+describe("menu geometry + roving focus", () => {
+  it("clampMenuPosition keeps the sheet inside the viewport with an 8px margin", () => {
+    // A pointer click near the right/bottom edge pulls the sheet back in.
+    expect(clampMenuPosition(1200, 800, 224, 168, 1280, 900)).toEqual({ x: 1048, y: 724 });
+    // An in-bounds position passes through.
+    expect(clampMenuPosition(40, 40, 224, 168, 1280, 900)).toEqual({ x: 40, y: 40 });
+    // Tiny viewports never go negative — the 8px floor wins.
+    expect(clampMenuPosition(0, 0, 224, 168, 200, 120)).toEqual({ x: 8, y: 8 });
+  });
+
+  it("nextMenuFocusIndex roves the enabled items and wraps", () => {
+    expect(nextMenuFocusIndex(-1, "ArrowDown", 3)).toBe(0);
+    expect(nextMenuFocusIndex(2, "ArrowDown", 3)).toBe(0);
+    expect(nextMenuFocusIndex(0, "ArrowUp", 3)).toBe(2);
+    expect(nextMenuFocusIndex(-1, "ArrowUp", 3)).toBe(2);
+    expect(nextMenuFocusIndex(1, "Home", 3)).toBe(0);
+    expect(nextMenuFocusIndex(1, "End", 3)).toBe(2);
+    expect(nextMenuFocusIndex(1, "ArrowRight", 3)).toBeNull();
+    expect(nextMenuFocusIndex(1, "Escape", 3)).toBeNull();
+    expect(nextMenuFocusIndex(0, "ArrowDown", 0)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 8. Wave A chunk A2 — the menu sheet markup (a11y contract)
+// ---------------------------------------------------------------------------
+
+describe("the chat row menu sheet (a11y)", () => {
+  const entries = chatRowMenuItems({
+    kind: "agent",
+    conversationId: "conversation_agent_general_assistant",
+    pinned: true,
+    mark: undefined,
+    runtimeUnread: true,
+    containerReady: false,
+    agentSlug: "general-assistant",
+    onTogglePin: () => undefined,
+    onSetMark: () => undefined,
+    onCopy: () => undefined,
+  });
+
+  const renderSheet = (): string =>
+    renderToStaticMarkup(
+      createElement(ChatRowMenuSheet, { entries, onDismiss: () => undefined }),
+    );
+
+  it("renders role=menu with role=menuitem rows, hairline separators, and the 30px/14px recipe", () => {
+    const html = renderSheet();
+    expect(html).toContain('role="menu"');
+    expect(html.match(/role="menuitem"/g)?.length).toBe(4);
+    expect(html.match(/role="separator"/g)?.length).toBe(2);
+    expect(html).toMatch(/min-h-\[30px\]/);
+    expect(html).toMatch(/text-sm/); // 14px
+    expect(html).toMatch(/h-px/); // hairline
+  });
+
+  it("the disabled item carries opacity + the reason in its title", () => {
+    const html = renderSheet();
+    expect(html).toMatch(/opacity-40/);
+    expect(html).toContain("Settings need the workspace ready");
+  });
+
+  it("labels render as the short declaratives — no exclamation marks", () => {
+    const html = renderSheet();
+    expect(html).toContain("Unpin"); // pinned fixture
+    expect(html).toContain("Mark as read");
+    expect(html).toContain("Copy conversation ID");
+    expect(html).not.toMatch(/!+/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9. Wave A chunk A2 — the row menu trigger + overlay wiring
+// ---------------------------------------------------------------------------
+
+describe("the row menu trigger (a11y)", () => {
+  it("every row carries a hover/keyboard-reachable trigger with menu semantics", () => {
+    const html = renderRows([baseRow]);
+    expect(html).toContain('aria-label="Chat options for General Assistant"');
+    expect(html).toContain('aria-haspopup="menu"');
+    expect(html).toContain('aria-expanded="false"');
+    // Keyboard-reachable: in the DOM always, revealed on hover or focus.
+    expect(html).toMatch(/opacity-0[^"]*group-hover:opacity-100/);
+  });
+});
+
+describe("pins and overlays through the real store wiring", () => {
+  it("the overlay read mark suppresses the runtime unread pill for that row", () => {
+    expect(renderRows([baseRow])).toContain(">2</span>"); // runtime pill
+    setChatUnreadMark(baseRow.conversationId, "read");
+    expect(renderRows([baseRow])).not.toContain(">2</span>");
+  });
+
+  it("the overlay unread mark renders a dot, never a fake count", () => {
+    const quiet: SimpleChatRow = { ...baseRow, state: "quiet", unreadCount: 0 };
+    const html = renderRows([quiet]);
+    expect(html).not.toContain("chat-unread-dot");
+    setChatUnreadMark(quiet.conversationId, "unread");
+    const marked = renderRows([quiet]);
+    expect(marked).toContain('data-testid="chat-unread-dot"');
+    expect(marked).toContain("Marked unread here only");
+    expect(marked).not.toContain('class="inline-flex min-w-5'); // no count pill
   });
 });

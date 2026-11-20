@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import { ModelControl } from "../components/chat/model-control";
 import { AgentChatView } from "../components/chat/agent-chat-view";
 import { agentById, buildThread, conversationForAgent } from "../lib/fixtures";
+import type { ProviderView } from "@shera-bot/contracts";
 import type { EffectiveProviderState } from "../lib/provider-data";
 
 /**
@@ -45,7 +46,7 @@ const UNCONFIGURED: EffectiveProviderState = {
     "No provider is configured for this conversation yet. Configure one in Settings → Providers & models, or set the Agent's default.",
 };
 
-const PROVIDERS = [
+const PROVIDERS: ProviderView[] = [
   {
     id: "prov_platform_openai",
     workspace_id: "ws_1",
@@ -181,17 +182,17 @@ describe("runtime composer gating (D17/G4, real effective readout)", () => {
 });
 
 describe("dimmed-with-reason picker (D52 wave D; E43 §5 + research annex §5/§9)", () => {
-  const KEYLESS: (typeof PROVIDERS)[number] = {
-    ...PROVIDERS[0],
+  const KEYLESS: ProviderView = {
+    ...PROVIDERS[0]!,
     id: "prov_platform_keyless",
     display_name: "Keyless Endpoint",
     credential_hint: null,
   };
-  const DISABLED: (typeof PROVIDERS)[number] = {
-    ...PROVIDERS[0],
+  const DISABLED: ProviderView = {
+    ...PROVIDERS[0]!,
     id: "prov_disabled_one",
     display_name: "Turned-off Provider",
-    status: "disabled" as const,
+    status: "disabled",
   };
   const control = (state: EffectiveProviderState, providers: typeof PROVIDERS): string =>
     render(
@@ -228,6 +229,11 @@ describe("dimmed-with-reason picker (D52 wave D; E43 §5 + research annex §5/§
     // The route exists (routes.settings("providers")), so the reason links to it.
     expect(source).toContain("Turned off in Providers & models");
     expect(source).toContain('routes.settings("providers")');
+    // Blocked entries live in the pane, never on the closed trigger: a
+    // configured control over a catalog with blocked rows stays calm.
+    const html = control(CONFIGURED, [PROVIDERS[0]!, DISABLED, KEYLESS]);
+    expect(html).toContain('data-provider-mark="P"');
+    expect(html).not.toContain('data-attention="true"');
   });
 
   it("a keyless enabled catalog entry and an empty catalog render the setup explanation — no invented count", () => {

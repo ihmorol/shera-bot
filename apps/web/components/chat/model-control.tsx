@@ -25,16 +25,34 @@ import { cn } from "@/lib/utils";
  *
  * Honesty rules: the collapsed button renders the effective union verbatim —
  * "No provider" when the runtime reports an unconfigured resolution, with the
- * panel carrying the runtime's own safe_message and the settings link (D17:
- * a clear configuration state, never a fabricated default). The picker lists
- * only ENABLED catalog entries; a disabled provider cannot be applied to new
- * turns. Below md the control collapses (the Agent identity keeps width
- * priority at 360px — the same breakpoint contract as the S12 presence chip).
+ * runtime's own safe_message in the title AND aria-label, and the panel
+ * carrying the same message plus the settings link (D17: a clear
+ * configuration state, never a fabricated default). The picker lists only
+ * catalog entries that can serve new turns; entries that cannot are never
+ * silently absent — they render in an explanation pane with the typed reason
+ * (D52 wave D, the OpenMausBot dimmed-with-reason pattern: E43 §5 +
+ * docs/research/openmausbot-ui-patterns-2026-11-21.md §5/§9/§10.5). The
+ * runtime payload carries no model count (ProviderView has only
+ * default_model_id), so the setup explanation carries no count.
+ *
+ * The scope line uses the Shera vocabulary — the override is "Only this
+ * chat"; the fallback is the "Agent default". No scope toggle exists in the
+ * runtime contract, so none is invented.
+ *
+ * Below md the control collapses (the Agent identity keeps width priority at
+ * 360px — the same breakpoint contract as the S12 presence chip).
  *
  * The panel is a plain, properly labelled disclosure (no portal needed — the
  * header is not an overflow:hidden context) closed by Escape or the toggle;
  * focus returns to the toggle on close so the keyboard pass stays intact.
  */
+
+/**
+ * D52 wave D prescribed copy (research annex §5 — dimmed-with-reason). Both
+ * reasons render verbatim in the explanation pane; neither is guessed.
+ */
+const TURNED_OFF_COPY = "Turned off in Providers & models";
+const SETUP_PENDING_COPY = "Models will appear after setup.";
 
 export interface ModelControlProps {
   state: EffectiveProviderState;
@@ -68,7 +86,27 @@ export function ModelControl({
   const toggleRef = useRef<HTMLButtonElement>(null);
   const panelId = useId();
 
-  const applicable = providers.filter((provider) => provider.status === "enabled");
+  // Entries that can serve new turns: enabled, and for api_key providers the
+  // key must exist (an enabled provider with no stored key cannot serve —
+  // the same state the settings row reports as "no key stored"). Everything
+  // else renders in the explanation pane with its typed reason instead of
+  // being silently absent (D52 wave D dimmed-with-reason).
+  const applicable = providers.filter(
+    (provider) =>
+      provider.status === "enabled" &&
+      (provider.api_mode === "no_key" || provider.credential_hint !== null),
+  );
+  const blockedDisabled = providers.filter((provider) => provider.status === "disabled");
+  const blockedSetup = providers.filter(
+    (provider) =>
+      provider.status === "enabled" &&
+      provider.api_mode === "api_key" &&
+      provider.credential_hint === null,
+  );
+  const catalogReady = providersState === "ready";
+  const showBlockedPane =
+    catalogReady &&
+    (blockedDisabled.length > 0 || blockedSetup.length > 0 || providers.length === 0);
 
   // Every close path resets the draft: a re-opened panel preselects nothing
   // until the user chooses (never a guessed override).
@@ -86,6 +124,7 @@ export function ModelControl({
   };
 
   const configured = state.kind === "configured";
+  const unconfigured = state.kind === "unconfigured";
   const label = configured ? `${state.displayName} · ${state.model}` : "No provider";
 
   return (
@@ -112,14 +151,40 @@ export function ModelControl({
         title={
           configured
             ? `Effective provider for this conversation (${SOURCE_LABEL[state.source]}) — override it`
-            : "No provider is configured for this conversation — open for details"
+            : unconfigured
+              ? // The runtime's typed reason (D17 safe_message) — never a
+                // generic guess; the attention dot pairs with it (D52 wave D).
+                state.safeMessage
+              : "The effective provider is still resolving — open for details"
         }
+        aria-label={unconfigured ? `No provider — ${state.safeMessage}` : undefined}
         className={cn(
           "flex max-w-56 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition-colors hover:bg-surface-elevated",
           configured ? "border-line text-muted" : "border-approval/40 text-approval",
         )}
       >
+        {configured ? (
+          // Provider mark: the display name's initial — the prototype has no
+          // provider logo assets, so the mark is an honest monogram tile
+          // (D52 wave D trigger-pill pattern, research annex §5).
+          <span
+            aria-hidden="true"
+            data-provider-mark={state.displayName.charAt(0).toUpperCase()}
+            className="flex size-4 shrink-0 items-center justify-center rounded-sm border border-line bg-surface-elevated font-mono text-[9px] font-semibold text-muted"
+          >
+            {state.displayName.charAt(0).toUpperCase()}
+          </span>
+        ) : null}
         <span className="truncate font-mono">{label}</span>
+        {state.kind === "unconfigured" ? (
+          // Attention dot: a configuration block applies. Color is never the
+          // only signal — the reason rides in the title and aria-label.
+          <span
+            aria-hidden="true"
+            data-attention="true"
+            className="size-1.5 shrink-0 rounded-full bg-approval"
+          />
+        ) : null}
         <ChevronDown
           className={cn("size-3.5 shrink-0 transition-transform", open && "rotate-180")}
           aria-hidden="true"
@@ -178,6 +243,36 @@ export function ModelControl({
                 </option>
               ))}
             </select>
+            {showBlockedPane ? (
+              // Dimmed-with-reason pane (D52 wave D): a provider that cannot
+              // serve new turns never disappears silently — it is named here
+              // with its typed reason. No model count: the runtime payload
+              // carries none.
+              <div
+                data-blocked-providers="true"
+                role="note"
+                aria-label="Providers that cannot serve new turns yet"
+                className="space-y-1 rounded-lg border border-line bg-surface-elevated p-2.5 text-[11px] text-muted"
+              >
+                {blockedDisabled.map((provider) => (
+                  <p key={provider.id} className="min-w-0 truncate">
+                    {provider.display_name} —{" "}
+                    <a
+                      href={routes.settings("providers")}
+                      className="text-sky underline underline-offset-4 hover:text-cool-highlight"
+                    >
+                      {TURNED_OFF_COPY}
+                    </a>
+                  </p>
+                ))}
+                {blockedSetup.map((provider) => (
+                  <p key={provider.id} className="min-w-0 truncate">
+                    {provider.display_name} — {SETUP_PENDING_COPY}
+                  </p>
+                ))}
+                {providers.length === 0 ? <p>{SETUP_PENDING_COPY}</p> : null}
+              </div>
+            ) : null}
             {draftProviderId ? (
               <div className="space-y-1.5">
                 <label
@@ -224,7 +319,7 @@ export function ModelControl({
             </div>
             <p className="flex items-center gap-1.5 text-[11px] text-muted">
               <Check className="size-3" aria-hidden="true" />
-              Applies to the next turn — the Agent&apos;s default is unchanged.
+              Only this chat — applies to the next turn; the Agent default is unchanged.
             </p>
             <p className="text-[11px] text-muted">
               <a

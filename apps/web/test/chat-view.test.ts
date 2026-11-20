@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { AgentChatView } from "../components/chat/agent-chat-view";
 import { MessageList } from "../components/chat/message-list";
 import { ArtifactCard, ReplayBoundary, RunCard, ToolCallCard } from "../components/chat/cards";
-import { Composer } from "../components/chat/composer";
+import { Composer, sendButtonTitle } from "../components/chat/composer";
 import { EmptyThread, ThreadSkeleton } from "../components/chat/thread-states";
 import { ErrorState } from "../components/shell/states";
 import {
@@ -261,6 +261,84 @@ describe("composer (§S3)", () => {
     expect(html).toContain("disabled");
     // The field itself reads as unavailable (dimmed), not just the send button.
     expect(html).toContain("disabled:opacity-60");
+  });
+});
+
+describe("composer honesty states (D52 wave B — audited placeholder priority)", () => {
+  it("the send button title follows the audited priority: reason, in-flight, empty draft, action", () => {
+    // (a) disabled with a reason: the title carries the reason (craft rule —
+    // every disabled control carries its reason in title/aria).
+    expect(
+      sendButtonTitle({
+        disabled: true,
+        disabledReason: "No provider is configured for this conversation yet.",
+        sending: false,
+        hasDraft: true,
+      }),
+    ).toBe("No provider is configured for this conversation yet.");
+    // In flight: the status word, never a promised outcome (G2).
+    expect(sendButtonTitle({ disabled: false, sending: true, hasDraft: true })).toBe("Sending…");
+    // Empty draft: names what is missing, not a fake action.
+    expect(sendButtonTitle({ disabled: false, sending: false, hasDraft: false })).toBe(
+      "Type a message to send",
+    );
+    // A real draft: the action's own name.
+    expect(sendButtonTitle({ disabled: false, sending: false, hasDraft: true })).toBe(
+      "Send message",
+    );
+  });
+
+  it("the send button names the action in aria-label; the idle title names the missing draft", () => {
+    const html = render(
+      createElement(Composer, { agentName: "Researcher", onSend: () => undefined }),
+    );
+    expect(html).toContain('aria-label="Send message"');
+    expect(html).toContain('title="Type a message to send"');
+  });
+
+  it("the disabled composer keeps the neutral placeholder; the title carries the reason", () => {
+    const html = render(
+      createElement(Composer, {
+        agentName: "Researcher",
+        onSend: () => undefined,
+        disabled: true,
+        disabledReason: "No provider is configured for this conversation yet.",
+      }),
+    );
+    expect(html).toMatch(/placeholder="Message Researcher"/);
+    expect(html).toContain('title="No provider is configured for this conversation yet."');
+  });
+
+  it("the disabled-without-reason fallback still names the unavailable state (review gap pin)", () => {
+    // The reviewer named this branch untested: a disabled composer whose
+    // caller passed no reason falls back to the S09 unavailable copy.
+    expect(sendButtonTitle({ disabled: true, sending: false, hasDraft: true })).toBe(
+      "Sending is unavailable right now.",
+    );
+  });
+
+  it("no invented approval-pending or queue/steer composer states (G2 — runtime audit)", () => {
+    // AUDIT (2026-11-21): the runtime allows sends while an approval waits —
+    // sendOperationMessage (apps/user-runtime
+    // src/modules/operations/operations.service.ts) gates only on the S23
+    // provider turn gate, the idempotency key, and message validation; there
+    // is NO approval-pending send block. So the composer has NO 'Answer the
+    // approval above to continue' state (honesty over drama), and Shera's
+    // runtime has no steer-while-running command, so the OpenMausBot
+    // queue/steer labels are NOT ported (a future-runtime item, not UI).
+    const composerSource = readFileSync(
+      join(APP_DIR, "components", "chat", "composer.tsx"),
+      "utf8",
+    );
+    const threadSource = readFileSync(
+      join(APP_DIR, "components", "operations", "operation-thread.tsx"),
+      "utf8",
+    );
+    for (const source of [composerSource, threadSource]) {
+      expect(source).not.toContain("Answer the approval above to continue");
+      expect(source).not.toContain("Queue message");
+      expect(source).not.toContain("Send into the running turn");
+    }
   });
 });
 

@@ -1,9 +1,76 @@
 "use client";
 
-import { Pencil } from "lucide-react";
+import { Pencil, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+
+/**
+ * The Operation definition strip (D52 wave B, E43 idea 2 — the deliverable
+ * is a Pack → Operations → Agents definition strip): ONE line under the
+ * Operation header that teaches the hierarchy from the runtime's own read
+ * model (G4 — basis-anchored, never invented): "Operation — {pack_id} pack
+ * · {N} Agents · {N_runs} runs so far — each run keeps its own task,
+ * events, and cost." With zero runs it states the rule over the real pack
+ * and roster and invents no run count; before the read model lands it
+ * renders nothing at all rather than inventing a basis. The leading word is
+ * the mono uppercase eyebrow (UI_DESIGN §2.1); the sentence is body type,
+ * muted, one line. It renders in BOTH interface modes — it teaches where
+ * users are.
+ */
+export function OperationDefinitionStrip({
+  packId,
+  agentCount,
+  runCount,
+}: {
+  packId: string | null;
+  agentCount: number | null;
+  runCount: number;
+}) {
+  if (packId === null || agentCount === null) {
+    // G4: the strip teaches from the runtime's own counts — with no read
+    // model yet it renders nothing rather than inventing a basis.
+    return null;
+  }
+  const agentWord = agentCount === 1 ? "Agent" : "Agents";
+  const body =
+    runCount > 0
+      ? `${packId} pack · ${agentCount} ${agentWord} · ${runCount} ${runCount === 1 ? "run" : "runs"} so far — each run keeps its own task, events, and cost.`
+      : `${packId} pack · ${agentCount} ${agentWord} — every run keeps its own task, events, and cost.`;
+  return (
+    <div data-testid="operation-definition-strip" className="shrink-0 bg-surface px-4 lg:px-6">
+      <p className="flex min-w-0 items-baseline gap-1.5 py-2 text-sm text-muted">
+        <span className="shrink-0 font-mono text-xs uppercase tracking-[0.16em]">Operation</span>
+        <span className="min-w-0 truncate">— {body}</span>
+      </p>
+    </div>
+  );
+}
+
+/**
+ * A refused/failed create-run surfaces the runtime's fixed safe message as
+ * ONE muted line under the header (D52 wave B review fix): the earlier
+ * comment claimed "a typed refusal renders as safe copy" while useCreateRun
+ * had no onError wired — this is the now-real behavior. The surface sets
+ * the message from the mutation's onError (safeOperationMessage, the same
+ * pattern as cancelRun and the roster commands), clears it on a new
+ * attempt, and unmount clears it with the surface. Never raw internals
+ * (D23 rule 4/G3).
+ */
+export function OperationCreateRunError({ message }: { message: string | null }) {
+  if (message === null) {
+    return null;
+  }
+  return (
+    <p
+      role="alert"
+      data-testid="operation-create-error"
+      className="shrink-0 bg-surface px-4 pt-2 text-xs text-muted lg:px-6"
+    >
+      {message}
+    </p>
+  );
+}
 
 /**
  * The Operation chat header (UI_DESIGN §S4 + S14, D41): the title with the
@@ -14,6 +81,17 @@ import { cn } from "@/lib/utils";
  * the editing state is prop-driven so the parent owns the draft, and the
  * runtime's typed validation failures render verbatim as safe copy (D23
  * rule 4 — never raw internals).
+ *
+ * D52 wave B (E43 idea 8): the "+ New run" affordance lives in the header
+ * beside the run count, not buried in the thread. Audit (2026-11-21): the
+ * runtime has NO admission rule forbidding a second concurrent run —
+ * POST /v1/operations/:id/runs and OperationsService.createRun create a
+ * CREATED-state run unconditionally once the Operation exists — so the
+ * affordance is NOT client-disabled on a guessed rule (G2): the runtime
+ * validates the create on submit, and a typed refusal renders as the
+ * parent's safe alert line under the header (OperationCreateRunError; the
+ * surface wires the mutation's onError). The title reflects runtime
+ * authority, never "I will start".
  */
 export function OperationChatHeader({
   name,
@@ -25,6 +103,8 @@ export function OperationChatHeader({
   renameDraft,
   renamePending,
   renameErrorMessage,
+  onCreateRun,
+  createPending = false,
   onRenameStart,
   onRenameCancel,
   onRenameDraftChange,
@@ -43,6 +123,9 @@ export function OperationChatHeader({
   renamePending: boolean;
   /** The rename command's typed failure, as its safe message. */
   renameErrorMessage: string | null;
+  /** The wired create-run command; absent where no real surface backs it. */
+  onCreateRun?: () => void;
+  createPending?: boolean;
   onRenameStart: () => void;
   onRenameCancel: () => void;
   onRenameDraftChange: (value: string) => void;
@@ -126,6 +209,20 @@ export function OperationChatHeader({
             : "Operation chat"}
         </p>
       </div>
+      {onCreateRun ? (
+        <Button
+          variant="outline"
+          size="sm"
+          aria-label="New run"
+          className="shrink-0"
+          disabled={createPending}
+          title={createPending ? "The runtime is starting the run" : "The runtime starts the run"}
+          onClick={onCreateRun}
+        >
+          <Plus className="size-3.5" aria-hidden="true" />
+          New run
+        </Button>
+      ) : null}
     </header>
   );
 }

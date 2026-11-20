@@ -6,7 +6,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { NewOperationForm } from "@/components/operations/new-operation-form";
-import { OperationChatHeader } from "@/components/operations/operation-chat-header";
+import {
+  OperationChatHeader,
+  OperationCreateRunError,
+  OperationDefinitionStrip,
+} from "@/components/operations/operation-chat-header";
 import { OperationPackSummary } from "@/components/operations/operation-pack-summary";
 import { OperationRosterPanel } from "@/components/operations/operation-roster-panel";
 import { OperationRunsPanel } from "@/components/operations/operation-runs-panel";
@@ -83,6 +87,49 @@ export function OperationChatSurface({ operationId }: { operationId: string }) {
   return <RuntimeOperationChat workspaceId={readyWorkspaceId} operationId={operationId} />;
 }
 
+/**
+ * The roster's visibility predicate (D52 wave B render pin): simple mode
+ * defers to the two-way disclosure toggle; advanced mode renders the roster
+ * directly — no toggle state involved. Exported for the mode pins (the full
+ * hook-heavy composition cannot render real data in the static-markup
+ * harness, so the branch predicate is the pinned contract).
+ */
+export function rosterVisibleForMode(advanced: boolean, rosterOpenSimple: boolean): boolean {
+  return advanced || rosterOpenSimple;
+}
+
+/**
+ * Simple mode's ONE roster strip — a two-way toggle (open AND collapse, never
+ * a one-way door; foundation spec-review fix). aria-expanded pairs the state
+ * for screen readers; every state of the control is labelled.
+ */
+export function RosterDisclosureToggle({
+  open,
+  onToggle,
+}: {
+  open: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="shrink-0 border-b border-line bg-surface px-4 lg:px-6">
+      <div className="flex items-center justify-end py-2">
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted transition-colors hover:bg-surface-elevated hover:text-text"
+        >
+          {open ? "Hide roster" : "Manage roster"}
+          <ChevronDown
+            className={cn("size-3.5 transition-transform", open && "rotate-180")}
+            aria-hidden="true"
+          />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** The §9 fixture Operation chats stay a labeled demo (§2.4 honesty, G4). */
 function DemoOperationChat({
   instance,
@@ -138,6 +185,21 @@ function RuntimeOperationChat({
   const rosterCommand = useRosterCommand(workspaceId, operationId);
   const coordinatorCommand = useCoordinatorCommand(workspaceId, operationId);
   const createRun = useCreateRun(workspaceId, operationId);
+  // D52 wave B review fix: a refused/failed create-run surfaces the
+  // runtime's safe message as ONE muted alert line under the header — set
+  // from the mutation's onError (safeOperationMessage, the same pattern as
+  // cancelRun below), cleared on a new attempt, and cleared with the
+  // surface on unmount (component state). Both entry points (the header
+  // affordance and the runs panel) share this handler, so the refusal
+  // renders whichever button the user pressed.
+  const [createSafeError, setCreateSafeError] = useState<string | null>(null);
+  const handleCreateRun = () => {
+    setCreateSafeError(null);
+    createRun.mutate(undefined, {
+      onError: (error) =>
+        setCreateSafeError(safeOperationMessage(error, "The run could not be started.")),
+    });
+  };
   const sendMessage = useSendOperationMessage(workspaceId, operationId);
   // S22 (PRD §8, AC15): the runs panel's stop control — the idempotent
   // cancel command and the TRUE retry attempt counts (read from each run's
@@ -159,7 +221,7 @@ function RuntimeOperationChat({
   // advanced mode keeps it always visible (UI_DESIGN §S4).
   const advanced = useAdvancedMode();
   const [rosterOpenSimple, setRosterOpenSimple] = useState(false);
-  const rosterVisible = advanced || rosterOpenSimple;
+  const rosterVisible = rosterVisibleForMode(advanced, rosterOpenSimple);
   // One idempotency key per draft: a retry of the SAME send reuses it (never a
   // duplicated turn); the key rotates only after a send settles successfully.
   const [draftKey, setDraftKey] = useState(() => newMessageDraftKey());
@@ -248,6 +310,15 @@ function RuntimeOperationChat({
         autoLabel={detail.detail?.auto_label ?? false}
         packLabel={packPinning}
         runCount={runs.length}
+        // D52 wave B (E43 idea 8): the "+ New run" affordance in the header.
+        // No client-side admission guess (G2): the affordance stays enabled —
+        // the runtime validates the create on submit (audit: the POST runs
+        // endpoint has no concurrent-run rule) — and a typed refusal renders
+        // as the safe alert line under the header: onError feeds
+        // createSafeError (OperationCreateRunError), cleared on a new
+        // attempt and with the surface on unmount.
+        onCreateRun={handleCreateRun}
+        createPending={createRun.isPending}
         renameEditing={renameEditing}
         renameDraft={renameDraft}
         renamePending={renameOperation.isPending}
@@ -276,6 +347,23 @@ function RuntimeOperationChat({
         }}
       />
 
+      {/* D52 wave B review fix: a refused/failed create surfaces the runtime's
+          fixed safe message as ONE muted line under the header — the wired
+          reality behind the affordance's runtime-authority claim (D23 rule
+          4: never raw internals). */}
+      <OperationCreateRunError message={createSafeError} />
+
+      {/* D52 wave B (E43 idea 2): the definition strip teaches the Pack →
+          Operations → Agents hierarchy from the detail read model's own
+          anchors — the pinned pack id, the roster count, the real run count
+          (zero runs render the rule, never a fake count; before the payload
+          lands the strip renders nothing, G4) — in BOTH interface modes. */}
+      <OperationDefinitionStrip
+        packId={detail.detail ? detail.detail.operation.pinning.pack_id : null}
+        agentCount={detail.detail ? detail.detail.roster.length : null}
+        runCount={runs.length}
+      />
+
       {/* S14 (UI_DESIGN S6/F6): the collapsible roster + pack skills/connectors
           summary — connectors render the runtime's honest not-configured
           status (D38), never an invented connection. */}
@@ -290,25 +378,13 @@ function RuntimeOperationChat({
       />
 
       {/* Simple mode keeps ONE strip in both directions — open AND collapse —
-          so the roster panel is never a one-way door. aria-expanded pairs the
-          state for screen readers. */}
+          so the roster panel is never a one-way door (extracted as
+          RosterDisclosureToggle, D52 wave B render pin). */}
       {!advanced ? (
-        <div className="shrink-0 border-b border-line bg-surface px-4 lg:px-6">
-          <div className="flex items-center justify-end py-2">
-            <button
-              type="button"
-              onClick={() => setRosterOpenSimple(!rosterOpenSimple)}
-              aria-expanded={rosterVisible}
-              className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted transition-colors hover:bg-surface-elevated hover:text-text"
-            >
-              {rosterOpenSimple ? "Hide roster" : "Manage roster"}
-              <ChevronDown
-                className={cn("size-3.5 transition-transform", rosterOpenSimple && "rotate-180")}
-                aria-hidden="true"
-              />
-            </button>
-          </div>
-        </div>
+        <RosterDisclosureToggle
+          open={rosterOpenSimple}
+          onToggle={() => setRosterOpenSimple(!rosterOpenSimple)}
+        />
       ) : null}
 
       {rosterVisible ? (
@@ -420,7 +496,7 @@ function RuntimeOperationChat({
             safeErrorMessage={detail.safeErrorMessage}
             onRetry={detail.refetch}
             createPending={createRun.isPending}
-            onCreateRun={() => createRun.mutate()}
+            onCreateRun={handleCreateRun}
             gitLinkage={gitLinkage.linkage}
             retryAttempts={retryAttempts.data ?? undefined}
             recoveryTimelines={recoveryTimelines}
